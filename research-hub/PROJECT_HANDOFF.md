@@ -172,21 +172,27 @@ Travel record changed (M06 save)
 | Layer | Choice | Package |
 |-------|--------|---------|
 | Framework | Next.js 16 | `next` |
+| Hosting | Vercel | `git push` → auto-deploy |
 | Auth | Clerk | `@clerk/nextjs` |
 | Database | Neon (serverless PG) | `@neondatabase/serverless` |
 | ORM | Drizzle | `drizzle-orm` |
 | UI | shadcn/ui + Tailwind | `tailwindcss` |
 | Data Tables | sadmann7/shadcn-table | `tablecn` |
-| WhatsApp | Evolution API | Docker sidecar |
+| WhatsApp | Evolution API | Docker sidecar (DigitalOcean $6/mo) |
 | Background Jobs | Inngest | `inngest` |
-| Notifications | Novu + React Email | `@novu/nextjs`, `react-email` |
+| Email | Resend + React Email | `resend`, `react-email` |
 | Certificates | pdfme | `@pdfme/ui`, `@pdfme/generator` |
 | CSV Import | react-spreadsheet-import | `react-spreadsheet-import` |
 | QR Scanner | yudiel/react-qr-scanner | `@yudiel/react-qr-scanner` |
 | QR Generate | qrcode.react | `qrcode.react` |
 | File Storage | Cloudflare R2 | `@aws-sdk/client-s3` |
+| **Cache + Locks** | **Upstash Redis** | `@upstash/redis`, `@upstash/ratelimit` |
+| **Error Monitoring** | **Sentry** | `@sentry/nextjs` |
+| **Feature Flags** | **Upstash Redis** | `@upstash/redis` |
+| **Phone Normalization** | **libphonenumber-js** | `libphonenumber-js` |
+| **Timezone** | **date-fns-tz** | `date-fns-tz` |
 | Audit Log | Bemi | `@bemi-db/drizzle` |
-| Hosting | Vercel | — |
+| **Health Monitoring** | **Openstatus** | External (free) |
 
 Full details: `research-hub/BACKEND_ARCHITECTURE_MAP.md`
 

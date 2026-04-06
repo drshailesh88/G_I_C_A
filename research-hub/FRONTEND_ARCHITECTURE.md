@@ -358,9 +358,15 @@ notification_templates
   id, event_id → events, name, channel (email|whatsapp|both),
   subject, body_json, variables (jsonb), created_at, updated_at
 
-delivery_log
+notification_log (replaces delivery_log — build BEFORE any notification sending)
   id, event_id → events, template_id → notification_templates,
-  person_id → people, channel, status (sent|delivered|read|failed),
+  person_id → people, channel (email|whatsapp),
+  provider (resend|evolution_api),
+  status (queued|sending|sent|delivered|failed|retrying),
+  idempotency_key (unique constraint: user+event+type+trigger),
+  attempts (integer, default 0),
+  last_error (text, nullable),
+  last_attempt_at (timestamp),
   sent_at, delivered_at, read_at, failed_reason
 
 automation_triggers
@@ -378,4 +384,100 @@ audit_log (via Bemi — automatic)
   table_name, record_id, operation (insert|update|delete),
   old_values (jsonb), new_values (jsonb),
   user_id, timestamp
+```
+
+---
+
+## 10. Resilience Layer (added from infrastructure planning)
+
+### Upstash Redis Client
+```typescript
+// lib/redis.ts
+import { Redis } from '@upstash/redis'
+export const redis = Redis.fromEnv() // UPSTASH_REDIS_REST_URL + TOKEN
+
+// lib/ratelimit.ts
+import { Ratelimit } from '@upstash/ratelimit'
+export const whatsappLimiter = new Ratelimit({
+  redis, limiter: Ratelimit.slidingWindow(1, '1 s') // 1 msg/sec
+})
+export const emailLimiter = new Ratelimit({
+  redis, limiter: Ratelimit.slidingWindow(10, '1 s') // 10/sec free tier
+})
+
+// lib/flags.ts
+export async function isEnabled(flag: string): Promise<boolean> {
+  const val = await redis.get(`flag:${flag}`)
+  return val === 'true' || val === true
+}
+// Flags: whatsapp_enabled, email_provider, certificate_selfserve_enabled,
+//        registration_open:{eventId}
+```
+
+### Idempotency Pattern
+```typescript
+// Used in every notification sender:
+async function sendWithIdempotency(key: string, sendFn: () => Promise<void>) {
+  const exists = await redis.get(`notification:${key}`)
+  if (exists) return // already sent
+  await redis.set(`notification:${key}`, 'sent', { ex: 86400 }) // 24h TTL
+  await sendFn()
+}
+```
+
+### Distributed Lock Pattern
+```typescript
+// Used in bulk operations (certificate generation, mass emails):
+async function withLock(resource: string, fn: () => Promise<void>) {
+  const acquired = await redis.set(`lock:${resource}`, '1', { nx: true, ex: 300 }) // 5min TTL
+  if (!acquired) throw new Error('Operation already in progress')
+  try { await fn() } finally { await redis.del(`lock:${resource}`) }
+}
+```
+
+### Health Check Endpoint
+```typescript
+// app/api/health/route.ts
+// Checks: Neon (SELECT 1), Clerk (session), R2 (HEAD), Evolution API (GET /status),
+//         Inngest (connection), Upstash Redis (PING)
+// Returns: 200 + { status: 'healthy', checks: {...} }
+//      or: 503 + { status: 'degraded', failed: ['evolution_api'] }
+```
+
+### Sentry Integration
+```typescript
+// sentry.client.config.ts + sentry.server.config.ts
+// Auto-configured by: npx @sentry/wizard@latest -i nextjs
+// Enriched with: Clerk user ID, active event ID, user role
+// Captures: errors, performance, React component errors
+```
+
+### Pre-Event Backup (Inngest scheduled function)
+```typescript
+// server/inngest/pre-event-backup.ts
+// Trigger: cron or event.start_date - 24h
+// Exports: agenda PDF, attendees CSV, faculty CSV, rooming CSV, transport CSV, travel CSV
+// Uploads to: R2 at emergency/{eventId}/pre-event-backup.zip
+// Also: manual trigger via "Export Emergency Kit" button on M47 Reports
+```
+
+### Phone Number Normalization
+```typescript
+// lib/phone.ts
+import { parsePhoneNumber } from 'libphonenumber-js'
+export function normalizePhone(input: string): string {
+  const parsed = parsePhoneNumber(input, 'IN') // default India
+  if (!parsed) throw new Error('Invalid phone number')
+  return parsed.format('E.164') // +919876543210
+}
+// Call on EVERY phone input: registration form, people import, manual add
+```
+
+### Optimistic Locking
+```typescript
+// In every mutation to sessions, travel, accommodation:
+// 1. Form loads record with updated_at timestamp
+// 2. On save, check: WHERE id = :id AND updated_at = :loadedUpdatedAt
+// 3. If 0 rows affected → someone else edited → show conflict error
+// 4. If 1 row affected → save succeeds → update form's updated_at
 ```

@@ -16,6 +16,12 @@
 | **Database** | Neon | `@neondatabase/serverless` | — | — | Serverless PostgreSQL |
 | **Auth** | Clerk | `@clerk/nextjs` | — | — | Auth, orgs, roles, permissions, pre-built React components |
 | **Storage** | Cloudflare R2 | `@aws-sdk/client-s3` (S3-compatible) | — | — | File uploads (tickets, certificates, brand assets) |
+| **Cache + Locks** | Upstash Redis | `@upstash/redis` | — | — | Rate limiting, idempotency, distributed locks, feature flags, session cache |
+| **Error Monitoring** | Sentry | `@sentry/nextjs` | — | — | Error tracking, performance monitoring, user context |
+| **Feature Flags** | Upstash Redis | `@upstash/redis` | — | — | Emergency toggles: WhatsApp, email, certificates, self-serve portal |
+| **Phone Normalization** | libphonenumber-js | `libphonenumber-js` | — | — | Normalize Indian phone numbers to E.164 format |
+| **Date/Timezone** | date-fns-tz | `date-fns-tz` | — | — | Store UTC, display IST, per-user timezone in notifications |
+| **Health Monitoring** | Openstatus | External (free) | — | — | Uptime monitoring, status page, 60s interval checks |
 
 ---
 
@@ -183,6 +189,103 @@ Brand assets stored in R2 with event-scoped prefixes:
   /{eventId}/logo.png, /{eventId}/header.png, /{eventId}/brand.json
 ```
 
+### Cross-Module: Resilience Infrastructure
+```
+Upstash Redis (@upstash/redis) → Rate limiting, locks, idempotency, feature flags
+  npm: @upstash/redis
+  Integration: HTTP-based, works from Vercel serverless functions
+
+  RATE LIMITING:
+    WhatsApp: 1 msg/sec via sliding window counter
+    Email (Resend): 10/sec free tier, 100/sec paid
+    Redis key: `ratelimit:{provider}:{timestamp_bucket}`
+
+  DISTRIBUTED LOCKS:
+    Prevent double certificate generation when two admins click simultaneously
+    Redis key: `lock:certificates:generate:{eventId}` with 5-min TTL
+    Pattern: SET NX (set if not exists) → do work → DEL
+
+  IDEMPOTENCY:
+    Before every notification send:
+    Redis key: `notification:{userId}:{eventId}:{type}:{triggerId}`
+    If exists → skip (already sent). If not → SET with 24h TTL → send.
+    Prevents "Dr. Sharma got 4 identical emails" from retries/double-clicks.
+
+  FEATURE FLAGS:
+    Redis keys:
+      flag:whatsapp_enabled = true/false
+      flag:email_provider = "resend" | "nodemailer_smtp"
+      flag:certificate_selfserve_enabled = true/false
+      flag:registration_open:{eventId} = true/false
+    Check before every gated operation. Admin toggle page to flip.
+
+  OPS MODE CACHE:
+    Cache critical event data for fast reads during live conferences:
+      cache:event:{eventId}:agenda = JSON
+      cache:event:{eventId}:attendees = JSON
+      cache:event:{eventId}:transport = JSON
+    Update cache on every source data mutation.
+    Ops screens read Redis first, fall back to Neon.
+
+Sentry (@sentry/nextjs) → Error monitoring + performance
+  npm: @sentry/nextjs
+  Integration: `npx @sentry/wizard@latest -i nextjs`
+  Captures: unhandled exceptions, failed API calls, slow DB queries, React errors
+  User context: Enriched with Clerk user ID + active event ID
+  Alert: Slack/email within 30 seconds of error
+
+Openstatus → Health monitoring + status page
+  /api/health endpoint checks:
+    - Neon: SELECT 1 query
+    - Clerk: session validation
+    - R2: HEAD request on test object
+    - Evolution API: GET /instance/status
+    - Inngest: connection check
+    - Upstash Redis: PING
+  Returns 200 if all pass, 503 with details if any fail
+  Openstatus checks every 60 seconds, alerts on failure
+  Public status page: status.gemindia.com (or similar)
+```
+
+### Cross-Module: Notification Log (build BEFORE any notification sending)
+```
+notification_log table in Drizzle:
+  id, event_id, person_id, template_id,
+  channel (email | whatsapp),
+  provider (resend | evolution_api),
+  status (queued | sending | sent | delivered | failed | retrying),
+  idempotency_key (unique: user+event+type+trigger),
+  attempts (integer, default 0),
+  last_error (text, nullable),
+  last_attempt_at (timestamp),
+  sent_at, delivered_at, read_at,
+  created_at
+
+Admin "Retry Failed" screen:
+  Filter by status = 'failed', show error, Retry button
+  "Retry all failed for this event" → dispatches one Inngest event per failed record
+
+Retry policies (configured per Inngest function):
+  Email: 3 retries, 30s backoff
+  WhatsApp: 2 retries, 60s backoff (rate limit protection)
+  PDF generation: 1 retry, then flag as failed for manual review
+```
+
+### Cross-Module: Pre-Event Backup
+```
+Scheduled Inngest function: runs 24 hours before event.start_date
+  Exports to R2 at: emergency/{eventId}/pre-event-backup.zip
+  Contents:
+    - agenda.pdf (full schedule)
+    - attendees.csv (all delegates + contact details)
+    - faculty.csv (all faculty + roles + sessions)
+    - rooming-list.csv (per-hotel room assignments)
+    - transport-plan.csv (arrival batches + vehicle assignments)
+    - travel-records.csv (all itineraries)
+  Also: manual "Export Emergency Kit" button in Reports screen
+  Purpose: if Neon goes down during live event, ops team prints from this ZIP
+```
+
 ### Cross-Module: Cascade System
 ```
 Inngest → Event-driven background job orchestration
@@ -215,31 +318,33 @@ Alternative (lighter): drizzle-pg-notify-audit-table
 ## Infrastructure Map
 
 ```
-                    ┌─────────────────────┐
-                    │   Vercel (Frontend)  │
-                    │   Next.js App        │
-                    │   API Routes         │
-                    └──────────┬──────────┘
-                               │
-              ┌────────────────┼────────────────┐
-              │                │                │
-     ┌────────▼──────┐  ┌─────▼──────┐  ┌──────▼───────┐
-     │  Neon DB       │  │ Cloudflare │  │  Inngest     │
-     │  PostgreSQL    │  │ R2 Storage │  │  Background  │
-     │  (Drizzle ORM) │  │ (S3-compat)│  │  Jobs        │
-     └───────────────┘  └────────────┘  └──────────────┘
-              │
-     ┌────────▼──────────┐
-     │  Evolution API     │
-     │  (Docker sidecar)  │
-     │  WhatsApp engine   │
-     └───────────────────┘
-              │
-     ┌────────▼──────────┐
-     │  Novu              │
-     │  (Docker or Cloud) │
-     │  Email + WA + Push │
-     └───────────────────┘
+                    ┌──────────────────────────┐
+                    │     Vercel               │
+                    │     Next.js App + API    │
+                    │     + Inngest endpoint   │
+                    │     + Sentry SDK         │
+                    └─────────────┬────────────┘
+                                  │
+        ┌─────────────┬───────────┼───────────┬──────────────┐
+        │             │           │           │              │
+   ┌────▼────┐  ┌─────▼────┐ ┌───▼────┐ ┌────▼─────┐ ┌─────▼──────┐
+   │ Neon DB  │  │Cloudflare│ │Inngest │ │ Upstash  │ │  Resend    │
+   │ Postgres │  │ R2       │ │ Cloud  │ │ Redis    │ │  (Email)   │
+   │(Drizzle) │  │(Storage) │ │ (Jobs) │ │(Cache/   │ └────────────┘
+   └──────────┘  └──────────┘ └────────┘ │ Locks/   │
+                                          │ Flags)   │
+                                          └──────────┘
+        ┌───────────────────────────┐
+        │  DigitalOcean ($6/mo)     │
+        │  Evolution API (Docker)   │
+        │  WhatsApp via Baileys     │
+        └───────────────────────────┘
+
+        ┌───────────────────────────┐
+        │  External Monitoring      │
+        │  Sentry (errors)          │
+        │  Openstatus (uptime)      │
+        └───────────────────────────┘
 ```
 
 ---
@@ -257,7 +362,7 @@ npm i @clerk/nextjs
 npm i @tanstack/react-table recharts @dnd-kit/core @dnd-kit/sortable
 
 # Communications
-npm i inngest @novu/nextjs react-email @react-email/components resend
+npm i inngest react-email @react-email/components resend
 
 # Certificates & QR
 npm i @pdfme/ui @pdfme/generator qrcode.react @yudiel/react-qr-scanner
@@ -271,9 +376,36 @@ npm i @usewaypoint/email-builder
 # Storage
 npm i @aws-sdk/client-s3
 
+# Resilience (NEW)
+npm i @upstash/redis          # Cache, locks, rate limiting, feature flags
+npm i @upstash/ratelimit      # Rate limiting helper
+npm i libphonenumber-js        # Phone number normalization (E.164)
+npm i date-fns date-fns-tz     # Timezone handling (UTC storage, IST display)
+
+# Monitoring (NEW)
+npx @sentry/wizard@latest -i nextjs  # Error monitoring
+
 # Audit
 npm i @bemi-db/drizzle
+
+# Validation
+npm i zod                      # Schema validation for all API inputs
 ```
+
+## Monthly Cost
+
+| Service | Free Tier | Production |
+|---------|-----------|------------|
+| Vercel (Hobby→Pro) | $0 | $20/mo |
+| Neon | $0 (0.5GB) | $19/mo |
+| Clerk | $0 (10K MAU) | $25/mo |
+| Cloudflare R2 | $0 (10GB) | ~$1/mo |
+| Inngest | $0 (25K events) | $25/mo |
+| Upstash Redis | $0 (10K/day) | $2/mo |
+| Resend | $0 (100/day) | $20/mo |
+| Sentry | $0 (5K errors) | $0 |
+| DigitalOcean (Evolution API) | — | $6/mo |
+| **Total** | **$6/mo** | **~$115/mo** |
 
 ---
 
@@ -293,8 +425,38 @@ travel_records, accommodation_records, transport_batches, vehicle_assignments
 certificate_templates (JSON from pdfme), issued_certificates
 
 // Communications
-notification_templates (JSON), delivery_logs
+notification_templates (JSON),
+notification_log (NEW — idempotency_key unique, status enum, attempts, last_error, provider, channel)
+automation_triggers (event_type, template_id, channels jsonb, enabled bool)
 
 // System
-audit_log (via Bemi), red_flags (type, detail, status, created_at, reviewed_by)
+audit_log (via Bemi — automatic PG WAL tracking),
+red_flags (type, detail, status: unreviewed|reviewed|resolved, reviewed_by, resolved_by)
+program_versions (version_number, changes_json, published_at, faculty_notified_count)
+
+// Infrastructure (no table — stored in Redis)
+// Rate limits: ratelimit:{provider}:{bucket}
+// Idempotency: notification:{userId}:{eventId}:{type}:{triggerId}
+// Feature flags: flag:{name}
+// Distributed locks: lock:{resource}:{id}
+// Ops cache: cache:event:{eventId}:{dataset}
+```
+
+## Infrastructure Rules (enforce during build)
+
+```
+1. Every notification send MUST check idempotency key in Redis before sending
+2. Every mutation to travel/accommodation/transport MUST write to audit log
+3. Every background job MUST be idempotent (safe to retry without side effects)
+4. Every API route MUST validate input with Zod schemas
+5. Every database query MUST filter by event_id (per-event isolation)
+6. Every error MUST be captured by Sentry with user context + event ID
+7. Feature flags MUST gate WhatsApp, email, and certificates independently
+8. Pre-event backup MUST run automatically 24 hours before event start
+9. Phone numbers MUST be normalized to E.164 on input (libphonenumber-js)
+10. All timestamps MUST be stored in UTC, displayed in IST (date-fns-tz)
+11. Optimistic locking via updated_at on sessions, travel, accommodation
+12. Clerk session duration: 24 hours for admin roles
+13. Autosave form drafts to localStorage every 60 seconds
+14. File upload max: 20MB (config in API route)
 ```
