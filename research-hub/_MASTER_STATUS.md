@@ -17,10 +17,10 @@
 | # | Agent | Platform(s) | Status |
 |---|-------|------------|--------|
 | 1 | ux-whova | Whova | **done** |
-| 2 | ux-sessionize | Sessionize | **done** |
-| 3 | ux-luma | Lu.ma | **done** |
+| 2 | ux-sessionize | Sessionize | **done** (chrome-teardown.md written 2026-04-06) |
+| 3 | ux-luma | Lu.ma | **done** (chrome-teardown.md written 2026-04-05) |
 | 4 | ux-hubspot | HubSpot CRM | **done** |
-| 5 | ux-certifier | Certifier.io | **done** |
+| 5 | ux-certifier | Certifier.io | **done** (chrome-teardown.md written 2026-04-05) |
 | 6 | ux-wati | WATI.io | **done** |
 | 7 | ux-travel-accom | TravelPerk + AppCraft | **done** |
 | 8 | ux-airtable | Airtable | **done** |
@@ -165,6 +165,63 @@
 - `research-hub/worker-2-pretalx/verdict.md` — Recommendation summary with what to copy vs improve (7KB)
 
 **Timestamp:** 2026-04-05
+
+---
+
+## Worker N — Fourwaves Platform Research (Live Browser Exploration)
+**Status:** Done
+**Completed:**
+- Explored fourwaves.com marketing site: homepage, all 5 feature pages (Event Website, Registration & Payments, Abstract Management, Conference Program, Virtual Poster Sessions), pricing page
+- Documented complete signup/event creation flow (wizard stepper: 6 fields → event name + date → Event Dashboard)
+- Explored help.fourwaves.com: full Organizers section (75 articles), documented all article categories and key articles
+- Read detailed help articles: Create your event, Add Sessions, Create rooms, Schedule overview
+- Browsed live public event: 2026 CSA-SCS Annual Conference (event.fourwaves.com)
+- Captured and documented both Grid and List schedule views with filters (Tracks, Tags, Rooms)
+- Documented session detail page with nested presentations, session organizers/chair, personal agenda
+- Documented complete pricing structure (4 tiers: Free/$0, Essential/$899, Advanced/$1,799, Pro/$4,799 + add-ons)
+- Created comprehensive 500+ line research document covering all platform aspects
+- Mapped complete data model, URL patterns, and help center structure
+
+**Key Findings:**
+- Fourwaves is an ALL-IN-ONE platform: website builder + registration + submissions + peer review + schedule + virtual platform — unlike pretalx (CfP only) or Indico (CERN-specific)
+- Schedule uses 2-level hierarchy only: Session → Presentation (vs Indico's 4 levels)
+- NO dedicated Speaker entity — speakers are submission authors; no invite/RSVP/confirmation workflow
+- Schedule has DUAL views: Grid (room columns × time rows, color-coded by track) + List (chronological cards grouped by time)
+- Personal agenda feature: attendees can bookmark sessions ("My agenda" tab)
+- Tracks Management is PRO PLAN ONLY ($4,799/yr) — basic plans don't get color-coded tracks
+- Rooms are created from within session edit form, not a dedicated room management page
+- Conflict checker auto-detects double-booked speakers
+- Drag-and-drop: accepted submissions dragged directly into schedule sessions
+- Real-time sync — changes publish instantly (no draft/publish workflow for schedule)
+- No schedule versioning (unlike pretalx's named releases)
+- No WhatsApp/SMS/push — email only
+- No native mobile app — responsive web only
+- Payment processing: organizer connects their own Stripe/PayPal (Fourwaves doesn't hold funds)
+- Bilingual support limited to English + French only
+
+**Additional (Round 2 — Registration & Attendee Experience):**
+- Explored 6 live public event registration forms (Photonics North, CSME, MSC-SMC, ISME, ASIC, CSA-SCS)
+- Documented registration page layout: progress stepper (Form → Confirmation), sticky sidebar, deadline display
+- Documented field variations across events: from minimal (4 fields) to complex (10+ fields with Title dropdown, address, country)
+- Captured "My agenda" empty state for non-logged-in users (lock icon, login prompt)
+- Confirmed personal agenda requires authentication; "All" schedule view is public
+- Documented event-ended state, date-gated registration rates, payment badges (PayPal)
+
+**Additional (Round 3 — Exports, Email, Certificates, Dashboard, Post-Event):**
+- Schedule export: Word (list) + PDF (grid), simplified or detailed format; tracks NOT included in exports
+- Submission file export: email with download link (7-day expiry), folder-per-submission or group-by-session
+- Invoice export: individual PDF or bulk ZIP (2-5 direct, 6+ via email)
+- Mass email: 3-step flow (select → compose with variables → confirm), 6 personalization variables, 3 recipient types (submitters/presenters/non-presenting authors)
+- Email tracking: 6 statuses (Delivered/Deferred/Bounce/Dropped/Processed/Unprocessed) via Event Data → Communications
+- Certificate generation: inline editor (landscape/portrait, logos, signatures, form variables), email or PDF download, error detection (empty values, overflow)
+- Dashboard: 4 sections (Overview/Configuration/Website Pages/Data), 3 role views (Organizer/Participant/Reviewer)
+- Post-event: websites stay online permanently, data accessible on free plan, premium features disabled when plan expires
+- Event cloning: copies website/forms/settings/branding but NOT data/emails/schedule/payments
+
+**Files Created:**
+- `research-hub/worker-N-fourwaves/fourwaves-platform-research.md` — Complete 1000+ line UX teardown (3 rounds of research)
+
+**Timestamp:** 2026-04-06 (round 3 complete)
 
 ---
 
