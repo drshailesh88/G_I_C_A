@@ -31,6 +31,7 @@
 | 3 | halls | Events | Physical spaces within venue |
 | 4 | event_user_assignments | Events | Per-event access control (Clerk user → event) |
 | 5 | people | People | Master identity database |
+| 5b | event_people | People | Auto-upserted event membership junction |
 | 6 | sessions | Program | Scheduled time blocks |
 | 7 | session_role_requirements | Program | Planning: "needs 1 Chair, 3 Speakers" |
 | 8 | session_assignments | Program | Confirmed person → session → role |
@@ -160,6 +161,26 @@
 **Decision:** `organization_id` FK on events, referencing organizations table.
 **Why:** V1 has one org (GEM India). But the data model is ready for multiple medical associations sharing the platform. Adding this later would require data migration on every event-scoped table.
 
+### 21. Event People Junction Table (Auto-Upserted)
+
+**Decision:** Formal `event_people` junction table, system-managed via auto-upsert.
+**Why:** A single stable source of truth for "who belongs to this event" — needed for people pickers, event rosters, counts, exports, and as a guardrail for logistics/certificate issuance. Without it, answering "who is in this event?" requires a UNION across 5+ tables, which is brittle and misses edge cases (invited faculty before assignment, VIPs added for logistics, manual certificate recipients).
+**Key rule:** Never a manual prerequisite step. Any first event-scoped person record (registration, faculty invite, session assignment, travel, accommodation) auto-upserts `event_people` in the same transaction. Ops is never blocked by ceremony.
+**Schema:** `id`, `event_id` (FK), `person_id` (FK), `participant_type` (delegate|faculty|both|guest|sponsor|volunteer), `status` (active|inactive|archived), `source` (registration|faculty_invite|session_assignment|travel|accommodation|manual|import), `created_at`, `updated_at`. Unique on `(event_id, person_id)`.
+
+### 22. Notification Delivery Events Structure
+
+**Decision:** Separate append-only forensic table for raw provider webhook payloads.
+**Why:** Keeps `notification_log` operational and readable. Webhook payloads are verbose, vendor-specific, and needed only for forensic tracing — not daily operations.
+**Schema:** `id`, `event_id`, `notification_log_id` (FK), `channel`, `provider`, `provider_message_id` (nullable), `provider_conversation_id` (nullable), `webhook_event_type` (queued|sent|delivered|read|failed|bounced), `webhook_event_at` (nullable), `received_at`, `normalized_status` (nullable), `raw_payload_json`, `headers_json` (nullable), `signature_valid` (nullable), `dedupe_key` (unique), `processing_status` (pending|processed|ignored|failed), `processing_error` (nullable), `created_at`.
+**Indexes:** `(notification_log_id)`, `(event_id, provider)`, `(provider, provider_message_id)`, unique `(dedupe_key)`.
+
+### 23. Organizations Table Structure (Minimal V1)
+
+**Decision:** Minimal ownership table for future multi-tenancy. Not a full enterprise account model.
+**Schema:** `id` (UUID), `slug` (unique), `name`, `status` (active|inactive), `clerk_org_id` (nullable — bridge to Clerk orgs later), `primary_contact_name` (nullable), `primary_contact_email` (nullable), `primary_contact_phone_e164` (nullable), `branding_defaults_json` (nullable), `created_at`, `updated_at`.
+**Rule:** `events.organization_id` is non-null in schema even with single org row in V1. No billing, address, legal, GST, or self-serve onboarding fields.
+
 ---
 
 ## Cascade Rules (Referential Integrity)
@@ -168,7 +189,8 @@
 |--------|-------|-----------|
 | organizations → events | cascade | Never delete orgs in practice |
 | events → halls, sessions, registrations, all logistics, certificates, comms, red_flags, attendance | cascade | Event deletion cascades (compliance-only operation) |
-| people → registrations, assignments, logistics, certificates | restrict | Cannot delete/archive person with linked records |
+| people → event_people, registrations, assignments, logistics, certificates | restrict | Cannot delete/archive person with linked records |
+| events → event_people | cascade | Event deletion cascades event membership |
 | sessions → role_requirements, assignments | cascade | Session deletion cascades to planning/assignments |
 | halls → sessions.hall_id | set null | Hall removal doesn't delete sessions |
 | event_registrations → travel.registration_id, accommodation.registration_id | set null | Registration removal doesn't delete logistics |
@@ -187,6 +209,7 @@ erDiagram
     ORGANIZATIONS ||--o{ EVENTS : "owns"
     
     EVENTS ||--o{ HALLS : "contains"
+    EVENTS ||--o{ EVENT_PEOPLE : "members"
     EVENTS ||--o{ EVENT_USER_ASSIGNMENTS : "grants access"
     EVENTS ||--o{ SESSIONS : "schedules"
     EVENTS ||--o{ EVENT_REGISTRATIONS : "accepts"
@@ -200,6 +223,7 @@ erDiagram
     EVENTS ||--o{ PROGRAM_VERSIONS : "publishes"
     EVENTS ||--o{ ATTENDANCE_RECORDS : "captures"
     
+    PEOPLE ||--o{ EVENT_PEOPLE : "belongs to"
     PEOPLE ||--o{ EVENT_REGISTRATIONS : "registers"
     PEOPLE ||--o{ SESSION_ASSIGNMENTS : "assigned to"
     PEOPLE ||--o{ FACULTY_INVITES : "invited"
@@ -245,7 +269,7 @@ erDiagram
 src/lib/db/schema/
   ├── organizations.ts   — Organizations (future multi-tenancy)
   ├── events.ts          — Events, halls, event_user_assignments
-  ├── people.ts          — People (master DB)
+  ├── people.ts          — People (master DB), event_people (auto-upserted membership)
   ├── program.ts         — Sessions, role requirements, assignments, faculty invites, program versions
   ├── registrations.ts   — Event registrations
   ├── logistics.ts       — Travel, accommodation, transport (batches, vehicles, passengers)
@@ -258,11 +282,11 @@ src/lib/db/schema/
 
 ---
 
-## Open Questions for Implementation
+## Implementation Notes (Not Open Questions — These Are Decided)
 
-1. **UUIDv7 vs v4:** Switch to UUIDv7 (time-ordered) when Drizzle/Neon support is confirmed. Reduces index fragmentation on high-write tables (notification_log, attendance_records).
+1. **UUIDv7 vs v4:** Use UUIDv4 (defaultRandom) now. Switch to UUIDv7 (time-ordered) when Drizzle/Neon support is confirmed. Reduces index fragmentation on high-write tables (notification_log, attendance_records).
 2. **Partial unique indexes:** Drizzle may not support `.where()` on unique constraints in all versions. May need raw SQL migration for `uq_cert_template_active` and `uq_red_flag_active`.
 3. **Bemi integration:** Wrap Drizzle client with `withBemi()` for automatic audit capture. Needs Clerk user context passed through request middleware.
 4. **CHECK constraints:** Add via migration SQL (not Drizzle schema) for statuses, types, and enum-like fields as defense-in-depth.
-5. **event_people junction:** Consider whether a formal `event_people` table is needed or if participation is adequately implied by existing junctions (registrations + session_assignments).
+5. **event_people junction:** DECIDED — formal table, auto-upserted. See Design Decision #21 above.
 6. **Notification log partitioning:** If notification_log exceeds 10M rows, partition by created_at (monthly). Plan from the start with BRIN index on created_at.

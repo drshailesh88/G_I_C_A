@@ -951,15 +951,17 @@
 
 ---
 
-## Open Questions
+## Open Questions — CLOSED (2026-04-07)
 
-- [ ] Should session_role_requirements be a separate table or JSONB on the session record?
-- [ ] Exact auto-archive timing for completed → archived (90 days confirmed, or configurable per event?)
-- [ ] Should event duplication copy automation triggers and their enabled/disabled states?
-- [ ] Notification delivery events table structure for raw provider webhook payloads
-- [ ] Exact idempotency_key composition formula for each trigger type
-- [ ] Whether V1 needs a formal event_people junction table or if participation is implied by existing junctions (registrations + session_faculty)
-- [ ] Shared room group upgrade path to full room-assignment model — when and what triggers the migration
-- [ ] CME attendance certificate: separate type or handled via delegate_attendance with CME fields?
-- [ ] Exact retention policy for notification_log rows (keep forever or archive after N years?)
-- [ ] Organization table structure for future multi-tenancy (minimal fields to add now)
+All questions resolved. Full decision rationale in `/Users/shaileshsingh/G_I_C_A/open questions.md`.
+
+- [x] **session_role_requirements:** Separate table. Not JSONB. Canonical shape: id, event_id, session_id, role, required_count, created_at, updated_at. Unique on (session_id, role).
+- [x] **Auto-archive timing:** Fixed 90 days after end_date. Global rule, not per-event configurable in V1. Super Admin can archive earlier manually. Daily Inngest background job handles auto-archive.
+- [x] **Event duplication copies triggers:** Yes. Copy trigger rows preserving is_enabled state. Execution gated by event status (draft blocks firing) and feature flag readiness — no accidental spam.
+- [x] **notification_delivery_events structure:** Separate append-only forensic table. Fields: id, event_id, notification_log_id, channel, provider, provider_message_id, provider_conversation_id, webhook_event_type, webhook_event_at, received_at, normalized_status, raw_payload_json, headers_json, signature_valid, dedupe_key (unique), processing_status, processing_error, created_at.
+- [x] **Idempotency key formula:** Canonical automatic-send formula: `auto:{eventId}:{automationTriggerId}:{channel}:{templateKey}:{recipientPersonId}:{triggerType}:{triggerEntityType}:{triggerEntityId}:{sourceEventId}`. Manual resend formula: `manual-resend:{eventId}:{originalNotificationLogId}:{initiatedByUserId}:{channel}:{requestId}`. Per-trigger-type bindings documented in `open questions.md`.
+- [x] **event_people junction table:** Yes, formal table in V1. System-managed and auto-upserted — no manual prerequisite step. Any first event-scoped person record (registration, faculty invite, session assignment, travel, accommodation) auto-upserts event_people in the same transaction. Shape: id, event_id, person_id, participant_type (delegate|faculty|both|guest|sponsor|volunteer), status (active|inactive|archived), source (registration|faculty_invite|session_assignment|travel|accommodation|manual|import), created_at, updated_at. Unique on (event_id, person_id).
+- [x] **Shared room upgrade path:** Defer to V2. Keep shared_room_group string in V1. Migrate only when accommodation becomes inventory-driven (hotel room stock tracking, room-first assignment, variable occupancy rules, gender/pairing constraints). Triggers documented in `open questions.md`.
+- [x] **CME certificate type:** Separate type `cme_attendance` in certificate_type enum. CME certificates have different legal wording, accreditation requirements, and additional variables (cme_credit_hours, accrediting_body_name, accreditation_code, cme_claim_text).
+- [x] **Notification log retention:** Keep forever. No automatic deletion or time-based purge in V1. Optional cold archive after 3 years for performance if needed — implementation optimization, not retention policy change. notification_delivery_events (raw webhooks) can be archived sooner.
+- [x] **Organization table structure:** Minimal V1 shape: id, slug (unique), name, status (active|inactive), clerk_org_id (nullable), primary_contact_name (nullable), primary_contact_email (nullable), primary_contact_phone_e164 (nullable), branding_defaults_json (nullable), created_at, updated_at. events.organization_id is non-null in schema even with single org row in V1. No billing, address, legal, GST, or self-serve onboarding fields.
