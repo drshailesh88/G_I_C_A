@@ -1,0 +1,12 @@
+{
+  "session_start": "2026-04-07T10:00:00Z",
+  "current_requirement": "Admin can sign in with email/password and access the dashboard based on their Clerk-managed global role",
+  "status": "BUILDING",
+  "attempt": 1,
+  "requirements_done": 0,
+  "requirements_stuck": 0,
+  "requirements_remaining": 11,
+  "test_results": { "unit_pass": 0, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
+  "worktree_branch": "main",
+  "last_updated": "2026-04-07T10:01:00Z"
+}

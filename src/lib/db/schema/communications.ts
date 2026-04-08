@@ -73,8 +73,9 @@ export const notificationTemplates = pgTable('notification_templates', {
   index('idx_notif_templates_key_channel').on(table.templateKey, table.channel),
   index('idx_notif_templates_status').on(table.status),
   index('idx_notif_templates_category').on(table.metaCategory),
-  // One active template per event + channel + key
-  unique('uq_notif_template_active').on(table.eventId, table.channel, table.templateKey).where(sql`status = 'active'`),
+  // Partial unique (one active per event+channel+key) enforced via raw SQL migration:
+  // CREATE UNIQUE INDEX uq_notif_template_active ON notification_templates (event_id, channel, template_key) WHERE status = 'active';
+  index('idx_notif_templates_event_channel_key_status').on(table.eventId, table.channel, table.templateKey, table.status),
 ]);
 
 export const notificationTemplatesRelations = relations(notificationTemplates, ({ one }) => ({

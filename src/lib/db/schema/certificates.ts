@@ -66,8 +66,9 @@ export const certificateTemplates = pgTable('certificate_templates', {
   index('idx_cert_templates_event_id').on(table.eventId),
   index('idx_cert_templates_event_type').on(table.eventId, table.certificateType),
   index('idx_cert_templates_status').on(table.status),
-  // Only one active template per event + type
-  unique('uq_cert_template_active').on(table.eventId, table.certificateType).where(sql`status = 'active'`),
+  // Partial unique (one active per event+type) enforced via raw SQL migration:
+  // CREATE UNIQUE INDEX uq_cert_template_active ON certificate_templates (event_id, certificate_type) WHERE status = 'active';
+  index('idx_cert_templates_event_type_status').on(table.eventId, table.certificateType, table.status),
 ]);
 
 export const certificateTemplatesRelations = relations(certificateTemplates, ({ one, many }) => ({

@@ -52,11 +52,10 @@ export const redFlags = pgTable('red_flags', {
   index('idx_red_flags_event_status').on(table.eventId, table.flagStatus),
   index('idx_red_flags_target').on(table.targetEntityType, table.targetEntityId),
   index('idx_red_flags_source').on(table.sourceEntityType, table.sourceEntityId),
-  // One active unresolved flag per target + type
-  unique('uq_red_flag_active').on(table.eventId, table.targetEntityType, table.targetEntityId, table.flagType)
-    .where(sql`flag_status != 'resolved'`),
-  // Ops quick filter: unreviewed flags
-  index('idx_red_flags_unreviewed').on(table.eventId).where(sql`flag_status = 'unreviewed'`),
+  // Partial unique (one active per target+type) enforced via raw SQL migration:
+  // CREATE UNIQUE INDEX uq_red_flag_active ON red_flags (event_id, target_entity_type, target_entity_id, flag_type) WHERE flag_status != 'resolved';
+  // CREATE INDEX idx_red_flags_unreviewed ON red_flags (event_id) WHERE flag_status = 'unreviewed';
+  index('idx_red_flags_target_type').on(table.eventId, table.targetEntityType, table.targetEntityId, table.flagType),
 ]);
 
 export const redFlagsRelations = relations(redFlags, ({ one }) => ({
