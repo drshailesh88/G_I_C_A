@@ -1,13 +1,13 @@
 {
   "session_start": "2026-04-08T05:08:00Z",
-  "current_requirement": "Scientific Program UI + Faculty Invitation UI — all screens built",
-  "status": "REVIEWING",
+  "current_requirement": "CHECKPOINT — Scientific Program UI + Faculty Invitation UI complete",
+  "status": "COMPLETE",
   "attempt": 1,
-  "requirements_done": 16,
+  "requirements_done": 28,
   "requirements_stuck": 0,
-  "requirements_remaining": 17,
+  "requirements_remaining": 7,
   "test_results": { "unit_pass": 216, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
   "worktree_branch": "wt/req-17-sessions-ui",
-  "last_updated": "2026-04-08T05:18:00Z",
-  "notes": "Session 3: All Priority 1 + Priority 2 UI screens built. M22 Session Manager, M23 Add/Edit Session, M30 Admin Schedule Grid, M04 Attendee Program, M26 Faculty Invitation, M55 Faculty Confirm, M60 Confirmed Success. 216 tests still passing. Sending for Codex review."
+  "last_updated": "2026-04-08T05:22:00Z",
+  "notes": "Session 3 checkpoint: 12 requirements built this session (8 Scientific Program + 4 Faculty Invitation). All UI screens built: M22, M23, M30, M04, M26, M55, M60. Program backend files (previously untracked) now committed. 216 tests passing. Codex review dispatched (pending response). Remaining 7 items: 2 notification features (SciProg), 1 accept-creates-reg (Faculty), 1 event duplication, 2 people features (merge, bemi), 1 reg cancellation red flags."
 }
