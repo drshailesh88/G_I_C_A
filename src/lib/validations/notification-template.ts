@@ -36,6 +36,8 @@ export const SYSTEM_TEMPLATE_KEYS = [
   'travel_update',
   'travel_cancelled',
   'accommodation_details',
+  'accommodation_update',
+  'accommodation_cancelled',
   'certificate_ready',
   'event_reminder',
 ] as const;
