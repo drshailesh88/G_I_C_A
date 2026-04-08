@@ -3,10 +3,12 @@
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
 import { events, eventUserAssignments, organizations } from '@/lib/db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { ZodError, ZodIssue } from 'zod';
 import { createEventSchema, eventIdSchema, EVENT_TRANSITIONS, type EventStatus } from '@/lib/validations/event';
+import { assertEventAccess, getEventListContext } from '@/lib/auth/event-access';
+import { withEventScope } from '@/lib/db/with-event-scope';
 
 function slugify(text: string): string {
   return text
@@ -103,26 +105,68 @@ export async function createEvent(formData: FormData) {
 }
 
 export async function getEvents() {
-  const { userId } = await auth();
+  const { userId, isSuperAdmin } = await getEventListContext();
   if (!userId) throw new Error('Unauthorized');
 
-  // TODO: Phase 1 Req 10 — filter by assigned events for non-super-admin
-  // For now, return all events (super admin view)
-  const allEvents = await db
-    .select()
+  // REQ 10: Super Admin sees all events; others see only assigned events
+  if (isSuperAdmin) {
+    return db
+      .select()
+      .from(events)
+      .orderBy(desc(events.startDate));
+  }
+
+  // Non-super-admin: JOIN with event_user_assignments to filter by assignment
+  const rows = await db
+    .select({
+      id: events.id,
+      organizationId: events.organizationId,
+      slug: events.slug,
+      name: events.name,
+      description: events.description,
+      startDate: events.startDate,
+      endDate: events.endDate,
+      timezone: events.timezone,
+      status: events.status,
+      archivedAt: events.archivedAt,
+      cancelledAt: events.cancelledAt,
+      venueName: events.venueName,
+      venueAddress: events.venueAddress,
+      venueCity: events.venueCity,
+      venueMapUrl: events.venueMapUrl,
+      moduleToggles: events.moduleToggles,
+      fieldConfig: events.fieldConfig,
+      branding: events.branding,
+      registrationSettings: events.registrationSettings,
+      communicationSettings: events.communicationSettings,
+      publicPageSettings: events.publicPageSettings,
+      createdBy: events.createdBy,
+      updatedBy: events.updatedBy,
+      createdAt: events.createdAt,
+      updatedAt: events.updatedAt,
+    })
     .from(events)
+    .innerJoin(
+      eventUserAssignments,
+      and(
+        eq(eventUserAssignments.eventId, events.id),
+        eq(eventUserAssignments.authUserId, userId),
+        eq(eventUserAssignments.isActive, true),
+      ),
+    )
     .orderBy(desc(events.startDate));
 
-  return allEvents;
+  return rows;
 }
 
 export async function getEvent(eventId: string) {
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-
   // Validate eventId format (Bug fix #5)
   eventIdSchema.parse(eventId);
 
+  // REQ 9: Per-event access control via assertEventAccess
+  await assertEventAccess(eventId);
+
+  // REQ 11: Query scoped by event_id
   const [event] = await db
     .select()
     .from(events)
@@ -131,30 +175,17 @@ export async function getEvent(eventId: string) {
 
   if (!event) throw new Error('Event not found');
 
-  // Authorization: user must be event creator or assigned (Bug fix #1)
-  if (event.createdBy !== userId) {
-    // Check event_user_assignments for access
-    const [assignment] = await db
-      .select()
-      .from(eventUserAssignments)
-      .where(eq(eventUserAssignments.eventId, eventId))
-      .limit(1);
-
-    if (!assignment || (assignment as Record<string, unknown>).authUserId !== userId) {
-      throw new Error('Forbidden: you do not have access to this event');
-    }
-  }
-
   return event;
 }
 
 export async function updateEventStatus(eventId: string, newStatus: EventStatus) {
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
-
   // Validate eventId
   eventIdSchema.parse(eventId);
 
+  // REQ 9: Per-event access control
+  const { userId } = await assertEventAccess(eventId);
+
+  // REQ 11: Query scoped by event_id
   const [event] = await db
     .select()
     .from(events)
@@ -186,10 +217,7 @@ export async function updateEventStatus(eventId: string, newStatus: EventStatus)
     .set(updateData)
     .where(eq(events.id, eventId));
 
-  // Post-update verification: re-read to detect both unauthorized access and
-  // concurrent modifications (optimistic locking). If the verified status doesn't
-  // match the intended new status, the update was either rejected (forbidden) or
-  // the event was concurrently modified (stale/conflict).
+  // Post-update verification: re-read to detect concurrent modifications
   const [verified] = await db
     .select()
     .from(events)
