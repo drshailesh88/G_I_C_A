@@ -32,12 +32,12 @@
 > Must be resolved BEFORE any production deployment. Fix during Phase 6 hardening
 > unless noted otherwise.
 
-| # | Severity | Issue | What Breaks in Production | Fix Phase |
-|---|----------|-------|--------------------------|-----------|
-| H1 | HIGH | Webhook endpoints (`/api/webhooks/email`, `/api/webhooks/whatsapp`) have no signature verification | Anyone can forge delivery/read/failed states by POSTing to the endpoints. Resend supports webhook signing; Evolution API supports HMAC. | Phase 6 (`/harden`) |
-| H2 | HIGH | Webhook ingest swallows all errors, routes always return 200, no dead-letter queue | Transient DB outage permanently loses delivery state — provider won't retry since it got 200 | Phase 6 — needs Inngest or Redis-based DLQ |
-| H3 | HIGH | Forward-only status progression uses stale read (no DB-level CAS) | Concurrent `delivered` + `read` webhooks can regress status. Need `UPDATE ... WHERE status_order < $new` | Phase 6 — DB-level compare-and-set |
-| H4 | HIGH | `providerMessageId` not unique-constrained in `notification_log` | Colliding or reused provider IDs can update wrong notification row | Phase 6 — DB migration to add unique index |
-| H5 | HIGH | Email adapter doesn't pass attachments to Resend; WhatsApp adapter ignores `mediaAttachments` | QR codes, itineraries, certificates silently omitted from sends | Phase 5 (certificates) — implement R2 signed URL attachment flow |
-| H6 | HIGH | Provider calls run inline with no timeout, queue, or circuit breaker | 1000+ sends or provider degradation blocks request path, cascading into user-facing saturation | Phase 6 — Inngest background jobs or at minimum `AbortController` timeouts |
-| H7 | MEDIUM | `handleDomainEvent` in `automation.ts` only logs dispatch plan, doesn't actually send | Modules wired to automation triggers appear to work but send nothing | Wire to `sendNotification()` when integrating cascade handlers with real NotificationService |
+| # | Severity | Issue | What Breaks in Production | Fix Phase | Status |
+|---|----------|-------|--------------------------|-----------|--------|
+| H1 | HIGH | Webhook endpoints have no signature verification | Forged delivery states | — | **FIXED** (2026-04-08) — Svix HMAC for Resend, Bearer token for Evolution API |
+| H2 | HIGH | Webhook ingest swallows errors, no DLQ | Permanent delivery state loss | — | **FIXED** (2026-04-08) — Redis-backed DLQ with 7-day TTL |
+| H3 | HIGH | Forward-only status uses stale read | Concurrent webhook status regression | — | **FIXED** (2026-04-08) — DB-level CASE CAS in WHERE clause |
+| H4 | HIGH | `providerMessageId` not unique-constrained | Correlation ambiguity | — | **FIXED** (2026-04-08) — unique(provider, provider_message_id) on notification_log |
+| H5 | HIGH | Email/WhatsApp adapters don't pass attachments | Certificates/QR silently omitted | Phase 5 | OPEN — implement R2 signed URL attachment flow |
+| H6 | HIGH | Provider calls inline with no timeout/circuit breaker | Cascading saturation at scale | Phase 6 | OPEN — Inngest background jobs or AbortController timeouts |
+| H7 | MEDIUM | `handleDomainEvent` only logs, doesn't send | Automation triggers do nothing | Phase 6 | OPEN — wire to sendNotification() |
