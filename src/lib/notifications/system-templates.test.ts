@@ -8,13 +8,13 @@ import { SYSTEM_TEMPLATE_KEYS } from '@/lib/validations/notification-template';
 import { interpolate, validateRequiredVariables } from './template-utils';
 
 describe('System template seeds', () => {
-  it('has exactly 20 seeds (10 keys × 2 channels)', () => {
-    expect(SYSTEM_TEMPLATE_SEEDS).toHaveLength(20);
+  it('has exactly 24 seeds (12 keys × 2 channels)', () => {
+    expect(SYSTEM_TEMPLATE_SEEDS).toHaveLength(24);
   });
 
-  it('has exactly 10 unique template keys', () => {
+  it('has exactly 12 unique template keys', () => {
     const keys = getSystemTemplateKeys();
-    expect(keys).toHaveLength(10);
+    expect(keys).toHaveLength(12);
   });
 
   it('every key has both email and WhatsApp variants', () => {
@@ -142,5 +142,19 @@ describe('System template seeds', () => {
 
   it('getSeedsForKey returns empty for unknown key', () => {
     expect(getSeedsForKey('nonexistent_key')).toEqual([]);
+  });
+
+  it('covers all cascade handler template keys', () => {
+    // Template keys referenced by cascade handlers
+    const cascadeTemplateKeys = [
+      'travel_update',
+      'travel_cancelled',
+      'accommodation_update',
+      'accommodation_cancelled',
+    ];
+    const seededKeys = getSystemTemplateKeys();
+    for (const key of cascadeTemplateKeys) {
+      expect(seededKeys, `Missing seed for cascade handler key: ${key}`).toContain(key);
+    }
   });
 });

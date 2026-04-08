@@ -435,7 +435,105 @@ Bring valid ID for hotel check-in.`,
     isSystemTemplate: true,
   },
 
-  // ── 9. Certificate Ready ────────────────────────────────────
+  // ── 9. Accommodation Update ──────────────────────────────────
+  {
+    templateKey: 'accommodation_update',
+    channel: 'email',
+    templateName: 'Accommodation Update Email',
+    metaCategory: 'logistics',
+    triggerType: 'accommodation.updated',
+    sendMode: 'automatic',
+    subjectLine: 'Accommodation Updated — {{eventName}}',
+    bodyContent: `Dear {{salutation}} {{fullName}},
+
+Your accommodation for {{eventName}} has been updated.
+
+Changes:
+{{changeSummary}}
+
+Updated details:
+🏨 Hotel: {{hotelName}}
+📅 Check-in: {{checkInDate}}
+📅 Check-out: {{checkOutDate}}
+
+If these details are incorrect, please contact the operations team.
+
+Regards,
+{{eventName}} Operations Team`,
+    previewText: 'Your accommodation has been updated',
+    allowedVariablesJson: ['salutation', 'fullName', 'eventName', 'changeSummary', 'hotelName', 'checkInDate', 'checkOutDate'],
+    requiredVariablesJson: ['fullName', 'eventName', 'changeSummary'],
+    isSystemTemplate: true,
+  },
+  {
+    templateKey: 'accommodation_update',
+    channel: 'whatsapp',
+    templateName: 'Accommodation Update WhatsApp',
+    metaCategory: 'logistics',
+    triggerType: 'accommodation.updated',
+    sendMode: 'automatic',
+    subjectLine: null,
+    bodyContent: `🏨 Accommodation Updated
+
+Dear {{fullName}},
+Your stay for *{{eventName}}* has been updated.
+
+Changes: {{changeSummary}}
+
+Contact ops if incorrect.`,
+    previewText: null,
+    allowedVariablesJson: ['fullName', 'eventName', 'changeSummary'],
+    requiredVariablesJson: ['fullName', 'eventName', 'changeSummary'],
+    isSystemTemplate: true,
+  },
+
+  // ── 10. Accommodation Cancelled ─────────────────────────────
+  {
+    templateKey: 'accommodation_cancelled',
+    channel: 'email',
+    templateName: 'Accommodation Cancelled Email',
+    metaCategory: 'logistics',
+    triggerType: 'accommodation.cancelled',
+    sendMode: 'automatic',
+    subjectLine: 'Accommodation Cancelled — {{eventName}}',
+    bodyContent: `Dear {{salutation}} {{fullName}},
+
+Your accommodation for {{eventName}} has been cancelled.
+
+Reason: {{reason}}
+
+If this is an error, please contact the operations team immediately.
+
+Regards,
+{{eventName}} Operations Team`,
+    previewText: 'Your accommodation has been cancelled',
+    allowedVariablesJson: ['salutation', 'fullName', 'eventName', 'reason'],
+    requiredVariablesJson: ['fullName', 'eventName'],
+    isSystemTemplate: true,
+  },
+  {
+    templateKey: 'accommodation_cancelled',
+    channel: 'whatsapp',
+    templateName: 'Accommodation Cancelled WhatsApp',
+    metaCategory: 'logistics',
+    triggerType: 'accommodation.cancelled',
+    sendMode: 'automatic',
+    subjectLine: null,
+    bodyContent: `❌ Accommodation Cancelled
+
+Dear {{fullName}},
+Your accommodation for *{{eventName}}* has been cancelled.
+
+Reason: {{reason}}
+
+Contact ops if this is an error.`,
+    previewText: null,
+    allowedVariablesJson: ['fullName', 'eventName', 'reason'],
+    requiredVariablesJson: ['fullName', 'eventName'],
+    isSystemTemplate: true,
+  },
+
+  // ── 11. Certificate Ready ────────────────────────────────────
   {
     templateKey: 'certificate_ready',
     channel: 'email',

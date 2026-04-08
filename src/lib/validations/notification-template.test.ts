@@ -37,9 +37,11 @@ describe('Notification template constants', () => {
     expect(TEMPLATE_META_CATEGORIES).toContain('logistics');
   });
 
-  it('defines 10 system template keys', () => {
-    expect(SYSTEM_TEMPLATE_KEYS).toHaveLength(10);
+  it('defines 12 system template keys', () => {
+    expect(SYSTEM_TEMPLATE_KEYS).toHaveLength(12);
     expect(SYSTEM_TEMPLATE_KEYS).toContain('registration_confirmation');
+    expect(SYSTEM_TEMPLATE_KEYS).toContain('accommodation_update');
+    expect(SYSTEM_TEMPLATE_KEYS).toContain('accommodation_cancelled');
     expect(SYSTEM_TEMPLATE_KEYS).toContain('event_reminder');
   });
 });
