@@ -72,7 +72,45 @@ function createMockDeps(overrides?: Partial<NotificationServiceDeps>): Notificat
     variables: { name: 'Test' },
   });
 
-  const mockLogRow = {
+  const mockLogRow = createStoredLog();
+
+  const mockCreateLogEntry = vi.fn().mockResolvedValue(mockLogRow);
+  const mockUpdateLogStatus = vi.fn().mockResolvedValue({ ...mockLogRow, status: 'sent' });
+  const mockGetLogById = vi.fn().mockResolvedValue(mockLogRow);
+
+  return {
+    emailProvider: mockEmailProvider,
+    whatsAppProvider: mockWhatsAppProvider,
+    idempotencyService: mockIdempotency,
+    renderTemplateFn: mockRenderTemplate,
+    createLogEntryFn: mockCreateLogEntry,
+    updateLogStatusFn: mockUpdateLogStatus,
+    getLogByIdFn: mockGetLogById,
+    ...overrides,
+  };
+}
+
+function createEmailInput(overrides?: Partial<SendNotificationInput>): SendNotificationInput {
+  return {
+    eventId: 'evt-1',
+    personId: 'person-1',
+    channel: 'email',
+    templateKey: 'registration_confirmation',
+    triggerType: 'registration.created',
+    triggerEntityType: 'registration',
+    triggerEntityId: 'reg-1',
+    sendMode: 'automatic',
+    idempotencyKey: 'idem-key-1',
+    variables: {
+      name: 'Test User',
+      recipientEmail: 'user@example.com',
+    },
+    ...overrides,
+  };
+}
+
+function createStoredLog(overrides?: Record<string, unknown>) {
+  return {
     id: 'log-1',
     eventId: 'evt-1',
     personId: 'person-1',
@@ -109,39 +147,6 @@ function createMockDeps(overrides?: Partial<NotificationServiceDeps>): Notificat
     initiatedByUserId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
-  };
-
-  const mockCreateLogEntry = vi.fn().mockResolvedValue(mockLogRow);
-  const mockUpdateLogStatus = vi.fn().mockResolvedValue({ ...mockLogRow, status: 'sent' });
-  const mockGetLogById = vi.fn().mockResolvedValue(mockLogRow);
-
-  return {
-    emailProvider: mockEmailProvider,
-    whatsAppProvider: mockWhatsAppProvider,
-    idempotencyService: mockIdempotency,
-    renderTemplateFn: mockRenderTemplate,
-    createLogEntryFn: mockCreateLogEntry,
-    updateLogStatusFn: mockUpdateLogStatus,
-    getLogByIdFn: mockGetLogById,
-    ...overrides,
-  };
-}
-
-function createEmailInput(overrides?: Partial<SendNotificationInput>): SendNotificationInput {
-  return {
-    eventId: 'evt-1',
-    personId: 'person-1',
-    channel: 'email',
-    templateKey: 'registration_confirmation',
-    triggerType: 'registration.created',
-    triggerEntityType: 'registration',
-    triggerEntityId: 'reg-1',
-    sendMode: 'automatic',
-    idempotencyKey: 'idem-key-1',
-    variables: {
-      name: 'Test User',
-      recipientEmail: 'user@example.com',
-    },
     ...overrides,
   };
 }
@@ -273,6 +278,15 @@ describe('sendNotification', () => {
       }),
     );
   });
+
+  it('should propagate template render errors', async () => {
+    const deps = createMockDeps({
+      renderTemplateFn: vi.fn().mockRejectedValueOnce(new Error('template render failed')),
+    });
+    const input = createEmailInput();
+
+    await expect(sendNotification(input, deps)).rejects.toThrow('template render failed');
+  });
 });
 
 describe('resendNotification', () => {
@@ -301,6 +315,43 @@ describe('resendNotification', () => {
     );
 
     expect(result.status).toBe('sent');
+  });
+
+  it('should preserve attachment manifests and resend attachments on resend attempts', async () => {
+    const attachments = [
+      {
+        fileName: 'travel-itinerary.pdf',
+        storageKey: 'uploads/evt-1/travel-itinerary.pdf',
+        contentType: 'application/pdf',
+      },
+    ];
+    const deps = createMockDeps({
+      getLogByIdFn: vi.fn().mockResolvedValue(
+        createStoredLog({
+          attachmentManifestJson: attachments,
+        }),
+      ),
+    });
+
+    await resendNotification(
+      {
+        eventId: 'evt-1',
+        notificationLogId: 'log-1',
+        initiatedByUserId: 'user-1',
+      },
+      deps,
+    );
+
+    expect(deps.createLogEntryFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachmentManifestJson: attachments,
+      }),
+    );
+    expect(deps.emailProvider.send).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments,
+      }),
+    );
   });
 
   it('should throw if original log not found', async () => {
@@ -356,6 +407,26 @@ describe('retryFailedNotification', () => {
     );
 
     expect(result.status).toBe('sent');
+  });
+
+  it('should use a fresh idempotency key for retry', async () => {
+    const deps = createMockDeps({
+      getLogByIdFn: vi.fn().mockResolvedValue(
+        createStoredLog({ status: 'failed' }),
+      ),
+    });
+
+    await retryFailedNotification(
+      { eventId: 'evt-1', notificationLogId: 'log-1', initiatedByUserId: 'user-1' },
+      deps,
+    );
+
+    // Retry creates a new log entry with a unique idempotency key
+    expect(deps.createLogEntryFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        idempotencyKey: expect.stringMatching(/^retry:log-1:/),
+      }),
+    );
   });
 
   it('should throw if notification is not in failed status', async () => {

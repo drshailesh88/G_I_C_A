@@ -281,7 +281,7 @@ async function sendNotificationFromLog(
     renderedSubject: (log.renderedSubject as string) ?? null,
     renderedBody: log.renderedBody as string,
     renderedVariablesJson: (log.renderedVariablesJson as Record<string, unknown>) ?? null,
-    attachmentManifestJson: null,
+    attachmentManifestJson: (log.attachmentManifestJson as Record<string, unknown>[] | null) ?? null,
     status: 'queued',
     initiatedByUserId: overrides.initiatedByUserId,
     isResend: overrides.isResend,
@@ -291,18 +291,21 @@ async function sendNotificationFromLog(
   // Route to provider
   let providerResult: ProviderSendResult;
   try {
+    const attachments = (log.attachmentManifestJson as Record<string, unknown>[] | null) ?? undefined;
     if (channel === 'email') {
       providerResult = await emailProvider.send({
         eventId: log.eventId as string,
         toEmail: (log.recipientEmail as string) ?? '',
         subject: (log.renderedSubject as string) ?? '',
         htmlBody: log.renderedBody as string,
+        attachments,
       });
     } else {
       providerResult = await whatsAppProvider.sendText({
         eventId: log.eventId as string,
         toPhoneE164: (log.recipientPhoneE164 as string) ?? '',
         body: log.renderedBody as string,
+        mediaAttachments: attachments,
       });
     }
   } catch (error) {

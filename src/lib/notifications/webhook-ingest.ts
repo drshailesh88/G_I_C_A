@@ -24,7 +24,7 @@ export async function ingestEmailStatus(params: {
     return;
   }
 
-  await processDeliveryEvent(parsed.providerMessageId, parsed.eventType, parsed.timestamp, params.rawPayload);
+  await processDeliveryEvent(parsed.providerMessageId, parsed.eventType, parsed.timestamp, params.rawPayload, 'email');
 }
 
 /**
@@ -40,7 +40,7 @@ export async function ingestWhatsAppStatus(params: {
     return;
   }
 
-  await processDeliveryEvent(parsed.providerMessageId, parsed.eventType, parsed.timestamp, params.rawPayload);
+  await processDeliveryEvent(parsed.providerMessageId, parsed.eventType, parsed.timestamp, params.rawPayload, 'whatsapp');
 }
 
 /**
@@ -54,12 +54,20 @@ async function processDeliveryEvent(
   eventType: NotificationStatus,
   timestamp: string,
   rawPayload: unknown,
+  expectedChannel: 'email' | 'whatsapp',
 ): Promise<void> {
   try {
     // Find the matching notification_log row
     const logRow = await findLogByProviderMessageId(providerMessageId);
     if (!logRow) {
       // No matching log — might be a stale webhook or a message we didn't send.
+      return;
+    }
+
+    // Verify the webhook channel matches the log's channel
+    if (logRow.channel !== expectedChannel) {
+      // Channel mismatch — a WhatsApp webhook for an email log (or vice versa).
+      // This can happen if provider message IDs collide across channels.
       return;
     }
 
