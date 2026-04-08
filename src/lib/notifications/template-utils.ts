@@ -25,6 +25,8 @@ export function resolvePath(obj: Record<string, unknown>, path: string): unknown
   for (const part of parts) {
     if (current === null || current === undefined) return undefined;
     if (typeof current !== 'object') return undefined;
+    // Guard against prototype chain access (e.g., __proto__, constructor)
+    if (!Object.prototype.hasOwnProperty.call(current, part)) return undefined;
     current = (current as Record<string, unknown>)[part];
   }
   return current;

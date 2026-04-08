@@ -60,6 +60,16 @@ describe('interpolate', () => {
     const result = interpolate('{{ name }} {name} {{}}', { name: 'Alice' });
     expect(result).toBe('{{ name }} {name} {{}}');
   });
+
+  it('does not resolve prototype chain properties (__proto__)', () => {
+    const result = interpolate('{{__proto__.toString}}', {});
+    expect(result).toBe('');
+  });
+
+  it('does not resolve constructor property', () => {
+    const result = interpolate('{{constructor}}', {});
+    expect(result).toBe('');
+  });
 });
 
 // ── validateRequiredVariables ────────────────────────────────
@@ -114,5 +124,10 @@ describe('validateRequiredVariables', () => {
   it('treats false as present', () => {
     const missing = validateRequiredVariables(['flag'], { flag: false });
     expect(missing).toEqual([]);
+  });
+
+  it('does not resolve prototype chain in validation', () => {
+    const missing = validateRequiredVariables(['__proto__.toString'], {});
+    expect(missing).toEqual(['__proto__.toString']);
   });
 });

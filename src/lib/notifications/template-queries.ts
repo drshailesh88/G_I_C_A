@@ -90,7 +90,10 @@ export async function updateTemplate(templateId: string, input: UpdateTemplateIn
   if (input.templateName !== undefined) updateData.templateName = input.templateName;
   if (input.status !== undefined) {
     updateData.status = input.status;
-    if (input.status === 'active') updateData.lastActivatedAt = new Date();
+    if (input.status === 'active') {
+      updateData.lastActivatedAt = new Date();
+      updateData.archivedAt = null; // Clear archived timestamp on reactivation
+    }
     if (input.status === 'archived') updateData.archivedAt = new Date();
   }
   if (input.subjectLine !== undefined) updateData.subjectLine = input.subjectLine;
@@ -188,6 +191,9 @@ export async function createEventOverride(
   eventId: string,
   createdBy: string,
 ) {
+  if (!eventId || !eventId.trim()) {
+    throw new Error('createEventOverride: eventId is required');
+  }
   const global = await getTemplateById(globalTemplateId);
   if (!global) throw new Error(`Global template ${globalTemplateId} not found`);
   if (global.eventId !== null) throw new Error('Source template is not a global template');

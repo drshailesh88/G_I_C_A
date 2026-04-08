@@ -163,6 +163,30 @@ describe('createNotificationTemplateSchema', () => {
     expect(result.allowedVariablesJson).toEqual(['name', 'eventName', 'registrationNumber']);
     expect(result.requiredVariablesJson).toEqual(['name']);
   });
+
+  it('rejects whitespace-only templateKey', () => {
+    const result = createNotificationTemplateSchema.safeParse({
+      ...validEmail,
+      templateKey: '   ',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects whitespace-only subject line for email', () => {
+    const result = createNotificationTemplateSchema.safeParse({
+      ...validEmail,
+      subjectLine: '   ',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects empty string variable identifiers', () => {
+    const result = createNotificationTemplateSchema.safeParse({
+      ...validEmail,
+      allowedVariablesJson: ['name', ''],
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 // ── updateNotificationTemplateSchema ─────────────────────────
