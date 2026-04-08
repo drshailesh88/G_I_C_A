@@ -18,9 +18,9 @@ v1 — GEM India Conference Management Platform
 - [ ] Published events have a public landing page showing event info, speakers, and schedule
 - [ ] Super Admin or Event Coordinator can duplicate an event's structure (sessions, halls, branding, triggers) without copying person-linked data
 - [x] Super Admin can archive, cancel, or transfer ownership of any event
-- [ ] Per-event access control scopes Event Coordinator, Ops, and Read-only to assigned events only
-- [ ] Super Admin sees all events; other roles see only assigned events
-- [ ] Every event-scoped query, mutation, export, and background job filters by event_id
+- [x] Per-event access control scopes Event Coordinator, Ops, and Read-only to assigned events only
+- [x] Super Admin sees all events; other roles see only assigned events
+- [x] Every event-scoped query, mutation, export, and background job filters by event_id
 
 ### People
 - [ ] Master people database stores global person records (salutation, full_name, email, phone_e164, designation, specialty, organization, city, tags)
