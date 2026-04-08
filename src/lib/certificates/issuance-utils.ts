@@ -173,24 +173,36 @@ export function checkEligibility(
       return { eligible: true };
 
     case 'speaker_recognition':
+      if (!context.hasSessionAssignment) {
+        return { eligible: false, reason: 'No session assignments found for this person' };
+      }
       if (!context.assignmentRoles.includes('speaker')) {
         return { eligible: false, reason: 'Person is not assigned as a speaker' };
       }
       return { eligible: true };
 
     case 'chairperson_recognition':
+      if (!context.hasSessionAssignment) {
+        return { eligible: false, reason: 'No session assignments found for this person' };
+      }
       if (!context.assignmentRoles.includes('chairperson')) {
         return { eligible: false, reason: 'Person is not assigned as a chairperson' };
       }
       return { eligible: true };
 
     case 'panelist_recognition':
+      if (!context.hasSessionAssignment) {
+        return { eligible: false, reason: 'No session assignments found for this person' };
+      }
       if (!context.assignmentRoles.includes('panelist')) {
         return { eligible: false, reason: 'Person is not assigned as a panelist' };
       }
       return { eligible: true };
 
     case 'moderator_recognition':
+      if (!context.hasSessionAssignment) {
+        return { eligible: false, reason: 'No session assignments found for this person' };
+      }
       if (!context.assignmentRoles.includes('moderator')) {
         return { eligible: false, reason: 'Person is not assigned as a moderator' };
       }

@@ -242,4 +242,8 @@ describe('getIssuedCertificate', () => {
     chainedSelectSequence([[]]);
     await expect(getIssuedCertificate(EVENT_ID, CERT_ID)).rejects.toThrow('Certificate not found');
   });
+
+  it('rejects non-UUID certificate ID', async () => {
+    await expect(getIssuedCertificate(EVENT_ID, 'not-a-uuid')).rejects.toThrow();
+  });
 });

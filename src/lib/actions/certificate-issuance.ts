@@ -3,6 +3,7 @@
 import { db } from '@/lib/db';
 import { issuedCertificates, certificateTemplates, people } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
+import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
@@ -14,6 +15,7 @@ import {
   findCurrentCertificate,
   buildSupersessionChain,
   validateRevocation,
+  getNextSequence,
   type IssuedCertificateRecord,
 } from '@/lib/certificates/issuance-utils';
 import { generateCertificateNumber, getCertificateTypeConfig } from '@/lib/certificates/certificate-types';
@@ -80,7 +82,8 @@ export async function issueCertificate(eventId: string, input: unknown) {
     .where(eq(issuedCertificates.eventId, eventId));
 
   const config = getCertificateTypeConfig(validated.certificateType);
-  const sequence = existingNumbers.length + 1;
+  const numbers = existingNumbers.map(r => r.certificateNumber);
+  const sequence = getNextSequence(numbers, config.certificateNumberPrefix);
   const certificateNumber = generateCertificateNumber(validated.certificateType, sequence);
 
   // Build storage key (PDF will be uploaded separately)
@@ -189,8 +192,11 @@ export async function listIssuedCertificates(eventId: string) {
 }
 
 // ── Get single issued certificate ────────────────────────────
+const certificateIdSchema = z.string().uuid('Invalid certificate ID');
+
 export async function getIssuedCertificate(eventId: string, certificateId: string) {
   await assertEventAccess(eventId);
+  const validatedId = certificateIdSchema.parse(certificateId);
 
   const [cert] = await db
     .select()
@@ -199,7 +205,7 @@ export async function getIssuedCertificate(eventId: string, certificateId: strin
       withEventScope(
         issuedCertificates.eventId,
         eventId,
-        eq(issuedCertificates.id, certificateId),
+        eq(issuedCertificates.id, validatedId),
       ),
     )
     .limit(1);

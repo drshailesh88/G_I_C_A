@@ -237,6 +237,41 @@ describe('checkEligibility', () => {
     const result = checkEligibility('cme_attendance', { ...fullContext, sessionAttendanceCount: 0 });
     expect(result.eligible).toBe(false);
   });
+
+  // Adversarial: role-based eligibility requires actual session assignments
+  it('speaker_recognition: ineligible with role claim but no session assignment', () => {
+    const result = checkEligibility('speaker_recognition', {
+      ...fullContext,
+      hasSessionAssignment: false,
+      assignmentRoles: ['speaker'],
+    });
+    expect(result.eligible).toBe(false);
+  });
+
+  it('chairperson_recognition: ineligible with role claim but no session assignment', () => {
+    const result = checkEligibility('chairperson_recognition', {
+      ...fullContext,
+      hasSessionAssignment: false,
+      assignmentRoles: ['chairperson'],
+    });
+    expect(result.eligible).toBe(false);
+  });
+
+  it('panelist_recognition: ineligible with role claim but no session assignment', () => {
+    const result = checkEligibility('panelist_recognition', {
+      ...fullContext,
+      hasSessionAssignment: false,
+    });
+    expect(result.eligible).toBe(false);
+  });
+
+  it('moderator_recognition: ineligible with role claim but no session assignment', () => {
+    const result = checkEligibility('moderator_recognition', {
+      ...fullContext,
+      hasSessionAssignment: false,
+    });
+    expect(result.eligible).toBe(false);
+  });
 });
 
 // ── getNextSequence ──────────────────────────────────────────
