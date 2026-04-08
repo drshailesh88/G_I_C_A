@@ -109,15 +109,15 @@ v1 — GEM India Conference Management Platform
 - [x] Manual resend creates new notification_log row (is_resend = true, resend_of_id)
 
 ### Certificates
-- [ ] Certificate templates designed in pdfme visual editor, stored as JSON in PostgreSQL
-- [ ] 7 certificate types (delegate_attendance through cme_attendance)
-- [ ] Bulk generation: select people by category/attendance, generate PDFs, upload to R2, deliver via email + WhatsApp
-- [ ] Supersession chain: regeneration creates new row, supersedes old one — never overwrite
-- [ ] Revocation: mandatory reason, revoked_at, irreversible
-- [ ] One current valid certificate per (person_id, event_id, certificate_type)
-- [ ] Storage via signed URLs only — no permanent public file URLs
-- [ ] Bulk ZIP download via node-archiver
-- [ ] Distributed lock prevents simultaneous bulk generation for same event/type
+- [x] Certificate templates designed in pdfme visual editor, stored as JSON in PostgreSQL
+- [x] 7 certificate types (delegate_attendance through cme_attendance)
+- [x] Bulk generation: select people by category/attendance, generate PDFs, upload to R2, deliver via email + WhatsApp
+- [x] Supersession chain: regeneration creates new row, supersedes old one — never overwrite
+- [x] Revocation: mandatory reason, revoked_at, irreversible
+- [x] One current valid certificate per (person_id, event_id, certificate_type)
+- [x] Storage via signed URLs only — no permanent public file URLs
+- [x] Bulk ZIP download via node-archiver
+- [x] Distributed lock prevents simultaneous bulk generation for same event/type
 
 ### QR & Attendance
 - [ ] Unique QR per registration (qr_code_token encoded via qrcode.react)

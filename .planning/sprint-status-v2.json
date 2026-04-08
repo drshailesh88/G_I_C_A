@@ -1,14 +1,14 @@
 {
-  "session_start": "2026-04-08T14:00:00Z",
-  "current_requirement": "CHECKPOINT — 3 build rounds done (6 requirements)",
+  "session_start": "2026-04-08T15:30:00Z",
+  "current_requirement": "CHECKPOINT — 3 build rounds done (Req 7-9)",
   "status": "COMPLETE",
   "attempt": 1,
-  "requirements_done": 6,
+  "requirements_done": 9,
   "requirements_stuck": 0,
-  "requirements_remaining": 9,
-  "test_results": { "unit_pass": 724, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
+  "requirements_remaining": 6,
+  "test_results": { "unit_pass": 801, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
   "worktree_branch": "",
-  "last_updated": "2026-04-08T15:00:00Z",
+  "last_updated": "2026-04-08T16:10:00Z",
   "phase": 5,
-  "notes": "CHECKPOINT: Req 1 (template CRUD), Req 2 (7 cert types), Req 3-6 (issuance, storage, supersession, revocation, eligibility) all DONE. 724 tests passing. Codex adversarial reviews: 2 runs, 8 bugs found and fixed."
+  "notes": "CHECKPOINT: Req 7 (signed URL download + QR verification), Req 8 (bulk ZIP via archiver), Req 9 (distributed lock via Redis) all DONE. 801 tests passing. Codex adversarial reviews: 3 runs, 25 bugs found, 12 fixed, 4 deferred, 9 accepted risks. Certificate section complete — moving to QR & Attendance (6 requirements)."
 }
