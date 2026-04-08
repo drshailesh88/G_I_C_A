@@ -81,6 +81,17 @@ describe('ScanFeedback', () => {
     expect(html).not.toContain('Dismiss');
   });
 
+  it('renders registration metadata even when personName is missing', () => {
+    const html = render({
+      type: 'duplicate',
+      message: 'Already checked in for this event.',
+      registrationNumber: 'GEM-DEL-00001',
+      category: 'delegate',
+    });
+    expect(html).toContain('GEM-DEL-00001');
+    expect(html).toContain('delegate');
+  });
+
   it('covers all ScanResultType values', () => {
     const types: ScanResultType[] = ['success', 'duplicate', 'invalid', 'ineligible'];
     for (const type of types) {

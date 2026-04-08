@@ -57,9 +57,11 @@ export function ScanFeedback({ result, onDismiss }: ScanFeedbackProps) {
         <div className="flex-1 min-w-0">
           <h3 className={`font-semibold ${config.textColor}`}>{config.title}</h3>
           <p className={`text-sm mt-1 ${config.textColor} opacity-80`}>{result.message}</p>
-          {result.personName && (
+          {(result.personName || result.registrationNumber || result.category) && (
             <div className="mt-2 space-y-0.5">
-              <p className={`text-sm font-medium ${config.textColor}`}>{result.personName}</p>
+              {result.personName && (
+                <p className={`text-sm font-medium ${config.textColor}`}>{result.personName}</p>
+              )}
               {result.registrationNumber && (
                 <p className={`text-xs ${config.textColor} opacity-60 font-mono`}>
                   {result.registrationNumber}
