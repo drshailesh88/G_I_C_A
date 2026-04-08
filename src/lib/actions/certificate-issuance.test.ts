@@ -303,13 +303,23 @@ describe('getCertificateDownloadUrl', () => {
     mockAssertEventAccess.mockRejectedValue(new Error('Forbidden'));
     await expect(getCertificateDownloadUrl(EVENT_ID, CERT_ID, mockStorageProvider)).rejects.toThrow('Forbidden');
   });
+
+  it('throws when storageKey is null (PDF not generated)', async () => {
+    const cert = {
+      ...mockIssuedCert,
+      storageKey: null,
+      fileName: 'GEM2026-ATT-00001.pdf',
+    };
+    chainedSelectSequence([[cert]]);
+    await expect(getCertificateDownloadUrl(EVENT_ID, CERT_ID, mockStorageProvider)).rejects.toThrow('not been generated');
+  });
 });
 
 // ── Verify Certificate (public) ─────────────────────────────
 describe('verifyCertificate', () => {
   const VERIFICATION_TOKEN = '660e8400-e29b-41d4-a716-446655440099';
 
-  it('returns valid for issued certificate', async () => {
+  it('returns valid for issued certificate and increments count', async () => {
     const cert = {
       id: CERT_ID,
       certificateNumber: 'GEM2026-ATT-00001',
@@ -334,9 +344,11 @@ describe('verifyCertificate', () => {
       expect(result.certificateNumber).toBe('GEM2026-ATT-00001');
       expect(result.certificateType).toBe('delegate_attendance');
     }
+    // Verification count should be incremented for valid certificates
+    expect(mockDb.update).toHaveBeenCalled();
   });
 
-  it('returns invalid for revoked certificate', async () => {
+  it('returns invalid for revoked certificate without incrementing count', async () => {
     const cert = {
       id: CERT_ID,
       certificateNumber: 'GEM2026-ATT-00001',
@@ -348,12 +360,6 @@ describe('verifyCertificate', () => {
       eventId: EVENT_ID,
     };
     chainedSelectSequence([[cert]]);
-    const updateChain = {
-      set: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      then: vi.fn().mockImplementation((resolve: () => void) => { resolve(); return { catch: vi.fn() }; }),
-    };
-    mockDb.update.mockReturnValue(updateChain);
 
     const result = await verifyCertificate(VERIFICATION_TOKEN);
     expect(result.valid).toBe(false);
@@ -361,9 +367,11 @@ describe('verifyCertificate', () => {
       expect(result.error).toContain('revoked');
       expect(result.revokedAt).toBeDefined();
     }
+    // Should NOT increment count for revoked certs
+    expect(mockDb.update).not.toHaveBeenCalled();
   });
 
-  it('returns invalid for superseded certificate', async () => {
+  it('returns invalid for superseded certificate without incrementing count', async () => {
     const cert = {
       id: CERT_ID,
       certificateNumber: 'GEM2026-ATT-00001',
@@ -375,18 +383,13 @@ describe('verifyCertificate', () => {
       eventId: EVENT_ID,
     };
     chainedSelectSequence([[cert]]);
-    const updateChain = {
-      set: vi.fn().mockReturnThis(),
-      where: vi.fn().mockReturnThis(),
-      then: vi.fn().mockImplementation((resolve: () => void) => { resolve(); return { catch: vi.fn() }; }),
-    };
-    mockDb.update.mockReturnValue(updateChain);
 
     const result = await verifyCertificate(VERIFICATION_TOKEN);
     expect(result.valid).toBe(false);
     if (!result.valid) {
       expect(result.error).toContain('superseded');
     }
+    expect(mockDb.update).not.toHaveBeenCalled();
   });
 
   it('returns invalid when not found', async () => {

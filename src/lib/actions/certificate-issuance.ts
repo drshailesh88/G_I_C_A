@@ -225,7 +225,12 @@ export async function getCertificateDownloadUrl(
   const validatedId = certificateIdSchema.parse(certificateId);
 
   const [cert] = await db
-    .select()
+    .select({
+      id: issuedCertificates.id,
+      status: issuedCertificates.status,
+      storageKey: issuedCertificates.storageKey,
+      fileName: issuedCertificates.fileName,
+    })
     .from(issuedCertificates)
     .where(
       withEventScope(
@@ -238,14 +243,29 @@ export async function getCertificateDownloadUrl(
 
   if (!cert) throw new Error('Certificate not found');
 
-  const access = validateDownloadAccess(cert as unknown as IssuedCertificateRecord & { storageKey?: string });
+  // Validate download access — blocks revoked, superseded, and ungenerated certs
+  const access = validateDownloadAccess({
+    id: cert.id,
+    eventId,
+    personId: '',
+    certificateType: '',
+    status: cert.status,
+    supersededById: null,
+    supersedesId: null,
+    revokedAt: null,
+    revokeReason: null,
+    storageKey: cert.storageKey,
+  });
   if (!access.allowed) throw new Error(access.error);
+
+  // Explicit null check — defense-in-depth for ungenerated PDFs
+  if (!cert.storageKey) throw new Error('Certificate PDF has not been generated yet');
 
   // Generate signed URL (1-hour expiry)
   const provider = storageProvider ?? (await import('@/lib/certificates/storage')).createR2Provider();
   const url = await provider.getSignedUrl(cert.storageKey, 3600);
 
-  // Increment download tracking (fire-and-forget, non-blocking)
+  // Increment download tracking (fire-and-forget with error logging)
   db.update(issuedCertificates)
     .set({
       downloadCount: sql`${issuedCertificates.downloadCount} + 1`,
@@ -260,7 +280,7 @@ export async function getCertificateDownloadUrl(
       ),
     )
     .then(() => {})
-    .catch(() => {});
+    .catch((err) => { console.error('[certificate-download] failed to increment download count:', err); });
 
   return {
     url,
@@ -270,6 +290,11 @@ export async function getCertificateDownloadUrl(
 }
 
 // ── Verify certificate (public, no auth) ────────────────────
+// NOTE: This is a public QR verification endpoint. It intentionally does NOT
+// require eventId as a parameter because the scanner only has the verification
+// token (embedded in the QR code). The token itself is a v4 UUID with 122 bits
+// of entropy, making enumeration impractical. The update uses both id AND eventId
+// for defense-in-depth.
 const verificationTokenSchema = z.string().uuid('Invalid verification token');
 
 export async function verifyCertificate(verificationToken: string) {
@@ -294,17 +319,6 @@ export async function verifyCertificate(verificationToken: string) {
     return { valid: false as const, error: 'Certificate not found' };
   }
 
-  // Increment verification count (fire-and-forget)
-  db.update(issuedCertificates)
-    .set({
-      verificationCount: sql`${issuedCertificates.verificationCount} + 1`,
-      lastVerifiedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(eq(issuedCertificates.id, cert.id))
-    .then(() => {})
-    .catch(() => {});
-
   if (cert.status === 'revoked') {
     return {
       valid: false as const,
@@ -321,6 +335,20 @@ export async function verifyCertificate(verificationToken: string) {
       certificateNumber: cert.certificateNumber,
     };
   }
+
+  // Only increment verification count for valid certificates
+  db.update(issuedCertificates)
+    .set({
+      verificationCount: sql`${issuedCertificates.verificationCount} + 1`,
+      lastVerifiedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(issuedCertificates.id, cert.id),
+      eq(issuedCertificates.eventId, cert.eventId),
+    ))
+    .then(() => {})
+    .catch((err) => { console.error('[certificate-verify] failed to increment verification count:', err); });
 
   return {
     valid: true as const,
