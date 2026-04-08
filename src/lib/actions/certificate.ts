@@ -116,7 +116,7 @@ export async function updateCertificateTemplate(eventId: string, input: unknown)
   const [updated] = await db
     .update(certificateTemplates)
     .set(updateFields)
-    .where(eq(certificateTemplates.id, templateId))
+    .where(withEventScope(certificateTemplates.eventId, eventId, eq(certificateTemplates.id, templateId)))
     .returning();
 
   revalidatePath(`/events/${eventId}/certificates`);
@@ -168,7 +168,7 @@ export async function activateCertificateTemplate(eventId: string, input: unknow
       updatedBy: userId,
       updatedAt: new Date(),
     })
-    .where(eq(certificateTemplates.id, templateId))
+    .where(withEventScope(certificateTemplates.eventId, eventId, eq(certificateTemplates.id, templateId)))
     .returning();
 
   revalidatePath(`/events/${eventId}/certificates`);
@@ -201,7 +201,7 @@ export async function archiveCertificateTemplate(eventId: string, input: unknown
       updatedBy: userId,
       updatedAt: new Date(),
     })
-    .where(eq(certificateTemplates.id, templateId))
+    .where(withEventScope(certificateTemplates.eventId, eventId, eq(certificateTemplates.id, templateId)))
     .returning();
 
   revalidatePath(`/events/${eventId}/certificates`);

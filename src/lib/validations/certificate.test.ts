@@ -216,6 +216,30 @@ describe('bulkGenerateSchema', () => {
   });
 });
 
+// ── Adversarial: Codex review findings ───────────────────────
+describe('adversarial: variable validation', () => {
+  it('rejects empty strings in allowedVariablesJson', () => {
+    expect(() => createCertificateTemplateSchema.parse({
+      ...validCreate,
+      allowedVariablesJson: ['full_name', '', 'event_name'],
+    })).toThrow();
+  });
+
+  it('rejects whitespace-only strings in allowedVariablesJson', () => {
+    expect(() => createCertificateTemplateSchema.parse({
+      ...validCreate,
+      allowedVariablesJson: ['  '],
+    })).toThrow();
+  });
+
+  it('rejects empty strings in requiredVariablesJson', () => {
+    expect(() => createCertificateTemplateSchema.parse({
+      ...validCreate,
+      requiredVariablesJson: [''],
+    })).toThrow();
+  });
+});
+
 describe('TEMPLATE_STATUS_TRANSITIONS', () => {
   it('draft can go to active or archived', () => {
     expect(TEMPLATE_STATUS_TRANSITIONS.draft).toEqual(['active', 'archived']);
