@@ -1,13 +1,13 @@
 {
   "session_start": "2026-04-08T05:08:00Z",
-  "current_requirement": "M22 Session Manager + M23 Add/Edit Session (Halls, Sessions, Role Requirements, Assignments, Conflict warnings)",
-  "status": "BUILDING",
+  "current_requirement": "Scientific Program UI + Faculty Invitation UI — all screens built",
+  "status": "REVIEWING",
   "attempt": 1,
   "requirements_done": 16,
   "requirements_stuck": 0,
   "requirements_remaining": 17,
   "test_results": { "unit_pass": 216, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
   "worktree_branch": "wt/req-17-sessions-ui",
-  "last_updated": "2026-04-08T05:08:00Z",
-  "notes": "Session 3: Building Scientific Program UI screens. Starting with M22 Session Manager + M23 Add/Edit Session. Backend fully built (program.ts actions + validations). 216 tests baseline."
+  "last_updated": "2026-04-08T05:18:00Z",
+  "notes": "Session 3: All Priority 1 + Priority 2 UI screens built. M22 Session Manager, M23 Add/Edit Session, M30 Admin Schedule Grid, M04 Attendee Program, M26 Faculty Invitation, M55 Faculty Confirm, M60 Confirmed Success. 216 tests still passing. Sending for Codex review."
 }

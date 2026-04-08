@@ -272,7 +272,7 @@ export function ScheduleGridClient({
                         key={session.id}
                         href={`/events/${eventId}/sessions/${session.id}`}
                         className={cn(
-                          'absolute left-1 right-1 overflow-hidden rounded border-l-3 p-1.5 transition-colors hover:ring-1 hover:ring-accent/50',
+                          'absolute left-1 right-1 overflow-hidden rounded border-l-4 p-1.5 transition-colors hover:ring-1 hover:ring-accent/50',
                           typeColors,
                           hasConflict && 'ring-1 ring-warning',
                         )}
