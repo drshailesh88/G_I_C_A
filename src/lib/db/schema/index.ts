@@ -4,6 +4,7 @@
 export * from './organizations';
 export * from './events';
 export * from './people';
+export * from './event-people';
 export * from './program';
 export * from './registrations';
 export * from './logistics';
