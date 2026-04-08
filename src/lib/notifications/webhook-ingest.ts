@@ -3,51 +3,64 @@
  *
  * Implements ProviderWebhookIngestService from SERVICE_CONTRACTS.md.
  * Parses raw payloads, records delivery events, and advances log status.
+ *
+ * FIX #10: On processing failure, payloads are pushed to a Redis DLQ
+ * instead of being silently lost.
+ * FIX #11: Status progression enforced at DB level via CAS (not app-level).
  */
 
-import { parseResendWebhook, parseEvolutionWebhook, isStatusForward } from './webhook-parsers';
+import { parseResendWebhook, parseEvolutionWebhook } from './webhook-parsers';
 import { insertDeliveryEvent, findLogByProviderMessageId, updateLogStatus } from './delivery-event-queries';
-import type { NotificationStatus, ProviderName } from './types';
+import { pushToDlq } from './webhook-dlq';
+import type { NotificationStatus } from './types';
 
 /**
  * Ingest an email status webhook from Resend.
- * Always succeeds (no throws) — webhook routes must return 200.
+ * Returns 200 to provider. On failure, pushes to DLQ.
  */
 export async function ingestEmailStatus(params: {
   provider: 'resend';
   rawPayload: unknown;
 }): Promise<void> {
   const parsed = parseResendWebhook(params.rawPayload);
-  if (!parsed) {
-    // Unknown or malformed payload — silently ignore.
-    // Providers send many event types we don't track (e.g. email.clicked).
-    return;
-  }
+  if (!parsed) return;
 
-  await processDeliveryEvent(parsed.providerMessageId, parsed.eventType, parsed.timestamp, params.rawPayload, 'email');
+  await processDeliveryEvent(
+    parsed.providerMessageId,
+    parsed.eventType,
+    parsed.timestamp,
+    params.rawPayload,
+    'email',
+    params.provider,
+  );
 }
 
 /**
  * Ingest a WhatsApp status webhook from Evolution API or WABA.
- * Always succeeds (no throws) — webhook routes must return 200.
+ * Returns 200 to provider. On failure, pushes to DLQ.
  */
 export async function ingestWhatsAppStatus(params: {
   provider: 'evolution_api' | 'waba';
   rawPayload: unknown;
 }): Promise<void> {
   const parsed = parseEvolutionWebhook(params.rawPayload);
-  if (!parsed) {
-    return;
-  }
+  if (!parsed) return;
 
-  await processDeliveryEvent(parsed.providerMessageId, parsed.eventType, parsed.timestamp, params.rawPayload, 'whatsapp');
+  await processDeliveryEvent(
+    parsed.providerMessageId,
+    parsed.eventType,
+    parsed.timestamp,
+    params.rawPayload,
+    'whatsapp',
+    params.provider,
+  );
 }
 
 /**
- * Core processing logic shared by both channels:
- * 1. Find notification_log by providerMessageId
- * 2. Insert delivery event (forensic record)
- * 3. Advance log status if the new event is forward progress
+ * Core processing logic shared by both channels.
+ * FIX #10: On error, push to DLQ instead of silent swallow.
+ * FIX #11: CAS is now enforced in updateLogStatus at DB level —
+ *   isStatusForward check removed (DB handles it).
  */
 async function processDeliveryEvent(
   providerMessageId: string,
@@ -55,21 +68,14 @@ async function processDeliveryEvent(
   timestamp: string,
   rawPayload: unknown,
   expectedChannel: 'email' | 'whatsapp',
+  provider: string,
 ): Promise<void> {
   try {
-    // Find the matching notification_log row
     const logRow = await findLogByProviderMessageId(providerMessageId);
-    if (!logRow) {
-      // No matching log — might be a stale webhook or a message we didn't send.
-      return;
-    }
+    if (!logRow) return;
 
-    // Verify the webhook channel matches the log's channel
-    if (logRow.channel !== expectedChannel) {
-      // Channel mismatch — a WhatsApp webhook for an email log (or vice versa).
-      // This can happen if provider message IDs collide across channels.
-      return;
-    }
+    // Channel mismatch guard
+    if (logRow.channel !== expectedChannel) return;
 
     // Always insert the delivery event (forensic/audit trail)
     await insertDeliveryEvent({
@@ -78,14 +84,17 @@ async function processDeliveryEvent(
       providerPayloadJson: rawPayload,
     });
 
-    // Only advance status forward, never regress
-    const currentStatus = logRow.status as NotificationStatus;
-    if (isStatusForward(currentStatus, eventType)) {
-      await updateLogStatus(logRow.id, eventType, timestamp);
-    }
+    // Advance status — CAS at DB level rejects regressions automatically
+    await updateLogStatus(logRow.id, eventType, timestamp);
   } catch (error) {
-    // Swallow errors — webhook routes MUST return 200.
-    // In production, this would go to structured logging.
-    console.error('[webhook-ingest] Error processing delivery event:', error);
+    // FIX #10: Push to DLQ instead of silently losing the event
+    console.error('[webhook-ingest] Processing failed, pushing to DLQ:', error);
+    await pushToDlq({
+      provider,
+      channel: expectedChannel,
+      rawPayload,
+      failedAt: new Date().toISOString(),
+      errorMessage: error instanceof Error ? error.message : String(error),
+    });
   }
 }

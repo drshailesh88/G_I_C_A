@@ -159,6 +159,9 @@ export const notificationLog = pgTable('notification_log', {
   index('idx_notif_log_trigger').on(table.triggerEntityType, table.triggerEntityId),
   index('idx_notif_log_resend_of').on(table.resendOfId),
   index('idx_notif_log_provider_msg').on(table.providerMessageId),
+  // FIX #12: Unique constraint on (provider, provider_message_id) WHERE provider_message_id IS NOT NULL
+  // Prevents correlation ambiguity when webhooks arrive
+  unique('uq_notif_log_provider_msg').on(table.provider, table.providerMessageId),
   // Failed notifications for retry screen
   index('idx_notif_log_failed').on(table.eventId, table.status).where(sql`status = 'failed'`),
 ]);

@@ -14,6 +14,7 @@ import type {
   IdempotencyService,
   ProviderSendResult,
   Channel,
+  AttachmentDescriptor,
 } from './types';
 import { renderTemplate } from './template-renderer';
 import {
@@ -325,7 +326,7 @@ async function sendNotificationFromLog(
     renderedSubject: (log.renderedSubject as string) ?? null,
     renderedBody: log.renderedBody as string,
     renderedVariablesJson: (log.renderedVariablesJson as Record<string, unknown>) ?? null,
-    attachmentManifestJson: (log.attachmentManifestJson as Record<string, unknown>[] | null) ?? null,
+    attachmentManifestJson: (log.attachmentManifestJson as AttachmentDescriptor[] | null) ?? null,
     status: 'queued',
     initiatedByUserId: overrides.initiatedByUserId,
     isResend: overrides.isResend,
@@ -335,7 +336,7 @@ async function sendNotificationFromLog(
   // Route to provider
   let providerResult: ProviderSendResult;
   try {
-    const attachments = (log.attachmentManifestJson as Record<string, unknown>[] | null) ?? undefined;
+    const attachments = (log.attachmentManifestJson as unknown as import('./types').AttachmentDescriptor[] | null) ?? undefined;
     if (channel === 'email') {
       providerResult = await emailProvider.send({
         eventId: log.eventId as string,
