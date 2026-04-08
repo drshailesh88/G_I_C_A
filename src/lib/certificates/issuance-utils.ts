@@ -222,6 +222,27 @@ export function checkEligibility(
   }
 }
 
+// ── Download Access Validation ──────────────────────────────
+
+/**
+ * Validate that a certificate can be downloaded.
+ * Only 'issued' certificates may be downloaded — revoked and superseded are blocked.
+ */
+export function validateDownloadAccess(
+  cert: IssuedCertificateRecord & { storageKey?: string },
+): { allowed: boolean; error?: string } {
+  if (cert.status === 'revoked') {
+    return { allowed: false, error: 'Cannot download a revoked certificate' };
+  }
+  if (cert.status === 'superseded') {
+    return { allowed: false, error: 'Cannot download a superseded certificate — download the current version instead' };
+  }
+  if (cert.storageKey !== undefined && !cert.storageKey) {
+    return { allowed: false, error: 'Certificate PDF has not been generated yet' };
+  }
+  return { allowed: true };
+}
+
 // ── Certificate Number Sequence ──────────────────────────────
 
 /**
