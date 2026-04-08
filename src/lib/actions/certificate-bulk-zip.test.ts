@@ -31,6 +31,7 @@ vi.mock('@/lib/auth/event-access', () => ({
 }));
 
 import { bulkZipDownload } from './certificate-bulk-zip';
+import { createStubLock } from '@/lib/certificates/distributed-lock';
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 
@@ -62,6 +63,14 @@ describe('bulkZipDownload', () => {
 
   const mockFetchPdf = vi.fn().mockResolvedValue(Buffer.from('fake-pdf'));
 
+  function makeDeps(overrides?: { lock?: ReturnType<typeof createStubLock> }) {
+    return {
+      storageProvider: mockStorageProvider,
+      fetchPdf: mockFetchPdf,
+      lock: overrides?.lock ?? createStubLock(),
+    };
+  }
+
   it('creates a ZIP from issued certificates and returns signed URL', async () => {
     const certs = [
       { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
@@ -69,11 +78,7 @@ describe('bulkZipDownload', () => {
     ];
     chainedSelect(certs);
 
-    const result = await bulkZipDownload(
-      EVENT_ID,
-      { certificateType: 'delegate_attendance' },
-      { storageProvider: mockStorageProvider, fetchPdf: mockFetchPdf },
-    );
+    const result = await bulkZipDownload(EVENT_ID, { certificateType: 'delegate_attendance' }, makeDeps());
 
     expect(result.fileCount).toBe(2);
     expect(result.zipUrl).toBe('https://r2.example.com/bulk.zip?signed=true');
@@ -90,11 +95,7 @@ describe('bulkZipDownload', () => {
     ];
     chainedSelect(certs);
 
-    const result = await bulkZipDownload(
-      EVENT_ID,
-      { certificateType: 'delegate_attendance' },
-      { storageProvider: mockStorageProvider, fetchPdf: mockFetchPdf },
-    );
+    const result = await bulkZipDownload(EVENT_ID, { certificateType: 'delegate_attendance' }, makeDeps());
 
     expect(result.fileCount).toBe(1);
     expect(mockFetchPdf).toHaveBeenCalledTimes(1);
@@ -102,12 +103,9 @@ describe('bulkZipDownload', () => {
 
   it('throws when no certificates found', async () => {
     chainedSelect([]);
-
-    await expect(bulkZipDownload(
-      EVENT_ID,
-      { certificateType: 'delegate_attendance' },
-      { storageProvider: mockStorageProvider, fetchPdf: mockFetchPdf },
-    )).rejects.toThrow('At least one');
+    await expect(
+      bulkZipDownload(EVENT_ID, { certificateType: 'delegate_attendance' }, makeDeps()),
+    ).rejects.toThrow('At least one');
   });
 
   it('throws when all certificates lack storageKey', async () => {
@@ -115,53 +113,94 @@ describe('bulkZipDownload', () => {
       { id: 'c1', storageKey: null, fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: null },
     ];
     chainedSelect(certs);
-
-    await expect(bulkZipDownload(
-      EVENT_ID,
-      { certificateType: 'delegate_attendance' },
-      { storageProvider: mockStorageProvider, fetchPdf: mockFetchPdf },
-    )).rejects.toThrow('At least one');
+    await expect(
+      bulkZipDownload(EVENT_ID, { certificateType: 'delegate_attendance' }, makeDeps()),
+    ).rejects.toThrow('At least one');
   });
 
   it('rejects invalid certificate type', async () => {
-    await expect(bulkZipDownload(
-      EVENT_ID,
-      { certificateType: 'invalid_type' },
-      { storageProvider: mockStorageProvider },
-    )).rejects.toThrow();
+    await expect(
+      bulkZipDownload(EVENT_ID, { certificateType: 'invalid_type' }, makeDeps()),
+    ).rejects.toThrow();
   });
 
   it('rejects unauthorized access', async () => {
     mockAssertEventAccess.mockRejectedValue(new Error('Forbidden'));
-    await expect(bulkZipDownload(
-      EVENT_ID,
-      { certificateType: 'delegate_attendance' },
-      { storageProvider: mockStorageProvider },
-    )).rejects.toThrow('Forbidden');
+    await expect(
+      bulkZipDownload(EVENT_ID, { certificateType: 'delegate_attendance' }, makeDeps()),
+    ).rejects.toThrow('Forbidden');
   });
 
   it('rejects when aggregate PDF size exceeds limit', async () => {
-    // 2 certs, each ~150MB = 300MB total (over 200MB limit)
     const certs = [
       { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 150 * 1024 * 1024 },
       { id: 'c2', storageKey: 'certs/c2.pdf', fileName: 'cert-002.pdf', status: 'issued', fileSizeBytes: 150 * 1024 * 1024 },
     ];
     chainedSelect(certs);
-
-    await expect(bulkZipDownload(
-      EVENT_ID,
-      { certificateType: 'delegate_attendance' },
-      { storageProvider: mockStorageProvider, fetchPdf: mockFetchPdf },
-    )).rejects.toThrow('exceeds maximum');
+    await expect(
+      bulkZipDownload(EVENT_ID, { certificateType: 'delegate_attendance' }, makeDeps()),
+    ).rejects.toThrow('exceeds maximum');
   });
 
   it('requires write access', async () => {
     chainedSelect([]);
-    await bulkZipDownload(
-      EVENT_ID,
-      { certificateType: 'delegate_attendance' },
-      { storageProvider: mockStorageProvider, fetchPdf: mockFetchPdf },
-    ).catch(() => {});
+    await bulkZipDownload(EVENT_ID, { certificateType: 'delegate_attendance' }, makeDeps()).catch(() => {});
     expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_ID, { requireWrite: true });
+  });
+
+  // ── Distributed Lock Tests ────────────────────────────────
+  it('throws when lock is already held (concurrent request)', async () => {
+    const lock = createStubLock();
+    // Pre-acquire the lock
+    await lock.acquire(EVENT_ID, 'delegate_attendance');
+
+    await expect(
+      bulkZipDownload(EVENT_ID, { certificateType: 'delegate_attendance' }, makeDeps({ lock })),
+    ).rejects.toThrow('already in progress');
+  });
+
+  it('releases lock after successful completion', async () => {
+    const lock = createStubLock();
+    const certs = [
+      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+    ];
+    chainedSelect(certs);
+
+    await bulkZipDownload(EVENT_ID, { certificateType: 'delegate_attendance' }, makeDeps({ lock }));
+
+    // Lock should be released
+    expect(lock.locks.size).toBe(0);
+    // Should be re-acquirable
+    const reacquired = await lock.acquire(EVENT_ID, 'delegate_attendance');
+    expect(reacquired).toBe(true);
+  });
+
+  it('releases lock even when operation fails', async () => {
+    const lock = createStubLock();
+    chainedSelect([]); // No certs → will throw validation error
+
+    await bulkZipDownload(EVENT_ID, { certificateType: 'delegate_attendance' }, makeDeps({ lock })).catch(() => {});
+
+    // Lock should still be released
+    expect(lock.locks.size).toBe(0);
+  });
+
+  it('allows concurrent requests for different certificate types', async () => {
+    const lock = createStubLock();
+    // Lock for delegate_attendance
+    await lock.acquire(EVENT_ID, 'delegate_attendance');
+
+    // faculty_participation should still work
+    const certs = [
+      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+    ];
+    chainedSelect(certs);
+
+    const result = await bulkZipDownload(
+      EVENT_ID,
+      { certificateType: 'faculty_participation' },
+      makeDeps({ lock }),
+    );
+    expect(result.fileCount).toBe(1);
   });
 });
