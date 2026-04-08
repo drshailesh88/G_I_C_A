@@ -32,6 +32,11 @@ describe('createEventSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('rejects whitespace-only event name', () => {
+    const result = createEventSchema.safeParse({ ...validInput, name: '   ' });
+    expect(result.success).toBe(false);
+  });
+
   it('rejects missing venue', () => {
     const result = createEventSchema.safeParse({ ...validInput, venueName: '' });
     expect(result.success).toBe(false);

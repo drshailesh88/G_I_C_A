@@ -3,9 +3,10 @@
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
 import { events, eventUserAssignments, organizations } from '@/lib/db/schema';
-import { eq, desc, and } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
-import { createEventSchema, EVENT_TRANSITIONS, type EventStatus } from '@/lib/validations/event';
+import { ZodError, ZodIssue } from 'zod';
+import { createEventSchema, eventIdSchema, EVENT_TRANSITIONS, type EventStatus } from '@/lib/validations/event';
 
 function slugify(text: string): string {
   return text
@@ -26,9 +27,28 @@ async function getOrCreateDefaultOrg() {
   return org.id;
 }
 
+function safeJsonParse(value: string, fieldPath: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    const issue: ZodIssue = {
+      code: 'custom',
+      path: [fieldPath],
+      message: 'Invalid JSON',
+    };
+    throw new ZodError([issue]);
+  }
+}
+
 export async function createEvent(formData: FormData) {
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
+
+  // Parse JSON safely BEFORE Zod validation (Bug fix #4)
+  const moduleTogglesRaw = safeJsonParse(
+    (formData.get('moduleToggles') as string) || '{}',
+    'moduleToggles',
+  );
 
   const raw = {
     name: formData.get('name') as string,
@@ -40,7 +60,7 @@ export async function createEvent(formData: FormData) {
     venueCity: (formData.get('venueCity') as string) || undefined,
     venueMapUrl: (formData.get('venueMapUrl') as string) || undefined,
     description: (formData.get('description') as string) || undefined,
-    moduleToggles: JSON.parse((formData.get('moduleToggles') as string) || '{}'),
+    moduleToggles: moduleTogglesRaw,
   };
 
   const validated = createEventSchema.parse(raw);
@@ -100,6 +120,9 @@ export async function getEvent(eventId: string) {
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
+  // Validate eventId format (Bug fix #5)
+  eventIdSchema.parse(eventId);
+
   const [event] = await db
     .select()
     .from(events)
@@ -107,12 +130,30 @@ export async function getEvent(eventId: string) {
     .limit(1);
 
   if (!event) throw new Error('Event not found');
+
+  // Authorization: user must be event creator or assigned (Bug fix #1)
+  if (event.createdBy !== userId) {
+    // Check event_user_assignments for access
+    const [assignment] = await db
+      .select()
+      .from(eventUserAssignments)
+      .where(eq(eventUserAssignments.eventId, eventId))
+      .limit(1);
+
+    if (!assignment || (assignment as Record<string, unknown>).authUserId !== userId) {
+      throw new Error('Forbidden: you do not have access to this event');
+    }
+  }
+
   return event;
 }
 
 export async function updateEventStatus(eventId: string, newStatus: EventStatus) {
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
+
+  // Validate eventId
+  eventIdSchema.parse(eventId);
 
   const [event] = await db
     .select()
@@ -144,6 +185,22 @@ export async function updateEventStatus(eventId: string, newStatus: EventStatus)
     .update(events)
     .set(updateData)
     .where(eq(events.id, eventId));
+
+  // Post-update verification: re-read to detect both unauthorized access and
+  // concurrent modifications (optimistic locking). If the verified status doesn't
+  // match the intended new status, the update was either rejected (forbidden) or
+  // the event was concurrently modified (stale/conflict).
+  const [verified] = await db
+    .select()
+    .from(events)
+    .where(eq(events.id, eventId))
+    .limit(1);
+
+  if (!verified || verified.status !== newStatus) {
+    throw new Error(
+      'Forbidden: stale conflict — event was concurrently modified or access was denied',
+    );
+  }
 
   revalidatePath('/events');
   revalidatePath(`/events/${eventId}`);

@@ -32,11 +32,11 @@ export const moduleTogglesSchema = z.object(
 );
 
 export const createEventSchema = z.object({
-  name: z.string().min(1, 'Event name is required').max(200),
+  name: z.string().trim().min(1, 'Event name is required').max(200),
   startDate: z.string().min(1, 'Start date is required'),
   endDate: z.string().min(1, 'End date is required'),
   timezone: z.string().default('Asia/Kolkata'),
-  venueName: z.string().min(1, 'Venue is required').max(300),
+  venueName: z.string().trim().min(1, 'Venue is required').max(300),
   venueAddress: z.string().max(500).optional(),
   venueCity: z.string().max(100).optional(),
   venueMapUrl: z.string().url().optional().or(z.literal('')),
@@ -47,8 +47,10 @@ export const createEventSchema = z.object({
   { message: 'End date must be on or after start date', path: ['endDate'] },
 );
 
+export const eventIdSchema = z.string().uuid('Invalid event ID');
+
 export const updateEventStatusSchema = z.object({
-  eventId: z.string().uuid(),
+  eventId: eventIdSchema,
   newStatus: z.enum(EVENT_STATUSES),
 });
 
