@@ -1,14 +1,14 @@
 {
-  "session_start": "2026-04-08T15:30:00Z",
-  "current_requirement": "CHECKPOINT — 3 build rounds done (Req 7-9)",
+  "session_start": "2026-04-08T18:00:00Z",
+  "current_requirement": "CHECKPOINT — 3 requirements done (Req 10-12)",
   "status": "COMPLETE",
   "attempt": 1,
-  "requirements_done": 9,
+  "requirements_done": 12,
   "requirements_stuck": 0,
-  "requirements_remaining": 6,
-  "test_results": { "unit_pass": 801, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
+  "requirements_remaining": 3,
+  "test_results": { "unit_pass": 904, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
   "worktree_branch": "",
-  "last_updated": "2026-04-08T16:10:00Z",
+  "last_updated": "2026-04-08T19:22:00Z",
   "phase": 5,
-  "notes": "CHECKPOINT: Req 7 (signed URL download + QR verification), Req 8 (bulk ZIP via archiver), Req 9 (distributed lock via Redis) all DONE. 801 tests passing. Codex adversarial reviews: 3 runs, 25 bugs found, 12 fixed, 4 deferred, 9 accepted risks. Certificate section complete — moving to QR & Attendance (6 requirements)."
+  "notes": "CHECKPOINT: Req 10 (QR per registration), Req 11 (PWA scanner + check-in action), Req 12 (scan feedback UI) all DONE. 904 tests passing. Codex reviews: 3 runs, 7 bugs found and fixed (whitespace inputs, uppercase UUIDs, isNull for NULL sessionId, race condition, component crash, type error, metadata visibility). Remaining: Req 13 (manual check-in search), Req 14 (attendance records), Req 15 (offline scanning)."
 }

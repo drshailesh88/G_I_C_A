@@ -120,9 +120,9 @@ v1 — GEM India Conference Management Platform
 - [x] Distributed lock prevents simultaneous bulk generation for same event/type
 
 ### QR & Attendance
-- [ ] Unique QR per registration (qr_code_token encoded via qrcode.react)
-- [ ] PWA scanner (@yudiel/react-qr-scanner) for crew phones/iPads
-- [ ] Scan feedback: success, duplicate, invalid
+- [x] Unique QR per registration (qr_code_token encoded via qrcode.react)
+- [x] PWA scanner (@yudiel/react-qr-scanner) for crew phones/iPads
+- [x] Scan feedback: success, duplicate, invalid
 - [ ] Manual check-in search by name when QR doesn't work
 - [ ] Attendance records separate from registration (repeatable per day/session)
 - [ ] Offline scanning: Service Worker + IndexedDB queue, sync on reconnect
