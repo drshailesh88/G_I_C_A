@@ -27,6 +27,7 @@ export type CreateTriggerInput = {
 };
 
 export type UpdateTriggerInput = {
+  eventId: string; // Required for event isolation
   guardConditionJson?: Record<string, unknown> | null;
   templateId?: string;
   recipientResolution?: string;
@@ -81,7 +82,13 @@ export async function updateTrigger(triggerId: string, input: UpdateTriggerInput
   const [updated] = await db
     .update(automationTriggers)
     .set(updateData)
-    .where(eq(automationTriggers.id, triggerId))
+    .where(
+      withEventScope(
+        automationTriggers.eventId,
+        input.eventId,
+        eq(automationTriggers.id, triggerId),
+      ),
+    )
     .returning();
 
   return updated ?? null;
@@ -140,22 +147,34 @@ export async function getActiveTriggersForEventType(
     .orderBy(automationTriggers.priority);
 }
 
-/** Get a single trigger by ID */
-export async function getTriggerById(triggerId: string) {
+/** Get a single trigger by ID (event-scoped) */
+export async function getTriggerById(triggerId: string, eventId: string) {
   const [trigger] = await db
     .select()
     .from(automationTriggers)
-    .where(eq(automationTriggers.id, triggerId))
+    .where(
+      withEventScope(
+        automationTriggers.eventId,
+        eventId,
+        eq(automationTriggers.id, triggerId),
+      ),
+    )
     .limit(1);
 
   return trigger ?? null;
 }
 
-/** Delete a trigger */
-export async function deleteTrigger(triggerId: string) {
+/** Delete a trigger (event-scoped) */
+export async function deleteTrigger(triggerId: string, eventId: string) {
   const [deleted] = await db
     .delete(automationTriggers)
-    .where(eq(automationTriggers.id, triggerId))
+    .where(
+      withEventScope(
+        automationTriggers.eventId,
+        eventId,
+        eq(automationTriggers.id, triggerId),
+      ),
+    )
     .returning();
 
   return deleted ?? null;

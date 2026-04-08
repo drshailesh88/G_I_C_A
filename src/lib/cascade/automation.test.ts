@@ -69,6 +69,19 @@ describe('evaluateGuard', () => {
     const guard = { '__proto__.toString': 'hack' };
     expect(evaluateGuard(guard, {})).toBe(false);
   });
+
+  it('matches array values via deep equality', () => {
+    const guard = { tags: ['vip', 'speaker'] };
+    expect(evaluateGuard(guard, { tags: ['vip', 'speaker'] })).toBe(true);
+    expect(evaluateGuard(guard, { tags: ['vip'] })).toBe(false);
+    expect(evaluateGuard(guard, { tags: ['speaker', 'vip'] })).toBe(false); // order matters
+  });
+
+  it('matches nested object values via deep equality', () => {
+    const guard = { meta: { type: 'auto' } };
+    expect(evaluateGuard(guard, { meta: { type: 'auto' } })).toBe(true);
+    expect(evaluateGuard(guard, { meta: { type: 'manual' } })).toBe(false);
+  });
 });
 
 // ── buildIdempotencyKey ──────────────────────────────────────
@@ -86,7 +99,7 @@ describe('buildIdempotencyKey', () => {
       ...base,
       scope: 'per_person_per_trigger_entity_per_channel',
     });
-    expect(key).toBe('notify:registration.created:event-1:person-1:entity-1:email');
+    expect(key).toBe('notify|registration.created|event-1|person-1|entity-1|email');
   });
 
   it('builds per_person_per_event_per_channel key (no entity)', () => {
@@ -94,7 +107,7 @@ describe('buildIdempotencyKey', () => {
       ...base,
       scope: 'per_person_per_event_per_channel',
     });
-    expect(key).toBe('notify:registration.created:event-1:person-1:email');
+    expect(key).toBe('notify|registration.created|event-1|person-1|email');
   });
 
   it('builds per_trigger_entity_per_channel key (no person)', () => {
@@ -102,16 +115,30 @@ describe('buildIdempotencyKey', () => {
       ...base,
       scope: 'per_trigger_entity_per_channel',
     });
-    expect(key).toBe('notify:registration.created:event-1:entity-1:email');
+    expect(key).toBe('notify|registration.created|event-1|entity-1|email');
   });
 
-  it('uses "none" when triggerEntityId is undefined', () => {
+  it('uses "__missing__" when triggerEntityId is undefined', () => {
     const key = buildIdempotencyKey({
       ...base,
       triggerEntityId: undefined,
       scope: 'per_person_per_trigger_entity_per_channel',
     });
-    expect(key).toContain(':none:');
+    expect(key).toContain('|__missing__|');
+  });
+
+  it('does not collide "__missing__" with literal string "none"', () => {
+    const keyMissing = buildIdempotencyKey({
+      ...base,
+      triggerEntityId: undefined,
+      scope: 'per_person_per_trigger_entity_per_channel',
+    });
+    const keyNone = buildIdempotencyKey({
+      ...base,
+      triggerEntityId: 'none',
+      scope: 'per_person_per_trigger_entity_per_channel',
+    });
+    expect(keyMissing).not.toBe(keyNone);
   });
 
   it('uses default scope for unknown scope values', () => {
@@ -119,8 +146,23 @@ describe('buildIdempotencyKey', () => {
       ...base,
       scope: 'unknown_scope',
     });
-    // Falls back to default (same as per_person_per_trigger_entity_per_channel)
-    expect(key).toBe('notify:registration.created:event-1:person-1:entity-1:email');
+    expect(key).toBe('notify|registration.created|event-1|person-1|entity-1|email');
+  });
+
+  it('sanitizes colons in field values to prevent injection', () => {
+    const key1 = buildIdempotencyKey({
+      ...base,
+      triggerEventType: 'a:b',
+      triggerEntityId: 'c',
+      scope: 'per_person_per_trigger_entity_per_channel',
+    });
+    const key2 = buildIdempotencyKey({
+      ...base,
+      triggerEventType: 'a',
+      triggerEntityId: 'b|c',
+      scope: 'per_person_per_trigger_entity_per_channel',
+    });
+    expect(key1).not.toBe(key2);
   });
 
   it('differentiates channels', () => {
