@@ -4,7 +4,28 @@
 **GEM India V1** — Created 2026-04-07
 
 ## Current Phase
-Phase 1: Scaffold + Auth + Event CRUD (Tracer Bullet) — Status: COMPLETE (2026-04-08)
+Phase 3: Logistics + Cascade System — Status: COMPLETE (2026-04-08)
+
+## Completed Phases
+- Phase 1: Scaffold + Auth + Event CRUD — COMPLETE (2026-04-08)
+- Phase 2: People + Registration + Scientific Program — COMPLETE (2026-04-08)
+- Phase 3: Logistics + Cascade System — COMPLETE (2026-04-08)
+
+## Next Phase
+Phase 4: Communications Engine
+
+## Progress Summary
+- Requirements done: 62/116
+- Requirements remaining: 54
+- Test files: 21 | Tests passing: 380
+- Security: Faculty token validation fixed, RBAC enforced on all logistics routes
+
+## Phase 3 Completion Notes
+- Backend: Travel CRUD (51 tests), Accommodation CRUD (37 tests), Transport three-tier model (51 tests), Cascade system with red flags (24 tests)
+- UI: 6 screens built (M35 Travel List, M06 Travel Form, M05 Accommodation + Flags, M36 Accommodation Form, M10 Transport Planning, M38 Vehicle Kanban)
+- Codex adversarial review passed: event-scoped people picker, RBAC on red-flag actions, kanban droppable containers fixed
+- /more page created with role-filtered menu
+- Still deferred: accommodation email+WhatsApp on save, rooming list export, auto-suggest transport batches
 
 ## Readiness Score
 9.0/10 — PRD passed all readiness gate dimensions
@@ -27,7 +48,7 @@ Phase 1: Scaffold + Auth + Event CRUD (Tracer Bullet) — Status: COMPLETE (2026
 - Frontend architecture: `research-hub/FRONTEND_ARCHITECTURE.md`
 
 ## Quick Reference
-- Next action: begin Phase 2 (People module)
-- Phase 1 risk: LOW
-- Phase 1 screens: M16, M17, M63, M59, M01, M02, M14, M21
-- Phase 1 schema: organizations, events, halls, event_user_assignments, people (table only), event_people (table only)
+- Next action: begin Phase 4 (Communications Engine)
+- Phase 4 screens: M13 Communications, M39 Template Editor, M53 Automation Triggers
+- Phase 4 schema: notification_templates, notification_log, notification_delivery_events, automation_triggers
+- Phase 4 infrastructure: Evolution API (WhatsApp), Resend (email), Upstash Redis (idempotency)
