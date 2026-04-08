@@ -123,9 +123,9 @@ v1 — GEM India Conference Management Platform
 - [x] Unique QR per registration (qr_code_token encoded via qrcode.react)
 - [x] PWA scanner (@yudiel/react-qr-scanner) for crew phones/iPads
 - [x] Scan feedback: success, duplicate, invalid
-- [ ] Manual check-in search by name when QR doesn't work
-- [ ] Attendance records separate from registration (repeatable per day/session)
-- [ ] Offline scanning: Service Worker + IndexedDB queue, sync on reconnect
+- [x] Manual check-in search by name when QR doesn't work
+- [x] Attendance records separate from registration (repeatable per day/session)
+- [x] Offline scanning: Service Worker + IndexedDB queue, sync on reconnect
 
 ### Branding & Reports
 - [ ] Per-event branding: logo, colors, header image, sender display name, letterhead footer — configurable without code
