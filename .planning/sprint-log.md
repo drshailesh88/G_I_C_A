@@ -2,7 +2,7 @@
 
 ## Session started: 2026-04-08
 ## Phase: 2 — People + Registration + Scientific Program
-## Current requirement: Admin can import people from CSV with automatic column mapping and fuzzy duplicate detection
+## Current requirement: Registration — public form, status state machine, capacity enforcement
 ## Status: BUILDING
 ## Attempt: 1/5
 ## Session: new
