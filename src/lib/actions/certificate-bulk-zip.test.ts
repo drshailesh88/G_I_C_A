@@ -64,8 +64,8 @@ describe('bulkZipDownload', () => {
 
   it('creates a ZIP from issued certificates and returns signed URL', async () => {
     const certs = [
-      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued' },
-      { id: 'c2', storageKey: 'certs/c2.pdf', fileName: 'cert-002.pdf', status: 'issued' },
+      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+      { id: 'c2', storageKey: 'certs/c2.pdf', fileName: 'cert-002.pdf', status: 'issued', fileSizeBytes: 2000 },
     ];
     chainedSelect(certs);
 
@@ -85,8 +85,8 @@ describe('bulkZipDownload', () => {
 
   it('filters out certificates without storageKey', async () => {
     const certs = [
-      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued' },
-      { id: 'c2', storageKey: null, fileName: 'cert-002.pdf', status: 'issued' },
+      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+      { id: 'c2', storageKey: null, fileName: 'cert-002.pdf', status: 'issued', fileSizeBytes: null },
     ];
     chainedSelect(certs);
 
@@ -112,7 +112,7 @@ describe('bulkZipDownload', () => {
 
   it('throws when all certificates lack storageKey', async () => {
     const certs = [
-      { id: 'c1', storageKey: null, fileName: 'cert-001.pdf', status: 'issued' },
+      { id: 'c1', storageKey: null, fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: null },
     ];
     chainedSelect(certs);
 
@@ -138,6 +138,21 @@ describe('bulkZipDownload', () => {
       { certificateType: 'delegate_attendance' },
       { storageProvider: mockStorageProvider },
     )).rejects.toThrow('Forbidden');
+  });
+
+  it('rejects when aggregate PDF size exceeds limit', async () => {
+    // 2 certs, each ~150MB = 300MB total (over 200MB limit)
+    const certs = [
+      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 150 * 1024 * 1024 },
+      { id: 'c2', storageKey: 'certs/c2.pdf', fileName: 'cert-002.pdf', status: 'issued', fileSizeBytes: 150 * 1024 * 1024 },
+    ];
+    chainedSelect(certs);
+
+    await expect(bulkZipDownload(
+      EVENT_ID,
+      { certificateType: 'delegate_attendance' },
+      { storageProvider: mockStorageProvider, fetchPdf: mockFetchPdf },
+    )).rejects.toThrow('exceeds maximum');
   });
 
   it('requires write access', async () => {

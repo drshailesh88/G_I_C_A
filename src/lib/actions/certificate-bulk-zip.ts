@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db';
 import { issuedCertificates } from '@/lib/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
@@ -23,11 +23,14 @@ const bulkZipRequestSchema = z.object({
  * Generate a bulk ZIP of all current (issued) certificates for a given type.
  *
  * Flow:
- * 1. Query all issued certificates for event + type
+ * 1. Query all issued certificates for event + type (with aggregate size check)
  * 2. Download each PDF from R2
  * 3. Bundle into ZIP via archiver
  * 4. Upload ZIP to R2
  * 5. Return signed download URL
+ *
+ * NOTE: This action should be protected by a distributed lock (Req 9) to prevent
+ * concurrent generation for the same event/type. Old ZIP files need a cleanup cron.
  */
 export async function bulkZipDownload(
   eventId: string,
@@ -40,13 +43,14 @@ export async function bulkZipDownload(
   await assertEventAccess(eventId, { requireWrite: true });
   const validated = bulkZipRequestSchema.parse(input);
 
-  // Fetch all current (issued) certificates for this event + type
+  // Fetch all current (issued) certificates for this event + type, including file size
   const certs = await db
     .select({
       id: issuedCertificates.id,
       storageKey: issuedCertificates.storageKey,
       fileName: issuedCertificates.fileName,
       status: issuedCertificates.status,
+      fileSizeBytes: issuedCertificates.fileSizeBytes,
     })
     .from(issuedCertificates)
     .where(
@@ -63,7 +67,13 @@ export async function bulkZipDownload(
   // Filter to only certs with generated PDFs
   const downloadable = certs.filter(c => c.storageKey);
 
-  // Validate
+  // Calculate aggregate size for validation
+  const totalSizeBytes = downloadable.reduce(
+    (sum, c) => sum + (c.fileSizeBytes ?? 0),
+    0,
+  );
+
+  // Validate (includes count limit and aggregate size check)
   const validationError = validateBulkZipInput({
     eventId,
     certificateType: validated.certificateType,
@@ -71,6 +81,7 @@ export async function bulkZipDownload(
       storageKey: c.storageKey,
       fileName: c.fileName,
     })),
+    totalSizeBytes,
   });
   if (validationError) throw new Error(validationError);
 

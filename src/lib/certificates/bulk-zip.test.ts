@@ -3,7 +3,9 @@ import {
   validateBulkZipInput,
   buildBulkZipStorageKey,
   deduplicateFileNames,
+  sanitizeFileName,
   createZipArchive,
+  MAX_AGGREGATE_SIZE_BYTES,
   type BulkZipInput,
 } from './bulk-zip';
 
@@ -59,6 +61,25 @@ describe('validateBulkZipInput', () => {
     };
     expect(validateBulkZipInput(input)).toContain('fileName');
   });
+
+  it('rejects when total size exceeds limit', () => {
+    const result = validateBulkZipInput({
+      ...validInput,
+      totalSizeBytes: MAX_AGGREGATE_SIZE_BYTES + 1,
+    });
+    expect(result).toContain('exceeds maximum');
+  });
+
+  it('accepts when total size is within limit', () => {
+    expect(validateBulkZipInput({
+      ...validInput,
+      totalSizeBytes: MAX_AGGREGATE_SIZE_BYTES - 1,
+    })).toBeNull();
+  });
+
+  it('skips size check when totalSizeBytes is undefined', () => {
+    expect(validateBulkZipInput(validInput)).toBeNull();
+  });
 });
 
 // ── buildBulkZipStorageKey ──────────────────────────────────
@@ -77,6 +98,42 @@ describe('buildBulkZipStorageKey', () => {
     // Keys may be the same if called within the same millisecond, but format is correct
     expect(key1).toMatch(/certificates\/.*\/bulk\/delegate_attendance-\d+\.zip/);
     expect(key2).toMatch(/certificates\/.*\/bulk\/delegate_attendance-\d+\.zip/);
+  });
+});
+
+// ── sanitizeFileName ────────────────────────────────────────
+describe('sanitizeFileName', () => {
+  it('passes through normal file names', () => {
+    expect(sanitizeFileName('cert-001.pdf')).toBe('cert-001.pdf');
+  });
+
+  it('strips path separators (Zip Slip prevention)', () => {
+    const result = sanitizeFileName('../../etc/passwd');
+    expect(result).not.toContain('/');
+    expect(result).not.toContain('\\');
+    expect(result).toBe('_.._etc_passwd');
+  });
+
+  it('strips backslashes', () => {
+    const result = sanitizeFileName('..\\..\\windows\\system32');
+    expect(result).not.toContain('\\');
+    expect(result).toBe('_.._windows_system32');
+  });
+
+  it('strips dangerous characters', () => {
+    expect(sanitizeFileName('cert<script>.pdf')).toBe('cert_script_.pdf');
+  });
+
+  it('strips leading dots', () => {
+    expect(sanitizeFileName('...hidden.pdf')).toBe('hidden.pdf');
+  });
+
+  it('returns fallback for empty result', () => {
+    expect(sanitizeFileName('')).toBe('certificate.pdf');
+  });
+
+  it('returns fallback for all-dots name', () => {
+    expect(sanitizeFileName('...')).toBe('certificate.pdf');
   });
 });
 
@@ -114,6 +171,23 @@ describe('deduplicateFileNames', () => {
   it('handles empty array', () => {
     const result = deduplicateFileNames([]);
     expect(result.size).toBe(0);
+  });
+
+  it('avoids collision between derived suffix and existing file name', () => {
+    // cert-2.pdf exists as a real name, and cert.pdf has duplicates
+    const result = deduplicateFileNames(['cert.pdf', 'cert.pdf', 'cert-2.pdf']);
+    expect(result.get(0)).toBe('cert.pdf');
+    expect(result.get(1)).toBe('cert-2.pdf');
+    expect(result.get(2)).toBe('cert-2-2.pdf'); // avoids collision with cert-2.pdf
+    // All names must be unique
+    const values = [...result.values()];
+    expect(new Set(values).size).toBe(values.length);
+  });
+
+  it('sanitizes path traversal in file names', () => {
+    const result = deduplicateFileNames(['../../evil.pdf', 'good.pdf']);
+    expect(result.get(0)).toBe('_.._evil.pdf');
+    expect(result.get(1)).toBe('good.pdf');
   });
 });
 

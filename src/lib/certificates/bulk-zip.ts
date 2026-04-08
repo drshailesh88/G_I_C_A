@@ -5,11 +5,17 @@
  * using node-archiver, uploads the ZIP to R2, and returns a signed download URL.
  *
  * The ZIP is stored at: certificates/{eventId}/bulk/{timestamp}.zip
+ *
+ * NOTE: Concurrent bulk ZIP requests for the same event/type should be guarded
+ * by a distributed lock (Req 9). Old ZIP files need a cleanup cron.
  */
 
 import archiver from 'archiver';
 import { PassThrough } from 'stream';
 import type { StorageProvider } from './storage';
+
+/** Maximum aggregate PDF size before ZIP creation (200MB) */
+export const MAX_AGGREGATE_SIZE_BYTES = 200 * 1024 * 1024;
 
 export type BulkZipInput = {
   eventId: string;
@@ -18,6 +24,7 @@ export type BulkZipInput = {
     storageKey: string;
     fileName: string;
   }>;
+  totalSizeBytes?: number;
 };
 
 export type BulkZipResult = {
@@ -36,6 +43,17 @@ export function buildBulkZipStorageKey(eventId: string, certificateType: string)
 }
 
 /**
+ * Sanitize a file name to prevent path traversal (Zip Slip) attacks.
+ * Strips path separators and dangerous characters.
+ */
+export function sanitizeFileName(name: string): string {
+  return name
+    .replace(/[/\\:*?"<>|]/g, '_')
+    .replace(/^\.+/, '')
+    .trim() || 'certificate.pdf';
+}
+
+/**
  * Validate the input for bulk ZIP generation.
  * Returns null if valid, or an error message.
  */
@@ -44,6 +62,10 @@ export function validateBulkZipInput(input: BulkZipInput): string | null {
   if (!input.certificateType) return 'certificateType is required';
   if (!input.certificates.length) return 'At least one certificate is required';
   if (input.certificates.length > 500) return 'Maximum 500 certificates per ZIP';
+
+  if (input.totalSizeBytes !== undefined && input.totalSizeBytes > MAX_AGGREGATE_SIZE_BYTES) {
+    return `Total PDF size (${Math.round(input.totalSizeBytes / 1024 / 1024)}MB) exceeds maximum (${MAX_AGGREGATE_SIZE_BYTES / 1024 / 1024}MB)`;
+  }
 
   for (const cert of input.certificates) {
     if (!cert.storageKey) return `Certificate missing storageKey: ${cert.fileName || 'unknown'}`;
@@ -55,27 +77,32 @@ export function validateBulkZipInput(input: BulkZipInput): string | null {
 
 /**
  * Collect all file names and detect duplicates.
- * Returns a map from original fileName to unique fileName (with suffix if needed).
+ * Uses a Set of assigned names to prevent collisions between
+ * duplicated names and legitimately-named files.
  */
 export function deduplicateFileNames(fileNames: string[]): Map<number, string> {
   const result = new Map<number, string>();
-  const seen = new Map<string, number>();
+  const assigned = new Set<string>();
 
   for (let i = 0; i < fileNames.length; i++) {
-    const name = fileNames[i];
-    const count = seen.get(name) ?? 0;
-    seen.set(name, count + 1);
+    let name = sanitizeFileName(fileNames[i]);
 
-    if (count === 0) {
+    if (!assigned.has(name)) {
       result.set(i, name);
+      assigned.add(name);
     } else {
-      // Insert suffix before .pdf extension
+      // Find a unique name by incrementing suffix
       const dotIdx = name.lastIndexOf('.');
-      if (dotIdx > 0) {
-        result.set(i, `${name.slice(0, dotIdx)}-${count + 1}${name.slice(dotIdx)}`);
-      } else {
-        result.set(i, `${name}-${count + 1}`);
+      const base = dotIdx > 0 ? name.slice(0, dotIdx) : name;
+      const ext = dotIdx > 0 ? name.slice(dotIdx) : '';
+      let counter = 2;
+      let candidate = `${base}-${counter}${ext}`;
+      while (assigned.has(candidate)) {
+        counter++;
+        candidate = `${base}-${counter}${ext}`;
       }
+      result.set(i, candidate);
+      assigned.add(candidate);
     }
   }
 
