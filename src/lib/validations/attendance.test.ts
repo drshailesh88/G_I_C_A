@@ -47,6 +47,26 @@ describe('qrScanSchema', () => {
   it('rejects empty qrPayload', () => {
     expect(() => qrScanSchema.parse({ eventId: EVENT_ID, qrPayload: '' })).toThrow();
   });
+
+  it('rejects whitespace-only qrPayload', () => {
+    expect(() => qrScanSchema.parse({ eventId: EVENT_ID, qrPayload: '   ' })).toThrow();
+  });
+
+  it('rejects whitespace-only deviceId', () => {
+    expect(() => qrScanSchema.parse({
+      eventId: EVENT_ID,
+      qrPayload: 'payload',
+      deviceId: '   ',
+    })).toThrow();
+  });
+
+  it('rejects unexpected extra properties', () => {
+    expect(() => qrScanSchema.parse({
+      eventId: EVENT_ID,
+      qrPayload: 'payload',
+      admin: true,
+    })).toThrow();
+  });
 });
 
 // ── manualCheckInSchema ──────────────────────────────────────
@@ -63,6 +83,14 @@ describe('manualCheckInSchema', () => {
     expect(() => manualCheckInSchema.parse({
       eventId: EVENT_ID,
       registrationId: 'not-uuid',
+    })).toThrow();
+  });
+
+  it('rejects unexpected extra properties', () => {
+    expect(() => manualCheckInSchema.parse({
+      eventId: EVENT_ID,
+      registrationId: REG_ID,
+      bypassAudit: true,
     })).toThrow();
   });
 });
@@ -86,6 +114,13 @@ describe('attendanceQuerySchema', () => {
     expect(() => attendanceQuerySchema.parse({
       eventId: EVENT_ID,
       date: '04/08/2026',
+    })).toThrow();
+  });
+
+  it('rejects unexpected extra properties', () => {
+    expect(() => attendanceQuerySchema.parse({
+      eventId: EVENT_ID,
+      includeAllEvents: true,
     })).toThrow();
   });
 });
@@ -123,6 +158,40 @@ describe('offlineSyncBatchSchema', () => {
     });
     expect(result.records[0].sessionId).toBe(SESSION_ID);
   });
+
+  it('rejects whitespace-only qrPayload in records', () => {
+    expect(() => offlineSyncBatchSchema.parse({
+      eventId: EVENT_ID,
+      records: [{
+        qrPayload: '   ',
+        scannedAt: '2026-04-08T10:00:00Z',
+        deviceId: 'ipad-1',
+      }],
+    })).toThrow();
+  });
+
+  it('rejects whitespace-only deviceId in records', () => {
+    expect(() => offlineSyncBatchSchema.parse({
+      eventId: EVENT_ID,
+      records: [{
+        qrPayload: 'payload1',
+        scannedAt: '2026-04-08T10:00:00Z',
+        deviceId: '   ',
+      }],
+    })).toThrow();
+  });
+
+  it('rejects unexpected extra properties in records', () => {
+    expect(() => offlineSyncBatchSchema.parse({
+      eventId: EVENT_ID,
+      records: [{
+        qrPayload: 'payload1',
+        scannedAt: '2026-04-08T10:00:00Z',
+        deviceId: 'ipad-1',
+        ignored: 'x',
+      }],
+    })).toThrow();
+  });
 });
 
 // ── checkInSearchSchema ──────────────────────────────────────
@@ -154,6 +223,14 @@ describe('checkInSearchSchema', () => {
     expect(() => checkInSearchSchema.parse({
       eventId: EVENT_ID,
       query: '   ',
+    })).toThrow();
+  });
+
+  it('rejects unexpected extra properties', () => {
+    expect(() => checkInSearchSchema.parse({
+      eventId: EVENT_ID,
+      query: 'Sharma',
+      includeCancelled: true,
     })).toThrow();
   });
 });

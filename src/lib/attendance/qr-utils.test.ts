@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
 import {
   buildQrPayloadUrl,
   buildCompactQrPayload,
@@ -8,6 +10,15 @@ import {
   determineScanResult,
   QR_CHECKIN_PATH,
 } from './qr-utils';
+
+vi.mock(
+  'qrcode.react',
+  () => ({
+    QRCodeSVG: ({ value }: { value: string }) => createElement('svg', { 'data-value': value }),
+  }),
+);
+
+import { RegistrationQrCode } from '@/components/shared/RegistrationQrCode';
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 const TOKEN = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef';
@@ -35,6 +46,18 @@ describe('buildQrPayloadUrl', () => {
     expect(() => buildQrPayloadUrl(BASE_URL, TOKEN, '')).toThrow('eventId is required');
   });
 
+  it('throws if baseUrl is whitespace only', () => {
+    expect(() => buildQrPayloadUrl('   ', TOKEN, EVENT_ID)).toThrow('baseUrl is required');
+  });
+
+  it('throws if token is whitespace only', () => {
+    expect(() => buildQrPayloadUrl(BASE_URL, '   ', EVENT_ID)).toThrow('token is required');
+  });
+
+  it('throws if eventId is whitespace only', () => {
+    expect(() => buildQrPayloadUrl(BASE_URL, TOKEN, '   ')).toThrow('eventId is required');
+  });
+
   it('handles baseUrl with trailing slash', () => {
     const url = buildQrPayloadUrl('https://example.com/', TOKEN, EVENT_ID);
     expect(url).toContain('/checkin?');
@@ -56,6 +79,14 @@ describe('buildCompactQrPayload', () => {
   it('throws if eventId is empty', () => {
     expect(() => buildCompactQrPayload(TOKEN, '')).toThrow('eventId is required');
   });
+
+  it('throws if token is whitespace only', () => {
+    expect(() => buildCompactQrPayload('   ', EVENT_ID)).toThrow('token is required');
+  });
+
+  it('throws if eventId is whitespace only', () => {
+    expect(() => buildCompactQrPayload(TOKEN, '   ')).toThrow('eventId is required');
+  });
 });
 
 // ── parseQrPayload ───────────────────────────────────────────
@@ -70,6 +101,12 @@ describe('parseQrPayload', () => {
     const compact = buildCompactQrPayload(TOKEN, EVENT_ID);
     const result = parseQrPayload(compact);
     expect(result).toEqual({ valid: true, token: TOKEN, eventId: EVENT_ID });
+  });
+
+  it('parses a compact payload with uppercase UUID characters', () => {
+    const uppercaseEventId = EVENT_ID.toUpperCase();
+    const result = parseQrPayload(`${uppercaseEventId}:${TOKEN}`);
+    expect(result).toEqual({ valid: true, token: TOKEN, eventId: uppercaseEventId });
   });
 
   it('returns invalid for empty string', () => {
@@ -97,6 +134,16 @@ describe('parseQrPayload', () => {
     expect(result).toEqual({ valid: false, error: 'Invalid token format' });
   });
 
+  it('returns invalid for URL with bad event format', () => {
+    const result = parseQrPayload(`${BASE_URL}/checkin?token=${TOKEN}&event=not-a-uuid`);
+    expect(result).toEqual({ valid: false, error: 'Invalid event ID format' });
+  });
+
+  it('returns invalid for URL with unexpected pathname', () => {
+    const result = parseQrPayload(`${BASE_URL}/phish?token=${TOKEN}&event=${EVENT_ID}`);
+    expect(result).toEqual({ valid: false, error: 'Invalid QR payload URL' });
+  });
+
   it('returns invalid for garbage string', () => {
     const result = parseQrPayload('not-a-url-or-compact');
     expect(result).toEqual({ valid: false, error: 'Unrecognized QR format' });
@@ -106,6 +153,44 @@ describe('parseQrPayload', () => {
     const compact = `  ${EVENT_ID}:${TOKEN}  `;
     const result = parseQrPayload(compact);
     expect(result).toEqual({ valid: true, token: TOKEN, eventId: EVENT_ID });
+  });
+});
+
+// ── RegistrationQrCode ───────────────────────────────────────
+describe('RegistrationQrCode', () => {
+  it('renders an SVG QR code for valid props', () => {
+    const markup = renderToStaticMarkup(
+      createElement(RegistrationQrCode, {
+        qrCodeToken: TOKEN,
+        eventId: EVENT_ID,
+        baseUrl: BASE_URL,
+      }),
+    );
+
+    expect(markup).toContain('<svg');
+  });
+
+  it('fails closed instead of throwing when runtime props are invalid', () => {
+    expect(() =>
+      renderToStaticMarkup(
+        createElement(RegistrationQrCode, {
+          qrCodeToken: null as unknown as string,
+          eventId: '   ',
+          baseUrl: BASE_URL,
+        }),
+      ),
+    ).not.toThrow();
+
+    const markup = renderToStaticMarkup(
+      createElement(RegistrationQrCode, {
+        qrCodeToken: null as unknown as string,
+        eventId: '   ',
+        baseUrl: BASE_URL,
+      }),
+    );
+
+    expect(markup).toContain('QR code unavailable');
+    expect(markup).not.toContain('<svg');
   });
 });
 

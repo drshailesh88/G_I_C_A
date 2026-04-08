@@ -26,20 +26,32 @@ export function RegistrationQrCode({
   compact = false,
   label,
 }: RegistrationQrCodeProps) {
-  const value = compact
-    ? buildCompactQrPayload(qrCodeToken, eventId)
-    : buildQrPayloadUrl(baseUrl, qrCodeToken, eventId);
+  const safeSize = Number.isFinite(size) && size > 0 ? size : 200;
+  const trimmedLabel = typeof label === 'string' ? label.trim() : '';
+
+  let value: string;
+  try {
+    value = compact
+      ? buildCompactQrPayload(qrCodeToken, eventId)
+      : buildQrPayloadUrl(baseUrl, qrCodeToken, eventId);
+  } catch {
+    return (
+      <div className="flex flex-col items-center gap-2">
+        <span className="text-sm text-muted-foreground">QR code unavailable</span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-center gap-2">
       <QRCodeSVG
         value={value}
-        size={size}
+        size={safeSize}
         level="M"
         includeMargin
       />
-      {label && (
-        <span className="text-sm text-muted-foreground font-mono">{label}</span>
+      {trimmedLabel && (
+        <span className="text-sm text-muted-foreground font-mono">{trimmedLabel}</span>
       )}
     </div>
   );
