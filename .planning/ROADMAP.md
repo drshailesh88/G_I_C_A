@@ -24,7 +24,7 @@
   - **Schema:** travel_records, accommodation_records, transport_batches, vehicle_assignments, transport_passenger_assignments, red_flags
   - **Risk:** HIGH — this is GEM India's core differentiator. The Inngest cascade with multi-consumer fan-out, idempotency, and red flag uniqueness constraints is the most operationally critical piece. Must be thoroughly tested before proceeding.
 
-- [ ] Phase 4: Communications Engine
+- [x] Phase 4: Communications Engine
   - **Deliverable:** Notification templates are configurable per event, automation triggers fire on business events, emails and WhatsApp messages are delivered through abstracted provider interfaces, delivery is logged with retry/resend capability
   - **Requirements addressed:** Communications (templates, triggers, notification service, provider abstraction, idempotency, notification log, delivery events, retry/resend)
   - **Screens:** M13 Communications, M39 Template Editor, M53 Automation Triggers

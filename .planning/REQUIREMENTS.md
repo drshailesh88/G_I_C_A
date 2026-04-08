@@ -98,15 +98,15 @@ v1 — GEM India Conference Management Platform
 - [x] Cascade direction: Travel → Accommodation + Transport. Accommodation → Transport. Transport → nothing.
 
 ### Communications
-- [ ] Notification templates: event-overridable, channel-specific (email vs WhatsApp), with variable placeholders
-- [ ] 10 V1 system template keys (registration_confirmation through event_reminder), each as email + WhatsApp
-- [ ] Automation triggers: one trigger = one channel = one template; execution gated by event status and feature flags
-- [ ] Notification service abstracts email (Resend) and WhatsApp (Evolution API) behind provider interfaces
-- [ ] Every notification send checks idempotency key in Redis before sending
-- [ ] Notification log: proof-of-send with rendered content, provider response, delivery lifecycle, retry/resend tracking
-- [ ] Delivery events: separate forensic table for raw provider webhook payloads
-- [ ] Retry Failed screen: filter by status = failed, show error, retry button
-- [ ] Manual resend creates new notification_log row (is_resend = true, resend_of_id)
+- [x] Notification templates: event-overridable, channel-specific (email vs WhatsApp), with variable placeholders
+- [x] 10 V1 system template keys (registration_confirmation through event_reminder), each as email + WhatsApp
+- [x] Automation triggers: one trigger = one channel = one template; execution gated by event status and feature flags
+- [x] Notification service abstracts email (Resend) and WhatsApp (Evolution API) behind provider interfaces
+- [x] Every notification send checks idempotency key in Redis before sending
+- [x] Notification log: proof-of-send with rendered content, provider response, delivery lifecycle, retry/resend tracking
+- [x] Delivery events: separate forensic table for raw provider webhook payloads
+- [x] Retry Failed screen: filter by status = failed, show error, retry button
+- [x] Manual resend creates new notification_log row (is_resend = true, resend_of_id)
 
 ### Certificates
 - [ ] Certificate templates designed in pdfme visual editor, stored as JSON in PostgreSQL

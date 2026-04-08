@@ -4,28 +4,33 @@
 **GEM India V1** — Created 2026-04-07
 
 ## Current Phase
-Phase 3: Logistics + Cascade System — Status: COMPLETE (2026-04-08)
+Phase 4: Communications Engine — Status: COMPLETE (2026-04-08)
 
 ## Completed Phases
 - Phase 1: Scaffold + Auth + Event CRUD — COMPLETE (2026-04-08)
 - Phase 2: People + Registration + Scientific Program — COMPLETE (2026-04-08)
 - Phase 3: Logistics + Cascade System — COMPLETE (2026-04-08)
+- Phase 4: Communications Engine — COMPLETE (2026-04-08)
 
 ## Next Phase
-Phase 4: Communications Engine
+Phase 5: Certificates + QR Attendance
 
 ## Progress Summary
-- Requirements done: 62/116
-- Requirements remaining: 54
-- Test files: 21 | Tests passing: 380
-- Security: Faculty token validation fixed, RBAC enforced on all logistics routes
+- Requirements done: 71/116
+- Requirements remaining: 45
+- Test files: 33 | Tests passing: 566
+- New dependencies: resend, @upstash/redis
 
-## Phase 3 Completion Notes
-- Backend: Travel CRUD (51 tests), Accommodation CRUD (37 tests), Transport three-tier model (51 tests), Cascade system with red flags (24 tests)
-- UI: 6 screens built (M35 Travel List, M06 Travel Form, M05 Accommodation + Flags, M36 Accommodation Form, M10 Transport Planning, M38 Vehicle Kanban)
-- Codex adversarial review passed: event-scoped people picker, RBAC on red-flag actions, kanban droppable containers fixed
-- /more page created with role-filtered menu
-- Still deferred: accommodation email+WhatsApp on save, rooming list export, auto-suggest transport batches
+## Phase 4 Completion Notes
+- Backend: NotificationService with email (Resend) + WhatsApp (Evolution API) providers
+- Idempotency: Redis-based (Upstash) check-before-send with SET NX EX pattern
+- Templates: 12 system keys × 2 channels = 24 global default templates
+- Automation: Guard condition evaluation, idempotency key building, event-to-trigger resolution
+- Webhooks: Resend + Evolution API webhook ingestion with forward-only status progression
+- Log: Immutable notification_log with delivery lifecycle, retry/resend lineage
+- UI: Retry Failed screen with channel filter, error details, retry + resend buttons
+- Codex adversarial reviews passed: prototype pollution guards, event-scoped queries, channel validation, attachment preservation
+- Pure logic extracted into *-utils.ts files for DB-free unit testing
 
 ## Readiness Score
 9.0/10 — PRD passed all readiness gate dimensions
@@ -48,7 +53,7 @@ Phase 4: Communications Engine
 - Frontend architecture: `research-hub/FRONTEND_ARCHITECTURE.md`
 
 ## Quick Reference
-- Next action: begin Phase 4 (Communications Engine)
-- Phase 4 screens: M13 Communications, M39 Template Editor, M53 Automation Triggers
-- Phase 4 schema: notification_templates, notification_log, notification_delivery_events, automation_triggers
-- Phase 4 infrastructure: Evolution API (WhatsApp), Resend (email), Upstash Redis (idempotency)
+- Next action: begin Phase 5 (Certificates + QR Attendance)
+- Phase 5 screens: M12 Certificate Generation, M56 Template Editor, M61 Progress, M11 QR Scanner, M44-M46 Scan Results, M58 Attendance Report
+- Phase 5 schema: certificate_templates, issued_certificates, attendance_records
+- Phase 5 infrastructure: pdfme (certificate rendering), qrcode.react, @yudiel/react-qr-scanner, R2 (storage), node-archiver (ZIP)
