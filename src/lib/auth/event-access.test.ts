@@ -95,6 +95,21 @@ describe('checkEventAccess', () => {
     const result = await checkEventAccess('event-1');
     expect(result.authorized).toBe(false);
   });
+
+  // Codex Bug #1: users with no recognized Clerk role should be denied even with assignment
+  it('denies assigned users who have no recognized Clerk role', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'user-without-role',
+      has: () => false,
+    });
+    mockAssignmentQuery([
+      { id: 'a3', eventId: 'event-1', authUserId: 'user-without-role', isActive: true },
+    ]);
+
+    const result = await checkEventAccess('event-1');
+    expect(result.authorized).toBe(false);
+    expect(result.role).toBeNull();
+  });
 });
 
 describe('assertEventAccess', () => {
@@ -121,6 +136,28 @@ describe('assertEventAccess', () => {
     const result = await assertEventAccess('event-1');
     expect(result.userId).toBe('admin-1');
     expect(result.role).toBe('org:super_admin');
+  });
+
+  // Codex Bug #2: read-only users should be blocked from write operations
+  it('throws for read-only users when requireWrite is true', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'readonly-1',
+      has: ({ role }: { role: string }) => role === 'org:read_only',
+    });
+    mockAssignmentQuery([{ id: 'a4', eventId: 'event-1', authUserId: 'readonly-1', isActive: true }]);
+
+    await expect(assertEventAccess('event-1', { requireWrite: true })).rejects.toThrow(/read-only|forbidden/i);
+  });
+
+  it('allows coordinator for write operations', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'coord-1',
+      has: ({ role }: { role: string }) => role === 'org:event_coordinator',
+    });
+    mockAssignmentQuery([{ id: 'a5', eventId: 'event-1', authUserId: 'coord-1', isActive: true }]);
+
+    const result = await assertEventAccess('event-1', { requireWrite: true });
+    expect(result.userId).toBe('coord-1');
   });
 });
 

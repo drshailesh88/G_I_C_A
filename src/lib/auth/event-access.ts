@@ -54,6 +54,11 @@ export async function checkEventAccess(eventId: string): Promise<EventAccessResu
     return { authorized: false, userId: '', role: null };
   }
 
+  // No recognized Clerk role → deny access regardless of assignment
+  if (!role) {
+    return { authorized: false, userId, role: null };
+  }
+
   // Super Admin bypasses event-level assignment check
   if (isSuperAdmin) {
     return { authorized: true, userId, role };
@@ -79,15 +84,27 @@ export async function checkEventAccess(eventId: string): Promise<EventAccessResu
   return { authorized: true, userId, role };
 }
 
+/** Roles that can perform write operations */
+const WRITE_ROLES: ReadonlySet<string> = new Set([ROLES.SUPER_ADMIN, ROLES.EVENT_COORDINATOR, ROLES.OPS]);
+
 /**
  * Assert event access — throws if unauthorized.
  * Use in server actions and API routes before any data access.
+ * Pass requireWrite: true for mutations to block read-only users.
  */
-export async function assertEventAccess(eventId: string): Promise<{ userId: string; role: string | null }> {
+export async function assertEventAccess(
+  eventId: string,
+  options?: { requireWrite?: boolean },
+): Promise<{ userId: string; role: string | null }> {
   const result = await checkEventAccess(eventId);
   if (!result.authorized) {
     throw new Error('Forbidden: you do not have access to this event');
   }
+
+  if (options?.requireWrite && (!result.role || !WRITE_ROLES.has(result.role as string))) {
+    throw new Error('Forbidden: read-only users cannot perform write operations');
+  }
+
   return { userId: result.userId, role: result.role };
 }
 

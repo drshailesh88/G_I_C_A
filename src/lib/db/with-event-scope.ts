@@ -14,6 +14,10 @@ export function withEventScope(
   eventId: string,
   ...conditions: (SQL | undefined)[]
 ): SQL {
+  if (!eventId) {
+    throw new Error('withEventScope: eventId is required — refusing to build unscoped query');
+  }
+
   const allConditions = [
     eq(eventIdColumn, eventId),
     ...conditions.filter((c): c is SQL => c !== undefined),

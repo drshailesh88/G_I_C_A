@@ -182,8 +182,8 @@ export async function updateEventStatus(eventId: string, newStatus: EventStatus)
   // Validate eventId
   eventIdSchema.parse(eventId);
 
-  // REQ 9: Per-event access control
-  const { userId } = await assertEventAccess(eventId);
+  // REQ 9: Per-event access control (write operation — blocks read-only)
+  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
 
   // REQ 11: Query scoped by event_id
   const [event] = await db

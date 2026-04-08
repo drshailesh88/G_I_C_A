@@ -239,6 +239,15 @@ describe('event actions — REQ 9/10/11 access control tests', () => {
     mockDb.update.mockReturnValue({ set });
 
     await updateEventStatus(eventId, 'published');
-    expect(mockAssertEventAccess).toHaveBeenCalledWith(eventId);
+    expect(mockAssertEventAccess).toHaveBeenCalledWith(eventId, { requireWrite: true });
+  });
+
+  // Codex Bug #2: updateEventStatus should pass requireWrite to block read-only users
+  it('updateEventStatus passes requireWrite: true to assertEventAccess', async () => {
+    const eventId = '66666666-6666-6666-6666-666666666666';
+    mockAssertEventAccess.mockRejectedValue(new Error('Forbidden: read-only users cannot perform write operations'));
+
+    await expect(updateEventStatus(eventId, 'published')).rejects.toThrow(/read-only|forbidden/i);
+    expect(mockAssertEventAccess).toHaveBeenCalledWith(eventId, { requireWrite: true });
   });
 });

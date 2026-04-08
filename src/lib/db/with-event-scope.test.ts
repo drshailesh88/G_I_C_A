@@ -27,4 +27,9 @@ describe('withEventScope', () => {
     const condition = withEventScope(testTable.eventId, 'abc-123', undefined);
     expect(condition).toBeDefined();
   });
+
+  // Codex Bug #3: reject blank/empty event IDs
+  it.each(['', null, undefined])('rejects invalid eventId: %p', (eventId) => {
+    expect(() => withEventScope(testTable.eventId, eventId as never)).toThrow(/eventId/i);
+  });
 });
