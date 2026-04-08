@@ -1,13 +1,13 @@
 {
   "session_start": "2026-04-08T03:52:00Z",
-  "current_requirement": "M03 People List — master people database + search + saved views",
+  "current_requirement": "Registration UI — M25, M07, M28, M29",
   "status": "BUILDING",
   "attempt": 1,
-  "requirements_done": 0,
+  "requirements_done": 8,
   "requirements_stuck": 0,
-  "requirements_remaining": 33,
+  "requirements_remaining": 25,
   "test_results": { "unit_pass": 129, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
   "worktree_branch": "",
-  "last_updated": "2026-04-08T03:52:00Z",
-  "notes": "Phase 2 sprint session 2. Backend done for People/Registration. Building People UI first (Group A)."
+  "last_updated": "2026-04-08T04:05:00Z",
+  "notes": "People UI COMPLETE: M03 People List + M09 Person Detail + M32 CSV Import + M62 Import Success. Codex review passed (15 issues found and fixed). 8/10 People reqs checked off. Remaining: merge UI (D3 deferred), Bemi audit log. Moving to Registration UI."
 }

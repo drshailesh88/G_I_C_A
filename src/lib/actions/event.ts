@@ -178,6 +178,38 @@ export async function getEvent(eventId: string) {
   return event;
 }
 
+// ── Public: get event by slug (no auth) ───────────────────────
+export async function getEventBySlug(slug: string) {
+  if (!slug || slug.length > 100) throw new Error('Invalid event slug');
+
+  const [event] = await db
+    .select({
+      id: events.id,
+      slug: events.slug,
+      name: events.name,
+      description: events.description,
+      startDate: events.startDate,
+      endDate: events.endDate,
+      timezone: events.timezone,
+      status: events.status,
+      venueName: events.venueName,
+      venueAddress: events.venueAddress,
+      venueCity: events.venueCity,
+      venueMapUrl: events.venueMapUrl,
+      branding: events.branding,
+      registrationSettings: events.registrationSettings,
+      publicPageSettings: events.publicPageSettings,
+    })
+    .from(events)
+    .where(eq(events.slug, slug))
+    .limit(1);
+
+  if (!event) throw new Error('Event not found');
+  if (event.status === 'draft') throw new Error('Event not found'); // Don't expose draft events
+
+  return event;
+}
+
 export async function updateEventStatus(eventId: string, newStatus: EventStatus) {
   // Validate eventId
   eventIdSchema.parse(eventId);

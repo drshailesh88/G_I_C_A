@@ -23,16 +23,16 @@ v1 — GEM India Conference Management Platform
 - [x] Every event-scoped query, mutation, export, and background job filters by event_id
 
 ### People
-- [ ] Master people database stores global person records (salutation, full_name, email, phone_e164, designation, specialty, organization, city, tags)
-- [ ] Person records require full_name plus at least one of email or mobile — no exceptions
-- [ ] Deduplication matches on email OR mobile (E.164 normalized); matched records reuse existing person, flag updated fields for admin review
-- [ ] Admin can import people from CSV with automatic column mapping and fuzzy duplicate detection (Fuse.js)
+- [x] Master people database stores global person records (salutation, full_name, email, phone_e164, designation, specialty, organization, city, tags)
+- [x] Person records require full_name plus at least one of email or mobile — no exceptions
+- [x] Deduplication matches on email OR mobile (E.164 normalized); matched records reuse existing person, flag updated fields for admin review
+- [x] Admin can import people from CSV with automatic column mapping and fuzzy duplicate detection (Fuse.js)
 - [ ] Admin can review and merge duplicate person records side-by-side
-- [ ] Person records support soft delete, restore (Super Admin), and anonymize (Super Admin, irreversible)
+- [x] Person records support soft delete, restore (Super Admin), and anonymize (Super Admin, irreversible)
 - [ ] Change history visible on person detail screen (timestamp, actor, action, field diff, source) via Bemi audit log
-- [ ] Person search: partial name, email domain, exact phone, organization, city, specialty — all server-side indexed
-- [ ] Saved views: All People, Faculty, Delegates, Sponsors, VIPs, Recently Added
-- [ ] event_people junction auto-upserted on first event touchpoint (registration, invite, assignment, travel, accommodation) — never a manual step
+- [x] Person search: partial name, email domain, exact phone, organization, city, specialty — all server-side indexed
+- [x] Saved views: All People, Faculty, Delegates, Sponsors, VIPs, Recently Added
+- [x] event_people junction auto-upserted on first event touchpoint (registration, invite, assignment, travel, accommodation) — never a manual step
 
 ### Registration
 - [ ] Delegates self-register on public event page (name, designation, specialty, city, age, mobile, email, preferences)
