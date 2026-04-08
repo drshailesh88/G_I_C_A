@@ -1,5 +1,5 @@
-import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
+import { assertEventAccess } from '@/lib/auth/event-access';
 import { getEventAccommodationRecords } from '@/lib/actions/accommodation';
 import { getUnresolvedFlags, getFlaggedEntityIds } from '@/lib/cascade/red-flags';
 import { AccommodationListClient } from './accommodation-list-client';
@@ -11,10 +11,13 @@ export default async function AccommodationPage({
 }: {
   params: Params;
 }) {
-  const { userId } = await auth();
-  if (!userId) redirect('/login');
-
   const { eventId } = await params;
+
+  try {
+    await assertEventAccess(eventId);
+  } catch {
+    redirect('/login');
+  }
 
   const [records, flags, flaggedIds] = await Promise.all([
     getEventAccommodationRecords(eventId),

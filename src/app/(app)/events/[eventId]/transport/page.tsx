@@ -1,5 +1,5 @@
-import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
+import { assertEventAccess } from '@/lib/auth/event-access';
 import { getEventTransportBatches } from '@/lib/actions/transport';
 import { TransportPlanningClient } from './transport-planning-client';
 
@@ -10,11 +10,14 @@ export default async function TransportPage({
 }: {
   params: Params;
 }) {
-  const { userId } = await auth();
-  if (!userId) redirect('/login');
-
   const { eventId } = await params;
-  const batches = await getEventTransportBatches(eventId);
 
+  try {
+    await assertEventAccess(eventId);
+  } catch {
+    redirect('/login');
+  }
+
+  const batches = await getEventTransportBatches(eventId);
   return <TransportPlanningClient eventId={eventId} batches={batches} />;
 }

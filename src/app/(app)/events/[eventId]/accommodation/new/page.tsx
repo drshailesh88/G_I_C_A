@@ -1,5 +1,5 @@
-import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
+import { assertEventAccess } from '@/lib/auth/event-access';
 import { getPeopleWithTravelRecords } from '@/lib/actions/accommodation';
 import { AccommodationFormClient } from '../accommodation-form-client';
 
@@ -10,10 +10,14 @@ export default async function NewAccommodationPage({
 }: {
   params: Params;
 }) {
-  const { userId } = await auth();
-  if (!userId) redirect('/login');
-
   const { eventId } = await params;
+
+  try {
+    await assertEventAccess(eventId, { requireWrite: true });
+  } catch {
+    redirect('/login');
+  }
+
   const peopleWithTravel = await getPeopleWithTravelRecords(eventId);
 
   return (

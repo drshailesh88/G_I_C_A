@@ -8,16 +8,15 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import {
   DndContext,
-  closestCenter,
+  closestCorners,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
+  useDroppable,
   type DragEndEvent,
 } from '@dnd-kit/core';
 import {
-  SortableContext,
-  verticalListSortingStrategy,
   useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -94,21 +93,37 @@ export function VehicleKanbanClient({
     byVehicle.set(v.id, passengers.filter((p) => p.vehicleAssignmentId === v.id));
   }
 
+  // Build a set of valid column IDs for resolving drop targets
+  const columnIds = new Set([UNASSIGNED_COLUMN, ...vehicles.map((v) => v.id)]);
+
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
+    if (!over) return;
 
     const passengerId = active.id as string;
-    const targetColumn = over.id as string;
+    const overId = over.id as string;
 
-    // Determine target vehicle ID (null for unassigned)
-    const targetVehicleId = targetColumn === UNASSIGNED_COLUMN ? '' : targetColumn;
+    // Resolve target column: if dropped on a column directly, use it.
+    // If dropped on another passenger card, resolve to that card's container.
+    let targetColumnId: string;
+    if (columnIds.has(overId)) {
+      targetColumnId = overId;
+    } else {
+      // over.id is a passenger card — get its container from sortable data
+      targetColumnId = (over.data?.current?.containerId as string) || UNASSIGNED_COLUMN;
+    }
+
+    // Don't move if same column as source
+    const sourceColumnId = (active.data?.current?.containerId as string) || UNASSIGNED_COLUMN;
+    if (targetColumnId === sourceColumnId) return;
+
+    const targetVehicleId = targetColumnId === UNASSIGNED_COLUMN ? '' : targetColumnId;
 
     setMoving(true);
     try {
       await movePassenger(eventId, {
         passengerAssignmentId: passengerId,
-        targetVehicleAssignmentId: targetVehicleId || '',
+        targetVehicleAssignmentId: targetVehicleId,
       });
       router.refresh();
     } catch (err: unknown) {
@@ -169,7 +184,7 @@ export function VehicleKanbanClient({
       {/* Kanban Board */}
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={closestCorners}
         onDragEnd={handleDragEnd}
       >
         <div className="mt-6 flex gap-4 overflow-x-auto pb-4">
@@ -276,7 +291,8 @@ function KanbanColumn({
   capacity?: number;
   passengers: Passenger[];
 }) {
-  const isOver = capacity !== undefined && count > capacity;
+  const isOverCapacity = capacity !== undefined && count > capacity;
+  const { setNodeRef, isOver } = useDroppable({ id });
 
   return (
     <div className="w-64 flex-shrink-0 rounded-xl border border-border bg-background p-3">
@@ -291,7 +307,7 @@ function KanbanColumn({
             )}
             <span className="text-sm font-semibold text-text-primary">{title}</span>
           </div>
-          <span className={cn('text-xs font-medium', isOver ? 'text-red-600' : 'text-text-muted')}>
+          <span className={cn('text-xs font-medium', isOverCapacity ? 'text-red-600' : 'text-text-muted')}>
             {count}{capacity !== undefined ? `/${capacity}` : ''}
           </span>
         </div>
@@ -299,26 +315,23 @@ function KanbanColumn({
         {driver && <p className="text-xs text-text-muted">Driver: {driver}</p>}
       </div>
 
-      {/* Drop Zone */}
-      <SortableContext
-        items={passengers.map((p) => p.id)}
-        strategy={verticalListSortingStrategy}
-        id={id}
+      {/* Drop Zone — registered as droppable container */}
+      <div
+        ref={setNodeRef}
+        className={cn(
+          'min-h-[80px] space-y-2 rounded-lg transition-colors',
+          isOver && 'bg-accent/5 ring-2 ring-accent/30',
+        )}
       >
-        <div
-          className="min-h-[80px] space-y-2"
-          data-droppable-id={id}
-        >
-          {passengers.map((passenger) => (
-            <PassengerCard key={passenger.id} passenger={passenger} containerId={id} />
-          ))}
-          {passengers.length === 0 && (
-            <div className="flex h-20 items-center justify-center rounded-lg border border-dashed border-border text-xs text-text-muted">
-              Drop passengers here
-            </div>
-          )}
-        </div>
-      </SortableContext>
+        {passengers.map((passenger) => (
+          <PassengerCard key={passenger.id} passenger={passenger} containerId={id} />
+        ))}
+        {passengers.length === 0 && (
+          <div className="flex h-20 items-center justify-center rounded-lg border border-dashed border-border text-xs text-text-muted">
+            Drop passengers here
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -1,5 +1,5 @@
-import { auth } from '@clerk/nextjs/server';
 import { redirect, notFound } from 'next/navigation';
+import { assertEventAccess } from '@/lib/auth/event-access';
 import { getTravelRecord } from '@/lib/actions/travel';
 import { TravelFormClient } from '../travel-form-client';
 
@@ -10,10 +10,13 @@ export default async function EditTravelPage({
 }: {
   params: Params;
 }) {
-  const { userId } = await auth();
-  if (!userId) redirect('/login');
-
   const { eventId, id } = await params;
+
+  try {
+    await assertEventAccess(eventId);
+  } catch {
+    redirect('/login');
+  }
 
   try {
     const record = await getTravelRecord(eventId, id);

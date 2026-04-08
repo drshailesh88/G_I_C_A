@@ -1,5 +1,5 @@
-import { auth } from '@clerk/nextjs/server';
 import { redirect, notFound } from 'next/navigation';
+import { assertEventAccess } from '@/lib/auth/event-access';
 import { getTransportBatch, getBatchVehicles, getBatchPassengers } from '@/lib/actions/transport';
 import { VehicleKanbanClient } from './vehicle-kanban-client';
 
@@ -10,10 +10,13 @@ export default async function VehicleAssignmentPage({
 }: {
   params: Params;
 }) {
-  const { userId } = await auth();
-  if (!userId) redirect('/login');
-
   const { eventId, batchId } = await params;
+
+  try {
+    await assertEventAccess(eventId);
+  } catch {
+    redirect('/login');
+  }
 
   try {
     const [batch, vehicles, passengers] = await Promise.all([

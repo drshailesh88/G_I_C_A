@@ -373,3 +373,22 @@ export async function importPeopleBatch(
   revalidatePath('/people');
   return { results, imported, duplicates, errors };
 }
+
+// ── Get people linked to an event (via event_people junction) ──
+export async function getEventPeople(eventId: string) {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  const rows = await db
+    .select({
+      id: people.id,
+      fullName: people.fullName,
+      email: people.email,
+      phoneE164: people.phoneE164,
+    })
+    .from(eventPeople)
+    .innerJoin(people, eq(eventPeople.personId, people.id))
+    .where(and(eq(eventPeople.eventId, eventId), isNull(people.anonymizedAt)));
+
+  return rows;
+}
