@@ -15,6 +15,7 @@ vi.mock('./log-queries', () => ({
   updateLogStatus: vi.fn(),
   getLogById: vi.fn(),
   listFailedLogs: vi.fn(),
+  markAsRetrying: vi.fn(),
 }));
 vi.mock('./email', () => ({
   resendEmailProvider: { send: vi.fn() },
@@ -26,6 +27,7 @@ vi.mock('./idempotency', () => ({
   redisIdempotencyService: { checkAndSet: vi.fn() },
 }));
 
+import { markAsRetrying } from './log-queries';
 import {
   sendNotification,
   resendNotification,
@@ -38,6 +40,14 @@ import type {
   WhatsAppProvider,
   IdempotencyService,
 } from './types';
+
+const mockedMarkAsRetrying = vi.mocked(markAsRetrying);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Default: markAsRetrying succeeds (returns the row)
+  mockedMarkAsRetrying.mockResolvedValue({} as Awaited<ReturnType<typeof markAsRetrying>>);
+});
 
 // ── Shared mocks ──────────────────────────────────────────────
 
@@ -215,7 +225,7 @@ describe('sendNotification', () => {
     expect(result.provider).toBe('evolution_api');
   });
 
-  it('should return early on duplicate idempotency key', async () => {
+  it('should return early on duplicate idempotency key but still create audit log', async () => {
     const deps = createMockDeps({
       idempotencyService: {
         checkAndSet: vi.fn().mockResolvedValue(true), // duplicate
@@ -225,10 +235,18 @@ describe('sendNotification', () => {
 
     const result = await sendNotification(input, deps);
 
-    // Should NOT render template or create log
-    expect(deps.renderTemplateFn).not.toHaveBeenCalled();
-    expect(deps.createLogEntryFn).not.toHaveBeenCalled();
+    // FIX #1: Log row is created BEFORE idempotency check (audit trail)
+    // but template is rendered and provider is NOT called
+    expect(deps.renderTemplateFn).toHaveBeenCalled();
+    expect(deps.createLogEntryFn).toHaveBeenCalled();
+    expect(deps.emailProvider.send).not.toHaveBeenCalled();
     expect(result.status).toBe('sent');
+    // Log row should be updated with duplicate detection marker
+    expect(deps.updateLogStatusFn).toHaveBeenCalledWith(
+      expect.any(String),
+      input.eventId,
+      expect.objectContaining({ status: 'sent', lastErrorCode: 'IDEMPOTENCY_DUPLICATE' }),
+    );
   });
 
   it('should handle provider exception gracefully', async () => {
@@ -279,13 +297,26 @@ describe('sendNotification', () => {
     );
   });
 
-  it('should propagate template render errors', async () => {
+  it('should record failed log on template render error instead of throwing', async () => {
+    // FIX #7: Template errors create a failed log row for audit trail
     const deps = createMockDeps({
       renderTemplateFn: vi.fn().mockRejectedValueOnce(new Error('template render failed')),
     });
     const input = createEmailInput();
 
-    await expect(sendNotification(input, deps)).rejects.toThrow('template render failed');
+    const result = await sendNotification(input, deps);
+
+    expect(result.status).toBe('failed');
+    expect(result.notificationLogId).toBeTruthy();
+    // Provider should NOT be called
+    expect(deps.emailProvider.send).not.toHaveBeenCalled();
+    // A failed log entry should be created
+    expect(deps.createLogEntryFn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'failed',
+        renderedBody: expect.stringContaining('RENDER_FAILED'),
+      }),
+    );
   });
 });
 
@@ -399,12 +430,8 @@ describe('retryFailedNotification', () => {
       deps,
     );
 
-    // Should have marked original as retrying
-    expect(deps.updateLogStatusFn).toHaveBeenCalledWith(
-      'log-1',
-      'evt-1',
-      { status: 'retrying' },
-    );
+    // FIX #8: Should have used atomic markAsRetrying instead of updateLogStatus
+    expect(mockedMarkAsRetrying).toHaveBeenCalledWith('log-1', 'evt-1');
 
     expect(result.status).toBe('sent');
   });

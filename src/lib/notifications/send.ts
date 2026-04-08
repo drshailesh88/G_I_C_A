@@ -20,6 +20,7 @@ import {
   createLogEntry,
   updateLogStatus,
   getLogById,
+  markAsRetrying,
 } from './log-queries';
 import { resendEmailProvider } from './email';
 import { evolutionWhatsAppProvider } from './whatsapp';
@@ -68,29 +69,48 @@ export async function sendNotification(
     updateLogStatusFn,
   } = deps;
 
-  // 1. Idempotency check
-  const isDuplicate = await idempotencyService.checkAndSet(input.idempotencyKey);
-  if (isDuplicate) {
-    // Return a result indicating this was already sent.
-    // We don't have the original log ID readily available without a DB lookup,
-    // so we return a synthetic result.
+  // 1. Render template (before any durable side effects)
+  let rendered;
+  try {
+    rendered = await renderTemplateFn({
+      eventId: input.eventId,
+      channel: input.channel,
+      templateKey: input.templateKey,
+      variables: input.variables,
+    });
+  } catch (renderError) {
+    // FIX #7: Record failed send in audit trail even on template errors
+    const failedLog = await createLogEntryFn({
+      eventId: input.eventId,
+      personId: input.personId,
+      templateId: null,
+      templateKeySnapshot: input.templateKey,
+      templateVersionNo: null,
+      channel: input.channel,
+      provider: providerNameForChannel(input.channel),
+      triggerType: input.triggerType,
+      triggerEntityType: input.triggerEntityType ?? null,
+      triggerEntityId: input.triggerEntityId ?? null,
+      sendMode: input.sendMode,
+      idempotencyKey: input.idempotencyKey,
+      recipientEmail: input.channel === 'email' ? (input.variables['recipientEmail'] as string ?? null) : null,
+      recipientPhoneE164: input.channel === 'whatsapp' ? (input.variables['recipientPhoneE164'] as string ?? null) : null,
+      renderedSubject: null,
+      renderedBody: `[RENDER_FAILED] ${renderError instanceof Error ? renderError.message : String(renderError)}`,
+      renderedVariablesJson: input.variables,
+      attachmentManifestJson: input.attachments ?? null,
+      status: 'failed',
+      initiatedByUserId: input.initiatedByUserId ?? null,
+    });
     return {
-      notificationLogId: '',
+      notificationLogId: failedLog.id,
       provider: providerNameForChannel(input.channel),
       providerMessageId: null,
-      status: 'sent' as NotificationStatus,
+      status: 'failed' as NotificationStatus,
     };
   }
 
-  // 2. Render template
-  const rendered = await renderTemplateFn({
-    eventId: input.eventId,
-    channel: input.channel,
-    templateKey: input.templateKey,
-    variables: input.variables,
-  });
-
-  // 3. Create log row (status = queued)
+  // 2. Create log row FIRST (status = queued) — durable record before idempotency
   const logRow = await createLogEntryFn({
     eventId: input.eventId,
     personId: input.personId,
@@ -113,6 +133,25 @@ export async function sendNotification(
     status: 'queued',
     initiatedByUserId: input.initiatedByUserId ?? null,
   });
+
+  // 3. Idempotency check — AFTER log creation so we have an audit trail
+  // FIX #1: If process dies after Redis SET but before provider call,
+  // the queued log row exists and ops can see + retry it.
+  const isDuplicate = await idempotencyService.checkAndSet(input.idempotencyKey);
+  if (isDuplicate) {
+    // Already sent — update our log as a duplicate detection record
+    await updateLogStatusFn(logRow.id, input.eventId, {
+      status: 'sent',
+      lastErrorCode: 'IDEMPOTENCY_DUPLICATE',
+      lastErrorMessage: 'Duplicate send detected — original already processed',
+    });
+    return {
+      notificationLogId: logRow.id,
+      provider: providerNameForChannel(input.channel),
+      providerMessageId: null,
+      status: 'sent' as NotificationStatus,
+    };
+  }
 
   // 4. Route to provider
   let providerResult: ProviderSendResult;
@@ -225,8 +264,13 @@ export async function retryFailedNotification(params: {
     );
   }
 
-  // Mark as retrying
-  await updateLogStatusFn(originalLog.id, params.eventId, { status: 'retrying' });
+  // FIX #8: Atomically mark as retrying — prevents concurrent retry race
+  const locked = await markAsRetrying(originalLog.id, params.eventId);
+  if (!locked) {
+    throw new Error(
+      `Cannot retry notification ${params.notificationLogId} — another retry is already in progress`,
+    );
+  }
 
   // Re-send using stored rendered content
   const newIdempotencyKey = `retry:${originalLog.id}:${Date.now()}`;

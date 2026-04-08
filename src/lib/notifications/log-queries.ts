@@ -75,6 +75,34 @@ export async function updateLogStatus(
   return rows[0] ?? null;
 }
 
+/**
+ * Atomically mark a log as retrying — only if current status is 'failed'.
+ * FIX #8: Prevents concurrent retry/resend race conditions.
+ * Returns the updated row if successful, null if status was already changed.
+ */
+export async function markAsRetrying(
+  logId: string,
+  eventId: string,
+): Promise<NotificationLogRow | null> {
+  const rows = await db
+    .update(notificationLog)
+    .set({
+      status: 'retrying',
+      lastAttemptAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(notificationLog.id, logId),
+        eq(notificationLog.eventId, eventId),
+        eq(notificationLog.status, 'failed'), // Optimistic lock
+      ),
+    )
+    .returning();
+
+  return rows[0] ?? null;
+}
+
 /** Get a single log entry by ID, scoped to eventId. */
 export async function getLogById(
   logId: string,

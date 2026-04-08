@@ -30,7 +30,8 @@ const listFailedSchema = z.object({
 
 export async function getFailedNotifications(input: unknown) {
   const validated = listFailedSchema.parse(input);
-  await assertEventAccess(validated.eventId, { requireWrite: true });
+  // FIX #5: Read-only users should be able to monitor failed notifications
+  await assertEventAccess(validated.eventId);
 
   return listFailedLogs(validated.eventId, {
     channel: validated.channel,
@@ -52,7 +53,7 @@ export async function retryNotification(input: unknown) {
     initiatedByUserId: userId,
   });
 
-  revalidatePath(`/events/${validated.eventId}/communications`);
+  revalidatePath(`/events/${validated.eventId}/communications/failed`);
   return result;
 }
 
@@ -68,7 +69,7 @@ export async function manualResend(input: unknown) {
     initiatedByUserId: userId,
   });
 
-  revalidatePath(`/events/${validated.eventId}/communications`);
+  revalidatePath(`/events/${validated.eventId}/communications/failed`);
   return result;
 }
 

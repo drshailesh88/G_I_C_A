@@ -35,6 +35,7 @@ export type CreateTemplateInput = {
 };
 
 export type UpdateTemplateInput = {
+  eventId: string | null; // Required for event isolation (null = global template)
   templateName?: string;
   status?: 'draft' | 'active' | 'archived';
   subjectLine?: string | null;
@@ -109,10 +110,15 @@ export async function updateTemplate(templateId: string, input: UpdateTemplateIn
   if (input.bodyContent !== undefined || input.subjectLine !== undefined) {
     // We use raw SQL increment since drizzle doesn't have increment helper
     // For now, we read-then-write; acceptable for admin-only operations
+    // Scope version read by eventId
+    const versionCondition = input.eventId
+      ? and(eq(notificationTemplates.id, templateId), eq(notificationTemplates.eventId, input.eventId))
+      : and(eq(notificationTemplates.id, templateId), isNull(notificationTemplates.eventId));
+
     const existing = await db
       .select({ versionNo: notificationTemplates.versionNo })
       .from(notificationTemplates)
-      .where(eq(notificationTemplates.id, templateId))
+      .where(versionCondition!)
       .limit(1);
 
     if (existing.length > 0) {
@@ -120,10 +126,15 @@ export async function updateTemplate(templateId: string, input: UpdateTemplateIn
     }
   }
 
+  // FIX #2: Scope update by eventId for event isolation
+  const whereCondition = input.eventId
+    ? and(eq(notificationTemplates.id, templateId), eq(notificationTemplates.eventId, input.eventId))
+    : and(eq(notificationTemplates.id, templateId), isNull(notificationTemplates.eventId));
+
   const [updated] = await db
     .update(notificationTemplates)
     .set(updateData)
-    .where(eq(notificationTemplates.id, templateId))
+    .where(whereCondition!)
     .returning();
 
   return updated ?? null;
@@ -166,20 +177,28 @@ export async function listTemplatesForEvent(
   return { eventTemplates, globalTemplates };
 }
 
-/** Get a single template by ID */
-export async function getTemplateById(templateId: string) {
+/** Get a single template by ID (event-scoped) */
+export async function getTemplateById(templateId: string, eventId?: string | null) {
+  // FIX #2: Scope by eventId for event isolation
+  const whereCondition = eventId
+    ? and(eq(notificationTemplates.id, templateId), eq(notificationTemplates.eventId, eventId))
+    : eventId === null
+      ? and(eq(notificationTemplates.id, templateId), isNull(notificationTemplates.eventId))
+      : eq(notificationTemplates.id, templateId); // undefined = no scoping (internal use only)
+
   const [template] = await db
     .select()
     .from(notificationTemplates)
-    .where(eq(notificationTemplates.id, templateId))
+    .where(whereCondition)
     .limit(1);
 
   return template ?? null;
 }
 
 /** Archive a template (soft delete) */
-export async function archiveTemplate(templateId: string, archivedBy: string) {
+export async function archiveTemplate(templateId: string, eventId: string | null, archivedBy: string) {
   return updateTemplate(templateId, {
+    eventId,
     status: 'archived',
     updatedBy: archivedBy,
   });

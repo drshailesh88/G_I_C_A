@@ -57,14 +57,24 @@ export function FailedNotificationsClient({
   function handleRetry(logId: string) {
     startTransition(async () => {
       try {
-        await retryNotification({ eventId, notificationLogId: logId });
-        setLogs((prev) => prev.filter((l) => l.id !== logId));
-        setActionResult({
-          logId,
-          type: 'retry',
-          status: 'success',
-          message: 'Retry queued successfully',
-        });
+        const result = await retryNotification({ eventId, notificationLogId: logId });
+        // FIX #4: Check actual returned status — don't assume success
+        if (result.status === 'failed') {
+          setActionResult({
+            logId,
+            type: 'retry',
+            status: 'error',
+            message: 'Retry attempted but provider rejected the message',
+          });
+        } else {
+          setLogs((prev) => prev.filter((l) => l.id !== logId));
+          setActionResult({
+            logId,
+            type: 'retry',
+            status: 'success',
+            message: 'Retry sent successfully',
+          });
+        }
       } catch (err) {
         setActionResult({
           logId,
@@ -79,13 +89,23 @@ export function FailedNotificationsClient({
   function handleResend(logId: string) {
     startTransition(async () => {
       try {
-        await manualResend({ eventId, notificationLogId: logId });
-        setActionResult({
-          logId,
-          type: 'resend',
-          status: 'success',
-          message: 'Resend queued successfully (new log entry created)',
-        });
+        const result = await manualResend({ eventId, notificationLogId: logId });
+        // FIX #4: Check actual returned status
+        if (result.status === 'failed') {
+          setActionResult({
+            logId,
+            type: 'resend',
+            status: 'error',
+            message: 'Resend attempted but provider rejected the message',
+          });
+        } else {
+          setActionResult({
+            logId,
+            type: 'resend',
+            status: 'success',
+            message: 'Resend sent successfully (new log entry created)',
+          });
+        }
       } catch (err) {
         setActionResult({
           logId,

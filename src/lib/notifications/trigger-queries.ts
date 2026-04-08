@@ -126,7 +126,9 @@ export async function getActiveTriggersForEventType(
   eventId: string,
   triggerEventType: string,
 ) {
-  return db
+  // FIX #3: Also scope the joined template to the same event (or global defaults)
+  // Prevents cross-event template leakage via malicious trigger rows
+  const rows = await db
     .select({
       trigger: automationTriggers,
       template: notificationTemplates,
@@ -145,6 +147,11 @@ export async function getActiveTriggersForEventType(
       ),
     )
     .orderBy(automationTriggers.priority);
+
+  // Post-filter: only allow templates that belong to this event or are global defaults
+  return rows.filter(({ template }) =>
+    template.eventId === eventId || template.eventId === null
+  );
 }
 
 /** Get a single trigger by ID (event-scoped) */
