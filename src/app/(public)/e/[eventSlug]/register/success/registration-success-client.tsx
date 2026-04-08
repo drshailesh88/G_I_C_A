@@ -6,16 +6,17 @@ import { CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 export function RegistrationSuccessClient({
   eventSlug,
   registrationNumber,
-  qrToken,
   status,
+  showQr,
 }: {
   eventSlug: string;
   registrationNumber: string;
-  qrToken: string;
   status: string;
+  showQr: boolean;
 }) {
   const isPending = status === 'pending';
   const isWaitlisted = status === 'waitlisted';
+  const isConfirmed = status === 'confirmed';
 
   return (
     <div className="flex flex-col items-center px-4 py-12">
@@ -50,8 +51,8 @@ export function RegistrationSuccessClient({
         <p className="mt-1 text-lg font-bold tracking-wider text-primary">{registrationNumber}</p>
       </div>
 
-      {/* QR Code placeholder */}
-      {qrToken && !isPending && (
+      {/* QR Code placeholder — only for confirmed registrations */}
+      {showQr && isConfirmed && (
         <div className="mt-4 w-full max-w-sm rounded-xl border border-border bg-surface p-6 text-center">
           <p className="text-xs text-text-muted">Check-in QR Code</p>
           <div className="mt-3 flex items-center justify-center">
@@ -61,7 +62,6 @@ export function RegistrationSuccessClient({
               </p>
             </div>
           </div>
-          <p className="mt-2 text-[10px] text-text-muted">Token: {qrToken.slice(0, 8)}...</p>
         </div>
       )}
 

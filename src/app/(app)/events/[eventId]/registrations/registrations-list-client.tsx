@@ -192,9 +192,11 @@ function RegistrationCard({
     actions.push({ label: 'Approve', status: 'confirmed', variant: 'success' });
     actions.push({ label: 'Decline', status: 'declined', variant: 'error' });
     actions.push({ label: 'Waitlist', status: 'waitlisted', variant: 'warning' });
+    actions.push({ label: 'Cancel', status: 'cancelled', variant: 'error' });
   } else if (reg.status === 'waitlisted') {
     actions.push({ label: 'Approve', status: 'confirmed', variant: 'success' });
     actions.push({ label: 'Decline', status: 'declined', variant: 'error' });
+    actions.push({ label: 'Cancel', status: 'cancelled', variant: 'error' });
   } else if (reg.status === 'confirmed') {
     actions.push({ label: 'Cancel', status: 'cancelled', variant: 'error' });
   }

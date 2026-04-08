@@ -82,7 +82,7 @@ export function EventLandingClient({ event }: { event: Event }) {
               {event.venueCity && (
                 <p className="text-xs text-text-secondary">{event.venueCity}</p>
               )}
-              {event.venueMapUrl && (
+              {event.venueMapUrl && (event.venueMapUrl.startsWith('https://') || event.venueMapUrl.startsWith('http://')) && (
                 <a
                   href={event.venueMapUrl}
                   target="_blank"

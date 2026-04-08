@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockAuth, mockDb, mockRevalidatePath, mockFindDuplicatePerson } = vi.hoisted(() => ({
+const { mockAuth, mockDb, mockRevalidatePath, mockFindDuplicatePerson, mockAssertEventAccess } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
   mockDb: {
     select: vi.fn(),
@@ -9,6 +9,7 @@ const { mockAuth, mockDb, mockRevalidatePath, mockFindDuplicatePerson } = vi.hoi
   },
   mockRevalidatePath: vi.fn(),
   mockFindDuplicatePerson: vi.fn(),
+  mockAssertEventAccess: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -29,6 +30,10 @@ vi.mock('./person', () => ({
 
 vi.mock('@/lib/db/with-event-scope', () => ({
   withEventScope: vi.fn(),
+}));
+
+vi.mock('@/lib/auth/event-access', () => ({
+  assertEventAccess: mockAssertEventAccess,
 }));
 
 import { registerForEvent, updateRegistrationStatus, getEventRegistrations } from './registration';
@@ -183,6 +188,7 @@ describe('updateRegistrationStatus', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAuth.mockResolvedValue({ userId: 'admin-1' });
+    mockAssertEventAccess.mockResolvedValue({ userId: 'admin-1' });
   });
 
   it('transitions pending → confirmed', async () => {
@@ -239,6 +245,7 @@ describe('getEventRegistrations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAuth.mockResolvedValue({ userId: 'admin-1' });
+    mockAssertEventAccess.mockResolvedValue({ userId: 'admin-1' });
   });
 
   it('returns registrations for an event', async () => {

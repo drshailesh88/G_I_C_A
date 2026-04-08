@@ -41,12 +41,8 @@ export function RegistrationFormClient({
 
     try {
       const result = await registerForEvent(eventId, data);
-      const params = new URLSearchParams({
-        regNumber: result.registrationNumber,
-        qrToken: result.qrCodeToken,
-        status: result.status,
-      });
-      router.push(`/e/${eventSlug}/register/success?${params.toString()}`);
+      // Pass only registrationId — success page fetches details server-side
+      router.push(`/e/${eventSlug}/register/success?id=${result.registrationId}`);
     } catch (err) {
       if (err instanceof Error) {
         // Check for Zod validation errors

@@ -17,6 +17,7 @@ import {
 import { normalizePhone } from '@/lib/validations/person';
 import { findDuplicatePerson } from './person';
 import { withEventScope } from '@/lib/db/with-event-scope';
+import { assertEventAccess } from '@/lib/auth/event-access';
 
 // ── Public registration (no auth required) ─────────────────────
 export async function registerForEvent(eventId: string, input: unknown) {
@@ -182,6 +183,9 @@ export async function updateRegistrationStatus(input: unknown) {
 
   if (!registration) throw new Error('Registration not found');
 
+  // Enforce per-event access control with write permission
+  await assertEventAccess(registration.eventId, { requireWrite: true });
+
   const currentStatus = registration.status as RegistrationStatus;
   const allowed = REGISTRATION_TRANSITIONS[currentStatus];
 
@@ -216,6 +220,9 @@ export async function getEventRegistrations(eventId: string) {
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
+  // Enforce per-event access control
+  await assertEventAccess(eventId);
+
   const rows = await db
     .select({
       id: eventRegistrations.id,
@@ -239,4 +246,25 @@ export async function getEventRegistrations(eventId: string) {
     .orderBy(desc(eventRegistrations.registeredAt));
 
   return rows;
+}
+
+// ── Public: get registration by ID (for success page) ─────────
+// Only returns non-sensitive fields. No auth required (public flow).
+export async function getRegistrationPublic(registrationId: string) {
+  registrationIdSchema.parse(registrationId);
+
+  const [reg] = await db
+    .select({
+      id: eventRegistrations.id,
+      registrationNumber: eventRegistrations.registrationNumber,
+      status: eventRegistrations.status,
+      qrCodeToken: eventRegistrations.qrCodeToken,
+      category: eventRegistrations.category,
+    })
+    .from(eventRegistrations)
+    .where(eq(eventRegistrations.id, registrationId))
+    .limit(1);
+
+  if (!reg) throw new Error('Registration not found');
+  return reg;
 }
