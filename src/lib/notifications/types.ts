@@ -83,3 +83,85 @@ export type SendNotificationResult = {
   providerMessageId?: string | null;
   status: NotificationStatus;
 };
+
+// ── Provider Input Types ───────────────────────────────────────
+
+export type SendEmailInput = {
+  eventId: string;
+  toEmail: string;
+  subject: string;
+  htmlBody: string;
+  textBody?: string;
+  fromDisplayName?: string | null;
+  attachments?: AttachmentDescriptor[];
+  metadata?: Record<string, string>;
+};
+
+export type SendWhatsAppInput = {
+  eventId: string;
+  toPhoneE164: string;
+  body: string;
+  mediaAttachments?: AttachmentDescriptor[];
+  metadata?: Record<string, string>;
+};
+
+// ── Provider Interfaces ────────────────────────────────────────
+
+export interface EmailProvider {
+  send(input: SendEmailInput): Promise<ProviderSendResult>;
+}
+
+export interface WhatsAppProvider {
+  sendText(input: SendWhatsAppInput): Promise<ProviderSendResult>;
+}
+
+// ── Idempotency Interface ──────────────────────────────────────
+
+export interface IdempotencyService {
+  /** Returns true if key already exists (duplicate). false if new. */
+  checkAndSet(key: string, ttlSeconds?: number): Promise<boolean>;
+}
+
+// ── Log Query Types ────────────────────────────────────────────
+
+export type CreateLogEntryInput = {
+  eventId: string;
+  personId: string;
+  templateId: string | null;
+  templateKeySnapshot: string | null;
+  templateVersionNo: number | null;
+  channel: Channel;
+  provider: ProviderName;
+  triggerType?: string | null;
+  triggerEntityType?: string | null;
+  triggerEntityId?: string | null;
+  sendMode: SendMode;
+  idempotencyKey: string;
+  recipientEmail?: string | null;
+  recipientPhoneE164?: string | null;
+  renderedSubject?: string | null;
+  renderedBody: string;
+  renderedVariablesJson?: Record<string, unknown> | null;
+  attachmentManifestJson?: AttachmentDescriptor[] | null;
+  status?: NotificationStatus;
+  initiatedByUserId?: string | null;
+  isResend?: boolean;
+  resendOfId?: string | null;
+};
+
+export type UpdateLogStatusInput = {
+  status: NotificationStatus;
+  providerMessageId?: string | null;
+  providerConversationId?: string | null;
+  lastErrorCode?: string | null;
+  lastErrorMessage?: string | null;
+  sentAt?: Date | null;
+  failedAt?: Date | null;
+};
+
+export type ListFailedLogsFilters = {
+  channel?: Channel;
+  templateKey?: string;
+  limit?: number;
+  offset?: number;
+};
