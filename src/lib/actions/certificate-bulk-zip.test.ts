@@ -172,7 +172,7 @@ describe('bulkZipDownload', () => {
     expect(lock.locks.size).toBe(0);
     // Should be re-acquirable
     const reacquired = await lock.acquire(EVENT_ID, 'delegate_attendance');
-    expect(reacquired).toBe(true);
+    expect(reacquired).not.toBeNull();
   });
 
   it('releases lock even when operation fails', async () => {
@@ -202,5 +202,19 @@ describe('bulkZipDownload', () => {
       makeDeps({ lock }),
     );
     expect(result.fileCount).toBe(1);
+  });
+
+  it('throws user-friendly error when Redis is unavailable', async () => {
+    const brokenLock = {
+      acquire: vi.fn().mockRejectedValue(new Error('ECONNREFUSED')),
+      release: vi.fn(),
+    };
+
+    await expect(
+      bulkZipDownload(EVENT_ID, { certificateType: 'delegate_attendance' }, {
+        ...makeDeps(),
+        lock: brokenLock,
+      }),
+    ).rejects.toThrow('Redis unavailable');
   });
 });

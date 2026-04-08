@@ -50,8 +50,17 @@ export async function bulkZipDownload(
   // Acquire distributed lock — prevents concurrent bulk generation
   const lock = deps?.lock
     ?? (await import('@/lib/certificates/distributed-lock')).createRedisLock();
-  const acquired = await lock.acquire(eventId, validated.certificateType);
-  if (!acquired) {
+
+  let lockHandle: Awaited<ReturnType<typeof lock.acquire>>;
+  try {
+    lockHandle = await lock.acquire(eventId, validated.certificateType);
+  } catch (err) {
+    throw new Error(
+      'Unable to check bulk generation lock (Redis unavailable). Please try again later.',
+    );
+  }
+
+  if (!lockHandle) {
     throw new Error(
       'Bulk certificate generation is already in progress for this event and certificate type. Please wait and try again.',
     );
@@ -132,8 +141,8 @@ export async function bulkZipDownload(
       zipSizeBytes: zipBuffer.length,
     };
   } finally {
-    // Always release the lock — even on error
-    await lock.release(eventId, validated.certificateType).catch((err) => {
+    // Always release the lock — only if we own it (conditional release)
+    await lock.release(lockHandle).catch((err) => {
       console.error('[bulk-zip] failed to release distributed lock:', err);
     });
   }

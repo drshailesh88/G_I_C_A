@@ -4,6 +4,7 @@ import {
   createStubLock,
   createTestLock,
   type DistributedLock,
+  type LockHandle,
 } from './distributed-lock';
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
@@ -27,6 +28,14 @@ describe('buildLockKey', () => {
     const key2 = buildLockKey('event-2', CERT_TYPE);
     expect(key1).not.toBe(key2);
   });
+
+  it('throws when eventId is empty', () => {
+    expect(() => buildLockKey('', CERT_TYPE)).toThrow('required');
+  });
+
+  it('throws when certificateType is empty', () => {
+    expect(() => buildLockKey(EVENT_ID, '')).toThrow('required');
+  });
 });
 
 // ── createStubLock ──────────────────────────────────────────
@@ -37,94 +46,113 @@ describe('createStubLock', () => {
     lock = createStubLock();
   });
 
-  it('acquires lock when not held', async () => {
-    const acquired = await lock.acquire(EVENT_ID, CERT_TYPE);
-    expect(acquired).toBe(true);
+  it('acquires lock and returns handle', async () => {
+    const handle = await lock.acquire(EVENT_ID, CERT_TYPE);
+    expect(handle).not.toBeNull();
+    expect(handle!.key).toContain(EVENT_ID);
+    expect(handle!.ownerToken).toBeTruthy();
   });
 
   it('fails to acquire lock when already held', async () => {
     await lock.acquire(EVENT_ID, CERT_TYPE);
     const second = await lock.acquire(EVENT_ID, CERT_TYPE);
-    expect(second).toBe(false);
+    expect(second).toBeNull();
   });
 
   it('releases lock allowing re-acquisition', async () => {
-    await lock.acquire(EVENT_ID, CERT_TYPE);
-    await lock.release(EVENT_ID, CERT_TYPE);
+    const handle = await lock.acquire(EVENT_ID, CERT_TYPE);
+    await lock.release(handle!);
     const reacquired = await lock.acquire(EVENT_ID, CERT_TYPE);
-    expect(reacquired).toBe(true);
+    expect(reacquired).not.toBeNull();
   });
 
-  it('release is safe when lock is not held', async () => {
-    await expect(lock.release(EVENT_ID, CERT_TYPE)).resolves.toBeUndefined();
+  it('release is safe with stale handle (wrong owner)', async () => {
+    const handle = await lock.acquire(EVENT_ID, CERT_TYPE);
+    const fakeHandle: LockHandle = { key: handle!.key, ownerToken: 'wrong-token' };
+    await lock.release(fakeHandle);
+    // Lock should still be held (fake owner can't release)
+    const second = await lock.acquire(EVENT_ID, CERT_TYPE);
+    expect(second).toBeNull();
   });
 
   it('locks are independent per event/type', async () => {
     await lock.acquire(EVENT_ID, 'delegate_attendance');
     const other = await lock.acquire(EVENT_ID, 'faculty_participation');
-    expect(other).toBe(true);
+    expect(other).not.toBeNull();
   });
 
-  it('tracks held locks in the locks set', async () => {
-    await lock.acquire(EVENT_ID, CERT_TYPE);
+  it('tracks held locks in the locks map', async () => {
+    const handle = await lock.acquire(EVENT_ID, CERT_TYPE);
     expect(lock.locks.size).toBe(1);
-    await lock.release(EVENT_ID, CERT_TYPE);
+    await lock.release(handle!);
     expect(lock.locks.size).toBe(0);
+  });
+
+  it('generates unique owner tokens per acquisition', async () => {
+    const handle1 = await lock.acquire(EVENT_ID, 'delegate_attendance');
+    await lock.release(handle1!);
+    const handle2 = await lock.acquire(EVENT_ID, 'delegate_attendance');
+    expect(handle1!.ownerToken).not.toBe(handle2!.ownerToken);
   });
 });
 
 // ── createTestLock (with mocked Redis) ──────────────────────
 describe('createTestLock', () => {
-  it('acquires lock via Redis SET NX', async () => {
+  it('acquires lock via Redis SET NX with owner token', async () => {
     const mockRedis = {
       set: vi.fn().mockResolvedValue('OK'),
-      del: vi.fn().mockResolvedValue(1),
+      eval: vi.fn().mockResolvedValue(1),
     };
     const lock = createTestLock(mockRedis as any);
 
-    const acquired = await lock.acquire(EVENT_ID, CERT_TYPE);
-    expect(acquired).toBe(true);
+    const handle = await lock.acquire(EVENT_ID, CERT_TYPE);
+    expect(handle).not.toBeNull();
     expect(mockRedis.set).toHaveBeenCalledWith(
       `cert:lock:${EVENT_ID}:${CERT_TYPE}`,
-      '1',
-      { nx: true, ex: 300 },
+      expect.any(String), // UUID owner token
+      { nx: true, ex: 600 },
     );
   });
 
-  it('returns false when Redis SET NX returns null (already locked)', async () => {
+  it('returns null when Redis SET NX returns null (already locked)', async () => {
     const mockRedis = {
       set: vi.fn().mockResolvedValue(null),
-      del: vi.fn(),
+      eval: vi.fn(),
     };
     const lock = createTestLock(mockRedis as any);
 
-    const acquired = await lock.acquire(EVENT_ID, CERT_TYPE);
-    expect(acquired).toBe(false);
+    const handle = await lock.acquire(EVENT_ID, CERT_TYPE);
+    expect(handle).toBeNull();
   });
 
-  it('releases lock via Redis DEL', async () => {
+  it('releases lock via Lua script with owner token', async () => {
     const mockRedis = {
       set: vi.fn().mockResolvedValue('OK'),
-      del: vi.fn().mockResolvedValue(1),
+      eval: vi.fn().mockResolvedValue(1),
     };
     const lock = createTestLock(mockRedis as any);
 
-    await lock.release(EVENT_ID, CERT_TYPE);
-    expect(mockRedis.del).toHaveBeenCalledWith(`cert:lock:${EVENT_ID}:${CERT_TYPE}`);
+    const handle = await lock.acquire(EVENT_ID, CERT_TYPE);
+    await lock.release(handle!);
+    expect(mockRedis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call'),
+      [handle!.key],
+      [handle!.ownerToken],
+    );
   });
 
   it('uses custom TTL when provided', async () => {
     const mockRedis = {
       set: vi.fn().mockResolvedValue('OK'),
-      del: vi.fn(),
+      eval: vi.fn(),
     };
     const lock = createTestLock(mockRedis as any);
 
-    await lock.acquire(EVENT_ID, CERT_TYPE, 600);
+    await lock.acquire(EVENT_ID, CERT_TYPE, 900);
     expect(mockRedis.set).toHaveBeenCalledWith(
       expect.any(String),
-      '1',
-      { nx: true, ex: 600 },
+      expect.any(String),
+      { nx: true, ex: 900 },
     );
   });
 });
