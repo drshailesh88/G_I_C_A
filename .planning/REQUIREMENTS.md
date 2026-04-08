@@ -45,23 +45,23 @@ v1 — GEM India Conference Management Platform
 - [ ] Registration cancellation creates red flags on linked logistics records — no auto-delete of downstream data
 
 ### Scientific Program
-- [ ] Halls managed per event (name, capacity, sort_order) — prevents typo duplicates
-- [ ] Sessions created with type, track, time (UTC), hall, CME credits, description, is_public flag
-- [ ] Sub-sessions supported (one level only; parent_session_id self-FK)
-- [ ] Session role requirements define planning demand per role ("needs 1 Chair, 3 Speakers") without person_id
-- [ ] Session assignments link confirmed people to sessions with responsibility roles (always non-null person_id)
-- [ ] Conflict detection: faculty double-booked or hall overlap — warnings, not hard blocks
-- [ ] Schedule grid view: admin always sees grid (horizontal scroll on mobile); attendee auto-switches (cards < 768px, grid >= 768px)
-- [ ] Program version publishing creates a snapshot with structured diff (added/changed/removed sessions and assignments)
+- [x] Halls managed per event (name, capacity, sort_order) — prevents typo duplicates
+- [x] Sessions created with type, track, time (UTC), hall, CME credits, description, is_public flag
+- [x] Sub-sessions supported (one level only; parent_session_id self-FK)
+- [x] Session role requirements define planning demand per role ("needs 1 Chair, 3 Speakers") without person_id
+- [x] Session assignments link confirmed people to sessions with responsibility roles (always non-null person_id)
+- [x] Conflict detection: faculty double-booked or hall overlap — warnings, not hard blocks
+- [x] Schedule grid view: admin always sees grid (horizontal scroll on mobile); attendee auto-switches (cards < 768px, grid >= 768px)
+- [x] Program version publishing creates a snapshot with structured diff (added/changed/removed sessions and assignments)
 - [ ] Revised-responsibility notifications sent to affected faculty showing A/B/C changes
 - [ ] Aggregated faculty email: one email per person showing ALL responsibilities across sessions
 
 ### Faculty Invitation
-- [ ] Faculty invited via email with unique confirmation link (token-based, no account required)
-- [ ] Faculty invite state machine: sent → opened → accepted/declined/expired
-- [ ] Invite covers entire responsibility bundle per person per event, not per-session
+- [x] Faculty invited via email with unique confirmation link (token-based, no account required)
+- [x] Faculty invite state machine: sent → opened → accepted/declined/expired
+- [x] Invite covers entire responsibility bundle per person per event, not per-session
 - [ ] Accept creates/confirms registration and auto-upserts event_people
-- [ ] Faculty invitation status visible to coordinator (sent/opened/accepted/declined/expired)
+- [x] Faculty invitation status visible to coordinator (sent/opened/accepted/declined/expired)
 
 ### Travel
 - [ ] Travel records created by admin or Ops (manual entry or CSV import) — not delegate self-service in V1

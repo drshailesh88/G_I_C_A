@@ -1,13 +1,13 @@
 {
-  "session_start": "2026-04-08T03:52:00Z",
-  "current_requirement": "CHECKPOINT — 2 screen groups complete",
+  "session_start": "2026-04-08T05:08:00Z",
+  "current_requirement": "CHECKPOINT — Scientific Program UI + Faculty Invitation UI complete",
   "status": "COMPLETE",
   "attempt": 1,
-  "requirements_done": 16,
+  "requirements_done": 28,
   "requirements_stuck": 0,
-  "requirements_remaining": 17,
-  "test_results": { "unit_pass": 129, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
-  "worktree_branch": "",
-  "last_updated": "2026-04-08T04:15:00Z",
-  "notes": "Session 2 progress: People UI (8 reqs) + Registration UI (8 reqs) = 16 done. Codex review passed both groups (30 issues found and fixed total). Remaining: 2 People deferred (merge UI, Bemi), 1 Registration deferred (red flag cascade), 10 Scientific Program, 5 Faculty Invitation, 1 Event duplication."
+  "requirements_remaining": 7,
+  "test_results": { "unit_pass": 216, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
+  "worktree_branch": "wt/req-17-sessions-ui",
+  "last_updated": "2026-04-08T05:22:00Z",
+  "notes": "Session 3 checkpoint: 12 requirements built this session (8 Scientific Program + 4 Faculty Invitation). All UI screens built: M22, M23, M30, M04, M26, M55, M60. Program backend files (previously untracked) now committed. 216 tests passing. Codex review dispatched (pending response). Remaining 7 items: 2 notification features (SciProg), 1 accept-creates-reg (Faculty), 1 event duplication, 2 people features (merge, bemi), 1 reg cancellation red flags."
 }
