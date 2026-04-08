@@ -30,7 +30,7 @@ export default async function PeoplePage({
     city: params.city || undefined,
     specialty: params.specialty || undefined,
     tag: params.tag || undefined,
-    page: params.page ? parseInt(params.page, 10) : 1,
+    page: params.page ? Number(params.page) || 1 : 1,
     limit: 25,
   });
 

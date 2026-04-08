@@ -1,13 +1,13 @@
 {
-  "session_start": "2026-04-08T02:12:00Z",
-  "current_requirement": "Phase 1 COMPLETE",
-  "status": "COMPLETE",
+  "session_start": "2026-04-08T03:52:00Z",
+  "current_requirement": "M03 People List — master people database + search + saved views",
+  "status": "BUILDING",
   "attempt": 1,
-  "requirements_done": 11,
+  "requirements_done": 0,
   "requirements_stuck": 0,
-  "requirements_remaining": 0,
-  "test_results": { "unit_pass": 50, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
+  "requirements_remaining": 33,
+  "test_results": { "unit_pass": 129, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
   "worktree_branch": "",
-  "last_updated": "2026-04-08T02:28:00Z",
-  "notes": "Phase 1 COMPLETE. All 11/11 Foundation+Events requirements done. Sprint 2 added REQ 9-11 (per-event access control). Codex adversarial review found and fixed 3 bugs: no-role bypass, read-only write escalation, blank eventId in withEventScope."
+  "last_updated": "2026-04-08T03:52:00Z",
+  "notes": "Phase 2 sprint session 2. Backend done for People/Registration. Building People UI first (Group A)."
 }

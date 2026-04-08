@@ -18,8 +18,12 @@ export default async function PersonDetailPage({
   let person;
   try {
     person = await getPerson(personId);
-  } catch {
-    notFound();
+  } catch (err) {
+    // Only treat "not found" errors as 404; re-throw others for error boundary
+    if (err instanceof Error && (err.message === 'Person not found' || err.message.includes('Invalid person ID'))) {
+      notFound();
+    }
+    throw err;
   }
 
   return <PersonDetailClient person={person} />;

@@ -16,7 +16,7 @@ import {
   Pencil,
   Clock,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { useRole } from '@/hooks/use-role';
 import { archivePerson, restorePerson, anonymizePerson } from '@/lib/actions/person';
 
 type Person = {
@@ -30,48 +30,76 @@ type Person = {
   organization: string | null;
   city: string | null;
   tags: unknown;
-  archivedAt: Date | null;
-  anonymizedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
+  archivedAt: Date | string | null;
+  anonymizedAt: Date | string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
   createdBy: string;
 };
 
 export function PersonDetailClient({ person }: { person: Person }) {
   const router = useRouter();
+  const { isSuperAdmin, canWrite } = useRole();
   const [isPending, startTransition] = useTransition();
+  const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showAnonymizeConfirm, setShowAnonymizeConfirm] = useState(false);
+  const [error, setError] = useState('');
 
   const isArchived = !!person.archivedAt;
-  const tags = Array.isArray(person.tags) ? (person.tags as string[]) : [];
+  const tags = Array.isArray(person.tags)
+    ? (person.tags as unknown[]).filter((t): t is string => typeof t === 'string')
+    : [];
 
   function handleArchive() {
+    setError('');
     startTransition(async () => {
-      await archivePerson(person.id);
-      router.refresh();
+      try {
+        await archivePerson(person.id);
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to archive person');
+      }
+      setShowArchiveConfirm(false);
     });
   }
 
   function handleRestore() {
+    setError('');
     startTransition(async () => {
-      await restorePerson(person.id);
-      router.refresh();
+      try {
+        await restorePerson(person.id);
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to restore person');
+      }
     });
   }
 
   function handleAnonymize() {
+    setError('');
     startTransition(async () => {
-      await anonymizePerson(person.id);
-      router.push('/people');
+      try {
+        await anonymizePerson(person.id);
+        router.push('/people');
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to anonymize person');
+        setShowAnonymizeConfirm(false);
+      }
     });
   }
 
-  const initials = person.fullName
-    .split(' ')
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  const initials = person.fullName && person.fullName !== '[ANONYMIZED]'
+    ? person.fullName
+        .split(' ')
+        .map((n) => n[0])
+        .filter(Boolean)
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
+    : '??';
+
+  const createdDate = new Date(person.createdAt);
+  const updatedDate = new Date(person.updatedAt);
 
   return (
     <div className="px-4 py-6">
@@ -84,16 +112,25 @@ export function PersonDetailClient({ person }: { person: Person }) {
           <ArrowLeft className="h-4 w-4" />
           People
         </Link>
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/people/${person.id}/edit`}
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-primary hover:bg-background"
-          >
-            <Pencil className="h-3.5 w-3.5" />
-            Edit
-          </Link>
-        </div>
+        {canWrite && (
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/people/${person.id}/edit`}
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-primary hover:bg-background"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit
+            </Link>
+          </div>
+        )}
       </div>
+
+      {/* Error banner */}
+      {error && (
+        <div className="mt-4 rounded-lg border border-error/20 bg-error/5 p-3">
+          <p className="text-sm text-error">{error}</p>
+        </div>
+      )}
 
       {/* Profile Header */}
       <div className="mt-6 flex items-start gap-4">
@@ -155,25 +192,25 @@ export function PersonDetailClient({ person }: { person: Person }) {
         </div>
       )}
 
-      {/* Change History placeholder — Bemi audit log integration deferred */}
+      {/* Change History */}
       <div className="mt-6">
         <h2 className="text-sm font-semibold text-text-primary">Change History</h2>
         <div className="mt-2 rounded-xl border border-border bg-surface p-4">
           <div className="flex items-center gap-2 text-sm text-text-muted">
             <Clock className="h-4 w-4" />
             <span>
-              Created {new Date(person.createdAt).toLocaleDateString('en-IN', {
+              Created {createdDate.toLocaleDateString('en-IN', {
                 day: 'numeric',
                 month: 'short',
                 year: 'numeric',
               })}
             </span>
           </div>
-          {person.updatedAt > person.createdAt && (
+          {updatedDate.getTime() > createdDate.getTime() && (
             <div className="mt-1 flex items-center gap-2 text-sm text-text-muted">
               <Clock className="h-4 w-4" />
               <span>
-                Last updated {new Date(person.updatedAt).toLocaleDateString('en-IN', {
+                Last updated {updatedDate.toLocaleDateString('en-IN', {
                   day: 'numeric',
                   month: 'short',
                   year: 'numeric',
@@ -184,62 +221,89 @@ export function PersonDetailClient({ person }: { person: Person }) {
         </div>
       </div>
 
-      {/* Danger Zone */}
-      <div className="mt-8 rounded-xl border border-error/20 bg-error/5 p-4">
-        <h2 className="text-sm font-semibold text-error">Danger Zone</h2>
-        <div className="mt-3 space-y-2">
-          {isArchived ? (
-            <button
-              onClick={handleRestore}
-              disabled={isPending}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary hover:bg-background disabled:opacity-50"
-            >
-              <RotateCcw className="h-4 w-4" />
-              Restore Person
-            </button>
-          ) : (
-            <button
-              onClick={handleArchive}
-              disabled={isPending}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-warning/50 bg-surface px-4 py-2.5 text-sm font-medium text-warning hover:bg-warning/5 disabled:opacity-50"
-            >
-              <Archive className="h-4 w-4" />
-              Archive Person
-            </button>
-          )}
-
-          {!showAnonymizeConfirm ? (
-            <button
-              onClick={() => setShowAnonymizeConfirm(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-error/50 bg-surface px-4 py-2.5 text-sm font-medium text-error hover:bg-error/5"
-            >
-              <ShieldAlert className="h-4 w-4" />
-              Anonymize Person
-            </button>
-          ) : (
-            <div className="rounded-lg border border-error bg-error/5 p-3">
-              <p className="text-xs font-medium text-error">
-                This action is irreversible. All personal data will be permanently removed.
-              </p>
-              <div className="mt-2 flex gap-2">
-                <button
-                  onClick={handleAnonymize}
-                  disabled={isPending}
-                  className="flex-1 rounded-lg bg-error px-3 py-2 text-sm font-medium text-white hover:bg-error/90 disabled:opacity-50"
-                >
-                  Confirm Anonymize
-                </button>
-                <button
-                  onClick={() => setShowAnonymizeConfirm(false)}
-                  className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-secondary hover:bg-background"
-                >
-                  Cancel
-                </button>
+      {/* Danger Zone — only for users with write access */}
+      {canWrite && (
+        <div className="mt-8 rounded-xl border border-error/20 bg-error/5 p-4">
+          <h2 className="text-sm font-semibold text-error">Danger Zone</h2>
+          <div className="mt-3 space-y-2">
+            {isArchived ? (
+              <button
+                onClick={handleRestore}
+                disabled={isPending}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary hover:bg-background disabled:opacity-50"
+              >
+                <RotateCcw className="h-4 w-4" />
+                Restore Person
+              </button>
+            ) : !showArchiveConfirm ? (
+              <button
+                onClick={() => setShowArchiveConfirm(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-warning/50 bg-surface px-4 py-2.5 text-sm font-medium text-warning hover:bg-warning/5"
+              >
+                <Archive className="h-4 w-4" />
+                Archive Person
+              </button>
+            ) : (
+              <div className="rounded-lg border border-warning bg-warning/5 p-3">
+                <p className="text-xs font-medium text-warning">
+                  This will remove the person from all list views.
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={handleArchive}
+                    disabled={isPending}
+                    className="flex-1 rounded-lg bg-warning px-3 py-2 text-sm font-medium text-white hover:bg-warning/90 disabled:opacity-50"
+                  >
+                    Confirm Archive
+                  </button>
+                  <button
+                    onClick={() => setShowArchiveConfirm(false)}
+                    className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-secondary hover:bg-background"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {/* Anonymize — Super Admin only */}
+            {isSuperAdmin && (
+              <>
+                {!showAnonymizeConfirm ? (
+                  <button
+                    onClick={() => setShowAnonymizeConfirm(true)}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-error/50 bg-surface px-4 py-2.5 text-sm font-medium text-error hover:bg-error/5"
+                  >
+                    <ShieldAlert className="h-4 w-4" />
+                    Anonymize Person
+                  </button>
+                ) : (
+                  <div className="rounded-lg border border-error bg-error/5 p-3">
+                    <p className="text-xs font-medium text-error">
+                      This action is irreversible. All personal data will be permanently removed.
+                    </p>
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        onClick={handleAnonymize}
+                        disabled={isPending}
+                        className="flex-1 rounded-lg bg-error px-3 py-2 text-sm font-medium text-white hover:bg-error/90 disabled:opacity-50"
+                      >
+                        Confirm Anonymize
+                      </button>
+                      <button
+                        onClick={() => setShowAnonymizeConfirm(false)}
+                        className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-secondary hover:bg-background"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useCallback, useTransition } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft,
-  Upload,
   FileSpreadsheet,
   AlertCircle,
   CheckCircle2,
@@ -20,7 +19,7 @@ import {
   type ColumnMapping,
   type ParsedPerson,
 } from '@/lib/import/csv-import';
-import { createPerson } from '@/lib/actions/person';
+import { importPeopleBatch } from '@/lib/actions/person';
 
 type Step = 'upload' | 'mapping' | 'preview' | 'importing';
 
@@ -45,8 +44,8 @@ export function CsvImportClient() {
   const [mappings, setMappings] = useState<ColumnMapping[]>([]);
   const [parsed, setParsed] = useState<ParsedPerson[]>([]);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
-  const [importProgress, setImportProgress] = useState({ done: 0, total: 0, errors: 0, duplicates: 0 });
-  const [isPending, startTransition] = useTransition();
+  const [importError, setImportError] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
 
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -100,49 +99,41 @@ export function CsvImportClient() {
     setStep('preview');
   }
 
-  function handleImport() {
+  async function handleImport() {
     const validRows = parsed.filter((p) => p.errors.length === 0);
-    setImportProgress({ done: 0, total: validRows.length, errors: 0, duplicates: 0 });
     setStep('importing');
+    setImportError('');
+    setIsImporting(true);
 
-    startTransition(async () => {
-      let done = 0;
-      let errors = 0;
-      let duplicates = 0;
+    try {
+      const result = await importPeopleBatch(
+        validRows.map((p) => ({
+          rowNumber: p.rowNumber,
+          fullName: p.fullName,
+          email: p.email,
+          phone: p.phone,
+          salutation: p.salutation,
+          designation: p.designation,
+          specialty: p.specialty,
+          organization: p.organization,
+          city: p.city,
+          tags: p.tags,
+        })),
+      );
 
-      for (const person of validRows) {
-        try {
-          const result = await createPerson({
-            fullName: person.fullName,
-            email: person.email || '',
-            phone: person.phone || '',
-            salutation: person.salutation,
-            designation: person.designation,
-            specialty: person.specialty,
-            organization: person.organization,
-            city: person.city,
-            tags: person.tags || [],
-          });
-
-          if (result && 'duplicate' in result && result.duplicate) {
-            duplicates++;
-          }
-        } catch {
-          errors++;
-        }
-        done++;
-        setImportProgress({ done, total: validRows.length, errors, duplicates });
-      }
-
-      // Navigate to success page with results
       const params = new URLSearchParams({
         total: String(validRows.length),
-        imported: String(done - errors - duplicates),
-        duplicates: String(duplicates),
-        errors: String(errors),
+        imported: String(result.imported),
+        duplicates: String(result.duplicates),
+        errors: String(result.errors),
       });
       router.push(`/people/import/success?${params.toString()}`);
-    });
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Import failed. Please try again.');
+      setStep('preview');
+    } finally {
+      setIsImporting(false);
+    }
   }
 
   const hasFullNameMapping = mappings.some((m) => m.mappedTo === 'fullName');
@@ -192,6 +183,16 @@ export function CsvImportClient() {
           );
         })}
       </div>
+
+      {/* Global import error */}
+      {importError && (
+        <div className="mt-4 rounded-lg border border-error/20 bg-error/5 p-3">
+          <p className="flex items-center gap-2 text-sm text-error">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {importError}
+          </p>
+        </div>
+      )}
 
       {/* Step: Upload */}
       {step === 'upload' && (
@@ -341,13 +342,14 @@ export function CsvImportClient() {
           <div className="mt-6 flex gap-3">
             <button
               onClick={() => setStep('mapping')}
-              className="rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-secondary hover:bg-background"
+              disabled={isImporting}
+              className="rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-secondary hover:bg-background disabled:opacity-50"
             >
               Back
             </button>
             <button
               onClick={handleImport}
-              disabled={validRows.length === 0}
+              disabled={validRows.length === 0 || isImporting}
               className="flex-1 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-white hover:bg-primary-light disabled:opacity-50"
             >
               Import {validRows.length} People
@@ -362,21 +364,8 @@ export function CsvImportClient() {
           <Loader2 className="h-10 w-10 animate-spin text-primary" />
           <p className="mt-4 font-medium text-text-primary">Importing people...</p>
           <p className="mt-1 text-sm text-text-secondary">
-            {importProgress.done} of {importProgress.total} processed
+            Processing {validRows.length} records on the server
           </p>
-          <div className="mt-4 h-2 w-full max-w-xs overflow-hidden rounded-full bg-border">
-            <div
-              className="h-full rounded-full bg-primary transition-all"
-              style={{
-                width: `${importProgress.total > 0 ? (importProgress.done / importProgress.total) * 100 : 0}%`,
-              }}
-            />
-          </div>
-          {importProgress.errors > 0 && (
-            <p className="mt-2 text-xs text-error">
-              {importProgress.errors} errors so far
-            </p>
-          )}
         </div>
       )}
     </div>

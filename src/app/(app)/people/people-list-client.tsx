@@ -15,6 +15,7 @@ import {
   MapPin,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useRole } from '@/hooks/use-role';
 
 type Person = {
   id: string;
@@ -56,6 +57,7 @@ export function PeopleListClient({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { canWrite } = useRole();
   const [isPending, startTransition] = useTransition();
   const [searchValue, setSearchValue] = useState(currentQuery);
 
@@ -87,22 +89,24 @@ export function PeopleListClient({
             {total} {total === 1 ? 'person' : 'people'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href="/people/import"
-            className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-primary hover:bg-background"
-          >
-            <Upload className="h-4 w-4" />
-            Import
-          </Link>
-          <button
-            onClick={() => navigate({ modal: 'add' })}
-            className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary-light"
-          >
-            <Plus className="h-4 w-4" />
-            Add
-          </button>
-        </div>
+        {canWrite && (
+          <div className="flex items-center gap-2">
+            <Link
+              href="/people/import"
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-primary hover:bg-background"
+            >
+              <Upload className="h-4 w-4" />
+              Import
+            </Link>
+            <button
+              onClick={() => navigate({ modal: 'add' })}
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary-light"
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Search */}
@@ -190,12 +194,9 @@ export function PeopleListClient({
 }
 
 function PersonCard({ person }: { person: Person }) {
-  const initials = person.fullName
-    .split(' ')
-    .map((n) => n[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
+  const initials = person.fullName && person.fullName !== '[ANONYMIZED]'
+    ? person.fullName.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
+    : '??';
 
   return (
     <Link
@@ -247,9 +248,9 @@ function PersonCard({ person }: { person: Person }) {
         </div>
 
         {/* Tags */}
-        {Array.isArray(person.tags) && (person.tags as string[]).length > 0 && (
+        {Array.isArray(person.tags) && (person.tags as unknown[]).filter((t): t is string => typeof t === 'string').length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
-            {(person.tags as string[]).map((tag: string) => (
+            {(person.tags as unknown[]).filter((t): t is string => typeof t === 'string').map((tag) => (
               <span
                 key={tag}
                 className="rounded-full bg-accent-light px-2 py-0.5 text-[10px] font-medium text-accent"

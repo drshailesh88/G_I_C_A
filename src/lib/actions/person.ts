@@ -157,19 +157,30 @@ export async function searchPeople(input: PersonSearchInput) {
 
   // Full-text search on name, email, organization
   if (query) {
+    // Escape SQL LIKE wildcards to prevent unintended pattern matching
+    const escaped = query.replace(/%/g, '\\%').replace(/_/g, '\\_');
     conditions.push(
       or(
-        ilike(people.fullName, `%${query}%`),
-        ilike(people.email, `%${query}%`),
-        ilike(people.organization, `%${query}%`),
-        eq(people.phoneE164, query), // exact phone match
+        ilike(people.fullName, `%${escaped}%`),
+        ilike(people.email, `%${escaped}%`),
+        ilike(people.organization, `%${escaped}%`),
+        eq(people.phoneE164, query), // exact phone match (no escaping needed)
       )!,
     );
   }
 
-  if (organization) conditions.push(ilike(people.organization, `%${organization}%`));
-  if (city) conditions.push(ilike(people.city, `%${city}%`));
-  if (specialty) conditions.push(ilike(people.specialty, `%${specialty}%`));
+  if (organization) {
+    const escaped = organization.replace(/%/g, '\\%').replace(/_/g, '\\_');
+    conditions.push(ilike(people.organization, `%${escaped}%`));
+  }
+  if (city) {
+    const escaped = city.replace(/%/g, '\\%').replace(/_/g, '\\_');
+    conditions.push(ilike(people.city, `%${escaped}%`));
+  }
+  if (specialty) {
+    const escaped = specialty.replace(/%/g, '\\%').replace(/_/g, '\\_');
+    conditions.push(ilike(people.specialty, `%${escaped}%`));
+  }
   if (tag) conditions.push(sql`${people.tags} @> ${JSON.stringify([tag])}::jsonb`);
 
   // Saved views filter by tags
@@ -294,4 +305,71 @@ export async function ensureEventPerson(
     .insert(eventPeople)
     .values({ eventId, personId, source })
     .onConflictDoNothing({ target: [eventPeople.eventId, eventPeople.personId] });
+}
+
+// ── Batch Import ──────────────────────────────────────────────
+// Imports an array of people in one server action call.
+// Returns per-row results for the client to display.
+export type ImportRowResult = {
+  rowNumber: number;
+  status: 'created' | 'duplicate' | 'error';
+  error?: string;
+  personId?: string;
+};
+
+export async function importPeopleBatch(
+  rows: Array<{
+    rowNumber: number;
+    fullName: string;
+    email?: string;
+    phone?: string;
+    salutation?: string;
+    designation?: string;
+    specialty?: string;
+    organization?: string;
+    city?: string;
+    tags?: string[];
+  }>,
+): Promise<{ results: ImportRowResult[]; imported: number; duplicates: number; errors: number }> {
+  const { userId } = await auth();
+  if (!userId) throw new Error('Unauthorized');
+
+  const results: ImportRowResult[] = [];
+  let imported = 0;
+  let duplicates = 0;
+  let errors = 0;
+
+  for (const row of rows) {
+    try {
+      const result = await createPerson({
+        fullName: row.fullName,
+        email: row.email || '',
+        phone: row.phone || '',
+        salutation: row.salutation,
+        designation: row.designation,
+        specialty: row.specialty,
+        organization: row.organization,
+        city: row.city,
+        tags: row.tags || [],
+      });
+
+      if (result && 'duplicate' in result && result.duplicate) {
+        duplicates++;
+        results.push({ rowNumber: row.rowNumber, status: 'duplicate' });
+      } else if (result && 'person' in result && result.person) {
+        imported++;
+        results.push({ rowNumber: row.rowNumber, status: 'created', personId: result.person.id });
+      }
+    } catch (err) {
+      errors++;
+      results.push({
+        rowNumber: row.rowNumber,
+        status: 'error',
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+    }
+  }
+
+  revalidatePath('/people');
+  return { results, imported, duplicates, errors };
 }
