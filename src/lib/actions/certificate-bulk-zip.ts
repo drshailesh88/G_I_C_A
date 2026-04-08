@@ -14,6 +14,7 @@ import {
   type BulkZipResult,
 } from '@/lib/certificates/bulk-zip';
 import type { StorageProvider } from '@/lib/certificates/storage';
+import type { DistributedLock } from '@/lib/certificates/distributed-lock';
 
 const bulkZipRequestSchema = z.object({
   certificateType: z.enum(CERTIFICATE_TYPES),
@@ -22,15 +23,17 @@ const bulkZipRequestSchema = z.object({
 /**
  * Generate a bulk ZIP of all current (issued) certificates for a given type.
  *
- * Flow:
- * 1. Query all issued certificates for event + type (with aggregate size check)
- * 2. Download each PDF from R2
- * 3. Bundle into ZIP via archiver
- * 4. Upload ZIP to R2
- * 5. Return signed download URL
+ * Protected by a distributed lock — only one bulk generation per event/type
+ * can run at a time. The lock auto-expires after 5 minutes as a safety net.
  *
- * NOTE: This action should be protected by a distributed lock (Req 9) to prevent
- * concurrent generation for the same event/type. Old ZIP files need a cleanup cron.
+ * Flow:
+ * 1. Acquire distributed lock
+ * 2. Query all issued certificates for event + type (with aggregate size check)
+ * 3. Download each PDF from R2
+ * 4. Bundle into ZIP via archiver
+ * 5. Upload ZIP to R2
+ * 6. Release lock
+ * 7. Return signed download URL
  */
 export async function bulkZipDownload(
   eventId: string,
@@ -38,82 +41,109 @@ export async function bulkZipDownload(
   deps?: {
     storageProvider?: StorageProvider;
     fetchPdf?: (storageKey: string) => Promise<Buffer>;
+    lock?: DistributedLock;
   },
 ): Promise<BulkZipResult> {
   await assertEventAccess(eventId, { requireWrite: true });
   const validated = bulkZipRequestSchema.parse(input);
 
-  // Fetch all current (issued) certificates for this event + type, including file size
-  const certs = await db
-    .select({
-      id: issuedCertificates.id,
-      storageKey: issuedCertificates.storageKey,
-      fileName: issuedCertificates.fileName,
-      status: issuedCertificates.status,
-      fileSizeBytes: issuedCertificates.fileSizeBytes,
-    })
-    .from(issuedCertificates)
-    .where(
-      withEventScope(
-        issuedCertificates.eventId,
-        eventId,
-        and(
-          eq(issuedCertificates.certificateType, validated.certificateType),
-          eq(issuedCertificates.status, 'issued'),
-        )!,
-      ),
+  // Acquire distributed lock — prevents concurrent bulk generation
+  const lock = deps?.lock
+    ?? (await import('@/lib/certificates/distributed-lock')).createRedisLock();
+
+  let lockHandle: Awaited<ReturnType<typeof lock.acquire>>;
+  try {
+    lockHandle = await lock.acquire(eventId, validated.certificateType);
+  } catch (err) {
+    throw new Error(
+      'Unable to check bulk generation lock (Redis unavailable). Please try again later.',
+    );
+  }
+
+  if (!lockHandle) {
+    throw new Error(
+      'Bulk certificate generation is already in progress for this event and certificate type. Please wait and try again.',
+    );
+  }
+
+  try {
+    // Fetch all current (issued) certificates for this event + type, including file size
+    const certs = await db
+      .select({
+        id: issuedCertificates.id,
+        storageKey: issuedCertificates.storageKey,
+        fileName: issuedCertificates.fileName,
+        status: issuedCertificates.status,
+        fileSizeBytes: issuedCertificates.fileSizeBytes,
+      })
+      .from(issuedCertificates)
+      .where(
+        withEventScope(
+          issuedCertificates.eventId,
+          eventId,
+          and(
+            eq(issuedCertificates.certificateType, validated.certificateType),
+            eq(issuedCertificates.status, 'issued'),
+          )!,
+        ),
+      );
+
+    // Filter to only certs with generated PDFs
+    const downloadable = certs.filter(c => c.storageKey);
+
+    // Calculate aggregate size for validation
+    const totalSizeBytes = downloadable.reduce(
+      (sum, c) => sum + (c.fileSizeBytes ?? 0),
+      0,
     );
 
-  // Filter to only certs with generated PDFs
-  const downloadable = certs.filter(c => c.storageKey);
+    // Validate (includes count limit and aggregate size check)
+    const validationError = validateBulkZipInput({
+      eventId,
+      certificateType: validated.certificateType,
+      certificates: downloadable.map(c => ({
+        storageKey: c.storageKey,
+        fileName: c.fileName,
+      })),
+      totalSizeBytes,
+    });
+    if (validationError) throw new Error(validationError);
 
-  // Calculate aggregate size for validation
-  const totalSizeBytes = downloadable.reduce(
-    (sum, c) => sum + (c.fileSizeBytes ?? 0),
-    0,
-  );
+    // Build the storage provider
+    const provider = deps?.storageProvider
+      ?? (await import('@/lib/certificates/storage')).createR2Provider();
 
-  // Validate (includes count limit and aggregate size check)
-  const validationError = validateBulkZipInput({
-    eventId,
-    certificateType: validated.certificateType,
-    certificates: downloadable.map(c => ({
-      storageKey: c.storageKey,
-      fileName: c.fileName,
-    })),
-    totalSizeBytes,
-  });
-  if (validationError) throw new Error(validationError);
+    // Fetch function: download PDF from R2 via signed URL
+    const fetchPdf = deps?.fetchPdf ?? (async (storageKey: string) => {
+      const url = await provider.getSignedUrl(storageKey, 300);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Failed to fetch PDF: ${storageKey}`);
+      return Buffer.from(await response.arrayBuffer());
+    });
 
-  // Build the storage provider
-  const provider = deps?.storageProvider
-    ?? (await import('@/lib/certificates/storage')).createR2Provider();
+    // Create ZIP archive
+    const zipBuffer = await createZipArchive(
+      downloadable.map(c => ({ storageKey: c.storageKey, fileName: c.fileName })),
+      fetchPdf,
+    );
 
-  // Fetch function: download PDF from R2 via signed URL
-  const fetchPdf = deps?.fetchPdf ?? (async (storageKey: string) => {
-    const url = await provider.getSignedUrl(storageKey, 300);
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`Failed to fetch PDF: ${storageKey}`);
-    return Buffer.from(await response.arrayBuffer());
-  });
+    // Upload ZIP to R2
+    const zipKey = buildBulkZipStorageKey(eventId, validated.certificateType);
+    await provider.upload(zipKey, zipBuffer, 'application/zip');
 
-  // Create ZIP archive
-  const zipBuffer = await createZipArchive(
-    downloadable.map(c => ({ storageKey: c.storageKey, fileName: c.fileName })),
-    fetchPdf,
-  );
+    // Generate signed download URL for the ZIP (1-hour expiry)
+    const zipUrl = await provider.getSignedUrl(zipKey, 3600);
 
-  // Upload ZIP to R2
-  const zipKey = buildBulkZipStorageKey(eventId, validated.certificateType);
-  await provider.upload(zipKey, zipBuffer, 'application/zip');
-
-  // Generate signed download URL for the ZIP (1-hour expiry)
-  const zipUrl = await provider.getSignedUrl(zipKey, 3600);
-
-  return {
-    zipStorageKey: zipKey,
-    zipUrl,
-    fileCount: downloadable.length,
-    zipSizeBytes: zipBuffer.length,
-  };
+    return {
+      zipStorageKey: zipKey,
+      zipUrl,
+      fileCount: downloadable.length,
+      zipSizeBytes: zipBuffer.length,
+    };
+  } finally {
+    // Always release the lock — only if we own it (conditional release)
+    await lock.release(lockHandle).catch((err) => {
+      console.error('[bulk-zip] failed to release distributed lock:', err);
+    });
+  }
 }
