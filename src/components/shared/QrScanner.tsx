@@ -61,7 +61,6 @@ export function QrScanner({
         formats={['qr_code']}
         paused={disabled || processing}
         components={{
-          audio: false,
           finder: true,
         }}
         styles={{

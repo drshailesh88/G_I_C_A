@@ -1,12 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockDb, mockRevalidatePath, mockAssertEventAccess } = vi.hoisted(() => ({
+const {
+  mockDb,
+  mockRevalidatePath,
+  mockAssertEventAccess,
+  mockWithEventScope,
+  mockEq,
+  mockAnd,
+  mockIsNull,
+} = vi.hoisted(() => ({
   mockDb: {
     select: vi.fn(),
     insert: vi.fn(),
   },
   mockRevalidatePath: vi.fn(),
   mockAssertEventAccess: vi.fn(),
+  mockWithEventScope: vi.fn(),
+  mockEq: vi.fn(),
+  mockAnd: vi.fn(),
+  mockIsNull: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -21,8 +33,19 @@ vi.mock('next/cache', () => ({
   revalidatePath: mockRevalidatePath,
 }));
 
+vi.mock('drizzle-orm', async () => {
+  const actual = await vi.importActual<typeof import('drizzle-orm')>('drizzle-orm');
+
+  return {
+    ...actual,
+    eq: mockEq,
+    and: mockAnd,
+    isNull: mockIsNull,
+  };
+});
+
 vi.mock('@/lib/db/with-event-scope', () => ({
-  withEventScope: vi.fn(),
+  withEventScope: mockWithEventScope,
 }));
 
 vi.mock('@/lib/auth/event-access', () => ({
@@ -67,6 +90,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   selectCallCount = 0;
   mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:super_admin' });
+  mockEq.mockImplementation((left, right) => ({ kind: 'eq', left, right }));
+  mockAnd.mockImplementation((...conditions) => ({ kind: 'and', conditions }));
+  mockIsNull.mockImplementation((column) => ({ kind: 'isNull', column }));
+  mockWithEventScope.mockImplementation((_eventColumn, _eventId, condition) => condition);
 });
 
 // ── processQrScan ────────────────────────────────────────────
@@ -231,6 +258,45 @@ describe('processQrScan', () => {
     expect(result.type).toBe('success');
     expect(result.personName).toBe('Unknown');
   });
+
+  it('uses isNull for duplicate detection when checking in at event level', async () => {
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+      [],
+    ]);
+    chainedInsert([{ id: 'new-id' }]);
+
+    await processQrScan(EVENT_ID, {
+      eventId: EVENT_ID,
+      qrPayload: validCompactPayload,
+    });
+
+    expect(mockIsNull).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns duplicate instead of throwing on a concurrent QR check-in conflict', async () => {
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+      [],
+    ]);
+    const duplicateError = Object.assign(new Error('duplicate key value violates unique constraint'), {
+      code: '23505',
+    });
+    mockDb.insert.mockReturnValue({
+      values: vi.fn().mockRejectedValue(duplicateError),
+    });
+
+    const result = await processQrScan(EVENT_ID, {
+      eventId: EVENT_ID,
+      qrPayload: validCompactPayload,
+      sessionId: '550e8400-e29b-41d4-a716-446655440010',
+    });
+
+    expect(result.type).toBe('duplicate');
+    expect(mockRevalidatePath).not.toHaveBeenCalled();
+  });
 });
 
 // ── processManualCheckIn ─────────────────────────────────────
@@ -305,5 +371,44 @@ describe('processManualCheckIn', () => {
       eventId: EVENT_ID,
       registrationId: REG_ID,
     })).rejects.toThrow('Forbidden');
+  });
+
+  it('uses isNull for manual event-level duplicate detection', async () => {
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+      [],
+    ]);
+    chainedInsert([{ id: 'new-id' }]);
+
+    await processManualCheckIn(EVENT_ID, {
+      eventId: EVENT_ID,
+      registrationId: REG_ID,
+    });
+
+    expect(mockIsNull).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns duplicate instead of throwing on a concurrent manual check-in conflict', async () => {
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+      [],
+    ]);
+    const duplicateError = Object.assign(new Error('duplicate key value violates unique constraint'), {
+      code: '23505',
+    });
+    mockDb.insert.mockReturnValue({
+      values: vi.fn().mockRejectedValue(duplicateError),
+    });
+
+    const result = await processManualCheckIn(EVENT_ID, {
+      eventId: EVENT_ID,
+      registrationId: REG_ID,
+      sessionId: '550e8400-e29b-41d4-a716-446655440010',
+    });
+
+    expect(result.type).toBe('duplicate');
+    expect(mockRevalidatePath).not.toHaveBeenCalled();
   });
 });
