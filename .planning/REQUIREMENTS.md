@@ -15,7 +15,7 @@ v1 — GEM India Conference Management Platform
 ### Events
 - [x] Super Admin or Event Coordinator can create an event with name, dates, venue, timezone, description, and module toggles
 - [x] Event transitions through lifecycle states: draft → published → completed → archived, plus cancelled as terminal state
-- [ ] Published events have a public landing page showing event info, speakers, and schedule
+- [x] Published events have a public landing page showing event info, speakers, and schedule
 - [ ] Super Admin or Event Coordinator can duplicate an event's structure (sessions, halls, branding, triggers) without copying person-linked data
 - [x] Super Admin can archive, cancel, or transfer ownership of any event
 - [x] Per-event access control scopes Event Coordinator, Ops, and Read-only to assigned events only
@@ -35,13 +35,13 @@ v1 — GEM India Conference Management Platform
 - [x] event_people junction auto-upserted on first event touchpoint (registration, invite, assignment, travel, accommodation) — never a manual step
 
 ### Registration
-- [ ] Delegates self-register on public event page (name, designation, specialty, city, age, mobile, email, preferences)
-- [ ] Registration creates/links a person record in the master database (dedup on email/mobile)
-- [ ] Immediate acknowledgement: registration number + QR code displayed and emailed
-- [ ] Registration status state machine: pending → confirmed/waitlisted/declined/cancelled (check-in is separate)
-- [ ] If event requires_approval: new registration starts as pending; otherwise directly confirmed
-- [ ] Capacity enforcement: registrations beyond capacity go to waitlisted (if enabled) or blocked
-- [ ] Super Admin and Event Coordinator can manage registrations (approve, decline, waitlist, cancel)
+- [x] Delegates self-register on public event page (name, designation, specialty, city, age, mobile, email, preferences)
+- [x] Registration creates/links a person record in the master database (dedup on email/mobile)
+- [x] Immediate acknowledgement: registration number + QR code displayed and emailed
+- [x] Registration status state machine: pending → confirmed/waitlisted/declined/cancelled (check-in is separate)
+- [x] If event requires_approval: new registration starts as pending; otherwise directly confirmed
+- [x] Capacity enforcement: registrations beyond capacity go to waitlisted (if enabled) or blocked
+- [x] Super Admin and Event Coordinator can manage registrations (approve, decline, waitlist, cancel)
 - [ ] Registration cancellation creates red flags on linked logistics records — no auto-delete of downstream data
 
 ### Scientific Program
