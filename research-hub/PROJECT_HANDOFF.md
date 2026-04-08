@@ -18,6 +18,9 @@ A mobile-first web app for managing Indian medical/academic conferences end-to-e
 │   ├── PROJECT_HANDOFF.md          ← YOU ARE HERE
 │   ├── DESIGN_DECISIONS.md         ← Locked tech + UX decisions
 │   ├── BACKEND_ARCHITECTURE_MAP.md ← Module → library → npm package
+│   ├── REPO_BUCKET_MAP.md          ← Direct-use vs pattern-only vs custom-build repo map
+│   ├── DECISION_LEDGER.md          ← Locked / partially locked / missing by frontend, wiring, backend
+│   ├── DB_DECISIONS.md             ← Owner-spec-aligned database decisions and phase gates
 │   ├── COMPLETE_GAP_ANALYSIS.md    ← Every PDF requirement → solution
 │   ├── USER_FLOWS.md               ← 15 Mermaid flow diagrams (partially stale)
 │   ├── CLICK_MAP_AND_TRACEABILITY.md ← Codex button→screen audit

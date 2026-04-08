@@ -6,18 +6,18 @@ v1 — GEM India Conference Management Platform
 ## Must Have (v1)
 
 ### Foundation
-- [ ] Admin can sign in with email/password and access the dashboard based on their Clerk-managed global role (Super Admin, Event Coordinator, Ops, Read-only)
-- [ ] Admin can reset a forgotten password via email link
-- [ ] Dashboard shows event selector dropdown, metric cards (events, people, mails/WA sent), and quick action buttons
-- [ ] Bottom tab bar navigation persists across main screens (HOME, EVENTS, PEOPLE, PROGRAM, MORE)
-- [ ] Role-based navigation hides or disables menu items based on global role
+- [x] Admin can sign in with email/password and access the dashboard based on their Clerk-managed global role (Super Admin, Event Coordinator, Ops, Read-only)
+- [x] Admin can reset a forgotten password via email link
+- [x] Dashboard shows event selector dropdown, metric cards (events, people, mails/WA sent), and quick action buttons
+- [x] Bottom tab bar navigation persists across main screens (HOME, EVENTS, PEOPLE, PROGRAM, MORE)
+- [x] Role-based navigation hides or disables menu items based on global role
 
 ### Events
-- [ ] Super Admin or Event Coordinator can create an event with name, dates, venue, timezone, description, and module toggles
-- [ ] Event transitions through lifecycle states: draft → published → completed → archived, plus cancelled as terminal state
+- [x] Super Admin or Event Coordinator can create an event with name, dates, venue, timezone, description, and module toggles
+- [x] Event transitions through lifecycle states: draft → published → completed → archived, plus cancelled as terminal state
 - [ ] Published events have a public landing page showing event info, speakers, and schedule
 - [ ] Super Admin or Event Coordinator can duplicate an event's structure (sessions, halls, branding, triggers) without copying person-linked data
-- [ ] Super Admin can archive, cancel, or transfer ownership of any event
+- [x] Super Admin can archive, cancel, or transfer ownership of any event
 - [ ] Per-event access control scopes Event Coordinator, Ops, and Read-only to assigned events only
 - [ ] Super Admin sees all events; other roles see only assigned events
 - [ ] Every event-scoped query, mutation, export, and background job filters by event_id

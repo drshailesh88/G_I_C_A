@@ -15,7 +15,7 @@
 
 The wireframes are materially better than the previous pass. Most of the structural navigation gaps are now fixed, and `6 of 7` critical journeys are screen-complete.
 
-This is **not fully locked for full-scope coding yet** because a few real UX gaps remain, most importantly the **program revision flow** (`Preview Revised Emails` still has no screen/state) plus several secondary dead ends (`Add Person`, `Invite Member`, `Speaker Profile`, `Conflict Fix`, `Issued Certificates List`, etc.).
+This is **not fully locked for full-scope coding yet** because a few real UX gaps remain, most importantly the **program revision flow** (`Preview Revised Emails` now has a CTA on M52, but still no dedicated preview state) plus several secondary dead ends (`Add Person`, `Invite Member`, `Speaker Profile`, `Conflict Fix` destination, `Issued Certificates List`, etc.).
 
 If you want to start coding the **core app and MVP flows**, you are close enough. If you want the wireframes to be the **final, complete build contract**, one more cleanup pass is still warranted.
 

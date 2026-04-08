@@ -1,12 +1,13 @@
 {
   "session_start": "2026-04-07T10:00:00Z",
-  "current_requirement": "Admin can sign in with email/password and access the dashboard based on their Clerk-managed global role",
+  "current_requirement": "Per-event access control scopes Event Coordinator, Ops, and Read-only to assigned events only",
   "status": "BUILDING",
   "attempt": 1,
-  "requirements_done": 0,
+  "requirements_done": 8,
   "requirements_stuck": 0,
-  "requirements_remaining": 11,
-  "test_results": { "unit_pass": 0, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
-  "worktree_branch": "main",
-  "last_updated": "2026-04-07T10:01:00Z"
+  "requirements_remaining": 3,
+  "test_results": { "unit_pass": 25, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
+  "worktree_branch": "",
+  "last_updated": "2026-04-07T10:45:00Z",
+  "notes": "Req 1-8 complete. Codex review passed (6 bugs found, all 6 fixed). 25 tests passing. Remaining: per-event access control (req 9), event visibility filtering (req 10), event_id filtering pattern (req 11)."
 }
