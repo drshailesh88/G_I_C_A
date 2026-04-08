@@ -10,10 +10,18 @@ const {
   updateLogStatus: vi.fn(),
 }));
 
+const { pushToDlq } = vi.hoisted(() => ({
+  pushToDlq: vi.fn(),
+}));
+
 vi.mock('./delivery-event-queries', () => ({
   insertDeliveryEvent,
   findLogByProviderMessageId,
   updateLogStatus,
+}));
+
+vi.mock('./webhook-dlq', () => ({
+  pushToDlq,
 }));
 
 import { ingestEmailStatus, ingestWhatsAppStatus } from './webhook-ingest';
@@ -23,7 +31,7 @@ describe('webhook ingest', () => {
     vi.clearAllMocks();
   });
 
-  it('should ignore a WhatsApp webhook when the located log row belongs to email delivery', async () => {
+  it('should ignore a WhatsApp webhook when the located log row belongs to email', async () => {
     findLogByProviderMessageId.mockResolvedValue({
       id: 'log-email-1',
       status: 'sent',
@@ -46,44 +54,75 @@ describe('webhook ingest', () => {
     expect(updateLogStatus).not.toHaveBeenCalled();
   });
 
-  it('should process both webhooks when both are forward progress from current status', async () => {
-    // Both "delivered" and "read" are forward from "sent", so both should update.
-    // In production, the DB row status advances between calls, but with mocked
-    // findLogByProviderMessageId always returning "sent", both pass isStatusForward.
-    findLogByProviderMessageId.mockImplementation(async () => ({
+  it('should process valid email webhook and update status', async () => {
+    findLogByProviderMessageId.mockResolvedValue({
       id: 'log-1',
       status: 'sent',
       channel: 'email',
       provider: 'resend',
-    }));
+    });
     insertDeliveryEvent.mockResolvedValue(undefined);
     updateLogStatus.mockResolvedValue(undefined);
 
-    await Promise.all([
-      ingestEmailStatus({
-        provider: 'resend',
-        rawPayload: {
-          type: 'email.delivered',
-          data: {
-            email_id: 'msg-1',
-            created_at: '2026-04-08T10:00:00Z',
-          },
-        },
-      }),
-      ingestEmailStatus({
-        provider: 'resend',
-        rawPayload: {
-          type: 'email.opened',
-          data: {
-            email_id: 'msg-1',
-            created_at: '2026-04-08T10:00:01Z',
-          },
-        },
-      }),
-    ]);
+    await ingestEmailStatus({
+      provider: 'resend',
+      rawPayload: {
+        type: 'email.delivered',
+        data: { email_id: 'msg-1', created_at: '2026-04-08T10:00:00Z' },
+      },
+    });
 
-    // Both are forward from "sent", both delivery events recorded
-    expect(insertDeliveryEvent).toHaveBeenCalledTimes(2);
-    expect(updateLogStatus).toHaveBeenCalledTimes(2);
+    expect(insertDeliveryEvent).toHaveBeenCalledWith({
+      notificationLogId: 'log-1',
+      eventType: 'delivered',
+      providerPayloadJson: expect.any(Object),
+    });
+    expect(updateLogStatus).toHaveBeenCalledWith('log-1', 'delivered', '2026-04-08T10:00:00Z');
+  });
+
+  it('should push to DLQ on processing failure instead of swallowing', async () => {
+    findLogByProviderMessageId.mockRejectedValue(new Error('DB connection lost'));
+    pushToDlq.mockResolvedValue(true);
+
+    await ingestEmailStatus({
+      provider: 'resend',
+      rawPayload: {
+        type: 'email.delivered',
+        data: { email_id: 'msg-1', created_at: '2026-04-08T10:00:00Z' },
+      },
+    });
+
+    expect(pushToDlq).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'resend',
+        channel: 'email',
+        errorMessage: 'DB connection lost',
+      }),
+    );
+  });
+
+  it('should not push to DLQ when payload is unparseable', async () => {
+    await ingestEmailStatus({
+      provider: 'resend',
+      rawPayload: { type: 'unknown.event' },
+    });
+
+    expect(findLogByProviderMessageId).not.toHaveBeenCalled();
+    expect(pushToDlq).not.toHaveBeenCalled();
+  });
+
+  it('should ignore webhooks with no matching log row', async () => {
+    findLogByProviderMessageId.mockResolvedValue(null);
+
+    await ingestEmailStatus({
+      provider: 'resend',
+      rawPayload: {
+        type: 'email.sent',
+        data: { email_id: 'unknown-msg', created_at: '2026-04-08T10:00:00Z' },
+      },
+    });
+
+    expect(insertDeliveryEvent).not.toHaveBeenCalled();
+    expect(updateLogStatus).not.toHaveBeenCalled();
   });
 });
