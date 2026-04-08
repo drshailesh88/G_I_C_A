@@ -31,10 +31,20 @@ export default async function FacultyConfirmPage({
     notFound();
   }
 
+  // Strip sensitive token from invite before passing to client
+  const safeInvite = {
+    id: invite.id,
+    eventId: invite.eventId,
+    personId: invite.personId,
+    status: invite.status,
+    sentAt: invite.sentAt,
+    respondedAt: invite.respondedAt,
+  };
+
   return (
     <FacultyConfirmClient
       event={event}
-      invite={invite}
+      invite={safeInvite}
       token={token}
       eventSlug={eventSlug}
     />

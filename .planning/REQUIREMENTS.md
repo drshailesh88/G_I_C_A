@@ -64,38 +64,38 @@ v1 — GEM India Conference Management Platform
 - [x] Faculty invitation status visible to coordinator (sent/opened/accepted/declined/expired)
 
 ### Travel
-- [ ] Travel records created by admin or Ops (manual entry or CSV import) — not delegate self-service in V1
-- [ ] Each record is one journey segment with direction, mode, from/to, departure/arrival (UTC), PNR, carrier, terminal, attachment
-- [ ] Multiple travel records per person per event (inbound + outbound legs)
-- [ ] Travel update emits cascade: red flag on accommodation, transport recalculation, delegate notification
-- [ ] Travel cancellation emits high-severity red flag on accommodation + transport
-- [ ] Soft cancel only, no hard delete; record stays for audit
+- [x] Travel records created by admin or Ops (manual entry or CSV import) — not delegate self-service in V1
+- [x] Each record is one journey segment with direction, mode, from/to, departure/arrival (UTC), PNR, carrier, terminal, attachment
+- [x] Multiple travel records per person per event (inbound + outbound legs)
+- [x] Travel update emits cascade: red flag on accommodation, transport recalculation, delegate notification
+- [x] Travel cancellation emits high-severity red flag on accommodation + transport
+- [x] Soft cancel only, no hard delete; record stays for audit
 
 ### Accommodation
-- [ ] Accommodation form auto-filters people picker to those with existing travel records for the event
-- [ ] Record stores hotel name, address, city, room type, room number, shared_room_group, check-in/out, Google Maps URL, booking PDF
+- [x] Accommodation form auto-filters people picker to those with existing travel records for the event
+- [x] Record stores hotel name, address, city, room type, room number, shared_room_group, check-in/out, Google Maps URL, booking PDF
 - [ ] Save triggers personalized email + WhatsApp with hotel details and map link
-- [ ] Accommodation update emits cascade: red flag on transport, delegate notification
-- [ ] Shared room group change flags all linked occupants
+- [x] Accommodation update emits cascade: red flag on transport, delegate notification
+- [x] Shared room group change flags all linked occupants
 - [ ] Rooming list export grouped by hotel (exceljs)
-- [ ] Soft cancel only; cascade fires red flags downstream
+- [x] Soft cancel only; cascade fires red flags downstream
 
 ### Transport
-- [ ] Transport batches group people by date, movement type, time window, and hub (not just city)
+- [x] Transport batches group people by date, movement type, time window, and hub (not just city)
 - [ ] System suggests batches from travel records; Ops accepts, merges, splits, or discards — no auto-assignment
-- [ ] Vehicle assignments within batches: vehicle label, type, plate, vendor, driver, capacity
-- [ ] Passenger assignments link people to vehicles via drag-and-drop kanban board
-- [ ] Transport is the terminal cascade node — changes don't cascade further
-- [ ] Three-tier status machines: batch (planned → ready → in_progress → completed), vehicle (assigned → dispatched → completed), passenger (pending → assigned → boarded → completed/no_show)
+- [x] Vehicle assignments within batches: vehicle label, type, plate, vendor, driver, capacity
+- [x] Passenger assignments link people to vehicles via drag-and-drop kanban board
+- [x] Transport is the terminal cascade node — changes don't cascade further
+- [x] Three-tier status machines: batch (planned → ready → in_progress → completed), vehicle (assigned → dispatched → completed), passenger (pending → assigned → boarded → completed/no_show)
 
 ### Red Flag Cascade System
-- [ ] Red flags created automatically by Inngest consumers when upstream records change
-- [ ] Three-state lifecycle: unreviewed → reviewed → resolved (Super Admin can skip to resolved)
-- [ ] Flag shows what changed (human-readable detail) and when
-- [ ] One active flag per (event_id, target_entity_type, target_entity_id, flag_type)
-- [ ] "Show flagged only" filter toggle on accommodation and transport lists
-- [ ] Every review/resolve action captures actor, timestamp, and optional resolution note
-- [ ] Cascade direction: Travel → Accommodation + Transport. Accommodation → Transport. Transport → nothing.
+- [x] Red flags created automatically by Inngest consumers when upstream records change
+- [x] Three-state lifecycle: unreviewed → reviewed → resolved (Super Admin can skip to resolved)
+- [x] Flag shows what changed (human-readable detail) and when
+- [x] One active flag per (event_id, target_entity_type, target_entity_id, flag_type)
+- [x] "Show flagged only" filter toggle on accommodation and transport lists
+- [x] Every review/resolve action captures actor, timestamp, and optional resolution note
+- [x] Cascade direction: Travel → Accommodation + Transport. Accommodation → Transport. Transport → nothing.
 
 ### Communications
 - [ ] Notification templates: event-overridable, channel-specific (email vs WhatsApp), with variable placeholders

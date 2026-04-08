@@ -16,6 +16,9 @@ import {
   Zap,
   Award,
   QrCode,
+  Plane,
+  Hotel,
+  Bus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
@@ -61,6 +64,10 @@ const MODULE_TILES = [
   // COMMUNICATIONS
   { key: 'communications', section: 'COMMUNICATIONS', label: 'Templates', icon: Mail, href: '/templates' },
   { key: 'communications', section: 'COMMUNICATIONS', label: 'Triggers', icon: Zap, href: '/triggers' },
+  // LOGISTICS
+  { key: 'travel_accommodation', section: 'LOGISTICS', label: 'Travel', icon: Plane, href: '/travel' },
+  { key: 'travel_accommodation', section: 'LOGISTICS', label: 'Accommodation', icon: Hotel, href: '/accommodation' },
+  { key: 'transport_planning', section: 'LOGISTICS', label: 'Transport', icon: Bus, href: '/transport' },
   // CERTIFICATES & QR
   { key: 'certificates', section: 'CERTIFICATES & QR', label: 'Certificates', icon: Award, href: '/certificates' },
   { key: 'qr_checkin', section: 'CERTIFICATES & QR', label: 'QR Check-in', icon: QrCode, href: '/qr' },

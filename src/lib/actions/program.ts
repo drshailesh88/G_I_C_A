@@ -784,7 +784,7 @@ export async function createFacultyInvite(eventId: string, input: unknown) {
 
 export async function updateFacultyInviteStatus(eventId: string, input: unknown) {
   const validated = updateFacultyInviteStatusSchema.parse(input);
-  const { inviteId, newStatus } = validated;
+  const { inviteId, newStatus, token } = validated;
 
   const [invite] = await db
     .select()
@@ -793,6 +793,11 @@ export async function updateFacultyInviteStatus(eventId: string, input: unknown)
     .limit(1);
 
   if (!invite) throw new Error('Invite not found');
+
+  // Server-side token validation — prevents unauthorized status changes
+  if (invite.token !== token) {
+    throw new Error('Invalid token');
+  }
 
   const currentStatus = invite.status as FacultyInviteStatus;
   const allowed = FACULTY_INVITE_TRANSITIONS[currentStatus];

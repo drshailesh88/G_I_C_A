@@ -645,6 +645,7 @@ describe('createFacultyInvite', () => {
 
 describe('updateFacultyInviteStatus', () => {
   const inviteId = '550e8400-e29b-41d4-a716-446655440000';
+  const validToken = 'test-token-abc123';
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -652,7 +653,7 @@ describe('updateFacultyInviteStatus', () => {
   });
 
   it('transitions sent → opened', async () => {
-    chainedSelect([{ id: inviteId, status: 'sent' }]);
+    chainedSelect([{ id: inviteId, status: 'sent', token: validToken }]);
 
     const updated = { id: inviteId, status: 'opened' };
     chainedUpdate([updated]);
@@ -660,12 +661,13 @@ describe('updateFacultyInviteStatus', () => {
     const result = await updateFacultyInviteStatus(EVENT_ID, {
       inviteId,
       newStatus: 'opened',
+      token: validToken,
     });
     expect(result.status).toBe('opened');
   });
 
   it('transitions opened → accepted', async () => {
-    chainedSelect([{ id: inviteId, status: 'opened' }]);
+    chainedSelect([{ id: inviteId, status: 'opened', token: validToken }]);
 
     const updated = { id: inviteId, status: 'accepted' };
     chainedUpdate([updated]);
@@ -673,15 +675,16 @@ describe('updateFacultyInviteStatus', () => {
     const result = await updateFacultyInviteStatus(EVENT_ID, {
       inviteId,
       newStatus: 'accepted',
+      token: validToken,
     });
     expect(result.status).toBe('accepted');
   });
 
   it('blocks invalid transition (accepted → sent)', async () => {
-    chainedSelect([{ id: inviteId, status: 'accepted' }]);
+    chainedSelect([{ id: inviteId, status: 'accepted', token: validToken }]);
 
     await expect(
-      updateFacultyInviteStatus(EVENT_ID, { inviteId, newStatus: 'sent' }),
+      updateFacultyInviteStatus(EVENT_ID, { inviteId, newStatus: 'sent', token: validToken }),
     ).rejects.toThrow('Cannot transition');
   });
 
@@ -689,8 +692,16 @@ describe('updateFacultyInviteStatus', () => {
     chainedSelect([]);
 
     await expect(
-      updateFacultyInviteStatus(EVENT_ID, { inviteId, newStatus: 'opened' }),
+      updateFacultyInviteStatus(EVENT_ID, { inviteId, newStatus: 'opened', token: validToken }),
     ).rejects.toThrow('Invite not found');
+  });
+
+  it('rejects invalid token', async () => {
+    chainedSelect([{ id: inviteId, status: 'sent', token: validToken }]);
+
+    await expect(
+      updateFacultyInviteStatus(EVENT_ID, { inviteId, newStatus: 'opened', token: 'wrong-token' }),
+    ).rejects.toThrow('Invalid token');
   });
 });
 

@@ -358,6 +358,7 @@ describe('updateFacultyInviteStatusSchema', () => {
     const result = updateFacultyInviteStatusSchema.safeParse({
       inviteId: uuid,
       newStatus: 'accepted',
+      token: 'valid-token-abc',
     });
     expect(result.success).toBe(true);
   });

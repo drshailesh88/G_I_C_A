@@ -142,6 +142,7 @@ export const createFacultyInviteSchema = z.object({
 export const updateFacultyInviteStatusSchema = z.object({
   inviteId: z.string().uuid('Invalid invite ID'),
   newStatus: z.enum(FACULTY_INVITE_STATUSES),
+  token: z.string().min(1, 'Token is required'),
 });
 
 // ── Program version publish schema ────────────────────────────

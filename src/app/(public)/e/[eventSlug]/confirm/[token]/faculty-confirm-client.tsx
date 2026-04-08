@@ -19,7 +19,6 @@ type Invite = {
   id: string;
   eventId: string;
   personId: string;
-  token: string;
   status: string;
   sentAt: Date;
   respondedAt: Date | null;
@@ -49,6 +48,7 @@ export function FacultyConfirmClient({
         await updateFacultyInviteStatus(invite.eventId, {
           inviteId: invite.id,
           newStatus: action,
+          token,
         });
         if (action === 'accepted') {
           router.push(`/e/${eventSlug}/confirm/success`);
