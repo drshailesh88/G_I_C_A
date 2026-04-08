@@ -35,6 +35,8 @@ import {
   revokeCertificate,
   listIssuedCertificates,
   getIssuedCertificate,
+  getCertificateDownloadUrl,
+  verifyCertificate,
 } from './certificate-issuance';
 
 // ── Chain helpers ─────────────────────────────────────────────
@@ -245,5 +247,158 @@ describe('getIssuedCertificate', () => {
 
   it('rejects non-UUID certificate ID', async () => {
     await expect(getIssuedCertificate(EVENT_ID, 'not-a-uuid')).rejects.toThrow();
+  });
+});
+
+// ── Get Certificate Download URL ────────────────────────────
+describe('getCertificateDownloadUrl', () => {
+  const mockStorageProvider = {
+    upload: vi.fn(),
+    getSignedUrl: vi.fn().mockResolvedValue('https://r2.example.com/signed?token=abc'),
+    delete: vi.fn(),
+  };
+
+  it('returns signed URL for issued certificate', async () => {
+    const cert = {
+      ...mockIssuedCert,
+      storageKey: 'certificates/ev/type/id.pdf',
+      fileName: 'GEM2026-ATT-00001.pdf',
+    };
+    chainedSelectSequence([[cert]]);
+    // Mock the fire-and-forget update
+    const updateChain = {
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      then: vi.fn().mockImplementation((resolve: () => void) => { resolve(); return { catch: vi.fn() }; }),
+    };
+    mockDb.update.mockReturnValue(updateChain);
+
+    const result = await getCertificateDownloadUrl(EVENT_ID, CERT_ID, mockStorageProvider);
+    expect(result.url).toBe('https://r2.example.com/signed?token=abc');
+    expect(result.fileName).toBe('GEM2026-ATT-00001.pdf');
+    expect(result.expiresInSeconds).toBe(3600);
+    expect(mockStorageProvider.getSignedUrl).toHaveBeenCalledWith('certificates/ev/type/id.pdf', 3600);
+  });
+
+  it('throws when certificate not found', async () => {
+    chainedSelectSequence([[]]);
+    await expect(getCertificateDownloadUrl(EVENT_ID, CERT_ID, mockStorageProvider)).rejects.toThrow('Certificate not found');
+  });
+
+  it('throws when certificate is revoked', async () => {
+    chainedSelectSequence([[{ ...mockIssuedCert, status: 'revoked', storageKey: 'k' }]]);
+    await expect(getCertificateDownloadUrl(EVENT_ID, CERT_ID, mockStorageProvider)).rejects.toThrow('revoked');
+  });
+
+  it('throws when certificate is superseded', async () => {
+    chainedSelectSequence([[{ ...mockIssuedCert, status: 'superseded', storageKey: 'k' }]]);
+    await expect(getCertificateDownloadUrl(EVENT_ID, CERT_ID, mockStorageProvider)).rejects.toThrow('superseded');
+  });
+
+  it('rejects non-UUID certificate ID', async () => {
+    await expect(getCertificateDownloadUrl(EVENT_ID, 'not-a-uuid', mockStorageProvider)).rejects.toThrow();
+  });
+
+  it('rejects unauthorized access', async () => {
+    mockAssertEventAccess.mockRejectedValue(new Error('Forbidden'));
+    await expect(getCertificateDownloadUrl(EVENT_ID, CERT_ID, mockStorageProvider)).rejects.toThrow('Forbidden');
+  });
+});
+
+// ── Verify Certificate (public) ─────────────────────────────
+describe('verifyCertificate', () => {
+  const VERIFICATION_TOKEN = '660e8400-e29b-41d4-a716-446655440099';
+
+  it('returns valid for issued certificate', async () => {
+    const cert = {
+      id: CERT_ID,
+      certificateNumber: 'GEM2026-ATT-00001',
+      certificateType: 'delegate_attendance',
+      status: 'issued',
+      issuedAt: new Date('2026-04-01'),
+      revokedAt: null,
+      personId: PERSON_ID,
+      eventId: EVENT_ID,
+    };
+    chainedSelectSequence([[cert]]);
+    const updateChain = {
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      then: vi.fn().mockImplementation((resolve: () => void) => { resolve(); return { catch: vi.fn() }; }),
+    };
+    mockDb.update.mockReturnValue(updateChain);
+
+    const result = await verifyCertificate(VERIFICATION_TOKEN);
+    expect(result.valid).toBe(true);
+    if (result.valid) {
+      expect(result.certificateNumber).toBe('GEM2026-ATT-00001');
+      expect(result.certificateType).toBe('delegate_attendance');
+    }
+  });
+
+  it('returns invalid for revoked certificate', async () => {
+    const cert = {
+      id: CERT_ID,
+      certificateNumber: 'GEM2026-ATT-00001',
+      certificateType: 'delegate_attendance',
+      status: 'revoked',
+      issuedAt: new Date('2026-04-01'),
+      revokedAt: new Date('2026-04-05'),
+      personId: PERSON_ID,
+      eventId: EVENT_ID,
+    };
+    chainedSelectSequence([[cert]]);
+    const updateChain = {
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      then: vi.fn().mockImplementation((resolve: () => void) => { resolve(); return { catch: vi.fn() }; }),
+    };
+    mockDb.update.mockReturnValue(updateChain);
+
+    const result = await verifyCertificate(VERIFICATION_TOKEN);
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.error).toContain('revoked');
+      expect(result.revokedAt).toBeDefined();
+    }
+  });
+
+  it('returns invalid for superseded certificate', async () => {
+    const cert = {
+      id: CERT_ID,
+      certificateNumber: 'GEM2026-ATT-00001',
+      certificateType: 'delegate_attendance',
+      status: 'superseded',
+      issuedAt: new Date('2026-04-01'),
+      revokedAt: null,
+      personId: PERSON_ID,
+      eventId: EVENT_ID,
+    };
+    chainedSelectSequence([[cert]]);
+    const updateChain = {
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      then: vi.fn().mockImplementation((resolve: () => void) => { resolve(); return { catch: vi.fn() }; }),
+    };
+    mockDb.update.mockReturnValue(updateChain);
+
+    const result = await verifyCertificate(VERIFICATION_TOKEN);
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.error).toContain('superseded');
+    }
+  });
+
+  it('returns invalid when not found', async () => {
+    chainedSelectSequence([[]]);
+    const result = await verifyCertificate(VERIFICATION_TOKEN);
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.error).toContain('not found');
+    }
+  });
+
+  it('rejects non-UUID token', async () => {
+    await expect(verifyCertificate('not-a-uuid')).rejects.toThrow();
   });
 });

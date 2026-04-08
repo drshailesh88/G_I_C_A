@@ -3,6 +3,7 @@ import {
   findCurrentCertificate,
   buildSupersessionChain,
   validateRevocation,
+  validateDownloadAccess,
   canIssueNewCertificate,
   checkEligibility,
   getNextSequence,
@@ -370,5 +371,49 @@ describe('planBulkGeneration', () => {
     expect(plan.toIssue[0].supersedes).toBeNull(); // A: no existing
     expect(plan.toIssue[1].supersedes).toBe('cert-b'); // B: supersedes
     expect(plan.toIssue[2].supersedes).toBeNull(); // C: revoked, doesn't count
+  });
+});
+
+// ── validateDownloadAccess ──────────────────────────────────
+describe('validateDownloadAccess', () => {
+  it('allows download for issued certificate', () => {
+    const cert = makeCert({ status: 'issued' });
+    const result = validateDownloadAccess(cert);
+    expect(result.allowed).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+
+  it('blocks download for revoked certificate', () => {
+    const cert = makeCert({ status: 'revoked' });
+    const result = validateDownloadAccess(cert);
+    expect(result.allowed).toBe(false);
+    expect(result.error).toContain('revoked');
+  });
+
+  it('blocks download for superseded certificate', () => {
+    const cert = makeCert({ status: 'superseded' });
+    const result = validateDownloadAccess(cert);
+    expect(result.allowed).toBe(false);
+    expect(result.error).toContain('superseded');
+  });
+
+  it('blocks download when storageKey is empty string', () => {
+    const cert = { ...makeCert(), storageKey: '' };
+    const result = validateDownloadAccess(cert);
+    expect(result.allowed).toBe(false);
+    expect(result.error).toContain('not been generated');
+  });
+
+  it('allows download when storageKey is present', () => {
+    const cert = { ...makeCert(), storageKey: 'certificates/ev/type/id.pdf' };
+    const result = validateDownloadAccess(cert);
+    expect(result.allowed).toBe(true);
+  });
+
+  it('allows download when storageKey is not in the object (field not provided)', () => {
+    const cert = makeCert();
+    // storageKey is not on IssuedCertificateRecord, so it's undefined
+    const result = validateDownloadAccess(cert);
+    expect(result.allowed).toBe(true);
   });
 });

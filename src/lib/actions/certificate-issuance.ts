@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db';
 import { issuedCertificates, certificateTemplates, people } from '@/lib/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
@@ -15,6 +15,7 @@ import {
   findCurrentCertificate,
   buildSupersessionChain,
   validateRevocation,
+  validateDownloadAccess,
   getNextSequence,
   type IssuedCertificateRecord,
 } from '@/lib/certificates/issuance-utils';
@@ -212,4 +213,119 @@ export async function getIssuedCertificate(eventId: string, certificateId: strin
 
   if (!cert) throw new Error('Certificate not found');
   return cert;
+}
+
+// ── Get signed download URL ─────────────────────────────────
+export async function getCertificateDownloadUrl(
+  eventId: string,
+  certificateId: string,
+  storageProvider?: import('@/lib/certificates/storage').StorageProvider,
+) {
+  await assertEventAccess(eventId);
+  const validatedId = certificateIdSchema.parse(certificateId);
+
+  const [cert] = await db
+    .select()
+    .from(issuedCertificates)
+    .where(
+      withEventScope(
+        issuedCertificates.eventId,
+        eventId,
+        eq(issuedCertificates.id, validatedId),
+      ),
+    )
+    .limit(1);
+
+  if (!cert) throw new Error('Certificate not found');
+
+  const access = validateDownloadAccess(cert as unknown as IssuedCertificateRecord & { storageKey?: string });
+  if (!access.allowed) throw new Error(access.error);
+
+  // Generate signed URL (1-hour expiry)
+  const provider = storageProvider ?? (await import('@/lib/certificates/storage')).createR2Provider();
+  const url = await provider.getSignedUrl(cert.storageKey, 3600);
+
+  // Increment download tracking (fire-and-forget, non-blocking)
+  db.update(issuedCertificates)
+    .set({
+      downloadCount: sql`${issuedCertificates.downloadCount} + 1`,
+      lastDownloadedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      withEventScope(
+        issuedCertificates.eventId,
+        eventId,
+        eq(issuedCertificates.id, validatedId),
+      ),
+    )
+    .then(() => {})
+    .catch(() => {});
+
+  return {
+    url,
+    fileName: cert.fileName,
+    expiresInSeconds: 3600,
+  };
+}
+
+// ── Verify certificate (public, no auth) ────────────────────
+const verificationTokenSchema = z.string().uuid('Invalid verification token');
+
+export async function verifyCertificate(verificationToken: string) {
+  const validatedToken = verificationTokenSchema.parse(verificationToken);
+
+  const [cert] = await db
+    .select({
+      id: issuedCertificates.id,
+      certificateNumber: issuedCertificates.certificateNumber,
+      certificateType: issuedCertificates.certificateType,
+      status: issuedCertificates.status,
+      issuedAt: issuedCertificates.issuedAt,
+      revokedAt: issuedCertificates.revokedAt,
+      personId: issuedCertificates.personId,
+      eventId: issuedCertificates.eventId,
+    })
+    .from(issuedCertificates)
+    .where(eq(issuedCertificates.verificationToken, validatedToken))
+    .limit(1);
+
+  if (!cert) {
+    return { valid: false as const, error: 'Certificate not found' };
+  }
+
+  // Increment verification count (fire-and-forget)
+  db.update(issuedCertificates)
+    .set({
+      verificationCount: sql`${issuedCertificates.verificationCount} + 1`,
+      lastVerifiedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(issuedCertificates.id, cert.id))
+    .then(() => {})
+    .catch(() => {});
+
+  if (cert.status === 'revoked') {
+    return {
+      valid: false as const,
+      error: 'This certificate has been revoked',
+      certificateNumber: cert.certificateNumber,
+      revokedAt: cert.revokedAt,
+    };
+  }
+
+  if (cert.status === 'superseded') {
+    return {
+      valid: false as const,
+      error: 'This certificate has been superseded by a newer version',
+      certificateNumber: cert.certificateNumber,
+    };
+  }
+
+  return {
+    valid: true as const,
+    certificateNumber: cert.certificateNumber,
+    certificateType: cert.certificateType,
+    issuedAt: cert.issuedAt,
+  };
 }
