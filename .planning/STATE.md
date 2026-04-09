@@ -7,7 +7,7 @@
 Phase 6: Notification Wiring + Branding + Reports — Status: NOT STARTED
 
 ## Next Action
-Begin Sub-Phase 6A-1: Replace notification stub with real service in cascade handlers
+Begin Sub-Phase 6A-2: Wire domain event handler (H7)
 
 ## Completed Phases
 - Phase 1: Scaffold + Auth + Event CRUD — COMPLETE (2026-04-08)
@@ -17,7 +17,7 @@ Begin Sub-Phase 6A-1: Replace notification stub with real service in cascade han
 - Phase 5: Certificates + QR Attendance — COMPLETE (2026-04-08)
 
 ## Progress Summary
-- Requirements done: 74/116
+- Requirements done: 75/116
 - Requirements remaining: 42 (across Phases 6-9)
 - Test files: 53 | Tests passing: 958
 - Phases remaining: 4 (Phase 6, 7, 8, 9)
@@ -25,7 +25,7 @@ Begin Sub-Phase 6A-1: Replace notification stub with real service in cascade han
 
 ## Phase 6-9 Requirement Tracker
 ### Phase 6: Notification Wiring + Branding + Reports (9 requirements)
-- [ ] 6A-1: Replace notification stub in cascade handlers (6 tests)
+- [x] 6A-1: Replace notification stub in cascade handlers (12 tests)
 - [ ] 6A-2: Wire domain event handler H7 (8 tests)
 - [ ] 6A-3: Implement attachment flow H5 (12 tests)
 - [ ] 6A-4: Add Clerk middleware (6 tests)
@@ -39,7 +39,7 @@ Begin Sub-Phase 6A-1: Replace notification stub with real service in cascade han
 - [ ] 7A-1: pdfme Designer integration (8 tests)
 - [ ] 7A-2: Certificate generation page UI (10 tests)
 - [ ] 7A-3: View all issued certificates (8 tests)
-- [ ] 7B-1: QR scanner page (8 tests)
+- [x] 7B-1: QR scanner page (12 tests)
 - [ ] 7B-2: Offline sync indicator (6 tests)
 - [ ] 7C-1: Dashboard with real metrics (10 tests)
 
