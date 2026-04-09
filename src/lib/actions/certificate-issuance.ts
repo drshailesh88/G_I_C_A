@@ -52,95 +52,115 @@ export async function issueCertificate(eventId: string, input: unknown) {
     .limit(1);
   if (!template) throw new Error('Active certificate template not found');
 
-  // Wrap in transaction to prevent race conditions with concurrent issuance
-  const issued = await db.transaction(async (tx) => {
-    // Check for existing current certificate (one-current-valid)
-    // FOR UPDATE locks matching rows to prevent concurrent issuance races
-    const existingCerts = await tx
-      .select()
-      .from(issuedCertificates)
-      .where(
-        withEventScope(
-          issuedCertificates.eventId,
+  // Retry loop for certificate number collisions (concurrent issuance for same event)
+  const MAX_CERT_NUMBER_RETRIES = 3;
+
+  for (let attempt = 0; attempt < MAX_CERT_NUMBER_RETRIES; attempt++) {
+    try {
+      const issued = await db.transaction(async (tx) => {
+        // Check for existing current certificate (one-current-valid)
+        // FOR UPDATE locks matching rows to prevent concurrent issuance races
+        const existingCerts = await tx
+          .select()
+          .from(issuedCertificates)
+          .where(
+            withEventScope(
+              issuedCertificates.eventId,
+              eventId,
+              and(
+                eq(issuedCertificates.personId, validated.personId),
+                eq(issuedCertificates.certificateType, validated.certificateType),
+              )!,
+            ),
+          )
+          .for('update');
+
+        const currentCert = findCurrentCertificate(
+          existingCerts as IssuedCertificateRecord[],
+          validated.personId,
           eventId,
-          and(
-            eq(issuedCertificates.personId, validated.personId),
-            eq(issuedCertificates.certificateType, validated.certificateType),
-          )!,
-        ),
-      )
-      .for('update');
-
-    const currentCert = findCurrentCertificate(
-      existingCerts as IssuedCertificateRecord[],
-      validated.personId,
-      eventId,
-      validated.certificateType,
-    );
-
-    const chain = buildSupersessionChain(currentCert);
-
-    // Get next certificate number
-    const existingNumbers = await tx
-      .select({ certificateNumber: issuedCertificates.certificateNumber })
-      .from(issuedCertificates)
-      .where(eq(issuedCertificates.eventId, eventId));
-
-    const config = getCertificateTypeConfig(validated.certificateType);
-    const numbers = existingNumbers.map(r => r.certificateNumber);
-    const sequence = getNextSequence(numbers, config.certificateNumberPrefix);
-    const certificateNumber = generateCertificateNumber(validated.certificateType, sequence);
-
-    // Build storage key (PDF will be uploaded separately)
-    const certId = crypto.randomUUID();
-    const storageKey = buildCertificateStorageKey(eventId, validated.certificateType, certId);
-
-    // Create the new issued certificate
-    const [newCert] = await tx
-      .insert(issuedCertificates)
-      .values({
-        id: certId,
-        eventId,
-        personId: validated.personId,
-        templateId: validated.templateId,
-        templateVersionNo: template.versionNo,
-        certificateType: validated.certificateType,
-        eligibilityBasisType: validated.eligibilityBasisType,
-        eligibilityBasisId: validated.eligibilityBasisId || null,
-        certificateNumber,
-        storageKey,
-        fileName: `${certificateNumber}.pdf`,
-        renderedVariablesJson: validated.renderedVariablesJson,
-        brandingSnapshotJson: template.brandingSnapshotJson,
-        templateSnapshotJson: template.templateJson,
-        supersedesId: chain.newCertLink?.supersedesId || null,
-        issuedBy: userId,
-      })
-      .returning();
-
-    // If superseding, update the old certificate
-    if (currentCert && chain.oldCertUpdate) {
-      await tx
-        .update(issuedCertificates)
-        .set({
-          status: 'superseded',
-          supersededById: newCert.id,
-          updatedAt: new Date(),
-        })
-        .where(
-          withEventScope(
-            issuedCertificates.eventId,
-            eventId,
-            eq(issuedCertificates.id, currentCert.id),
-          ),
+          validated.certificateType,
         );
+
+        const chain = buildSupersessionChain(currentCert);
+
+        // Get next certificate number
+        const existingNumbers = await tx
+          .select({ certificateNumber: issuedCertificates.certificateNumber })
+          .from(issuedCertificates)
+          .where(eq(issuedCertificates.eventId, eventId));
+
+        const config = getCertificateTypeConfig(validated.certificateType);
+        const numbers = existingNumbers.map(r => r.certificateNumber);
+        const sequence = getNextSequence(numbers, config.certificateNumberPrefix);
+        const certificateNumber = generateCertificateNumber(validated.certificateType, sequence);
+
+        // Build storage key (PDF will be uploaded separately)
+        const certId = crypto.randomUUID();
+        const storageKey = buildCertificateStorageKey(eventId, validated.certificateType, certId);
+
+        // Create the new issued certificate
+        const [newCert] = await tx
+          .insert(issuedCertificates)
+          .values({
+            id: certId,
+            eventId,
+            personId: validated.personId,
+            templateId: validated.templateId,
+            templateVersionNo: template.versionNo,
+            certificateType: validated.certificateType,
+            eligibilityBasisType: validated.eligibilityBasisType,
+            eligibilityBasisId: validated.eligibilityBasisId || null,
+            certificateNumber,
+            storageKey,
+            fileName: `${certificateNumber}.pdf`,
+            renderedVariablesJson: validated.renderedVariablesJson,
+            brandingSnapshotJson: template.brandingSnapshotJson,
+            templateSnapshotJson: template.templateJson,
+            supersedesId: chain.newCertLink?.supersedesId || null,
+            issuedBy: userId,
+          })
+          .returning();
+
+        // If superseding, update the old certificate
+        if (currentCert && chain.oldCertUpdate) {
+          await tx
+            .update(issuedCertificates)
+            .set({
+              status: 'superseded',
+              supersededById: newCert.id,
+              updatedAt: new Date(),
+            })
+            .where(
+              withEventScope(
+                issuedCertificates.eventId,
+                eventId,
+                eq(issuedCertificates.id, currentCert.id),
+              ),
+            );
+        }
+
+        return newCert;
+      });
+
+      revalidatePath(`/events/${eventId}/certificates`);
+      return issued;
+    } catch (error) {
+      // Retry on certificate_number unique constraint violation (concurrent issuance for same event)
+      const isCertNumberCollision =
+        error instanceof Error &&
+        ('code' in error ? String((error as any).code) === '23505' : false) &&
+        error.message.toLowerCase().includes('certificate_number');
+
+      if (isCertNumberCollision && attempt < MAX_CERT_NUMBER_RETRIES - 1) {
+        continue; // Retry with fresh sequence number
+      }
+      throw error;
     }
+  }
 
-    return newCert;
-  });
-
-  revalidatePath(`/events/${eventId}/certificates`);
-  return issued;
+  // Unreachable, but TypeScript needs it
+  throw new Error('Certificate issuance failed after maximum retries');
 }
 
 // ── Revoke a certificate ─────────────────────────────────────

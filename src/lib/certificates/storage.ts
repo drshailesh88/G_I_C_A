@@ -77,6 +77,54 @@ export function createR2Provider(): StorageProvider {
       };
     },
 
+    async uploadStream(key, stream, contentType) {
+      const { S3Client } = await import('@aws-sdk/client-s3');
+      const { Upload } = await import('@aws-sdk/lib-storage');
+      const cryptoModule = await import('crypto');
+
+      const client = new S3Client({
+        region: 'auto',
+        endpoint: process.env.R2_ENDPOINT!,
+        credentials: {
+          accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+          secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+        },
+      });
+
+      // Tee the stream: compute hash while uploading via multipart
+      const { PassThrough } = await import('stream');
+      const hashPassThrough = new PassThrough();
+      const hash = cryptoModule.createHash('sha256');
+      let totalBytes = 0;
+
+      hashPassThrough.on('data', (chunk: Buffer) => {
+        hash.update(chunk);
+        totalBytes += chunk.length;
+      });
+
+      stream.pipe(hashPassThrough);
+
+      const upload = new Upload({
+        client,
+        params: {
+          Bucket: process.env.R2_BUCKET_NAME!,
+          Key: key,
+          Body: hashPassThrough,
+          ContentType: contentType,
+        },
+        partSize: 5 * 1024 * 1024,
+        leavePartsOnError: false,
+      });
+
+      await upload.done();
+
+      return {
+        storageKey: key,
+        fileSizeBytes: totalBytes,
+        fileChecksumSha256: hash.digest('hex'),
+      };
+    },
+
     async getSignedUrl(key, expiresInSeconds = DEFAULT_SIGNED_URL_EXPIRY) {
       const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
       const { getSignedUrl: s3GetSignedUrl } = await import('@aws-sdk/s3-request-presigner');
