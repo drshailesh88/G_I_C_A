@@ -29,6 +29,7 @@ import { redisIdempotencyService } from './idempotency';
 import type { CircuitBreakerService } from './circuit-breaker';
 import { ProviderTimeoutError } from './timeout';
 import { CircuitOpenError } from './circuit-breaker';
+import { captureNotificationError } from '@/lib/sentry';
 
 // ── Dependency injection for testability ──────────────────────
 
@@ -85,6 +86,14 @@ export async function sendNotification(
       variables: input.variables,
     });
   } catch (renderError) {
+    captureNotificationError(renderError, {
+      channel: input.channel,
+      eventId: input.eventId,
+      personId: input.personId,
+      templateKey: input.templateKey,
+      provider: providerNameForChannel(input.channel),
+      errorCode: 'RENDER_FAILED',
+    });
     // FIX #7: Record failed send in audit trail even on template errors
     const failedLog = await createLogEntryFn({
       eventId: input.eventId,
@@ -208,6 +217,15 @@ export async function sendNotification(
     const isTimeout = error instanceof ProviderTimeoutError;
     const errorCode = isTimeout ? 'PROVIDER_TIMEOUT' : 'PROVIDER_EXCEPTION';
     const errorMessage = error instanceof Error ? error.message : String(error);
+
+    captureNotificationError(error, {
+      channel: input.channel,
+      eventId: input.eventId,
+      personId: input.personId,
+      templateKey: input.templateKey,
+      provider: providerName,
+      errorCode,
+    });
 
     // Record failure in circuit breaker
     if (deps.circuitBreaker) {
@@ -427,6 +445,15 @@ async function sendNotificationFromLog(
     const isTimeout = error instanceof ProviderTimeoutError;
     const errorCode = isTimeout ? 'PROVIDER_TIMEOUT' : 'PROVIDER_EXCEPTION';
     const errorMessage = error instanceof Error ? error.message : String(error);
+
+    captureNotificationError(error, {
+      channel,
+      eventId: log.eventId as string,
+      personId: log.personId as string,
+      templateKey: (log.templateKeySnapshot as string) ?? undefined,
+      provider: providerName,
+      errorCode,
+    });
 
     if (deps.circuitBreaker) {
       await deps.circuitBreaker.recordFailure(providerName);

@@ -18,6 +18,7 @@ import { sendNotification } from '@/lib/notifications/send';
 import { onCascadeEvent } from '../emit';
 import { CASCADE_EVENTS } from '../events';
 import type { TravelUpdatedPayload, TravelCancelledPayload } from '../events';
+import { captureCascadeError } from '@/lib/sentry';
 import { people } from '@/lib/db/schema';
 import type { NotificationTriggerType } from '@/lib/notifications/types';
 
@@ -86,6 +87,11 @@ async function sendCascadeNotification(params: {
   } catch (error) {
     // Cascade must never fail due to notification failure
     console.error('[cascade:travel] notification send failed:', error);
+    captureCascadeError(error, {
+      handler: 'travel-cascade',
+      eventId: params.eventId,
+      cascadeEvent: `travel:${params.templateKey}`,
+    });
   }
 }
 
