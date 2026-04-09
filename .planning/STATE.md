@@ -17,9 +17,9 @@ Begin Sub-Phase 6B-2: Branding injection into notification templates
 - Phase 5: Certificates + QR Attendance — COMPLETE (2026-04-08)
 
 ## Progress Summary
-- Requirements done: 78/116
-- Requirements remaining: 40 (across Phases 6-9)
-- Test files: 74 | Tests passing: 1222
+- Requirements done: 79/116
+- Requirements remaining: 39 (across Phases 6-9)
+- Test files: 75 | Tests passing: 1234
 - Phases remaining: 4 (Phase 6, 7, 8, 9)
 - Estimated: ~23 granular requirements across 11 sub-phases
 
@@ -30,7 +30,7 @@ Begin Sub-Phase 6B-2: Branding injection into notification templates
 - [ ] 6A-3: Implement attachment flow H5 (12 tests)
 - [ ] 6A-4: Add Clerk middleware (6 tests)
 - [x] 6B-1: Branding configuration CRUD (14 tests)
-- [ ] 6B-2: Branding injection into templates (6 tests)
+- [x] 6B-2: Branding injection into templates (12 tests)
 - [x] 6C-1: Excel export engine (19 tests)
 - [x] 6C-2: Per-event PDF archive (16 tests)
 - [x] 6D-1: Team management page (13 tests)

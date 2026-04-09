@@ -135,7 +135,7 @@ v1 — GEM India Conference Management Platform
 
 ### Phase 6B — Per-Event Branding
 - [x] Req 6B-1: Branding configuration CRUD — Uses existing events.branding JSONB column (logoStorageKey, headerImageStorageKey, primaryColor, secondaryColor, emailSenderName, emailFooterText, whatsappPrefix). Branding settings page (M15) at /events/[eventId]/branding with image upload to R2, color pickers, text fields, live email+WhatsApp preview. Zod validation. 14 tests passing.
-- [ ] Req 6B-2: Branding injection into notification templates — Modify renderTemplate() to load event branding and inject logo URL, colors, sender name as template variables. React Email templates use these variables. Tests: render with custom branding → logo in HTML, render with no branding → defaults, change branding → new values appear. Target: 6 new tests.
+- [x] Req 6B-2: Branding injection into notification templates — Modify renderTemplate() to load event branding and inject logo URL, colors, sender name as template variables. React Email templates use these variables. Tests: render with custom branding → logo in HTML, render with no branding → defaults, change branding → new values appear. Target: 6 new tests.
 
 ### Phase 6C — Reports & Exports
 - [x] Req 6C-1: Excel export engine — Build src/lib/exports/excel.ts using exceljs with styled headers, auto-width. Implement 6 exports (attendee list, travel roster, rooming list, transport plan, faculty responsibilities, attendance report), each scoped by eventId. API routes at /api/events/[eventId]/exports/[type]. Reports page (M47) with cards + download buttons. Tests: 3 per export type (correct rows, correct columns, no cross-event leak). Target: 18 new tests.
