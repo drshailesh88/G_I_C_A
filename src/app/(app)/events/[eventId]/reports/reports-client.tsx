@@ -14,6 +14,7 @@ const EXPORT_ICONS: Record<ExportType, string> = {
 
 export function ReportsClient({ eventId }: { eventId: string }) {
   const [downloading, setDownloading] = useState<ExportType | null>(null);
+  const [archiving, setArchiving] = useState(false);
 
   async function handleDownload(type: ExportType) {
     setDownloading(type);
@@ -39,6 +40,27 @@ export function ReportsClient({ eventId }: { eventId: string }) {
       alert(err instanceof Error ? err.message : 'Download failed');
     } finally {
       setDownloading(null);
+    }
+  }
+
+  async function handleArchiveDownload() {
+    setArchiving(true);
+    try {
+      const res = await fetch(`/api/events/${eventId}/exports/archive`, {
+        method: 'POST',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Archive generation failed' }));
+        throw new Error(err.error || 'Archive generation failed');
+      }
+
+      const data = await res.json();
+      // Open signed URL in new tab for download
+      window.open(data.archiveUrl, '_blank');
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Archive generation failed');
+    } finally {
+      setArchiving(false);
     }
   }
 
@@ -71,7 +93,7 @@ export function ReportsClient({ eventId }: { eventId: string }) {
               </div>
               <button
                 onClick={() => handleDownload(type)}
-                disabled={downloading !== null}
+                disabled={downloading !== null || archiving}
                 className="mt-4 w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {downloading === type ? 'Downloading...' : 'Download Excel'}
@@ -79,6 +101,27 @@ export function ReportsClient({ eventId }: { eventId: string }) {
             </div>
           ),
         )}
+
+        <div className="rounded-lg border bg-card p-6 shadow-sm border-dashed">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl" role="img" aria-label="Event Archive">
+              📦
+            </span>
+            <div className="flex-1">
+              <h3 className="font-semibold">Event Archive</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Complete ZIP with agenda, certificates, and notification log
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleArchiveDownload}
+            disabled={downloading !== null || archiving}
+            className="mt-4 w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {archiving ? 'Generating Archive...' : 'Download Archive ZIP'}
+          </button>
+        </div>
       </div>
     </div>
   );
