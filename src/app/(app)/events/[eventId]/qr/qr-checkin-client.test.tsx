@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import fs from 'node:fs';
 
 // Mock dependencies
 vi.mock('next/navigation', () => ({
@@ -20,6 +21,11 @@ vi.mock('@/lib/hooks/use-online-status', () => ({
 }));
 
 import { QrCheckInClient } from './qr-checkin-client';
+
+const componentSource = fs.readFileSync(
+  new URL('./qr-checkin-client.tsx', import.meta.url),
+  'utf8',
+);
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 
@@ -131,5 +137,20 @@ describe('QrCheckInClient', () => {
     });
     expect(html).toContain('Dr. Sharma');
     expect(html).toContain('Recent Check-ins');
+  });
+
+  // ── Codex adversarial tests ──
+
+  it('exposes the Manual Check-in toggle state with aria-pressed for assistive tech', () => {
+    expect(componentSource).toContain('aria-pressed');
+  });
+
+  it('announces connectivity changes through a live status region', () => {
+    expect(componentSource).toContain('role="status"');
+    expect(componentSource).toContain('aria-live="polite"');
+  });
+
+  it('formats recent check-in timestamps explicitly in IST', () => {
+    expect(componentSource).toContain("timeZone: 'Asia/Kolkata'");
   });
 });

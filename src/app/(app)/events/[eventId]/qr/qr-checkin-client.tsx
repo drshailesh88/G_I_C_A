@@ -156,6 +156,7 @@ export function QrCheckInClient({
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
             data-testid="manual-checkin-toggle"
+            aria-pressed={showManualSearch}
           >
             {showManualSearch ? 'Switch to QR Scanner' : 'Manual Check-in'}
           </button>
@@ -169,6 +170,8 @@ export function QrCheckInClient({
                   : 'bg-amber-100 text-amber-700'
               }`}
               data-testid="connectivity-badge"
+              role="status"
+              aria-live="polite"
             >
               <span
                 className={`h-2 w-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-amber-500 animate-pulse'}`}
@@ -244,7 +247,7 @@ function AttendanceLog({ records }: { records: AttendanceRecord[] }) {
                 </span>
               </td>
               <td className="px-3 py-1.5 text-gray-500 whitespace-nowrap">
-                {new Date(r.checkInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {new Date(r.checkInAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' })}
               </td>
             </tr>
           ))}
