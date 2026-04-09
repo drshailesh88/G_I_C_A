@@ -36,12 +36,26 @@ interface DashboardClientProps {
 
 const STORAGE_KEY = 'gem-dashboard-selected-event';
 
+function safeGetItem(key: string): string | null {
+  try {
+    return typeof window !== 'undefined' ? localStorage.getItem(key) : null;
+  } catch {
+    return null;
+  }
+}
+
+function safeSetItem(key: string, value: string): void {
+  try {
+    if (typeof window !== 'undefined') localStorage.setItem(key, value);
+  } catch {
+    // Silently ignore — incognito mode or storage full
+  }
+}
+
 function getInitialEventId(events: EventOption[]): string | null {
   if (events.length === 0) return null;
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored && events.some((e) => e.id === stored)) return stored;
-  }
+  const stored = safeGetItem(STORAGE_KEY);
+  if (stored && events.some((e) => e.id === stored)) return stored;
   return events[0].id;
 }
 
@@ -82,7 +96,7 @@ export function DashboardClient({ events }: DashboardClientProps) {
 
   function selectEvent(eventId: string) {
     setSelectedEventId(eventId);
-    localStorage.setItem(STORAGE_KEY, eventId);
+    safeSetItem(STORAGE_KEY, eventId);
     setDropdownOpen(false);
   }
 

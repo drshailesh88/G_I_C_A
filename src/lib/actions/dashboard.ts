@@ -2,7 +2,6 @@
 
 import { db } from '@/lib/db';
 import {
-  events,
   eventRegistrations,
   sessionAssignments,
   facultyInvites,
@@ -13,6 +12,7 @@ import {
 import { eq, and, count, sql, gte, inArray } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { eventIdSchema } from '@/lib/validations/event';
 
 export interface DashboardMetrics {
   registrations: { total: number; today: number };
@@ -30,6 +30,7 @@ export interface NeedsAttentionItem {
 }
 
 export async function getDashboardMetrics(eventId: string): Promise<DashboardMetrics> {
+  eventIdSchema.parse(eventId);
   await assertEventAccess(eventId, { requireWrite: false });
 
   const todayStart = new Date();
@@ -161,11 +162,11 @@ export async function getDashboardMetrics(eventId: string): Promise<DashboardMet
 }
 
 export async function getNeedsAttention(eventId: string): Promise<NeedsAttentionItem[]> {
+  eventIdSchema.parse(eventId);
   await assertEventAccess(eventId, { requireWrite: false });
 
-  const items: NeedsAttentionItem[] = [];
-
   return await db.transaction(async (tx) => {
+    const items: NeedsAttentionItem[] = [];
     // Red flags pending
     const [flagsPending] = await tx
       .select({ count: count() })
