@@ -80,6 +80,15 @@ function createMockDeps(overrides?: Partial<NotificationServiceDeps>): Notificat
     subject: 'Test Subject',
     body: '<p>Hello World</p>',
     variables: { name: 'Test' },
+    brandingVars: {
+      logoUrl: '',
+      headerImageUrl: '',
+      primaryColor: '#1E40AF',
+      secondaryColor: '#9333EA',
+      emailSenderName: '',
+      emailFooterText: '',
+      whatsappPrefix: '',
+    },
   });
 
   const mockLogRow = createStoredLog();
