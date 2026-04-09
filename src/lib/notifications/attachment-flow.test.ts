@@ -148,6 +148,49 @@ describe('Email attachment flow', () => {
       }),
     ).rejects.toThrow('R2 unavailable');
   });
+
+  it('sanitizes path traversal in fileName (Codex fix)', async () => {
+    const mockSend = getMockSend();
+    mockSend.mockResolvedValue({ data: { id: 'msg-5' }, error: null });
+
+    await resendEmailProvider.send({
+      eventId: 'evt-1',
+      toEmail: 'user@example.com',
+      subject: 'Malicious Filename',
+      htmlBody: '<p>Hello</p>',
+      attachments: [
+        { fileName: '../../etc/passwd', storageKey: 'certs/cert.pdf' },
+      ],
+    });
+
+    const callArgs = mockSend.mock.calls[0][0];
+    expect(callArgs.attachments[0].filename).not.toContain('..');
+    expect(callArgs.attachments[0].filename).not.toContain('/');
+  });
+
+  it('rejects empty storageKey (Codex fix)', async () => {
+    await expect(
+      resendEmailProvider.send({
+        eventId: 'evt-1',
+        toEmail: 'user@example.com',
+        subject: 'Bad Key',
+        htmlBody: '<p>Hello</p>',
+        attachments: [{ fileName: 'cert.pdf', storageKey: '' }],
+      }),
+    ).rejects.toThrow('Invalid attachment storageKey');
+  });
+
+  it('rejects empty fileName (Codex fix)', async () => {
+    await expect(
+      resendEmailProvider.send({
+        eventId: 'evt-1',
+        toEmail: 'user@example.com',
+        subject: 'Bad Name',
+        htmlBody: '<p>Hello</p>',
+        attachments: [{ fileName: '', storageKey: 'certs/cert.pdf' }],
+      }),
+    ).rejects.toThrow('fileName is required');
+  });
 });
 
 describe('WhatsApp attachment flow', () => {
@@ -303,5 +346,56 @@ describe('WhatsApp attachment flow', () => {
       (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
     );
     expect(callBody.mediatype).toBe('document');
+  });
+
+  it('warns when multiple attachments provided (Codex fix)', async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ key: { id: 'wa-msg-6' } }),
+    });
+    mockGetSignedUrl.mockResolvedValueOnce('https://r2.example.com/signed/first.pdf');
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await evolutionWhatsAppProvider.sendText({
+      eventId: 'evt-1',
+      toPhoneE164: '+919876543210',
+      body: 'Multiple files',
+      mediaAttachments: [
+        { fileName: 'cert1.pdf', storageKey: 'certs/1.pdf', contentType: 'application/pdf' },
+        { fileName: 'cert2.pdf', storageKey: 'certs/2.pdf', contentType: 'application/pdf' },
+        { fileName: 'cert3.pdf', storageKey: 'certs/3.pdf', contentType: 'application/pdf' },
+      ],
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('3 attachments'),
+    );
+    // Only 1 signed URL should be generated (first attachment only)
+    expect(mockGetSignedUrl).toHaveBeenCalledOnce();
+    warnSpy.mockRestore();
+  });
+
+  it('sanitizes path traversal in WhatsApp fileName (Codex fix)', async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      json: async () => ({ key: { id: 'wa-msg-7' } }),
+    });
+    mockGetSignedUrl.mockResolvedValueOnce('https://r2.example.com/signed/cert.pdf');
+
+    await evolutionWhatsAppProvider.sendText({
+      eventId: 'evt-1',
+      toPhoneE164: '+919876543210',
+      body: 'Malicious',
+      mediaAttachments: [
+        { fileName: '../../../tmp/evil.sh', storageKey: 'certs/cert.pdf' },
+      ],
+    });
+
+    const callBody = JSON.parse(
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body,
+    );
+    expect(callBody.fileName).not.toContain('..');
+    expect(callBody.fileName).not.toContain('/');
   });
 });

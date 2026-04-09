@@ -22,6 +22,32 @@ function getResendClient(): Resend {
   return new Resend(apiKey);
 }
 
+/** Sanitize a filename: extract basename, strip dangerous chars, enforce length */
+function sanitizeFileName(name: string): string {
+  // Strip null bytes
+  let safe = name.replace(/\0/g, '');
+  // Extract just the basename (last segment after any / or \)
+  const lastSlash = Math.max(safe.lastIndexOf('/'), safe.lastIndexOf('\\'));
+  if (lastSlash >= 0) safe = safe.slice(lastSlash + 1);
+  // Remove path traversal sequences
+  safe = safe.replace(/\.\./g, '');
+  // Remove leading dots to prevent hidden files
+  safe = safe.replace(/^\.+/, '');
+  // Enforce max length
+  if (safe.length > 255) safe = safe.slice(0, 255);
+  return safe || 'attachment';
+}
+
+/** Validate attachment descriptor before processing */
+function validateAttachment(att: AttachmentDescriptor): void {
+  if (!att.storageKey || att.storageKey.includes('\0')) {
+    throw new Error(`Invalid attachment storageKey: "${att.storageKey}"`);
+  }
+  if (!att.fileName) {
+    throw new Error('Attachment fileName is required');
+  }
+}
+
 /** Resolve AttachmentDescriptor[] to Resend attachment format via R2 signed URLs */
 async function resolveAttachments(
   attachments: AttachmentDescriptor[] | undefined,
@@ -32,9 +58,10 @@ async function resolveAttachments(
   const resolved: Array<{ filename: string; path: string }> = [];
 
   for (const att of attachments) {
+    validateAttachment(att);
     const signedUrl = await r2.getSignedUrl(att.storageKey, ATTACHMENT_URL_EXPIRY_SECONDS);
     resolved.push({
-      filename: att.fileName,
+      filename: sanitizeFileName(att.fileName),
       path: signedUrl,
     });
   }

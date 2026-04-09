@@ -80,6 +80,27 @@ export const evolutionWhatsAppProvider: WhatsAppProvider = {
   },
 };
 
+/** Sanitize a filename: extract basename, strip dangerous chars, enforce length */
+function sanitizeFileName(name: string): string {
+  let safe = name.replace(/\0/g, '');
+  const lastSlash = Math.max(safe.lastIndexOf('/'), safe.lastIndexOf('\\'));
+  if (lastSlash >= 0) safe = safe.slice(lastSlash + 1);
+  safe = safe.replace(/\.\./g, '');
+  safe = safe.replace(/^\.+/, '');
+  if (safe.length > 255) safe = safe.slice(0, 255);
+  return safe || 'attachment';
+}
+
+/** Validate attachment before sending */
+function validateAttachment(att: AttachmentDescriptor): void {
+  if (!att.storageKey || att.storageKey.includes('\0')) {
+    throw new Error(`Invalid attachment storageKey: "${att.storageKey}"`);
+  }
+  if (!att.fileName) {
+    throw new Error('Attachment fileName is required');
+  }
+}
+
 /** Send a media message via Evolution API with R2 signed URL */
 async function sendMediaMessage(
   baseUrl: string,
@@ -90,8 +111,15 @@ async function sendMediaMessage(
 ): Promise<ProviderSendResult> {
   const r2 = createR2Provider();
 
-  // Send the first attachment (Evolution API sends one media per message)
+  // WhatsApp sends one media per message — warn if multiple
+  if (attachments.length > 1) {
+    console.warn(
+      `[whatsapp] ${attachments.length} attachments provided, only first will be sent. WhatsApp supports one media per message.`,
+    );
+  }
+
   const att = attachments[0];
+  validateAttachment(att);
   const signedUrl = await r2.getSignedUrl(att.storageKey, ATTACHMENT_URL_EXPIRY_SECONDS);
   const mediaType = getMediaType(att.contentType);
 
@@ -106,7 +134,7 @@ async function sendMediaMessage(
       mediatype: mediaType,
       media: signedUrl,
       caption,
-      fileName: att.fileName,
+      fileName: sanitizeFileName(att.fileName),
     }),
   });
 
