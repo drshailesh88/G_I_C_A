@@ -6,9 +6,9 @@
   "requirements_done": 1,
   "requirements_stuck": 0,
   "requirements_remaining": 0,
-  "test_results": { "unit_pass": 1248, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
+  "test_results": { "unit_pass": 1252, "unit_fail": 0, "e2e_pass": 0, "e2e_fail": 0 },
   "worktree_branch": "",
-  "last_updated": "2026-04-09T21:00:00Z",
+  "last_updated": "2026-04-09T21:15:00Z",
   "phase": "8B",
-  "notes": "8B-4 COMPLETE. 8 new tests (target 8). All 1248 tests passing. Codex adversarial review: 7 findings — all 7 fixed. Fixes: (1) 48h cron window for reliable 24h-before coverage, (2) per-event error isolation in cron, (3) transport CSV uses 3-query pattern matching existing exports, (4) removed dead manualEmergencyKitFn, (5) write access required on API route, (6) Zod validation on eventId, (7) cancelled records filtered from logistics CSVs."
+  "notes": "8B-4 COMPLETE. 8 new tests (target 8). All 1252 tests passing. Codex review round 1: 7 findings, all fixed. Round 2: 3 remaining findings, all fixed. Total fixes: (1) 48h cron window, (2) per-event error isolation, (3) transport CSV 3-query pattern with batch→vehicle→passenger hierarchy, (4) removed dead manualEmergencyKitFn, (5) write access on API route, (6) Zod validation, (7) cancelled records filtered, (8) read-only UX disabled button, (9) deterministic cron storage key to prevent duplicate backups, (10) empty vehicles now appear in transport CSV."
 }

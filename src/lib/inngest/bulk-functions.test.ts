@@ -40,12 +40,27 @@ vi.mock('./client', () => ({
 
 vi.mock('@/lib/db', () => ({ db: mockDb }));
 vi.mock('@/lib/db/schema', () => ({
-  issuedCertificates: { id: 'id', eventId: 'eid', personId: 'pid', certificateType: 'ct', certificateNumber: 'cn', storageKey: 'sk', status: 's' },
+  issuedCertificates: {
+    id: 'id',
+    eventId: 'eid',
+    personId: 'pid',
+    templateId: 'tid',
+    templateVersionNo: 'tvn',
+    certificateType: 'ct',
+    certificateNumber: 'cn',
+    supersededById: 'sbi',
+    supersedesId: 'sid',
+    revokedAt: 'ra',
+    revokeReason: 'rr',
+    storageKey: 'sk',
+    status: 's',
+  },
   certificateTemplates: { id: 'id', eventId: 'eid', status: 's' },
   people: { id: 'id', fullName: 'fn', email: 'em', phoneE164: 'ph', designation: 'des' },
   eventRegistrations: { eventId: 'eid', personId: 'pid', status: 's', category: 'cat' },
   sessionAssignments: { eventId: 'eid', personId: 'pid' },
   attendanceRecords: { eventId: 'eid', personId: 'pid' },
+  eventPeople: { eventId: 'eid', personId: 'pid' },
 }));
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn(), and: vi.fn(), inArray: vi.fn(), relations: vi.fn(),
@@ -66,6 +81,17 @@ vi.mock('@/lib/certificates/storage', () => ({
   buildCertificateStorageKey: vi.fn((eid: string, ct: string, cid: string) => `certs/${eid}/${ct}/${cid}.pdf`),
   createR2Provider: vi.fn(),
 }));
+vi.mock('@pdfme/generator', () => ({
+  generate: vi.fn().mockResolvedValue(Uint8Array.from([1, 2, 3, 4])),
+}));
+vi.mock('@pdfme/schemas', () => ({
+  text: {},
+  image: {},
+  line: {},
+  rectangle: {},
+  ellipse: {},
+  barcodes: {},
+}));
 vi.mock('@/lib/notifications/send', () => ({
   sendNotification: (...args: unknown[]) => mockSendNotification(...args),
 }));
@@ -77,15 +103,15 @@ vi.mock('@/lib/exports/archive', () => ({
 }));
 
 const mockStorageProvider = {
-  upload: vi.fn().mockResolvedValue(undefined),
+  upload: vi.fn(async (storageKey: string, data: Buffer) => ({
+    storageKey,
+    fileSizeBytes: data.length,
+    fileChecksumSha256: 'sha256-test',
+  })),
   getSignedUrl: vi.fn().mockResolvedValue('https://signed.url/archive.zip'),
+  delete: vi.fn().mockResolvedValue(undefined),
   uploadStream: null,
 };
-
-vi.mock('@/lib/certificates/storage', () => ({
-  buildCertificateStorageKey: vi.fn((eid: string, ct: string, cid: string) => `certs/${eid}/${ct}/${cid}.pdf`),
-  createR2Provider: vi.fn(() => mockStorageProvider),
-}));
 
 // Mock archiver for archive test — returns a fake archive object
 vi.mock('archiver', () => ({
@@ -101,6 +127,9 @@ vi.mock('archiver', () => ({
 }));
 
 import { bulkInngestFunctions, chunk } from './bulk-functions';
+import * as issuanceUtils from '@/lib/certificates/issuance-utils';
+import * as storageModule from '@/lib/certificates/storage';
+import * as pdfGenerator from '@pdfme/generator';
 
 // ── Helpers ────────────────────────────────────────────────
 
@@ -174,6 +203,7 @@ function createMockStep() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(storageModule.createR2Provider).mockReturnValue(mockStorageProvider as never);
 });
 
 // ── Test 1: Function registration ──────────────────────────
@@ -240,6 +270,7 @@ describe('bulkCertificateGenerateFn handler', () => {
       };
       return fn(tx);
     });
+    mockDb.update.mockImplementation(() => chainedUpdate());
 
     const result = await handler({
       event: {
@@ -266,6 +297,8 @@ describe('bulkCertificateGenerateFn handler', () => {
     const res = result as { issued: number; certificateIds: string[] };
     expect(res.issued).toBe(100);
     expect(res.certificateIds).toHaveLength(100);
+    expect(vi.mocked(pdfGenerator.generate)).toHaveBeenCalledTimes(100);
+    expect(mockStorageProvider.upload).toHaveBeenCalledTimes(100);
   });
 
   it('persists batch 1 even when batch 2 fails (step isolation)', async () => {
@@ -303,6 +336,7 @@ describe('bulkCertificateGenerateFn handler', () => {
       };
       return fn(tx);
     });
+    mockDb.update.mockImplementation(() => chainedUpdate());
 
     await expect(
       handler({
@@ -324,6 +358,207 @@ describe('bulkCertificateGenerateFn handler', () => {
     expect(completedSteps.some(s => s.name === 'generate-batch-1')).toBe(true);
     // Inngest retries the function — batch 1's step.run is memoized (already completed),
     // so only batch 2 re-executes on retry. This is Inngest's core value proposition.
+  });
+
+  it('renders, uploads, and persists PDF metadata for generated certificates', async () => {
+    const handler = getHandler();
+    const step = createMockStep();
+    const txInsert = vi.fn().mockImplementation(() => chainedInsert([{ id: 'cert-1' }]));
+
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      if (selectCallCount === 1) return chainedSelect([mockTemplate]);
+      if (selectCallCount === 2) return chainedSelect(makeRecipients(1));
+      if (selectCallCount === 3) return chainedSelect([]);
+      if (selectCallCount === 4) return chainedSelect([]);
+      if (selectCallCount === 5) return chainedSelect([]);
+      if (selectCallCount === 6) return chainedSelect([]);
+      return chainedSelect([]);
+    });
+
+    mockDb.transaction.mockImplementation(async (fn: any) => {
+      const tx = {
+        insert: txInsert,
+        update: vi.fn().mockImplementation(() => chainedUpdate()),
+      };
+      return fn(tx);
+    });
+    mockDb.update.mockImplementation(() => chainedUpdate());
+
+    await handler({
+      event: {
+        data: {
+          eventId: 'evt-1',
+          userId: 'user-1',
+          templateId: 'tpl-1',
+          recipientType: 'all_delegates',
+          eligibilityBasisType: 'registration',
+        },
+      },
+      step,
+    });
+
+    expect(vi.mocked(pdfGenerator.generate)).toHaveBeenCalledTimes(1);
+    expect(mockStorageProvider.upload).toHaveBeenCalledWith(
+      expect.stringContaining('certs/evt-1/delegate_attendance/'),
+      expect.any(Buffer),
+      'application/pdf',
+    );
+    expect(mockDb.update).not.toHaveBeenCalled();
+    expect(txInsert).toHaveBeenCalled();
+  });
+
+  it('reuses the current certificate on retry and uploads the missing PDF without inserting a duplicate row', async () => {
+    const handler = getHandler();
+    const step = createMockStep();
+    const existingCert = {
+      id: 'cert-existing',
+      eventId: 'evt-1',
+      personId: 'person-1',
+      templateId: 'tpl-1',
+      templateVersionNo: 1,
+      certificateType: 'delegate_attendance',
+      certificateNumber: 'GEM-00042',
+      status: 'issued',
+      supersededById: null,
+      supersedesId: null,
+      revokedAt: null,
+      revokeReason: null,
+      storageKey: 'certs/evt-1/delegate_attendance/cert-existing.pdf',
+    };
+
+    vi.mocked(issuanceUtils.findCurrentCertificate).mockReturnValueOnce(existingCert);
+
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      if (selectCallCount === 1) return chainedSelect([mockTemplate]);
+      if (selectCallCount === 2) return chainedSelect(makeRecipients(1));
+      if (selectCallCount === 3) return chainedSelect([]);
+      if (selectCallCount === 4) return chainedSelect([{ certificateNumber: 'GEM-00042' }]);
+      if (selectCallCount === 5) return chainedSelect([existingCert]);
+      if (selectCallCount === 6) return chainedSelect([{ certificateNumber: 'GEM-00042' }]);
+      return chainedSelect([]);
+    });
+
+    const txInsert = vi.fn().mockImplementation(() => chainedInsert([{ id: 'unexpected' }]));
+    mockDb.transaction.mockImplementation(async (fn: any) => {
+      const tx = {
+        insert: txInsert,
+        update: vi.fn().mockImplementation(() => chainedUpdate()),
+      };
+      return fn(tx);
+    });
+    mockDb.update.mockImplementation(() => chainedUpdate());
+
+    const result = await handler({
+      event: {
+        data: {
+          eventId: 'evt-1',
+          userId: 'user-1',
+          templateId: 'tpl-1',
+          recipientType: 'all_delegates',
+          eligibilityBasisType: 'registration',
+        },
+      },
+      step,
+    });
+
+    const res = result as { certificateIds: string[] };
+    expect(txInsert).not.toHaveBeenCalled();
+    expect(res.certificateIds).toEqual(['cert-existing']);
+    expect(mockStorageProvider.upload).toHaveBeenCalledWith(
+      'certs/evt-1/delegate_attendance/cert-existing.pdf',
+      expect.any(Buffer),
+      'application/pdf',
+    );
+  });
+
+  it('does not insert new certificate rows when PDF rendering fails', async () => {
+    const handler = getHandler();
+    const step = createMockStep();
+    const renderError = new Error('template render failed');
+    vi.mocked(pdfGenerator.generate).mockRejectedValueOnce(renderError);
+
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      if (selectCallCount === 1) return chainedSelect([mockTemplate]);
+      if (selectCallCount === 2) return chainedSelect(makeRecipients(1));
+      if (selectCallCount === 3) return chainedSelect([]);
+      if (selectCallCount === 4) return chainedSelect([]);
+      if (selectCallCount === 5) return chainedSelect([]);
+      if (selectCallCount === 6) return chainedSelect([]);
+      return chainedSelect([]);
+    });
+
+    const txInsert = vi.fn().mockImplementation(() => chainedInsert([{ id: 'unexpected' }]));
+    mockDb.transaction.mockImplementation(async (fn: any) => {
+      const tx = {
+        insert: txInsert,
+        update: vi.fn().mockImplementation(() => chainedUpdate()),
+      };
+      return fn(tx);
+    });
+
+    await expect(
+      handler({
+        event: {
+          data: {
+            eventId: 'evt-1',
+            userId: 'user-1',
+            templateId: 'tpl-1',
+            recipientType: 'all_delegates',
+            eligibilityBasisType: 'registration',
+          },
+        },
+        step,
+      }),
+    ).rejects.toThrow('template render failed');
+
+    expect(mockStorageProvider.upload).not.toHaveBeenCalled();
+    expect(txInsert).not.toHaveBeenCalled();
+    expect(mockStorageProvider.delete).not.toHaveBeenCalled();
+  });
+
+  it('cleans up uploaded PDFs when the DB transaction fails after upload', async () => {
+    const handler = getHandler();
+    const step = createMockStep();
+
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      if (selectCallCount === 1) return chainedSelect([mockTemplate]);
+      if (selectCallCount === 2) return chainedSelect(makeRecipients(1));
+      if (selectCallCount === 3) return chainedSelect([]);
+      if (selectCallCount === 4) return chainedSelect([]);
+      if (selectCallCount === 5) return chainedSelect([]);
+      if (selectCallCount === 6) return chainedSelect([]);
+      return chainedSelect([]);
+    });
+
+    mockDb.transaction.mockRejectedValueOnce(new Error('insert failed'));
+
+    await expect(
+      handler({
+        event: {
+          data: {
+            eventId: 'evt-1',
+            userId: 'user-1',
+            templateId: 'tpl-1',
+            recipientType: 'all_delegates',
+            eligibilityBasisType: 'registration',
+          },
+        },
+        step,
+      }),
+    ).rejects.toThrow('insert failed');
+
+    expect(mockStorageProvider.upload).toHaveBeenCalledTimes(1);
+    expect(mockStorageProvider.delete).toHaveBeenCalledWith(
+      expect.stringContaining('certs/evt-1/delegate_attendance/'),
+    );
   });
 });
 

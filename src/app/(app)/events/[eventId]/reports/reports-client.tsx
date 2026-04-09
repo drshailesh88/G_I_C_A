@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { EXPORT_TYPES, type ExportType } from '@/lib/exports/types';
+import { useRole } from '@/hooks/use-role';
 
 const EXPORT_ICONS: Record<ExportType, string> = {
   'attendee-list': '👥',
@@ -13,6 +14,7 @@ const EXPORT_ICONS: Record<ExportType, string> = {
 };
 
 export function ReportsClient({ eventId }: { eventId: string }) {
+  const { isReadOnly } = useRole();
   const [downloading, setDownloading] = useState<ExportType | null>(null);
   const [archiving, setArchiving] = useState(false);
   const [generatingKit, setGeneratingKit] = useState(false);
@@ -158,8 +160,9 @@ export function ReportsClient({ eventId }: { eventId: string }) {
           </div>
           <button
             onClick={handleEmergencyKit}
-            disabled={downloading !== null || archiving || generatingKit}
+            disabled={isReadOnly || downloading !== null || archiving || generatingKit}
             className="mt-4 w-full rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={isReadOnly ? 'Write access required to generate emergency kit' : undefined}
           >
             {generatingKit ? 'Generating Kit...' : 'Download Emergency Kit'}
           </button>
