@@ -97,8 +97,8 @@ export async function handleDomainEvent(
         continue;
       }
 
-      // Build idempotency key
-      const idempotencyKey = buildIdempotencyKey({
+      // Build idempotency key — include trigger.id to prevent collisions between triggers
+      const baseKey = buildIdempotencyKey({
         scope: (trigger.idempotencyScope as string) ?? 'per_person_per_trigger_entity_per_channel',
         eventId,
         personId,
@@ -106,8 +106,10 @@ export async function handleDomainEvent(
         channel: trigger.channel as string,
         triggerEventType,
       });
+      const idempotencyKey = `${baseKey}|t:${trigger.id}`;
 
-      // Send the notification
+      // Send the notification (filter sensitive fields from payload)
+      const variables = sanitizePayloadForVariables(payload);
       await sendNotification({
         eventId,
         personId,
@@ -119,7 +121,7 @@ export async function handleDomainEvent(
         sendMode: 'automatic',
         idempotencyKey,
         variables: {
-          ...payload,
+          ...variables,
           recipientEmail: payload.recipientEmail ?? null,
           recipientPhoneE164: payload.recipientPhoneE164 ?? null,
         },
@@ -151,8 +153,26 @@ function resolveRecipientPersonId(
     case 'trigger_person':
       return (payload.personId as string) ?? null;
     default:
-      // Future: session_faculty, event_faculty, ops_team
-      console.warn(`[automation] unsupported recipientResolution: ${resolution}`);
-      return (payload.personId as string) ?? null;
+      // Future: session_faculty, event_faculty, ops_team — skip until implemented
+      console.warn(`[automation] unsupported recipientResolution: ${resolution} — skipping`);
+      return null;
   }
+}
+
+/** Strip sensitive fields from payload before passing as template variables */
+const SENSITIVE_KEYS = new Set([
+  'accessToken', 'refreshToken', 'passwordResetToken', 'apiKey',
+  'secret', 'password', 'token', 'sessionToken', 'confirmationToken',
+]);
+
+function sanitizePayloadForVariables(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    if (!SENSITIVE_KEYS.has(key)) {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
 }

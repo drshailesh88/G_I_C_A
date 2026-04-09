@@ -227,4 +227,73 @@ describe('handleDomainEvent → real notification', () => {
     expect(mockSendNotification).not.toHaveBeenCalled();
     warnSpy.mockRestore();
   });
+
+  it('strips sensitive fields from payload variables (Codex fix)', async () => {
+    mockGetActiveTriggersForEventType.mockResolvedValue([activeTrigger]);
+
+    await handleDomainEvent({
+      eventId,
+      triggerEventType: 'conference/travel.saved',
+      actor,
+      payload: {
+        personId: 'person-1',
+        travelRecordId: 'tr-1',
+        accessToken: 'super-secret',
+        passwordResetToken: 'reset-secret',
+        recipientEmail: 'test@test.com',
+      },
+    });
+
+    const vars = mockSendNotification.mock.calls[0][0].variables;
+    expect(vars.personId).toBe('person-1');
+    expect(vars.travelRecordId).toBe('tr-1');
+    expect(vars.recipientEmail).toBe('test@test.com');
+    expect(vars).not.toHaveProperty('accessToken');
+    expect(vars).not.toHaveProperty('passwordResetToken');
+  });
+
+  it('includes trigger ID in idempotency key to prevent collisions (Codex fix)', async () => {
+    const trigger2 = {
+      ...activeTrigger,
+      trigger: { ...activeTrigger.trigger, id: 'trig-2', templateId: 'tpl-2' },
+      template: { ...activeTrigger.template, id: 'tpl-2', templateKey: 'travel_update' },
+    };
+    mockGetActiveTriggersForEventType.mockResolvedValue([activeTrigger, trigger2]);
+
+    await handleDomainEvent({
+      eventId,
+      triggerEventType: 'conference/travel.saved',
+      triggerEntityType: 'travel_record',
+      triggerEntityId: 'tr-1',
+      actor,
+      payload: { personId: 'person-1' },
+    });
+
+    expect(mockSendNotification).toHaveBeenCalledTimes(2);
+    const key1 = mockSendNotification.mock.calls[0][0].idempotencyKey;
+    const key2 = mockSendNotification.mock.calls[1][0].idempotencyKey;
+    expect(key1).not.toBe(key2);
+    expect(key1).toContain('trig-1');
+    expect(key2).toContain('trig-2');
+  });
+
+  it('skips unsupported recipientResolution (Codex fix)', async () => {
+    const opsTrigger = {
+      ...activeTrigger,
+      trigger: { ...activeTrigger.trigger, recipientResolution: 'ops_team' },
+    };
+    mockGetActiveTriggersForEventType.mockResolvedValue([opsTrigger]);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await handleDomainEvent({
+      eventId,
+      triggerEventType: 'conference/travel.saved',
+      actor,
+      payload: { personId: 'person-1' },
+    });
+
+    expect(result.triggersSkipped).toBe(1);
+    expect(mockSendNotification).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
 });
