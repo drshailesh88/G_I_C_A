@@ -41,7 +41,8 @@ export type ArchiveResult = {
 
 export function buildArchiveStorageKey(eventId: string): string {
   const timestamp = Date.now();
-  return `events/${eventId}/archives/archive-${timestamp}.zip`;
+  const random = Math.random().toString(36).slice(2, 10);
+  return `events/${eventId}/archives/archive-${timestamp}-${random}.zip`;
 }
 
 // ── 1. Agenda Excel Buffer ────────────────────────────────────
@@ -235,8 +236,12 @@ export async function generateNotificationLogCsv(eventId: string): Promise<Buffe
 }
 
 function escapeCsvField(value: string | null | undefined): string {
-  const str = value ?? '';
-  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+  let str = value ?? '';
+  // Neutralize CSV formula injection: prefix dangerous first chars with a tab
+  if (str.length > 0 && '=+-@'.includes(str[0])) {
+    str = `\t${str}`;
+  }
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\t')) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
@@ -359,8 +364,24 @@ export async function generateEventArchive(options: ArchiveOptions): Promise<Arc
 }
 
 function sanitizeFileName(name: string): string {
-  return name
+  let sanitized = name
+    // Strip null bytes and control characters
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    // Replace path separators and dangerous chars
     .replace(/[/\\:*?"<>|]/g, '_')
+    // Strip leading dots (after trimming spaces)
+    .trim()
     .replace(/^\.+/, '')
-    .trim() || 'certificate.pdf';
+    // Collapse any remaining ".." sequences (defense-in-depth)
+    .replace(/\.\./g, '_')
+    .trim();
+
+  // Truncate to 200 chars max (preserving extension)
+  if (sanitized.length > 200) {
+    const dotIdx = sanitized.lastIndexOf('.');
+    const ext = dotIdx > 0 ? sanitized.slice(dotIdx) : '';
+    sanitized = sanitized.slice(0, 200 - ext.length) + ext;
+  }
+
+  return sanitized || 'certificate.pdf';
 }

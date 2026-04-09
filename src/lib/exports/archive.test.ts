@@ -127,7 +127,7 @@ describe('Per-Event PDF Archive (6C-2)', () => {
   describe('buildArchiveStorageKey', () => {
     it('produces correct key format', () => {
       const key = buildArchiveStorageKey('evt-123');
-      expect(key).toMatch(/^events\/evt-123\/archives\/archive-\d+\.zip$/);
+      expect(key).toMatch(/^events\/evt-123\/archives\/archive-\d+-[a-z0-9]+\.zip$/);
     });
   });
 
@@ -283,7 +283,7 @@ describe('Per-Event PDF Archive (6C-2)', () => {
         fetchCertificatePdf: fetchPdf,
       });
 
-      expect(result.archiveStorageKey).toMatch(/^events\/event-aaa-aaa\/archives\/archive-\d+\.zip$/);
+      expect(result.archiveStorageKey).toMatch(/^events\/event-aaa-aaa\/archives\/archive-\d+-[a-z0-9]+\.zip$/);
       expect(result.archiveUrl).toContain('stub-r2.example.com');
       expect(result.fileCount).toBe(3); // agenda + csv + 1 cert PDF
 
@@ -369,6 +369,192 @@ describe('Per-Event PDF Archive (6C-2)', () => {
         (args) => args[1] === EVENT_ID,
       );
       expect(eventScopeCalls.length).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  //  ADVERSARIAL TESTS — bugs found during adversarial review
+  // ═══════════════════════════════════════════════════════════════
+
+  describe('ADVERSARIAL: CSV formula injection', () => {
+    it('should neutralize formula-injection payloads starting with =, +, -, @', async () => {
+      // CSV injection: when a cell value starts with =, +, -, or @, Excel/Sheets
+      // will interpret it as a formula. escapeCsvField does NOT sanitize these.
+      setupDbReturn([
+        {
+          fullName: '=HYPERLINK("http://evil.com","Click")',
+          recipientEmail: '+cmd|/C calc|',
+          recipientPhone: '-1+1',
+          channel: '@SUM(1+1)',
+          provider: 'resend',
+          status: 'sent',
+          templateKey: 'test',
+          triggerType: null,
+          sendMode: 'manual',
+          renderedSubject: '=1+1',
+          attempts: 1,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          queuedAt: new Date('2026-04-10T10:00:00Z'),
+          sentAt: new Date('2026-04-10T10:00:01Z'),
+          deliveredAt: null,
+          failedAt: null,
+        },
+      ]);
+
+      const buffer = await generateNotificationLogCsv(EVENT_ID);
+      const csv = buffer.toString('utf-8');
+      const dataLine = csv.split('\n')[1];
+
+      // None of the fields should start a formula when opened in Excel.
+      // The standard mitigation is to prefix with a single quote or tab, or
+      // wrap in quotes with a leading space. At minimum the raw = / + / - / @
+      // must NOT appear as the first character of an unquoted field.
+      // Current code does NOT do this — this test should FAIL.
+      const fields = dataLine.split(',');
+      for (const field of fields) {
+        const unquoted = field.replace(/^"/, '').replace(/"$/, '');
+        expect(
+          unquoted.startsWith('=') ||
+          unquoted.startsWith('+') ||
+          unquoted.startsWith('-') ||
+          unquoted.startsWith('@'),
+          `Field "${field}" is vulnerable to CSV formula injection`,
+        ).toBe(false);
+      }
+    });
+  });
+
+  describe('ADVERSARIAL: sanitizeFileName path traversal', () => {
+    it('should reject path traversal via space-padded dot segments', async () => {
+      // sanitizeFileName strips leading dots and /\\, but " ../" or "\t../"
+      // can bypass it. The regex only handles [/\\:*?"<>|] and ^\.+ — it does
+      // NOT collapse spaces before dots, so " ../../../etc/passwd" survives.
+      setupDbReturn(
+        [{ name: 'Event', startDate: new Date(), endDate: new Date(), venueName: null }],
+        [],
+        [{ storageKey: 'certs/evil.pdf', fileName: ' ../../../etc/passwd' }],
+        [],
+      );
+
+      const storage = createStubStorage();
+      const fetchPdf = vi.fn(async () => Buffer.from('pdf'));
+      const result = await generateEventArchive({
+        eventId: EVENT_ID,
+        storageProvider: storage,
+        fetchCertificatePdf: fetchPdf,
+      });
+
+      // The archiver mock captures entries. Retrieve the appended name.
+      const archiver = (await import('archiver')).default;
+      const lastArchive = (archiver as any).mock.results.slice(-1)[0]?.value;
+      const certEntry = lastArchive?._entries?.find(
+        (e: any) => e.opts.name.startsWith('certificates/'),
+      );
+      const entryName: string = certEntry?.opts?.name ?? '';
+
+      // The sanitized name should NOT contain ".." anywhere
+      expect(entryName).not.toContain('..');
+      // And should not navigate above the certificates/ directory
+      expect(entryName.startsWith('certificates/')).toBe(true);
+    });
+
+    it('should strip null bytes from file names', async () => {
+      setupDbReturn(
+        [{ name: 'Event', startDate: new Date(), endDate: new Date(), venueName: null }],
+        [],
+        [{ storageKey: 'certs/null.pdf', fileName: 'cert\x00.pdf' }],
+        [],
+      );
+
+      const storage = createStubStorage();
+      const fetchPdf = vi.fn(async () => Buffer.from('pdf'));
+      await generateEventArchive({
+        eventId: EVENT_ID,
+        storageProvider: storage,
+        fetchCertificatePdf: fetchPdf,
+      });
+
+      const archiver = (await import('archiver')).default;
+      const lastArchive = (archiver as any).mock.results.slice(-1)[0]?.value;
+      const certEntry = lastArchive?._entries?.find(
+        (e: any) => e.opts.name.startsWith('certificates/'),
+      );
+      const entryName: string = certEntry?.opts?.name ?? '';
+
+      // Null bytes must be stripped
+      expect(entryName).not.toContain('\x00');
+    });
+  });
+
+  describe('ADVERSARIAL: archive key collision', () => {
+    it('should produce unique keys for rapid consecutive calls', () => {
+      // Date.now() has millisecond resolution. Two calls within the same
+      // millisecond will produce the same key, causing one archive to
+      // silently overwrite the other in R2.
+      const keys = new Set<string>();
+      for (let i = 0; i < 100; i++) {
+        keys.add(buildArchiveStorageKey('evt-collision'));
+      }
+      // If using Date.now(), many of these will collide in a tight loop.
+      // A robust implementation uses crypto.randomUUID() or similar.
+      expect(keys.size).toBe(100);
+    });
+  });
+
+  describe('ADVERSARIAL: getSignedUrl failure after upload', () => {
+    it('should propagate error when getSignedUrl fails after successful upload', async () => {
+      setupDbReturn(
+        [{ name: 'Event', startDate: new Date(), endDate: new Date(), venueName: null }],
+        [],
+        [],
+        [],
+      );
+
+      const storage = createStubStorage();
+      storage.getSignedUrl.mockRejectedValueOnce(new Error('R2 signing failed'));
+
+      // The archive was uploaded but we can't get a URL. The function should
+      // throw a clear error (currently it does propagate, but let's verify
+      // the caller gets a useful error message, not a generic crash).
+      await expect(
+        generateEventArchive({
+          eventId: EVENT_ID,
+          storageProvider: storage,
+          fetchCertificatePdf: vi.fn(),
+        }),
+      ).rejects.toThrow('R2 signing failed');
+    });
+  });
+
+  describe('ADVERSARIAL: extremely long file names', () => {
+    it('should truncate file names that exceed reasonable length', async () => {
+      const longName = 'A'.repeat(300) + '.pdf';
+      setupDbReturn(
+        [{ name: 'Event', startDate: new Date(), endDate: new Date(), venueName: null }],
+        [],
+        [{ storageKey: 'certs/long.pdf', fileName: longName }],
+        [],
+      );
+
+      const storage = createStubStorage();
+      const fetchPdf = vi.fn(async () => Buffer.from('pdf'));
+      await generateEventArchive({
+        eventId: EVENT_ID,
+        storageProvider: storage,
+        fetchCertificatePdf: fetchPdf,
+      });
+
+      const archiver = (await import('archiver')).default;
+      const lastArchive = (archiver as any).mock.results.slice(-1)[0]?.value;
+      const certEntry = lastArchive?._entries?.find(
+        (e: any) => e.opts.name.startsWith('certificates/'),
+      );
+      const entryName: string = certEntry?.opts?.name ?? '';
+
+      // ZIP entry names should be under 255 characters (common filesystem limit)
+      // "certificates/" prefix is 14 chars, so the filename portion should be <= 241
+      expect(entryName.length).toBeLessThanOrEqual(255);
     });
   });
 });
