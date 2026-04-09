@@ -17,6 +17,7 @@ import {
   handleAccommodationUpdated,
   handleAccommodationCancelled,
 } from '../cascade/handlers/accommodation-cascade';
+import { bulkInngestFunctions } from './bulk-functions';
 
 /** Travel updated → flag accommodation + transport, notify delegate */
 export const travelUpdatedFn = inngest.createFunction(
@@ -88,4 +89,5 @@ export const inngestFunctions = [
   travelCancelledFn,
   accommodationUpdatedFn,
   accommodationCancelledFn,
+  ...bulkInngestFunctions,
 ];

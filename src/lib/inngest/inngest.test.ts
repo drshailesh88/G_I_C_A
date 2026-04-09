@@ -136,17 +136,22 @@ describe('Inngest cascade integration', () => {
     consoleSpy.mockRestore();
   });
 
-  // Test 4: All 4 cascade functions are registered
-  it('registers all 4 cascade Inngest functions', () => {
-    expect(inngestFunctions).toHaveLength(4);
+  // Test 4: All 7 Inngest functions are registered (4 cascade + 3 bulk)
+  it('registers all 7 Inngest functions', () => {
+    expect(inngestFunctions).toHaveLength(7);
 
     // Since createFunction is mocked, we get { _config, _handler } objects
     const configs = inngestFunctions.map((fn: unknown) => (fn as { _config: { id: string } })._config);
     const ids = configs.map(c => c.id);
+    // Cascade functions
     expect(ids).toContain('cascade-travel-updated');
     expect(ids).toContain('cascade-travel-cancelled');
     expect(ids).toContain('cascade-accommodation-updated');
     expect(ids).toContain('cascade-accommodation-cancelled');
+    // Bulk operation functions (8A-2)
+    expect(ids).toContain('bulk-certificate-generate');
+    expect(ids).toContain('bulk-certificate-notify');
+    expect(ids).toContain('bulk-archive-generate');
   });
 
   // Test 5: All functions configured with 3 retries

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockDb, mockRevalidatePath, mockAssertEventAccess, mockSendNotification } = vi.hoisted(() => ({
+const { mockDb, mockAssertEventAccess, mockInngestSend, mockIsCertificateGenerationEnabled } = vi.hoisted(() => ({
   mockDb: {
     select: vi.fn(),
     selectDistinctOn: vi.fn(),
@@ -8,9 +8,9 @@ const { mockDb, mockRevalidatePath, mockAssertEventAccess, mockSendNotification 
     update: vi.fn(),
     transaction: vi.fn(),
   },
-  mockRevalidatePath: vi.fn(),
   mockAssertEventAccess: vi.fn(),
-  mockSendNotification: vi.fn(),
+  mockInngestSend: vi.fn().mockResolvedValue({ ids: ['evt-1'] }),
+  mockIsCertificateGenerationEnabled: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -22,7 +22,7 @@ vi.mock('@/lib/db', () => ({
 }));
 
 vi.mock('next/cache', () => ({
-  revalidatePath: mockRevalidatePath,
+  revalidatePath: vi.fn(),
 }));
 
 vi.mock('@/lib/db/with-event-scope', () => ({
@@ -34,7 +34,17 @@ vi.mock('@/lib/auth/event-access', () => ({
 }));
 
 vi.mock('@/lib/notifications/send', () => ({
-  sendNotification: mockSendNotification,
+  sendNotification: vi.fn().mockResolvedValue({ logId: 'log-1', status: 'sent' }),
+}));
+
+vi.mock('@/lib/inngest/client', () => ({
+  inngest: {
+    send: (...args: unknown[]) => mockInngestSend(...args),
+  },
+}));
+
+vi.mock('@/lib/flags', () => ({
+  isCertificateGenerationEnabled: () => mockIsCertificateGenerationEnabled(),
 }));
 
 import {
@@ -72,25 +82,6 @@ function chainedSelectDistinctOn(rows: unknown[]) {
   return chain;
 }
 
-function chainedInsert(rows: unknown[]) {
-  const chain: any = {
-    values: vi.fn().mockImplementation(() => chain),
-    returning: vi.fn().mockResolvedValue(rows),
-    then: (resolve: (val: unknown) => void) => Promise.resolve(rows).then(resolve),
-  };
-  return chain;
-}
-
-function chainedUpdate() {
-  const chain: any = {
-    set: vi.fn().mockImplementation(() => chain),
-    where: vi.fn().mockImplementation(() => chain),
-    returning: vi.fn().mockResolvedValue([]),
-    then: (resolve: (val: unknown) => void) => Promise.resolve([]).then(resolve),
-  };
-  return chain;
-}
-
 const mockRecipients = [
   { id: PERSON_1, fullName: 'Dr. Alice Smith', email: 'alice@example.com', designation: 'Professor' },
   { id: PERSON_2, fullName: 'Dr. Bob Jones', email: 'bob@example.com', designation: 'Lecturer' },
@@ -113,7 +104,7 @@ const mockTemplate = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockAssertEventAccess.mockResolvedValue({ userId: 'user_123' });
-  mockSendNotification.mockResolvedValue({ logId: 'log-1', status: 'sent' });
+  mockIsCertificateGenerationEnabled.mockResolvedValue(true);
 });
 
 // ── getEligibleRecipients ───────────────────────────────────
@@ -162,47 +153,12 @@ describe('getEligibleRecipients', () => {
   });
 });
 
-// ── bulkGenerateCertificates ────────────────────────────────
+// ── bulkGenerateCertificates (now queues via Inngest) ──────
 
 describe('bulkGenerateCertificates', () => {
-  it('issues certificates for all eligible recipients', async () => {
-    // select template
-    let selectCallCount = 0;
-    mockDb.select.mockImplementation(() => {
-      selectCallCount++;
-      if (selectCallCount === 1) {
-        // Template lookup
-        return chainedSelect([mockTemplate]);
-      }
-      if (selectCallCount === 2) {
-        // Recipients (all_delegates)
-        return chainedSelect(mockRecipients);
-      }
-      if (selectCallCount === 3) {
-        // Existing certs for event+type
-        return chainedSelect([]);
-      }
-      if (selectCallCount === 4) {
-        // Existing cert numbers
-        return chainedSelect([]);
-      }
-      return chainedSelect([]);
-    });
-
-    const createdCerts: unknown[] = [];
-    mockDb.transaction.mockImplementation(async (fn: any) => {
-      const tx = {
-        insert: vi.fn().mockImplementation(() => {
-          const certId = crypto.randomUUID();
-          const cert = { id: certId, certificateNumber: `GEM2026-ATT-${String(createdCerts.length + 1).padStart(5, '0')}` };
-          createdCerts.push(cert);
-          return chainedInsert([cert]);
-        }),
-        update: vi.fn().mockImplementation(() => chainedUpdate()),
-        select: vi.fn().mockImplementation(() => chainedSelect([])),
-      };
-      return fn(tx);
-    });
+  it('sends Inngest event with correct data for bulk generation', async () => {
+    // Template lookup
+    mockDb.select.mockReturnValueOnce(chainedSelect([mockTemplate]));
 
     const result = await bulkGenerateCertificates(EVENT_ID, {
       templateId: TEMPLATE_ID,
@@ -210,35 +166,20 @@ describe('bulkGenerateCertificates', () => {
       eligibilityBasisType: 'registration',
     });
 
-    expect(result.issued).toBe(2);
-    expect(result.skipped).toBe(0);
-    expect(result.certificateIds).toHaveLength(2);
-    expect(result.errors).toHaveLength(0);
-    expect(mockRevalidatePath).toHaveBeenCalledWith(`/events/${EVENT_ID}/certificates`);
-  });
-
-  it('returns zero issued when no recipients found', async () => {
-    mockDb.select.mockImplementation(() => {
-      return chainedSelect([mockTemplate]);
+    expect(result.queued).toBe(true);
+    expect(result.message).toContain('queued');
+    expect(mockInngestSend).toHaveBeenCalledOnce();
+    expect(mockInngestSend).toHaveBeenCalledWith({
+      name: 'bulk/certificates.generate',
+      data: {
+        eventId: EVENT_ID,
+        userId: 'user_123',
+        templateId: TEMPLATE_ID,
+        recipientType: 'all_delegates',
+        personIds: undefined,
+        eligibilityBasisType: 'registration',
+      },
     });
-
-    // Second call returns empty recipients
-    let callCount = 0;
-    mockDb.select.mockImplementation(() => {
-      callCount++;
-      if (callCount === 1) return chainedSelect([mockTemplate]);
-      return chainedSelect([]);
-    });
-
-    const result = await bulkGenerateCertificates(EVENT_ID, {
-      templateId: TEMPLATE_ID,
-      recipientType: 'all_delegates',
-      eligibilityBasisType: 'registration',
-    });
-
-    expect(result.issued).toBe(0);
-    expect(result.skipped).toBe(0);
-    expect(result.certificateIds).toHaveLength(0);
   });
 
   it('throws when template not found or not active', async () => {
@@ -251,217 +192,76 @@ describe('bulkGenerateCertificates', () => {
         eligibilityBasisType: 'registration',
       }),
     ).rejects.toThrow('Active certificate template not found');
+    expect(mockInngestSend).not.toHaveBeenCalled();
   });
 
-  it('deduplicates duplicate recipients before issuing certificates', async () => {
-    let selectCallCount = 0;
-    mockDb.select.mockImplementation(() => {
-      selectCallCount++;
-      if (selectCallCount === 1) {
-        return chainedSelect([mockTemplate]);
-      }
-      if (selectCallCount === 2) {
-        return chainedSelect([
-          mockRecipients[0],
-          { ...mockRecipients[0] },
-        ]);
-      }
-      if (selectCallCount === 3) {
-        return chainedSelect([]);
-      }
-      if (selectCallCount === 4) {
-        return chainedSelect([]);
-      }
-      return chainedSelect([]);
-    });
-
-    mockDb.transaction.mockImplementation(async (fn: any) => {
-      const tx = {
-        insert: vi.fn().mockImplementation(() => chainedInsert([{ id: crypto.randomUUID() }])),
-        update: vi.fn().mockImplementation(() => chainedUpdate()),
-        select: vi.fn().mockImplementation(() => chainedSelect([])),
-      };
-      return fn(tx);
-    });
-
-    const result = await bulkGenerateCertificates(EVENT_ID, {
-      templateId: TEMPLATE_ID,
-      recipientType: 'custom',
-      personIds: [PERSON_1, PERSON_1],
-      eligibilityBasisType: 'registration',
-    });
-
-    expect(result.issued).toBe(1);
-    expect(result.skipped).toBe(1);
-  });
-
-  it('fails the bulk operation when supersession update fails after insert', async () => {
-    const existingCert = {
-      id: '990e8400-e29b-41d4-a716-446655440001',
-      eventId: EVENT_ID,
-      personId: PERSON_1,
-      certificateType: mockTemplate.certificateType,
-      status: 'issued',
-      supersededById: null,
-      supersedesId: null,
-      revokedAt: null,
-      revokeReason: null,
-    };
-
-    let selectCallCount = 0;
-    mockDb.select.mockImplementation(() => {
-      selectCallCount++;
-      if (selectCallCount === 1) {
-        return chainedSelect([mockTemplate]);
-      }
-      if (selectCallCount === 2) {
-        return chainedSelect([mockRecipients[0]]);
-      }
-      if (selectCallCount === 3) {
-        return chainedSelect([existingCert]);
-      }
-      if (selectCallCount === 4) {
-        return chainedSelect([]);
-      }
-      return chainedSelect([]);
-    });
-
-    mockDb.transaction.mockImplementation(async (fn: any) => {
-      const tx = {
-        insert: vi.fn().mockImplementation(() => chainedInsert([{ id: crypto.randomUUID() }])),
-        update: vi.fn().mockImplementation(() => {
-          throw new Error('failed to supersede previous certificate');
-        }),
-        select: vi.fn().mockImplementation(() => chainedSelect([])),
-      };
-      return fn(tx);
-    });
+  it('throws when certificate generation is disabled', async () => {
+    mockIsCertificateGenerationEnabled.mockResolvedValueOnce(false);
 
     await expect(
       bulkGenerateCertificates(EVENT_ID, {
         templateId: TEMPLATE_ID,
-        recipientType: 'custom',
-        personIds: [PERSON_1],
+        recipientType: 'all_delegates',
         eligibilityBasisType: 'registration',
       }),
-    ).rejects.toThrow('failed to supersede previous certificate');
+    ).rejects.toThrow('currently disabled');
+    expect(mockInngestSend).not.toHaveBeenCalled();
+  });
+
+  it('includes personIds for custom recipient type', async () => {
+    mockDb.select.mockReturnValueOnce(chainedSelect([mockTemplate]));
+
+    await bulkGenerateCertificates(EVENT_ID, {
+      templateId: TEMPLATE_ID,
+      recipientType: 'custom',
+      personIds: [PERSON_1, PERSON_2],
+      eligibilityBasisType: 'manual',
+    });
+
+    expect(mockInngestSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          recipientType: 'custom',
+          personIds: [PERSON_1, PERSON_2],
+          eligibilityBasisType: 'manual',
+        }),
+      }),
+    );
   });
 });
 
-// ── sendCertificateNotifications ────────────────────────────
+// ── sendCertificateNotifications (now queues via Inngest) ──
 
 describe('sendCertificateNotifications', () => {
   const CERT_ID_1 = '880e8400-e29b-41d4-a716-446655440001';
   const CERT_ID_2 = '880e8400-e29b-41d4-a716-446655440002';
 
-  const mockCerts = [
-    {
-      id: CERT_ID_1,
-      certificateNumber: 'GEM2026-ATT-00001',
-      certificateType: 'delegate_attendance',
-      storageKey: 'certificates/key1.pdf',
-      personId: PERSON_1,
-      personFullName: 'Dr. Alice Smith',
-      personEmail: 'alice@example.com',
-      personPhone: '+919876543210',
-    },
-    {
-      id: CERT_ID_2,
-      certificateNumber: 'GEM2026-ATT-00002',
-      certificateType: 'delegate_attendance',
-      storageKey: 'certificates/key2.pdf',
-      personId: PERSON_2,
-      personFullName: 'Dr. Bob Jones',
-      personEmail: 'bob@example.com',
-      personPhone: null,
-    },
-  ];
-
-  it('sends email notifications for issued certificates', async () => {
-    mockDb.select.mockReturnValueOnce(chainedSelect(mockCerts));
-    mockDb.update.mockImplementation(() => chainedUpdate());
-
+  it('sends Inngest event for email notifications', async () => {
     const result = await sendCertificateNotifications(EVENT_ID, {
       certificateIds: [CERT_ID_1, CERT_ID_2],
       channel: 'email',
     });
 
-    expect(result.sent).toBe(2);
-    expect(result.failed).toBe(0);
-    expect(mockSendNotification).toHaveBeenCalledTimes(2);
-    expect(mockSendNotification).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(result.queued).toBe(true);
+    expect(mockInngestSend).toHaveBeenCalledWith({
+      name: 'bulk/certificates.notify',
+      data: {
         eventId: EVENT_ID,
-        personId: PERSON_1,
+        certificateIds: [CERT_ID_1, CERT_ID_2],
         channel: 'email',
-        templateKey: 'certificate_delivery',
-        triggerType: 'certificate.generated',
-      }),
-    );
+      },
+    });
   });
 
-  it('sends both email and whatsapp when channel is both', async () => {
-    mockDb.select.mockReturnValueOnce(chainedSelect([mockCerts[0]]));
-    mockDb.update.mockImplementation(() => chainedUpdate());
-
-    const result = await sendCertificateNotifications(EVENT_ID, {
+  it('sends Inngest event for both channels', async () => {
+    await sendCertificateNotifications(EVENT_ID, {
       certificateIds: [CERT_ID_1],
       channel: 'both',
     });
 
-    expect(result.sent).toBe(1);
-    // Should call sendNotification twice (email + whatsapp)
-    expect(mockSendNotification).toHaveBeenCalledTimes(2);
-  });
-
-  it('counts failures when sendNotification throws', async () => {
-    mockDb.select.mockReturnValueOnce(chainedSelect(mockCerts));
-    mockSendNotification.mockRejectedValue(new Error('Provider error'));
-
-    const result = await sendCertificateNotifications(EVENT_ID, {
-      certificateIds: [CERT_ID_1, CERT_ID_2],
-      channel: 'email',
-    });
-
-    expect(result.sent).toBe(0);
-    expect(result.failed).toBe(2);
-  });
-
-  it('does not send notifications for certificates without generated PDFs', async () => {
-    mockDb.select.mockReturnValueOnce(
-      chainedSelect([
-        {
-          ...mockCerts[0],
-          storageKey: null,
-        },
-      ]),
-    );
-    mockDb.update.mockImplementation(() => chainedUpdate());
-
-    const result = await sendCertificateNotifications(EVENT_ID, {
-      certificateIds: [CERT_ID_1],
-      channel: 'email',
-    });
-
-    expect(result.sent).toBe(0);
-    expect(result.failed).toBe(1);
-    expect(mockSendNotification).not.toHaveBeenCalled();
-  });
-
-  it('passes recipient delivery details to the notification service', async () => {
-    mockDb.select.mockReturnValueOnce(chainedSelect([mockCerts[0]]));
-    mockDb.update.mockImplementation(() => chainedUpdate());
-
-    await sendCertificateNotifications(EVENT_ID, {
-      certificateIds: [CERT_ID_1],
-      channel: 'email',
-    });
-
-    expect(mockSendNotification).toHaveBeenCalledWith(
+    expect(mockInngestSend).toHaveBeenCalledWith(
       expect.objectContaining({
-        variables: expect.objectContaining({
-          recipientEmail: 'alice@example.com',
-        }),
+        data: expect.objectContaining({ channel: 'both' }),
       }),
     );
   });
