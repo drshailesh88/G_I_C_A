@@ -4,11 +4,13 @@
  * Tracks consecutive failures per provider. After FAILURE_THRESHOLD consecutive
  * failures the circuit opens and rejects all new sends immediately with
  * CIRCUIT_OPEN. After OPEN_DURATION_MS the circuit enters half-open state
- * and allows one probe request through. If the probe succeeds the circuit
- * resets; if it fails the circuit returns to open.
+ * and allows one probe request through (via SET NX lock). If the probe
+ * succeeds the circuit resets; if it fails the circuit returns to open.
  *
- * Redis key pattern: notif:circuit:{provider}
- * Stored value: JSON { failures: number, openedAt: number | null }
+ * Redis keys per provider:
+ *   notif:circuit:{provider}:failures  — atomic counter (INCR)
+ *   notif:circuit:{provider}:opened    — timestamp when circuit opened
+ *   notif:circuit:{provider}:probe     — SET NX lock for single half-open probe
  */
 
 import { Redis } from '@upstash/redis';
@@ -16,16 +18,12 @@ import { Redis } from '@upstash/redis';
 const KEY_PREFIX = 'notif:circuit:';
 const FAILURE_THRESHOLD = 5;
 const OPEN_DURATION_MS = 60_000; // 60 seconds
+const KEY_TTL_SECONDS = 300;     // 5-minute TTL for auto-cleanup
 
 export type CircuitState = 'closed' | 'open' | 'half-open';
 
 export type CircuitStatus = {
   state: CircuitState;
-  failures: number;
-  openedAt: number | null;
-};
-
-type StoredCircuit = {
   failures: number;
   openedAt: number | null;
 };
@@ -38,39 +36,45 @@ export class CircuitOpenError extends Error {
 }
 
 export interface CircuitBreakerService {
-  /** Check if the circuit allows a request. Throws CircuitOpenError if open. */
   checkCircuit(provider: string): Promise<CircuitState>;
-  /** Record a successful provider call — resets the failure counter. */
   recordSuccess(provider: string): Promise<void>;
-  /** Record a failed provider call — increments counter, may open circuit. */
   recordFailure(provider: string): Promise<void>;
-  /** Get current circuit status (for monitoring/debugging). */
   getStatus(provider: string): Promise<CircuitStatus>;
 }
 
-function circuitKey(provider: string): string {
-  return `${KEY_PREFIX}${provider}`;
+function failuresKey(provider: string): string {
+  return `${KEY_PREFIX}${provider}:failures`;
+}
+function openedKey(provider: string): string {
+  return `${KEY_PREFIX}${provider}:opened`;
+}
+function probeKey(provider: string): string {
+  return `${KEY_PREFIX}${provider}:probe`;
 }
 
 export function createCircuitBreaker(redis: Redis): CircuitBreakerService {
-  async function getStoredCircuit(provider: string): Promise<StoredCircuit> {
-    const raw = await redis.get<StoredCircuit>(circuitKey(provider));
-    return raw ?? { failures: 0, openedAt: null };
-  }
-
   return {
     async checkCircuit(provider: string): Promise<CircuitState> {
-      const circuit = await getStoredCircuit(provider);
+      const failures = (await redis.get<number>(failuresKey(provider))) ?? 0;
 
-      if (circuit.failures < FAILURE_THRESHOLD) {
+      if (failures < FAILURE_THRESHOLD) {
         return 'closed';
       }
 
-      // Circuit has reached threshold — check if it's time for half-open
-      if (circuit.openedAt !== null) {
-        const elapsed = Date.now() - circuit.openedAt;
+      // Circuit has reached threshold — check if cooldown has elapsed
+      const opened = await redis.get<number>(openedKey(provider));
+      if (opened !== null) {
+        const elapsed = Date.now() - opened;
         if (elapsed >= OPEN_DURATION_MS) {
-          return 'half-open';
+          // Try to claim the probe slot — only one caller wins
+          const claimed = await redis.set(probeKey(provider), '1', {
+            nx: true,
+            ex: 60, // probe lock expires after 60s
+          });
+          if (claimed !== null) {
+            return 'half-open';
+          }
+          // Another caller already claimed the probe — circuit stays open for us
         }
       }
 
@@ -78,44 +82,42 @@ export function createCircuitBreaker(redis: Redis): CircuitBreakerService {
     },
 
     async recordSuccess(provider: string): Promise<void> {
-      // Reset the circuit completely
-      await redis.del(circuitKey(provider));
+      // Reset the circuit completely — delete all keys
+      await Promise.all([
+        redis.del(failuresKey(provider)),
+        redis.del(openedKey(provider)),
+        redis.del(probeKey(provider)),
+      ]);
     },
 
     async recordFailure(provider: string): Promise<void> {
-      const circuit = await getStoredCircuit(provider);
-      const newFailures = circuit.failures + 1;
+      // Atomic increment — no read-modify-write race
+      const newCount = await redis.incr(failuresKey(provider));
+      // Set TTL on the failures key so stale breakers auto-clear
+      await redis.expire(failuresKey(provider), KEY_TTL_SECONDS);
 
-      let openedAt: number | null = null;
-      if (newFailures >= FAILURE_THRESHOLD) {
-        // If already at/above threshold (failed probe), refresh openedAt to restart the window.
-        // If crossing threshold for the first time, set openedAt now.
-        openedAt = circuit.failures >= FAILURE_THRESHOLD ? Date.now() : (circuit.openedAt ?? Date.now());
+      if (newCount >= FAILURE_THRESHOLD) {
+        // Set/refresh openedAt to (re)start the cooldown window
+        await redis.set(openedKey(provider), Date.now(), { ex: KEY_TTL_SECONDS });
+        // Clear any existing probe lock so a new probe window starts
+        await redis.del(probeKey(provider));
       }
-
-      const updated: StoredCircuit = { failures: newFailures, openedAt };
-
-      // Store with 5-minute TTL so stale breakers auto-clear
-      await redis.set(circuitKey(provider), updated, { ex: 300 });
     },
 
     async getStatus(provider: string): Promise<CircuitStatus> {
-      const circuit = await getStoredCircuit(provider);
+      const failures = (await redis.get<number>(failuresKey(provider))) ?? 0;
+      const opened = await redis.get<number>(openedKey(provider));
 
       let state: CircuitState = 'closed';
-      if (circuit.failures >= FAILURE_THRESHOLD) {
-        if (circuit.openedAt !== null && (Date.now() - circuit.openedAt) >= OPEN_DURATION_MS) {
+      if (failures >= FAILURE_THRESHOLD) {
+        if (opened !== null && (Date.now() - opened) >= OPEN_DURATION_MS) {
           state = 'half-open';
         } else {
           state = 'open';
         }
       }
 
-      return {
-        state,
-        failures: circuit.failures,
-        openedAt: circuit.openedAt,
-      };
+      return { state, failures, openedAt: opened };
     },
   };
 }
@@ -137,10 +139,8 @@ export function getDefaultCircuitBreaker(): CircuitBreakerService {
   return _defaultBreaker;
 }
 
-/** Reset the cached default instance (for testing) */
 export function resetDefaultCircuitBreaker(): void {
   _defaultBreaker = null;
 }
 
-/** Exported constants for testing */
 export { FAILURE_THRESHOLD, OPEN_DURATION_MS };

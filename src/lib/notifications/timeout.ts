@@ -28,23 +28,23 @@ export async function withTimeout<T>(
   fn: (signal: AbortSignal) => Promise<T>,
 ): Promise<T> {
   const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
 
   const timeoutPromise = new Promise<never>((_, reject) => {
-    const timer = setTimeout(() => {
+    timer = setTimeout(() => {
       controller.abort();
       reject(new ProviderTimeoutError(providerName, timeoutMs));
     }, timeoutMs);
-    // Ensure the timer doesn't prevent Node from exiting
-    if (typeof timer === 'object' && 'unref' in timer) {
-      timer.unref();
-    }
   });
 
   try {
-    return await Promise.race([fn(controller.signal), timeoutPromise]);
-  } catch (error) {
-    // Re-throw — ProviderTimeoutError from race, or original error from fn
-    throw error;
+    const result = await Promise.race([fn(controller.signal), timeoutPromise]);
+    return result;
+  } finally {
+    // Always clear the timer to prevent leaks and stale abort signals
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
   }
 }
 

@@ -352,6 +352,7 @@ async function sendNotificationFromLog(
   } = deps;
 
   const channel = log.channel as Channel;
+  const providerName = providerNameForChannel(channel);
 
   // Create new log entry
   const newLog = await createLogEntryFn({
@@ -379,6 +380,29 @@ async function sendNotificationFromLog(
     resendOfId: overrides.resendOfId,
   });
 
+  // Circuit breaker check for resend/retry path
+  if (deps.circuitBreaker) {
+    try {
+      await deps.circuitBreaker.checkCircuit(providerName);
+    } catch (error) {
+      if (error instanceof CircuitOpenError) {
+        await updateLogStatusFn(newLog.id, log.eventId as string, {
+          status: 'failed',
+          lastErrorCode: 'CIRCUIT_OPEN',
+          lastErrorMessage: error.message,
+          failedAt: new Date(),
+        });
+        return {
+          notificationLogId: newLog.id,
+          provider: providerName,
+          providerMessageId: null,
+          status: 'failed',
+        };
+      }
+      throw error;
+    }
+  }
+
   // Route to provider
   let providerResult: ProviderSendResult;
   try {
@@ -400,19 +424,35 @@ async function sendNotificationFromLog(
       });
     }
   } catch (error) {
+    const isTimeout = error instanceof ProviderTimeoutError;
+    const errorCode = isTimeout ? 'PROVIDER_TIMEOUT' : 'PROVIDER_EXCEPTION';
     const errorMessage = error instanceof Error ? error.message : String(error);
+
+    if (deps.circuitBreaker) {
+      await deps.circuitBreaker.recordFailure(providerName);
+    }
+
     await updateLogStatusFn(newLog.id, log.eventId as string, {
       status: 'failed',
-      lastErrorCode: 'PROVIDER_EXCEPTION',
+      lastErrorCode: errorCode,
       lastErrorMessage: errorMessage,
       failedAt: new Date(),
     });
     return {
       notificationLogId: newLog.id,
-      provider: providerNameForChannel(channel),
+      provider: providerName,
       providerMessageId: null,
       status: 'failed',
     };
+  }
+
+  // Update circuit breaker with result
+  if (deps.circuitBreaker) {
+    if (providerResult.accepted) {
+      await deps.circuitBreaker.recordSuccess(providerName);
+    } else {
+      await deps.circuitBreaker.recordFailure(providerName);
+    }
   }
 
   const finalStatus: NotificationStatus = providerResult.accepted ? 'sent' : 'failed';

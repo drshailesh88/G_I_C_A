@@ -1,16 +1,15 @@
 /**
  * Tests for Provider Timeout and Circuit Breaker (Req 8C-1)
  *
- * 12 tests covering:
- * - Timeout: 20s provider → timeout at configured time
- * - Circuit breaker: 5 failures → circuit opens
- * - Half-open: 60s → probe sent
- * - Success probe → circuit resets
- * - Parallel requests during open → immediate fail
- * - Integration with sendNotification
+ * Covers:
+ * - Timeout: provider within limit, provider exceeds limit, signal propagation
+ * - Circuit breaker: closed, open after 5 failures, half-open probe, reset on success
+ * - Probe race: only one concurrent caller gets half-open
+ * - Atomic increments: concurrent failures don't lose counts
+ * - Integration: sendNotification, resendNotification, retryFailedNotification with breaker
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ── 1. Timeout utility tests ─────────────────────────────────
 
@@ -38,6 +37,24 @@ describe('withTimeout', () => {
       expect(error).toBeInstanceOf(ProviderTimeoutError);
       expect((error as ProviderTimeoutError).message).toBe('Request timed out after 0.05s');
       expect((error as ProviderTimeoutError).timeoutMs).toBe(50);
+    }
+  });
+
+  it('clears timer on success so AbortSignal stays clean', async () => {
+    vi.useFakeTimers();
+    try {
+      let signal: AbortSignal | undefined;
+
+      await withTimeout('test', 50, async (receivedSignal) => {
+        signal = receivedSignal;
+        return 'ok';
+      });
+
+      // Advance past the timeout — signal should NOT fire since timer was cleared
+      await vi.advanceTimersByTimeAsync(100);
+      expect(signal!.aborted).toBe(false);
+    } finally {
+      vi.useRealTimers();
     }
   });
 
@@ -82,7 +99,7 @@ import {
 } from './circuit-breaker';
 
 /**
- * In-memory Redis stub that mimics the subset of @upstash/redis used by circuit breaker.
+ * In-memory Redis stub supporting get, set (with NX), del, incr, expire.
  */
 function createRedisStub() {
   const store = new Map<string, { value: string; expiresAt?: number }>();
@@ -98,7 +115,13 @@ function createRedisStub() {
       }
       return JSON.parse(entry.value) as T;
     },
-    async set(key: string, value: unknown, opts?: { ex?: number }): Promise<'OK'> {
+    async set(key: string, value: unknown, opts?: { ex?: number; nx?: boolean }): Promise<'OK' | null> {
+      if (opts?.nx) {
+        const existing = store.get(key);
+        if (existing && (!existing.expiresAt || Date.now() <= existing.expiresAt)) {
+          return null; // Key exists — NX fails
+        }
+      }
       const entry: { value: string; expiresAt?: number } = {
         value: JSON.stringify(value),
       };
@@ -111,6 +134,30 @@ function createRedisStub() {
     async del(key: string): Promise<number> {
       return store.delete(key) ? 1 : 0;
     },
+    async incr(key: string): Promise<number> {
+      const entry = store.get(key);
+      let current = 0;
+      if (entry) {
+        if (entry.expiresAt && Date.now() > entry.expiresAt) {
+          store.delete(key);
+        } else {
+          current = JSON.parse(entry.value) as number;
+        }
+      }
+      const next = current + 1;
+      const existing = store.get(key);
+      store.set(key, {
+        value: JSON.stringify(next),
+        expiresAt: existing?.expiresAt,
+      });
+      return next;
+    },
+    async expire(key: string, seconds: number): Promise<0 | 1> {
+      const entry = store.get(key);
+      if (!entry) return 0;
+      entry.expiresAt = Date.now() + seconds * 1000;
+      return 1;
+    },
   };
 }
 
@@ -120,12 +167,10 @@ describe('CircuitBreaker', () => {
 
   beforeEach(() => {
     redis = createRedisStub();
-    // Cast the stub — it satisfies the subset of Redis methods used
     breaker = createCircuitBreaker(redis as unknown as import('@upstash/redis').Redis);
   });
 
   it('allows requests when circuit is closed (< 5 failures)', async () => {
-    // Record 4 failures — still under threshold
     for (let i = 0; i < FAILURE_THRESHOLD - 1; i++) {
       await breaker.recordFailure('resend');
     }
@@ -147,12 +192,10 @@ describe('CircuitBreaker', () => {
   });
 
   it('rejects immediately with CircuitOpenError when circuit is open', async () => {
-    // Open the circuit
     for (let i = 0; i < FAILURE_THRESHOLD; i++) {
       await breaker.recordFailure('resend');
     }
 
-    // Multiple parallel checks — all should fail immediately
     const results = await Promise.allSettled([
       breaker.checkCircuit('resend'),
       breaker.checkCircuit('resend'),
@@ -167,34 +210,37 @@ describe('CircuitBreaker', () => {
     }
   });
 
-  it('enters half-open state after 60s and allows a probe', async () => {
-    // Open circuit
+  it('enters half-open state after 60s and allows exactly one probe', async () => {
     for (let i = 0; i < FAILURE_THRESHOLD; i++) {
       await breaker.recordFailure('resend');
     }
 
-    // Simulate time passage by directly modifying the stored openedAt
-    const key = 'notif:circuit:resend';
-    const stored = await redis.get<{ failures: number; openedAt: number }>(key);
-    expect(stored).not.toBeNull();
-
     // Set openedAt to 61 seconds ago
-    await redis.set(key, {
-      failures: stored!.failures,
-      openedAt: Date.now() - OPEN_DURATION_MS - 1000,
-    }, { ex: 300 });
+    await redis.set('notif:circuit:resend:opened', Date.now() - OPEN_DURATION_MS - 1000, { ex: 300 });
 
-    const state = await breaker.checkCircuit('resend');
-    expect(state).toBe('half-open');
+    // Three concurrent checks — only one should get half-open
+    const results = await Promise.allSettled([
+      breaker.checkCircuit('resend'),
+      breaker.checkCircuit('resend'),
+      breaker.checkCircuit('resend'),
+    ]);
+
+    const halfOpenResults = results.filter(
+      (r) => r.status === 'fulfilled' && r.value === 'half-open',
+    );
+    const openErrors = results.filter(
+      (r) => r.status === 'rejected' && r.reason instanceof CircuitOpenError,
+    );
+
+    expect(halfOpenResults).toHaveLength(1);
+    expect(openErrors).toHaveLength(2);
   });
 
   it('resets circuit on successful probe (half-open → closed)', async () => {
-    // Open circuit
     for (let i = 0; i < FAILURE_THRESHOLD; i++) {
       await breaker.recordFailure('resend');
     }
 
-    // Record success (simulating successful probe)
     await breaker.recordSuccess('resend');
 
     const status = await breaker.getStatus('resend');
@@ -204,41 +250,40 @@ describe('CircuitBreaker', () => {
   });
 
   it('returns to open on failed probe (half-open → open)', async () => {
-    // Open circuit
     for (let i = 0; i < FAILURE_THRESHOLD; i++) {
       await breaker.recordFailure('resend');
     }
 
     // Simulate half-open by setting openedAt in the past
-    const key = 'notif:circuit:resend';
-    await redis.set(key, {
-      failures: FAILURE_THRESHOLD,
-      openedAt: Date.now() - OPEN_DURATION_MS - 1000,
-    }, { ex: 300 });
+    await redis.set('notif:circuit:resend:opened', Date.now() - OPEN_DURATION_MS - 1000, { ex: 300 });
 
-    // Verify it's half-open
-    const halfOpenState = await breaker.checkCircuit('resend');
-    expect(halfOpenState).toBe('half-open');
-
-    // Probe fails — record another failure
+    // Probe fails — record another failure (refreshes openedAt to now)
     await breaker.recordFailure('resend');
 
-    // Should be open again (failures now = THRESHOLD + 1, openedAt refreshed)
+    // Should be open again
     await expect(breaker.checkCircuit('resend')).rejects.toThrow(CircuitOpenError);
   });
 
   it('tracks separate circuits per provider', async () => {
-    // Open circuit for resend
     for (let i = 0; i < FAILURE_THRESHOLD; i++) {
       await breaker.recordFailure('resend');
     }
 
-    // evolution_api should still be closed
     const state = await breaker.checkCircuit('evolution_api');
     expect(state).toBe('closed');
 
-    // resend should be open
     await expect(breaker.checkCircuit('resend')).rejects.toThrow(CircuitOpenError);
+  });
+
+  it('handles concurrent failure increments atomically', async () => {
+    // Record 2 failures concurrently — both should be counted
+    await Promise.all([
+      breaker.recordFailure('resend'),
+      breaker.recordFailure('resend'),
+    ]);
+
+    const status = await breaker.getStatus('resend');
+    expect(status.failures).toBe(2);
   });
 });
 
@@ -270,7 +315,8 @@ vi.mock('./idempotency', () => ({
   redisIdempotencyService: { checkAndSet: vi.fn() },
 }));
 
-import { sendNotification } from './send';
+import { markAsRetrying } from './log-queries';
+import { sendNotification, resendNotification, retryFailedNotification } from './send';
 import type { NotificationServiceDeps } from './send';
 import type {
   SendNotificationInput,
@@ -278,6 +324,13 @@ import type {
   WhatsAppProvider,
   IdempotencyService,
 } from './types';
+
+const mockedMarkAsRetrying = vi.mocked(markAsRetrying);
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockedMarkAsRetrying.mockResolvedValue({} as Awaited<ReturnType<typeof markAsRetrying>>);
+});
 
 function createMockDeps(overrides?: Partial<NotificationServiceDeps>): NotificationServiceDeps {
   const mockEmailProvider: EmailProvider = {
@@ -349,6 +402,33 @@ function createBaseInput(overrides?: Partial<SendNotificationInput>): SendNotifi
   };
 }
 
+function createStoredLog(overrides?: Record<string, unknown>) {
+  return {
+    id: 'log-original',
+    eventId: 'evt-1',
+    personId: 'person-1',
+    templateId: 'tpl-1',
+    templateKeySnapshot: 'registration_confirmation',
+    templateVersionNo: 1,
+    channel: 'email',
+    provider: 'resend',
+    triggerType: 'registration.created',
+    triggerEntityType: null,
+    triggerEntityId: null,
+    sendMode: 'automatic',
+    idempotencyKey: 'original-key',
+    recipientEmail: 'test@example.com',
+    recipientPhoneE164: null,
+    renderedSubject: 'Stored subject',
+    renderedBody: '<p>Stored body</p>',
+    renderedVariablesJson: { recipientName: 'John' },
+    attachmentManifestJson: null,
+    status: 'sent',
+    initiatedByUserId: 'user-1',
+    ...overrides,
+  };
+}
+
 describe('sendNotification with circuit breaker', () => {
   it('fails immediately with CIRCUIT_OPEN when circuit is open', async () => {
     const mockBreaker: CircuitBreakerService = {
@@ -370,7 +450,6 @@ describe('sendNotification with circuit breaker', () => {
         lastErrorCode: 'CIRCUIT_OPEN',
       }),
     );
-    // Provider should NOT have been called
     expect(deps.emailProvider.send).not.toHaveBeenCalled();
   });
 
@@ -443,5 +522,52 @@ describe('sendNotification with circuit breaker', () => {
 
     expect(result.status).toBe('failed');
     expect(mockBreaker.recordFailure).toHaveBeenCalledWith('resend');
+  });
+});
+
+describe('resendNotification with circuit breaker', () => {
+  it('checks circuit breaker before resend and blocks if open', async () => {
+    const mockBreaker: CircuitBreakerService = {
+      checkCircuit: vi.fn().mockRejectedValue(new CircuitOpenError('resend')),
+      recordSuccess: vi.fn(),
+      recordFailure: vi.fn(),
+      getStatus: vi.fn(),
+    };
+
+    const deps = createMockDeps({ circuitBreaker: mockBreaker });
+    deps.getLogByIdFn = vi.fn().mockResolvedValue(createStoredLog());
+
+    const result = await resendNotification({
+      eventId: 'evt-1',
+      notificationLogId: 'log-original',
+      initiatedByUserId: 'user-2',
+    }, deps);
+
+    expect(result.status).toBe('failed');
+    expect(mockBreaker.checkCircuit).toHaveBeenCalledWith('resend');
+    expect(deps.emailProvider.send).not.toHaveBeenCalled();
+  });
+});
+
+describe('retryFailedNotification with circuit breaker', () => {
+  it('checks circuit breaker and records success on successful retry', async () => {
+    const mockBreaker: CircuitBreakerService = {
+      checkCircuit: vi.fn().mockResolvedValue('closed'),
+      recordSuccess: vi.fn(),
+      recordFailure: vi.fn(),
+      getStatus: vi.fn(),
+    };
+
+    const deps = createMockDeps({ circuitBreaker: mockBreaker });
+    deps.getLogByIdFn = vi.fn().mockResolvedValue(createStoredLog({ status: 'failed' }));
+
+    await retryFailedNotification({
+      eventId: 'evt-1',
+      notificationLogId: 'log-original',
+      initiatedByUserId: 'user-2',
+    }, deps);
+
+    expect(mockBreaker.checkCircuit).toHaveBeenCalledWith('resend');
+    expect(mockBreaker.recordSuccess).toHaveBeenCalledWith('resend');
   });
 });
