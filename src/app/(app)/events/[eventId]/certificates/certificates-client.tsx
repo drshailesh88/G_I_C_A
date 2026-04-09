@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   createCertificateTemplate,
   updateCertificateTemplate,
@@ -145,12 +146,20 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
         </div>
         <div className="flex gap-2">
           {activeTemplates.length > 0 && (
-            <button
-              onClick={() => setShowIssue(true)}
-              className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
-            >
-              Issue Certificate
-            </button>
+            <>
+              <Link
+                href={`/events/${eventId}/certificates/generate`}
+                className="rounded-md bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-700"
+              >
+                Bulk Generate
+              </Link>
+              <button
+                onClick={() => setShowIssue(true)}
+                className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
+              >
+                Issue Certificate
+              </button>
+            </>
           )}
           <button
             onClick={() => setShowCreate(true)}
