@@ -24,6 +24,7 @@ import { bulkInngestFunctions } from './bulk-functions';
 import {
   findEventsNeedingBackup,
   generateEmergencyKit,
+  buildCronBackupStorageKey,
 } from '../exports/emergency-kit';
 import { createR2Provider } from '@/lib/certificates/storage';
 import { captureCascadeError } from '@/lib/sentry';
@@ -124,6 +125,7 @@ export const preEventBackupFn = inngest.createFunction(
           const kit = await generateEmergencyKit({
             eventId: event.id,
             storageProvider,
+            storageKeyOverride: buildCronBackupStorageKey(event.id),
           });
           return { eventId: event.id, eventName: event.name, storageKey: kit.storageKey };
         });

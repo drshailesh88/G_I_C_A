@@ -158,7 +158,7 @@ v1 — GEM India Conference Management Platform
 
 ### Phase 8A — Background Job Migration
 - [x] Req 8A-1: Install and configure Inngest — Install inngest, create /api/inngest route. Replace synchronous cascade emitter: emitCascadeEvent() → inngest.send(), each cascade handler → inngest.createFunction() with max 3 retries + exponential backoff. Handler code stays identical — only wrapper changes. Tests: travel record → Inngest event emitted, handler failure → retry, all existing cascade tests green. Target: 6 new tests.
-- [ ] Req 8A-2: Move bulk operations to Inngest — Bulk certificate gen → step.run() per batch of 50. Bulk email → step.run() per batch of 20 + step.sleep('30s'). Bulk WhatsApp → step.run() per message + step.sleep('2s'). Archive gen → steps per export type. Tests: bulk cert 100 delegates → batched execution, failure at batch 3 → 1-2 persisted + 3 retries. Target: 8 new tests.
+- [x] Req 8A-2: Move bulk operations to Inngest — Bulk certificate gen → step.run() per batch of 50. Bulk email → step.run() per batch of 20 + step.sleep('30s'). Bulk WhatsApp → step.run() per message + step.sleep('2s'). Archive gen → steps per export type. Tests: bulk cert 100 delegates → batched execution, failure at batch 3 → 1-2 persisted + 3 retries. Target: 8 new tests.
 
 ### Phase 8B — Monitoring & Safety
 - [x] Req 8B-1: Sentry integration — Install @sentry/nextjs, configure DSN/environment/source maps. Add captureException to notification failures, cascade errors, R2 failures, unhandled API errors. Add Clerk user context. No PII in error payloads.

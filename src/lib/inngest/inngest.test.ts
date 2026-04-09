@@ -156,12 +156,16 @@ describe('Inngest cascade integration', () => {
     expect(ids).toContain('pre-event-backup');
   });
 
-  // Test 5: Cascade functions configured with 3 retries, scheduled with 2
-  it('cascade functions have 3 retries, scheduled functions have 2 retries', () => {
-    const cascadeIds = ['cascade-travel-updated', 'cascade-travel-cancelled', 'cascade-accommodation-updated', 'cascade-accommodation-cancelled'];
+  // Test 5: Functions configured with correct retry counts
+  it('cascade and bulk functions have 3 retries, scheduled functions have 2 retries', () => {
+    const threeRetryIds = [
+      'cascade-travel-updated', 'cascade-travel-cancelled',
+      'cascade-accommodation-updated', 'cascade-accommodation-cancelled',
+      'bulk-certificate-generate', 'bulk-certificate-notify', 'bulk-archive-generate',
+    ];
     for (const fn of inngestFunctions) {
       const config = (fn as unknown as { _config: { id: string; retries: number } })._config;
-      if (cascadeIds.includes(config.id)) {
+      if (threeRetryIds.includes(config.id)) {
         expect(config.retries).toBe(3);
       } else {
         expect(config.retries).toBe(2);
