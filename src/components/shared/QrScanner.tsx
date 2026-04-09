@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { useOnlineStatus } from '@/lib/hooks/use-online-status';
+import { useOfflineSync } from '@/lib/hooks/use-offline-sync';
 import { queueOfflineScan, generateScanId, getPendingCount } from '@/lib/attendance/offline-queue';
 import type { ScanLookupResult } from '@/lib/attendance/qr-utils';
 
@@ -23,8 +24,14 @@ export function QrScanner({
 }: QrScannerProps) {
   const [processing, setProcessing] = useState(false);
   const [lastScannedPayload, setLastScannedPayload] = useState<string | null>(null);
-  const [pendingCount, setPendingCount] = useState(0);
+  const [offlinePendingCount, setOfflinePendingCount] = useState(0);
   const isOnline = useOnlineStatus();
+
+  // Auto-sync when connectivity returns
+  const { syncStatus, pendingCount, lastSyncError, syncNow } = useOfflineSync({
+    eventId,
+    enabled: true,
+  });
 
   const handleScan = useCallback(
     async (detectedCodes: { rawValue: string }[]) => {
@@ -38,7 +45,6 @@ export function QrScanner({
 
       try {
         if (isOnline) {
-          // Online: call server directly
           const { processQrScan } = await import('@/lib/actions/checkin');
           const result = await processQrScan(eventId, {
             eventId,
@@ -48,7 +54,6 @@ export function QrScanner({
           });
           onScan(result);
         } else {
-          // Offline: queue to IndexedDB
           await queueOfflineScan({
             id: generateScanId(),
             qrPayload: payload,
@@ -58,7 +63,7 @@ export function QrScanner({
             synced: false,
           });
           const count = await getPendingCount();
-          setPendingCount(count);
+          setOfflinePendingCount(count);
           onScan({
             type: 'success',
             message: `Queued offline (${count} pending). Will sync when back online.`,
@@ -71,7 +76,6 @@ export function QrScanner({
           onScan({ type: 'invalid', message: 'Failed to process scan. Please try again.' });
         }
       } finally {
-        // Debounce: prevent rapid re-scans of the same code
         setTimeout(() => {
           setProcessing(false);
           setLastScannedPayload(null);
@@ -80,6 +84,8 @@ export function QrScanner({
     },
     [eventId, sessionId, deviceId, onScan, disabled, processing, lastScannedPayload, isOnline],
   );
+
+  const displayPendingCount = pendingCount || offlinePendingCount;
 
   return (
     <div className="relative w-full max-w-sm mx-auto">
@@ -101,8 +107,29 @@ export function QrScanner({
       )}
       {!isOnline && (
         <div className="mt-2 rounded-md bg-yellow-50 px-3 py-2 text-center text-xs text-yellow-800">
-          Offline mode — scans will be queued and synced when connectivity returns
-          {pendingCount > 0 && ` (${pendingCount} pending)`}
+          Offline mode — scans queued locally
+          {displayPendingCount > 0 && ` (${displayPendingCount} pending)`}
+        </div>
+      )}
+      {isOnline && syncStatus === 'syncing' && (
+        <div className="mt-2 rounded-md bg-blue-50 px-3 py-2 text-center text-xs text-blue-800">
+          Syncing {displayPendingCount} offline scan{displayPendingCount !== 1 ? 's' : ''}...
+        </div>
+      )}
+      {isOnline && syncStatus === 'synced' && (
+        <div className="mt-2 rounded-md bg-green-50 px-3 py-2 text-center text-xs text-green-800">
+          Offline scans synced successfully
+        </div>
+      )}
+      {isOnline && syncStatus === 'error' && (
+        <div className="mt-2 rounded-md bg-red-50 px-3 py-2 text-center text-xs text-red-800">
+          Sync failed: {lastSyncError}
+          <button
+            onClick={syncNow}
+            className="ml-2 underline hover:no-underline"
+          >
+            Retry
+          </button>
         </div>
       )}
     </div>

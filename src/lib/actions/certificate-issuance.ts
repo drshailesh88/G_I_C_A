@@ -55,6 +55,7 @@ export async function issueCertificate(eventId: string, input: unknown) {
   // Wrap in transaction to prevent race conditions with concurrent issuance
   const issued = await db.transaction(async (tx) => {
     // Check for existing current certificate (one-current-valid)
+    // FOR UPDATE locks matching rows to prevent concurrent issuance races
     const existingCerts = await tx
       .select()
       .from(issuedCertificates)
@@ -67,7 +68,8 @@ export async function issueCertificate(eventId: string, input: unknown) {
             eq(issuedCertificates.certificateType, validated.certificateType),
           )!,
         ),
-      );
+      )
+      .for('update');
 
     const currentCert = findCurrentCertificate(
       existingCerts as IssuedCertificateRecord[],

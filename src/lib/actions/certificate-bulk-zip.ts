@@ -11,6 +11,7 @@ import {
   validateBulkZipInput,
   buildBulkZipStorageKey,
   createZipArchive,
+  createZipStream,
   type BulkZipResult,
 } from '@/lib/certificates/bulk-zip';
 import type { StorageProvider } from '@/lib/certificates/storage';
@@ -121,35 +122,40 @@ export async function bulkZipDownload(
       return Buffer.from(await response.arrayBuffer());
     });
 
-    // Create ZIP archive with periodic lock renewal to prevent TTL expiry on large jobs
+    // Create ZIP with periodic lock renewal to prevent TTL expiry on large jobs
     let filesProcessed = 0;
     const renewingFetchPdf = async (storageKey: string) => {
       const buffer = await fetchPdf(storageKey);
       filesProcessed++;
-      // Renew lock every 10 files to prevent TTL expiry
       if (filesProcessed % 10 === 0 && lockHandle) {
         await lock.renew(lockHandle).catch(() => {});
       }
       return buffer;
     };
 
-    const zipBuffer = await createZipArchive(
-      downloadable.map(c => ({ storageKey: c.storageKey, fileName: c.fileName })),
-      renewingFetchPdf,
-    );
-
-    // Upload ZIP to R2
     const zipKey = buildBulkZipStorageKey(eventId, validated.certificateType);
-    await provider.upload(zipKey, zipBuffer, 'application/zip');
+    const zipEntries = downloadable.map(c => ({ storageKey: c.storageKey, fileName: c.fileName }));
 
-    // Generate signed download URL for the ZIP (1-hour expiry)
+    // Use streaming upload if provider supports it (avoids buffering full ZIP in memory)
+    let zipSizeBytes: number;
+    if (provider.uploadStream) {
+      const { stream, done } = createZipStream(zipEntries, renewingFetchPdf);
+      const uploadResult = await provider.uploadStream(zipKey, stream, 'application/zip');
+      await done;
+      zipSizeBytes = uploadResult.fileSizeBytes;
+    } else {
+      const zipBuffer = await createZipArchive(zipEntries, renewingFetchPdf);
+      await provider.upload(zipKey, zipBuffer, 'application/zip');
+      zipSizeBytes = zipBuffer.length;
+    }
+
     const zipUrl = await provider.getSignedUrl(zipKey, 3600);
 
     return {
       zipStorageKey: zipKey,
       zipUrl,
       fileCount: downloadable.length,
-      zipSizeBytes: zipBuffer.length,
+      zipSizeBytes,
     };
   } finally {
     // Always release the lock — only if we own it (conditional release)

@@ -110,44 +110,57 @@ export function deduplicateFileNames(fileNames: string[]): Map<number, string> {
 }
 
 /**
- * Download certificate PDFs from storage and create a ZIP archive buffer.
+ * Download certificate PDFs from storage and create a ZIP archive as a readable stream.
  *
  * Uses node-archiver for streaming ZIP creation. Each PDF is fetched from the
- * storage provider and appended to the archive.
+ * storage provider and appended to the archive sequentially to limit memory use.
  *
  * @param certificates - List of certificates with storageKey and fileName
  * @param fetchPdf - Function that fetches a PDF buffer by storage key
- * @returns ZIP buffer
+ * @returns PassThrough stream piped from archiver + a promise that resolves when done
+ */
+export function createZipStream(
+  certificates: Array<{ storageKey: string; fileName: string }>,
+  fetchPdf: (storageKey: string) => Promise<Buffer>,
+): { stream: PassThrough; done: Promise<void> } {
+  const uniqueNames = deduplicateFileNames(certificates.map(c => c.fileName));
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  const passThrough = new PassThrough();
+
+  archive.on('error', (err) => passThrough.destroy(err));
+  archive.pipe(passThrough);
+
+  const done = (async () => {
+    for (let i = 0; i < certificates.length; i++) {
+      const cert = certificates[i];
+      const pdf = await fetchPdf(cert.storageKey);
+      const fileName = uniqueNames.get(i) ?? cert.fileName;
+      archive.append(pdf, { name: fileName });
+    }
+    await archive.finalize();
+  })();
+
+  return { stream: passThrough, done };
+}
+
+/**
+ * Download certificate PDFs from storage and create a ZIP archive buffer.
+ * Convenience wrapper around createZipStream for backward compatibility.
  */
 export async function createZipArchive(
   certificates: Array<{ storageKey: string; fileName: string }>,
   fetchPdf: (storageKey: string) => Promise<Buffer>,
 ): Promise<Buffer> {
-  const uniqueNames = deduplicateFileNames(certificates.map(c => c.fileName));
+  const { stream, done } = createZipStream(certificates, fetchPdf);
 
-  return new Promise<Buffer>((resolve, reject) => {
-    const archive = archiver('zip', { zlib: { level: 6 } });
-    const chunks: Buffer[] = [];
-    const passThrough = new PassThrough();
+  const chunks: Buffer[] = [];
+  stream.on('data', (chunk: Buffer) => chunks.push(chunk));
 
-    passThrough.on('data', (chunk: Buffer) => chunks.push(chunk));
-    passThrough.on('end', () => resolve(Buffer.concat(chunks)));
-    passThrough.on('error', reject);
-
-    archive.on('error', reject);
-    archive.pipe(passThrough);
-
-    // Append all PDFs sequentially to avoid memory pressure
-    const appendAll = async () => {
-      for (let i = 0; i < certificates.length; i++) {
-        const cert = certificates[i];
-        const pdf = await fetchPdf(cert.storageKey);
-        const fileName = uniqueNames.get(i) ?? cert.fileName;
-        archive.append(pdf, { name: fileName });
-      }
-      await archive.finalize();
-    };
-
-    appendAll().catch(reject);
+  await new Promise<void>((resolve, reject) => {
+    stream.on('end', resolve);
+    stream.on('error', reject);
+    done.catch(reject);
   });
+
+  return Buffer.concat(chunks);
 }

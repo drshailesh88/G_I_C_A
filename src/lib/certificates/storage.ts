@@ -15,6 +15,8 @@ export type StorageUploadResult = {
 export type StorageProvider = {
   /** Upload a PDF buffer to storage. Returns the storage key and metadata. */
   upload(key: string, data: Buffer, contentType: string): Promise<StorageUploadResult>;
+  /** Upload a stream to storage (for large files like ZIPs). Falls back to buffered upload if not supported. */
+  uploadStream?(key: string, stream: import('stream').Readable, contentType: string): Promise<StorageUploadResult>;
   /** Generate a signed URL for temporary download access. */
   getSignedUrl(key: string, expiresInSeconds?: number): Promise<string>;
   /** Delete a stored file. */

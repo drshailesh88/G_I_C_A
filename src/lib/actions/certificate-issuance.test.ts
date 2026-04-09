@@ -53,6 +53,7 @@ function chainedSelectSequence(calls: unknown[][]) {
       where: vi.fn().mockImplementation(() => chain),
       limit: vi.fn().mockResolvedValue(rows),
       orderBy: vi.fn().mockResolvedValue(rows),
+      for: vi.fn().mockResolvedValue(rows),
       then: (resolve: (val: unknown) => void) => Promise.resolve(rows).then(resolve),
     };
     return chain;
