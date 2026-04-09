@@ -32,13 +32,21 @@ function getBlankTemplate(orientation: string): PdfmeTemplate {
 }
 
 function isValidPdfmeTemplate(json: Record<string, unknown>): json is PdfmeTemplate {
-  return (
-    json !== null &&
-    typeof json === 'object' &&
-    'schemas' in json &&
-    Array.isArray(json.schemas) &&
-    ('basePdf' in json)
-  );
+  if (json === null || typeof json !== 'object') return false;
+  if (!('schemas' in json) || !Array.isArray(json.schemas)) return false;
+  if (!('basePdf' in json)) return false;
+
+  // basePdf must be a string (data URI / URL), ArrayBuffer, Uint8Array, or a BlankPdf object
+  const basePdf = json.basePdf;
+  if (typeof basePdf === 'string' || basePdf instanceof ArrayBuffer || basePdf instanceof Uint8Array) {
+    return true;
+  }
+  // BlankPdf object: must have numeric width and height
+  if (typeof basePdf === 'object' && basePdf !== null) {
+    const bp = basePdf as Record<string, unknown>;
+    return typeof bp.width === 'number' && typeof bp.height === 'number';
+  }
+  return false;
 }
 
 export function CertificateEditorClient({
@@ -101,14 +109,18 @@ export function CertificateEditorClient({
 
     return () => {
       cancelled = true;
-      designerRef.current = null;
+      if (designerRef.current) {
+        // pdfme Designer has a destroy method to clean up event listeners and DOM
+        (designerRef.current as unknown as { destroy?: () => void }).destroy?.();
+        designerRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Save template to DB
   const handleSave = useCallback(() => {
-    if (!designerRef.current) return;
+    if (!designerRef.current || status === 'archived') return;
     setError(null);
     setSaveSuccess(false);
 
@@ -126,7 +138,7 @@ export function CertificateEditorClient({
         setError(err instanceof Error ? err.message : 'Failed to save template');
       }
     });
-  }, [eventId, templateId]);
+  }, [eventId, templateId, status]);
 
   // Preview: generate a sample PDF with placeholder values
   const handlePreview = useCallback(async () => {

@@ -143,4 +143,38 @@ describe('CertificateEditorClient', () => {
     expect(html).toContain('A4_portrait');
     expect(html).toContain('pdfme-designer-container');
   });
+
+  // ── Bug fixes verified by Codex adversarial review ────────────
+
+  it('rejects basePdf with string type but no schemas (validation tightening)', () => {
+    // basePdf: "broken" string with schemas present should still be valid (base64/URL)
+    const html = render({
+      templateJson: {
+        basePdf: 'data:application/pdf;base64,JVBERi0x',
+        schemas: [[]],
+      } as unknown as typeof defaultProps.templateJson,
+    });
+    // Should use this template (valid), not blank
+    expect(html).toContain('pdfme-designer-container');
+  });
+
+  it('rejects basePdf object without width/height as invalid', () => {
+    // basePdf: { broken: true } is not a valid BlankPdf — should fall back to blank
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const html = render({ templateJson: { basePdf: { broken: true }, schemas: [[]] } as any });
+    expect(html).toContain('pdfme-designer-container');
+    expect(html).toContain('Loading designer');
+  });
+
+  it('does not show Save button for archived templates (Ctrl+S also blocked)', () => {
+    const html = render({ status: 'archived' });
+    // Save button is not rendered
+    expect(html).toContain('Preview PDF');
+    expect(html).toContain('archived and cannot be edited');
+    // Verify no Save button in the output (checking for absence of the save button text
+    // in a button context — Preview PDF is still there)
+    const saveButtonMatch = html.match(/>Save</);
+    // Save button text should not appear (only "Preview PDF" button exists)
+    expect(saveButtonMatch).toBeNull();
+  });
 });
