@@ -4,6 +4,10 @@ import {
   createVehicleSchema,
   assignPassengerSchema,
   movePassengerSchema,
+  updateBatchSchema,
+  batchIdSchema,
+  vehicleIdSchema,
+  passengerIdSchema,
   BATCH_STATUSES,
   BATCH_TRANSITIONS,
   VEHICLE_STATUSES,
@@ -219,5 +223,109 @@ describe('movePassengerSchema', () => {
       targetVehicleAssignmentId: '',
     });
     expect(result.targetVehicleAssignmentId).toBe('');
+  });
+});
+
+// ── Hardening: schema defaults ───────────────────────────────
+describe('Schema defaults', () => {
+  it('createBatchSchema defaults pickupHubType and dropHubType to "other"', () => {
+    const result = createBatchSchema.parse({
+      movementType: 'arrival',
+      serviceDate: '2026-05-01T00:00:00Z',
+      timeWindowStart: '2026-05-01T08:00:00Z',
+      timeWindowEnd: '2026-05-01T10:00:00Z',
+      sourceCity: 'Mumbai',
+      pickupHub: 'BOM T2',
+      dropHub: 'Hotel Leela',
+    });
+    expect(result.pickupHubType).toBe('other');
+    expect(result.dropHubType).toBe('other');
+  });
+
+  it('createBatchSchema rejects notes longer than 2000 chars', () => {
+    expect(() =>
+      createBatchSchema.parse({
+        movementType: 'arrival',
+        serviceDate: '2026-05-01T00:00:00Z',
+        timeWindowStart: '2026-05-01T08:00:00Z',
+        timeWindowEnd: '2026-05-01T10:00:00Z',
+        sourceCity: 'Mumbai',
+        pickupHub: 'BOM T2',
+        dropHub: 'Hotel Leela',
+        notes: 'x'.repeat(2001),
+      }),
+    ).toThrow();
+  });
+
+  it('createVehicleSchema coerces string capacity to number', () => {
+    const result = createVehicleSchema.parse({
+      batchId: '550e8400-e29b-41d4-a716-446655440000',
+      vehicleLabel: 'Van-1',
+      vehicleType: 'van',
+      capacity: '12',
+    });
+    expect(result.capacity).toBe(12);
+    expect(typeof result.capacity).toBe('number');
+  });
+
+  it('createVehicleSchema rejects capacity over 100', () => {
+    expect(() =>
+      createVehicleSchema.parse({
+        batchId: '550e8400-e29b-41d4-a716-446655440000',
+        vehicleLabel: 'Bus-1',
+        vehicleType: 'bus',
+        capacity: 101,
+      }),
+    ).toThrow();
+  });
+});
+
+// ── Hardening: UUID validation ───────────────────────────────
+describe('UUID validation', () => {
+  it('batchIdSchema rejects non-UUID strings', () => {
+    expect(() => batchIdSchema.parse('not-a-uuid')).toThrow('Invalid batch ID');
+  });
+
+  it('vehicleIdSchema rejects non-UUID strings', () => {
+    expect(() => vehicleIdSchema.parse('abc123')).toThrow('Invalid vehicle assignment ID');
+  });
+
+  it('passengerIdSchema rejects non-UUID strings', () => {
+    expect(() => passengerIdSchema.parse('')).toThrow('Invalid passenger assignment ID');
+  });
+
+  it('assignPassengerSchema rejects invalid personId UUID', () => {
+    expect(() =>
+      assignPassengerSchema.parse({
+        batchId: '550e8400-e29b-41d4-a716-446655440000',
+        personId: 'not-valid',
+        travelRecordId: '550e8400-e29b-41d4-a716-446655440002',
+      }),
+    ).toThrow();
+  });
+});
+
+// ── Hardening: updateBatchSchema ─────────────────────────────
+describe('updateBatchSchema', () => {
+  it('requires batchId', () => {
+    expect(() => updateBatchSchema.parse({})).toThrow();
+  });
+
+  it('allows all fields optional except batchId', () => {
+    const result = updateBatchSchema.parse({
+      batchId: '550e8400-e29b-41d4-a716-446655440000',
+    });
+    expect(result.batchId).toBeDefined();
+    expect(result.sourceCity).toBeUndefined();
+    expect(result.pickupHub).toBeUndefined();
+  });
+
+  it('accepts partial updates', () => {
+    const result = updateBatchSchema.parse({
+      batchId: '550e8400-e29b-41d4-a716-446655440000',
+      sourceCity: 'Delhi',
+    });
+    expect(result.sourceCity).toBe('Delhi');
+    expect(result.pickupHub).toBeUndefined();
   });
 });

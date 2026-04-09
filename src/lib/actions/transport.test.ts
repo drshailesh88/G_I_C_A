@@ -282,3 +282,126 @@ describe('updatePassengerStatus', () => {
     await expect(updatePassengerStatus(EVENT_ID, PASSENGER_ID, 'assigned')).rejects.toThrow('Passenger assignment not found');
   });
 });
+
+// ══════════════════════════════════════════════════════════════
+// HARDENING: updateTransportBatch
+// ══════════════════════════════════════════════════════════════
+import { updateTransportBatch, getEventTransportBatches, getTransportBatch, getBatchVehicles, getBatchPassengers } from './transport';
+
+describe('updateTransportBatch', () => {
+  it('allows partial update on planned batch', async () => {
+    chainedSelect([{ id: BATCH_ID, batchStatus: 'planned' }]);
+    chainedUpdate([{ id: BATCH_ID, sourceCity: 'Delhi' }]);
+
+    const result = await updateTransportBatch(EVENT_ID, {
+      batchId: BATCH_ID,
+      sourceCity: 'Delhi',
+    });
+    expect(result.sourceCity).toBe('Delhi');
+  });
+
+  it('blocks update on completed batch', async () => {
+    chainedSelect([{ id: BATCH_ID, batchStatus: 'completed' }]);
+    await expect(
+      updateTransportBatch(EVENT_ID, { batchId: BATCH_ID, sourceCity: 'Delhi' }),
+    ).rejects.toThrow('Cannot update a batch in "completed" status');
+  });
+
+  it('blocks update on cancelled batch', async () => {
+    chainedSelect([{ id: BATCH_ID, batchStatus: 'cancelled' }]);
+    await expect(
+      updateTransportBatch(EVENT_ID, { batchId: BATCH_ID, sourceCity: 'Delhi' }),
+    ).rejects.toThrow('Cannot update a batch in "cancelled" status');
+  });
+
+  it('throws when batch not found', async () => {
+    chainedSelect([]);
+    await expect(
+      updateTransportBatch(EVENT_ID, { batchId: BATCH_ID, sourceCity: 'Delhi' }),
+    ).rejects.toThrow('Transport batch not found');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// HARDENING: Batch status full lifecycle
+// ══════════════════════════════════════════════════════════════
+describe('updateBatchStatus — full lifecycle', () => {
+  it('allows cancellation from planned', async () => {
+    chainedSelect([{ id: BATCH_ID, batchStatus: 'planned' }]);
+    chainedUpdate([{ id: BATCH_ID, batchStatus: 'cancelled' }]);
+    const result = await updateBatchStatus(EVENT_ID, BATCH_ID, 'cancelled');
+    expect(result.batchStatus).toBe('cancelled');
+  });
+
+  it('allows cancellation from ready', async () => {
+    chainedSelect([{ id: BATCH_ID, batchStatus: 'ready' }]);
+    chainedUpdate([{ id: BATCH_ID, batchStatus: 'cancelled' }]);
+    const result = await updateBatchStatus(EVENT_ID, BATCH_ID, 'cancelled');
+    expect(result.batchStatus).toBe('cancelled');
+  });
+
+  it('allows cancellation from in_progress', async () => {
+    chainedSelect([{ id: BATCH_ID, batchStatus: 'in_progress' }]);
+    chainedUpdate([{ id: BATCH_ID, batchStatus: 'cancelled' }]);
+    const result = await updateBatchStatus(EVENT_ID, BATCH_ID, 'cancelled');
+    expect(result.batchStatus).toBe('cancelled');
+  });
+
+  it('allows in_progress -> completed', async () => {
+    chainedSelect([{ id: BATCH_ID, batchStatus: 'in_progress' }]);
+    chainedUpdate([{ id: BATCH_ID, batchStatus: 'completed' }]);
+    const result = await updateBatchStatus(EVENT_ID, BATCH_ID, 'completed');
+    expect(result.batchStatus).toBe('completed');
+  });
+
+  it('rejects cancelled -> anything', async () => {
+    chainedSelect([{ id: BATCH_ID, batchStatus: 'cancelled' }]);
+    await expect(updateBatchStatus(EVENT_ID, BATCH_ID, 'planned')).rejects.toThrow('Cannot transition');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// HARDENING: Vehicle status not found
+// ══════════════════════════════════════════════════════════════
+describe('updateVehicleStatus — not found', () => {
+  it('throws when vehicle assignment not found', async () => {
+    chainedSelect([]);
+    await expect(updateVehicleStatus(EVENT_ID, VEHICLE_ID, 'dispatched')).rejects.toThrow('Vehicle assignment not found');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// HARDENING: Read actions call assertEventAccess
+// ══════════════════════════════════════════════════════════════
+describe('Read actions — auth', () => {
+  it('getEventTransportBatches calls assertEventAccess without requireWrite', async () => {
+    chainedSelect([]);
+    await getEventTransportBatches(EVENT_ID);
+    expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_ID);
+  });
+
+  it('getTransportBatch calls assertEventAccess without requireWrite', async () => {
+    chainedSelect([{ id: BATCH_ID }]);
+    await getTransportBatch(EVENT_ID, BATCH_ID);
+    expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_ID);
+  });
+
+  it('getBatchVehicles calls assertEventAccess without requireWrite', async () => {
+    chainedSelect([]);
+    await getBatchVehicles(EVENT_ID, BATCH_ID);
+    expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_ID);
+  });
+
+  it('getBatchPassengers calls assertEventAccess without requireWrite', async () => {
+    const innerJoinChain = {
+      from: vi.fn().mockReturnValue({
+        innerJoin: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue([]),
+        }),
+      }),
+    };
+    mockDb.select.mockReturnValue(innerJoinChain);
+    await getBatchPassengers(EVENT_ID, BATCH_ID);
+    expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_ID);
+  });
+});
