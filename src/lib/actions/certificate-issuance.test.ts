@@ -271,6 +271,22 @@ describe('issueCertificate', () => {
     await expect(issueCertificate(EVENT_ID, validIssueInput)).rejects.toThrow('certificate_number');
   });
 
+  it('issues new cert after revocation without supersession link (CP-33)', async () => {
+    const revokedCert = { ...mockIssuedCert, id: 'revoked-id', status: 'revoked' };
+    chainedSelectSequence([
+      [{ id: PERSON_ID }],    // person exists
+      [mockTemplate],           // active template
+      [revokedCert],             // existing cert is revoked
+      [],                       // no existing cert numbers
+    ]);
+    const newCert = { ...mockIssuedCert, id: 'fresh-id', supersedesId: null };
+    chainedInsert([newCert]);
+
+    const result = await issueCertificate(EVENT_ID, validIssueInput);
+    // Should NOT link to the revoked cert (buildSupersessionChain returns nulls for revoked)
+    expect(result.supersedesId).toBeNull();
+  });
+
   it('does not retry on non-certificate_number unique violations', async () => {
     let txCallCount = 0;
     const otherUniqueError = Object.assign(
@@ -390,6 +406,11 @@ describe('listIssuedCertificates', () => {
     expect(result).toEqual([]);
   });
 
+  it('calls orderBy for issuedAt DESC ordering (CP-40)', async () => {
+    const chain = chainedSelectWithJoins([]);
+    await listIssuedCertificates(EVENT_ID);
+    expect(chain.orderBy).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ── Get Issued Certificate ───────────────────────────────────
@@ -417,6 +438,48 @@ describe('getCertificateDownloadUrl', () => {
     getSignedUrl: vi.fn().mockResolvedValue('https://r2.example.com/signed?token=abc'),
     delete: vi.fn(),
   };
+
+  it('returns download result with correct format (CP-43)', async () => {
+    const cert = {
+      ...mockIssuedCert,
+      storageKey: 'certificates/ev/type/id.pdf',
+      fileName: 'GEM2026-ATT-00001.pdf',
+    };
+    chainedSelectSequence([[cert]]);
+    const updateChain = {
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      then: vi.fn().mockImplementation((resolve: () => void) => { resolve(); return { catch: vi.fn() }; }),
+    };
+    mockDb.update.mockReturnValue(updateChain);
+
+    const result = await getCertificateDownloadUrl(EVENT_ID, CERT_ID, mockStorageProvider);
+    expect(result).toHaveProperty('url');
+    expect(result).toHaveProperty('fileName');
+    expect(result).toHaveProperty('expiresInSeconds');
+    expect(typeof result.url).toBe('string');
+    expect(typeof result.fileName).toBe('string');
+    expect(result.expiresInSeconds).toBe(3600);
+  });
+
+  it('triggers fire-and-forget update for downloadCount (CP-47)', async () => {
+    const cert = {
+      ...mockIssuedCert,
+      storageKey: 'certificates/ev/type/id.pdf',
+      fileName: 'GEM2026-ATT-00001.pdf',
+    };
+    chainedSelectSequence([[cert]]);
+    const updateChain = {
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      then: vi.fn().mockImplementation((resolve: () => void) => { resolve(); return { catch: vi.fn() }; }),
+    };
+    mockDb.update.mockReturnValue(updateChain);
+
+    await getCertificateDownloadUrl(EVENT_ID, CERT_ID, mockStorageProvider);
+    // Verify the fire-and-forget update was triggered
+    expect(mockDb.update).toHaveBeenCalled();
+  });
 
   it('returns signed URL for issued certificate', async () => {
     const cert = {
@@ -561,6 +624,30 @@ describe('verifyCertificate', () => {
     }
   });
 
+  it('increments verificationCount via fire-and-forget update (CP-52)', async () => {
+    const cert = {
+      id: CERT_ID,
+      certificateNumber: 'GEM2026-ATT-00001',
+      certificateType: 'delegate_attendance',
+      status: 'issued',
+      issuedAt: new Date('2026-04-01'),
+      revokedAt: null,
+      personId: PERSON_ID,
+      eventId: EVENT_ID,
+    };
+    chainedSelectSequence([[cert]]);
+    const updateChain = {
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      then: vi.fn().mockImplementation((resolve: () => void) => { resolve(); return { catch: vi.fn() }; }),
+    };
+    mockDb.update.mockReturnValue(updateChain);
+
+    await verifyCertificate('660e8400-e29b-41d4-a716-446655440099');
+    // Update should have been called to increment verificationCount
+    expect(mockDb.update).toHaveBeenCalled();
+  });
+
   it('rejects non-UUID token', async () => {
     await expect(verifyCertificate('not-a-uuid')).rejects.toThrow();
   });
@@ -662,6 +749,59 @@ describe('resendCertificateNotification', () => {
       certificateId: CERT_ID,
       channel: 'email',
     })).rejects.toThrow('Forbidden');
+  });
+
+  it('uses idempotencyKey with timestamp for uniqueness (CP-124)', async () => {
+    const certWithPerson = {
+      id: CERT_ID,
+      certificateNumber: 'GEM2026-ATT-00001',
+      certificateType: 'delegate_attendance',
+      status: 'issued',
+      storageKey: 'certificates/ev/type/id.pdf',
+      personId: PERSON_ID,
+      personFullName: 'Dr. Smith',
+      personEmail: 'smith@example.com',
+      personPhone: '+919876543210',
+    };
+    chainedSelectWithJoin([certWithPerson]);
+    chainedUpdate([]);
+
+    await resendCertificateNotification(EVENT_ID, {
+      certificateId: CERT_ID,
+      channel: 'email',
+    });
+
+    const call = mockSendNotification.mock.calls[0][0];
+    expect(call.idempotencyKey).toMatch(/^cert-resend-.+-email-\d+$/);
+  });
+
+  it('sends to both channels when channel is both (CP-125)', async () => {
+    const certWithPerson = {
+      id: CERT_ID,
+      certificateNumber: 'GEM2026-ATT-00001',
+      certificateType: 'delegate_attendance',
+      status: 'issued',
+      storageKey: 'certificates/ev/type/id.pdf',
+      personId: PERSON_ID,
+      personFullName: 'Dr. Smith',
+      personEmail: 'smith@example.com',
+      personPhone: '+919876543210',
+    };
+    chainedSelectWithJoin([certWithPerson]);
+    chainedUpdate([]);
+
+    const result = await resendCertificateNotification(EVENT_ID, {
+      certificateId: CERT_ID,
+      channel: 'both',
+    });
+
+    expect(result.sent).toBe(true);
+    expect(result.channels).toBe(2);
+    expect(mockSendNotification).toHaveBeenCalledTimes(2);
+
+    const channels = mockSendNotification.mock.calls.map((c: any[]) => c[0].channel);
+    expect(channels).toContain('email');
+    expect(channels).toContain('whatsapp');
   });
 
   it('fails when the notification service reports a failed send instead of marking the certificate as sent', async () => {

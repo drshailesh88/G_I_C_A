@@ -153,6 +153,18 @@ describe('createCertificateTemplate', () => {
     mockAssertEventAccess.mockRejectedValue(new Error('Forbidden'));
     await expect(createCertificateTemplate(EVENT_ID, validCreateInput)).rejects.toThrow('Forbidden');
   });
+
+  it('applies default file name pattern when not provided (CP-16)', async () => {
+    const insertChain = chainedInsert([{
+      ...mockTemplate,
+      defaultFileNamePattern: '{{full_name}}-{{event_name}}-certificate.pdf',
+    }]);
+
+    await createCertificateTemplate(EVENT_ID, validCreateInput);
+    // Verify the insert was called with the default pattern
+    const insertCall = insertChain.values.mock.calls[0][0];
+    expect(insertCall.defaultFileNamePattern).toBe('{{full_name}}-{{event_name}}-certificate.pdf');
+  });
 });
 
 // ── Update ───────────────────────────────────────────────────

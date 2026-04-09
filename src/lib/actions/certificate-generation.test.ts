@@ -151,6 +151,19 @@ describe('getEligibleRecipients', () => {
 
     expect(result).toEqual([]);
   });
+
+  it('returns specified persons for custom type with personIds (CP-57)', async () => {
+    mockDb.select.mockReturnValueOnce(chainedSelect([mockRecipients[0]]));
+
+    const result = await getEligibleRecipients(EVENT_ID, {
+      recipientType: 'custom',
+      personIds: [PERSON_1],
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe(PERSON_1);
+    expect(mockDb.select).toHaveBeenCalled();
+  });
 });
 
 // ── bulkGenerateCertificates (now queues via Inngest) ──────
@@ -249,6 +262,23 @@ describe('sendCertificateNotifications', () => {
         eventId: EVENT_ID,
         certificateIds: [CERT_ID_1, CERT_ID_2],
         channel: 'email',
+      },
+    });
+  });
+
+  it('dispatches Inngest event with correct structure (CP-62)', async () => {
+    const CERT_ID = '880e8400-e29b-41d4-a716-446655440001';
+    await sendCertificateNotifications(EVENT_ID, {
+      certificateIds: [CERT_ID],
+      channel: 'whatsapp',
+    });
+
+    expect(mockInngestSend).toHaveBeenCalledWith({
+      name: 'bulk/certificates.notify',
+      data: {
+        eventId: EVENT_ID,
+        certificateIds: [CERT_ID],
+        channel: 'whatsapp',
       },
     });
   });

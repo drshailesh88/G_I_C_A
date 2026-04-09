@@ -240,6 +240,45 @@ describe('adversarial: variable validation', () => {
   });
 });
 
+// ── Hardening gap tests (CP-95, CP-98, CP-03) ──────────────
+describe('hardening: boundary validation', () => {
+  it('rejects templateName longer than 200 characters (CP-95)', () => {
+    const longName = 'A'.repeat(201);
+    expect(() => createCertificateTemplateSchema.parse({ ...validCreate, templateName: longName })).toThrow();
+  });
+
+  it('accepts templateName of exactly 200 characters', () => {
+    const maxName = 'A'.repeat(200);
+    const result = createCertificateTemplateSchema.parse({ ...validCreate, templateName: maxName });
+    expect(result.templateName).toBe(maxName);
+  });
+
+  it('rejects revokeReason longer than 2000 characters (CP-98)', () => {
+    const longReason = 'R'.repeat(2001);
+    expect(() => revokeCertificateSchema.parse({
+      certificateId: '550e8400-e29b-41d4-a716-446655440000',
+      revokeReason: longReason,
+    })).toThrow();
+  });
+
+  it('accepts revokeReason of exactly 2000 characters', () => {
+    const maxReason = 'R'.repeat(2000);
+    const result = revokeCertificateSchema.parse({
+      certificateId: '550e8400-e29b-41d4-a716-446655440000',
+      revokeReason: maxReason,
+    });
+    expect(result.revokeReason).toBe(maxReason);
+  });
+
+  it('rejects requiredVariablesJson not subset of allowedVariablesJson (CP-03)', () => {
+    expect(() => createCertificateTemplateSchema.parse({
+      ...validCreate,
+      allowedVariablesJson: ['full_name'],
+      requiredVariablesJson: ['full_name', 'event_name'],
+    })).toThrow('required variables must be included in allowed variables');
+  });
+});
+
 describe('TEMPLATE_STATUS_TRANSITIONS', () => {
   it('draft can go to active or archived', () => {
     expect(TEMPLATE_STATUS_TRANSITIONS.draft).toEqual(['active', 'archived']);

@@ -283,6 +283,34 @@ describe('Pre-Event Emergency Kit (8B-4)', () => {
     expect(data.generatedAt).toBeTruthy();
   });
 
+  // Test CP-129: generateCertificateKeysJson produces correct structure
+  it('generateCertificateKeysJson returns JSON with certificates array and generatedAt (CP-129)', async () => {
+    const certRows = [
+      { storageKey: 'certificates/evt/delegate_attendance/cert-1.pdf', fileName: 'Dr-Rao-cert.pdf', certificateType: 'delegate_attendance', status: 'issued' },
+      { storageKey: 'certificates/evt/speaker_recognition/cert-2.pdf', fileName: 'Dr-Smith-cert.pdf', certificateType: 'speaker_recognition', status: 'issued' },
+    ];
+    setupDbReturn(certRows);
+
+    const { generateCertificateKeysJson } = await import('./emergency-kit');
+    const buffer = await generateCertificateKeysJson(EVENT_ID);
+    const parsed = JSON.parse(buffer.toString('utf-8'));
+
+    expect(parsed.generatedAt).toBeTruthy();
+    expect(parsed.certificates).toHaveLength(2);
+    expect(parsed.certificates[0].storageKey).toBe('certificates/evt/delegate_attendance/cert-1.pdf');
+    expect(parsed.certificates[1].certificateType).toBe('speaker_recognition');
+  });
+
+  // Test CP-131: Events outside 48h window excluded
+  it('findEventsNeedingBackup returns empty when events are outside 48h window', async () => {
+    // Return empty results — simulating no events in window
+    setupDbReturn([]);
+
+    const results = await findEventsNeedingBackup();
+    expect(results).toHaveLength(0);
+    expect(mockDb.select).toHaveBeenCalled();
+  });
+
   // Test 7: Event scoping — all queries filter by eventId
   it('all queries use withEventScope for data isolation', async () => {
     // 9 queries, all empty

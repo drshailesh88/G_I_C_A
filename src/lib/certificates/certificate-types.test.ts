@@ -137,6 +137,42 @@ describe('generateCertificateNumber', () => {
   });
 });
 
+// ── Hardening gap tests (CP-25, CP-26) ──────────────────────
+describe('hardening: per-type required variables', () => {
+  const sessionBasedTypes = [
+    'speaker_recognition',
+    'chairperson_recognition',
+    'panelist_recognition',
+    'moderator_recognition',
+  ] as const;
+
+  it('session-based types require session_title variable (CP-25)', () => {
+    for (const type of sessionBasedTypes) {
+      const config = getCertificateTypeConfig(type);
+      expect(config.requiredVariables).toContain('session_title');
+    }
+  });
+
+  it('non-session types do not require session_title', () => {
+    for (const type of ['delegate_attendance', 'faculty_participation', 'cme_attendance'] as const) {
+      const config = getCertificateTypeConfig(type);
+      expect(config.requiredVariables).not.toContain('session_title');
+    }
+  });
+
+  it('CME type requires cme_credits variable (CP-26)', () => {
+    const config = getCertificateTypeConfig('cme_attendance');
+    expect(config.requiredVariables).toContain('cme_credits');
+  });
+
+  it('non-CME types do not require cme_credits', () => {
+    for (const type of sessionBasedTypes) {
+      const config = getCertificateTypeConfig(type);
+      expect(config.requiredVariables).not.toContain('cme_credits');
+    }
+  });
+});
+
 describe('parseCertificateNumber', () => {
   it('parses valid certificate number', () => {
     const result = parseCertificateNumber('GEM2026-ATT-00412');

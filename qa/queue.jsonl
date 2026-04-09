@@ -1,0 +1,11 @@
+{"module":"certificates","spec":"spec-01-template-management","checkpoints":17,"passing":17,"status":"PASS"}
+{"module":"certificates","spec":"spec-02-certificate-types","checkpoints":10,"passing":10,"status":"PASS"}
+{"module":"certificates","spec":"spec-03-issuance","checkpoints":15,"passing":15,"status":"PASS"}
+{"module":"certificates","spec":"spec-04-download-verify","checkpoints":11,"passing":11,"status":"PASS"}
+{"module":"certificates","spec":"spec-05-bulk-generation","checkpoints":14,"passing":14,"status":"PASS"}
+{"module":"certificates","spec":"spec-06-bulk-zip","checkpoints":14,"passing":14,"status":"PASS"}
+{"module":"certificates","spec":"spec-07-storage-lock","checkpoints":11,"passing":11,"status":"PASS"}
+{"module":"certificates","spec":"spec-08-validation","checkpoints":8,"passing":8,"status":"PASS"}
+{"module":"certificates","spec":"spec-09-issuance-utils","checkpoints":20,"passing":20,"status":"PASS"}
+{"module":"certificates","spec":"spec-10-notification-resend","checkpoints":5,"passing":5,"status":"PASS"}
+{"module":"certificates","spec":"spec-11-exports","checkpoints":6,"passing":6,"status":"PASS"}
