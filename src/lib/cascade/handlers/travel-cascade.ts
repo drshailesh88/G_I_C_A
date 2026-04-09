@@ -4,7 +4,7 @@
  * When travel records are updated or cancelled:
  *   1. Create/update red flags on accommodation records for the same person
  *   2. Create/update red flags on transport passenger assignments
- *   3. Send notification to delegate (stubbed in Phase 3)
+ *   3. Send notification to delegate via email + WhatsApp
  *
  * Cascade direction: Travel → Accommodation + Transport
  */

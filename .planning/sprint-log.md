@@ -1,12 +1,10 @@
 # Sprint Log
 
-## Session started: 2026-04-08
-## Phase: 2 — People + Registration + Scientific Program
-## Current requirement: Registration — public form, status state machine, capacity enforcement
-## Status: BUILDING
+## Session started: 2026-04-09
+## Phase: 6A — Wire Real Notifications to Cascade
+## Current requirement: Req 6A-1 — COMPLETE. Next: Req 6A-2
+## Status: COMPLETE
 ## Attempt: 1/5
-## Session: new
-## Files changed: [person.ts, person.test.ts, person-validations.ts, person-validations.test.ts, event-people.ts, schema/index.ts]
-## Last test result: 80 passing, 0 failing
-## Failing test: N/A
-## Notes: Starting Phase 2. Building People module foundations first — validations, server actions, event_people junction table, list page, detail page.
+## Tests passing: 1018
+## Files changed: travel-cascade.ts, accommodation-cascade.ts, travel-cascade.test.ts, accommodation-cascade.test.ts
+## Codex review: done — 3 fixes applied (idempotency keys, result logging, person-not-found guard)

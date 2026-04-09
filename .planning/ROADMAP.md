@@ -61,7 +61,7 @@
   - **Goal:** Placeholder pages become fully functional. Dashboard becomes operational command center.
   - **Sub-phases:**
     - [ ] 7A: Certificate Template Editor UI (3 requirements)
-      - [ ] 7A-1: Integrate pdfme Designer component (M56)
+      - [x] 7A-1: Integrate pdfme Designer component (M56)
       - [ ] 7A-2: Certificate generation page UI (M12)
       - [ ] 7A-3: View all issued certificates (D6)
     - [ ] 7B: QR Check-in UI (2 requirements)
