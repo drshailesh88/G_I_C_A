@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { attendanceRecords } from '@/lib/db/schema/attendance';
 import { people } from '@/lib/db/schema/people';
 import { eventRegistrations } from '@/lib/db/schema/registrations';
-import { eq, and, sql, count } from 'drizzle-orm';
+import { eq, and, sql, count, notInArray } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
 import { attendanceQuerySchema } from '@/lib/validations/attendance';
@@ -149,4 +149,27 @@ export async function getAttendanceStats(
       bySession,
     };
   });
+}
+
+/**
+ * Count confirmed registrations for an event (eligible for check-in).
+ * Used by the QR scanner page to show total/remaining stats.
+ */
+export async function getConfirmedRegistrationCount(
+  eventId: string,
+): Promise<number> {
+  await assertEventAccess(eventId, { requireWrite: false });
+
+  const [row] = await db
+    .select({ count: count() })
+    .from(eventRegistrations)
+    .where(
+      withEventScope(
+        eventRegistrations.eventId,
+        eventId,
+        eq(eventRegistrations.status, 'confirmed'),
+      ),
+    );
+
+  return row?.count ?? 0;
 }

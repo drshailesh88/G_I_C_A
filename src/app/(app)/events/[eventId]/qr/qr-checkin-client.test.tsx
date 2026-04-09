@@ -15,6 +15,9 @@ vi.mock('@/components/shared/ScanFeedback', () => ({
 vi.mock('@/components/shared/CheckInSearch', () => ({
   CheckInSearch: (props: any) => createElement('div', { 'data-testid': 'check-in-search', 'data-event': props.eventId }),
 }));
+vi.mock('@/lib/hooks/use-online-status', () => ({
+  useOnlineStatus: () => true,
+}));
 
 import { QrCheckInClient } from './qr-checkin-client';
 
@@ -33,53 +36,83 @@ function render(props: Partial<Parameters<typeof QrCheckInClient>[0]> = {}) {
       eventId: EVENT_ID,
       initialStats: emptyStats,
       initialRecords: [],
+      totalRegistrations: 100,
       ...props,
     }),
   );
 }
 
 describe('QrCheckInClient', () => {
+  // ── Layout tests ──
+
   it('renders the page title', () => {
     const html = render();
     expect(html).toContain('QR Check-In');
   });
 
-  it('displays attendance stats cards', () => {
-    const html = render({ initialStats: sampleStats });
-    expect(html).toContain('42'); // total
-    expect(html).toContain('30'); // qr scans
-    expect(html).toContain('12'); // manual
-    expect(html).toContain('2');  // sessions count
-  });
-
-  it('renders zero stats when no check-ins', () => {
-    const html = render({ initialStats: emptyStats });
-    expect(html).toContain('Total Checked In');
-    expect(html).toContain('>0<'); // zero count
-  });
-
-  it('renders tab navigation with all three modes', () => {
+  it('renders three-panel layout with Scanner, Last Scan Result, and Statistics sections', () => {
     const html = render();
-    expect(html).toContain('QR Scanner');
-    expect(html).toContain('Manual Search');
-    expect(html).toContain('Attendance Log');
+    expect(html).toContain('Scanner');
+    expect(html).toContain('Last Scan Result');
+    expect(html).toContain('Statistics');
   });
 
-  it('renders QR scanner component in default mode', () => {
+  it('renders QR scanner component in default mode (not manual search)', () => {
     const html = render();
     expect(html).toContain('data-testid="qr-scanner"');
-    expect(html).toContain(`data-event="${EVENT_ID}"`);
+    expect(html).not.toContain('data-testid="check-in-search"');
   });
 
-  it('renders Attendance Log tab even when scanner is active (tab always visible)', () => {
-    // Default mode is 'scan', but the attendance log tab label is always present
-    const html = render();
-    expect(html).toContain('Attendance Log');
+  // ── Stats tests ──
+
+  it('displays total/checked-in/remaining stats', () => {
+    const html = render({ totalRegistrations: 100, initialStats: sampleStats });
+    // Total registrations
+    expect(html).toContain('Total');
+    expect(html).toContain('>100<');
+    // Checked in
+    expect(html).toContain('Checked In');
+    expect(html).toContain('>42<');
+    // Remaining = 100 - 42 = 58
+    expect(html).toContain('Remaining');
+    expect(html).toContain('>58<');
   });
 
-  it('reflects stats from records passed to the component', () => {
+  it('shows remaining as 0 when checked-in exceeds total', () => {
     const html = render({
-      initialStats: { totalCheckedIn: 5, byMethod: { qr_scan: 3, manual_search: 2 }, bySession: {} },
+      totalRegistrations: 5,
+      initialStats: { totalCheckedIn: 10, byMethod: {}, bySession: {} },
+    });
+    expect(html).toContain('Remaining');
+    expect(html).toContain('>0<');
+  });
+
+  it('displays method breakdown (QR Scans and Manual counts)', () => {
+    const html = render({ initialStats: sampleStats });
+    expect(html).toContain('QR Scans');
+    expect(html).toContain('>30<');
+    expect(html).toContain('Manual');
+    expect(html).toContain('>12<');
+  });
+
+  // ── Bottom bar tests ──
+
+  it('renders bottom bar with Manual Check-in toggle and Online connectivity badge', () => {
+    const html = render();
+    expect(html).toContain('data-testid="bottom-bar"');
+    expect(html).toContain('data-testid="manual-checkin-toggle"');
+    expect(html).toContain('Manual Check-in');
+    expect(html).toContain('data-testid="connectivity-badge"');
+    expect(html).toContain('Online');
+  });
+
+  it('shows "Waiting for scan..." placeholder when no scan result', () => {
+    const html = render();
+    expect(html).toContain('Waiting for scan...');
+  });
+
+  it('renders recent check-ins in attendance log', () => {
+    const html = render({
       initialRecords: [
         {
           id: 'att-1',
@@ -96,9 +129,7 @@ describe('QrCheckInClient', () => {
         },
       ],
     });
-    // Stats are always visible regardless of tab
-    expect(html).toContain('>5<'); // total
-    expect(html).toContain('>3<'); // qr scans
-    expect(html).toContain('>2<'); // manual
+    expect(html).toContain('Dr. Sharma');
+    expect(html).toContain('Recent Check-ins');
   });
 });

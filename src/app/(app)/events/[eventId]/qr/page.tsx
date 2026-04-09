@@ -1,6 +1,10 @@
 import { redirect } from 'next/navigation';
 import { assertEventAccess } from '@/lib/auth/event-access';
-import { getAttendanceStats, listAttendanceRecords } from '@/lib/actions/attendance';
+import {
+  getAttendanceStats,
+  listAttendanceRecords,
+  getConfirmedRegistrationCount,
+} from '@/lib/actions/attendance';
 import { QrCheckInClient } from './qr-checkin-client';
 
 type Params = Promise<{ eventId: string }>;
@@ -18,9 +22,10 @@ export default async function QrCheckInPage({
     redirect('/login');
   }
 
-  const [stats, records] = await Promise.all([
+  const [stats, records, totalRegistrations] = await Promise.all([
     getAttendanceStats(eventId, { eventId }),
     listAttendanceRecords(eventId, { eventId }),
+    getConfirmedRegistrationCount(eventId),
   ]);
 
   return (
@@ -28,6 +33,7 @@ export default async function QrCheckInPage({
       eventId={eventId}
       initialStats={stats}
       initialRecords={records}
+      totalRegistrations={totalRegistrations}
     />
   );
 }
