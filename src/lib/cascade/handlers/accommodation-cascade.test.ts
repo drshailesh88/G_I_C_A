@@ -140,8 +140,8 @@ describe('Accommodation cascade → real notification', () => {
     expect(call.variables.cancelledAt).toBe('2026-04-09T15:00:00Z');
     expect(call.variables.reason).toBe('Hotel overbooked');
     expect(call.variables.recipientEmail).toBe('cancel@test.com');
-    expect(call.idempotencyKey).toBe(
-      `notify:accom-cancelled:${eventId}:${personId}:${accommodationRecordId}:email`,
+    expect(call.idempotencyKey).toMatch(
+      new RegExp(`^notify:accom-cancelled:${eventId}:${personId}:${accommodationRecordId}:[\\w-]+:email$`),
     );
   });
 

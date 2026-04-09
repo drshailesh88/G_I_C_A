@@ -122,8 +122,8 @@ describe('Travel cascade → real notification', () => {
     expect(call.variables.changeSummary).toEqual({
       departureAtUtc: { from: '2026-04-10', to: '2026-04-11' },
     });
-    expect(call.idempotencyKey).toBe(
-      `notify:travel-updated:${eventId}:${personId}:${travelRecordId}:email`,
+    expect(call.idempotencyKey).toMatch(
+      new RegExp(`^notify:travel-updated:${eventId}:${personId}:${travelRecordId}:[\\w-]+:email$`),
     );
   });
 
@@ -188,5 +188,107 @@ describe('Travel cascade → real notification', () => {
       expect.any(Error),
     );
     consoleSpy.mockRestore();
+  });
+
+  it('skips email notification when person has no email (Codex fix #1)', async () => {
+    const accomSelect = createChainableSelect([]);
+    const transportSelect = createChainableSelect([]);
+    // Person exists but has NO email
+    const personSelect = createChainableSelect([
+      { email: null, phoneE164: '+919999999999', fullName: 'No Email Person' },
+    ]);
+
+    mockDb.select
+      .mockReturnValueOnce(accomSelect)
+      .mockReturnValueOnce(transportSelect)
+      .mockReturnValueOnce(personSelect);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
+      travelRecordId,
+      personId,
+      registrationId: null,
+      previous: {},
+      current: {},
+      changeSummary: { toCity: { from: 'A', to: 'B' } },
+    });
+
+    // sendNotification should NOT be called — no email to send to
+    expect(mockSendNotification).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('skipping email notification'),
+      expect.objectContaining({ personId }),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('skips notification when person not found in DB (Codex fix #1)', async () => {
+    const accomSelect = createChainableSelect([]);
+    const transportSelect = createChainableSelect([]);
+    // Person NOT found — empty result
+    const personSelect = createChainableSelect([]);
+
+    mockDb.select
+      .mockReturnValueOnce(accomSelect)
+      .mockReturnValueOnce(transportSelect)
+      .mockReturnValueOnce(personSelect);
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_CANCELLED, eventId, actor, {
+      travelRecordId,
+      personId,
+      registrationId: null,
+      cancelledAt: '2026-04-09T10:00:00Z',
+      reason: null,
+    });
+
+    expect(mockSendNotification).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('generates unique idempotency keys for successive updates (Codex fix #4)', async () => {
+    const makeSelects = () => {
+      const accomSelect = createChainableSelect([]);
+      const transportSelect = createChainableSelect([]);
+      const personSelect = createChainableSelect([
+        { email: 'test@test.com', phoneE164: null, fullName: 'Test' },
+      ]);
+      return [accomSelect, transportSelect, personSelect];
+    };
+
+    // First update
+    const [a1, t1, p1] = makeSelects();
+    mockDb.select.mockReturnValueOnce(a1).mockReturnValueOnce(t1).mockReturnValueOnce(p1);
+
+    await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
+      travelRecordId,
+      personId,
+      registrationId: null,
+      previous: {},
+      current: {},
+      changeSummary: { toCity: { from: 'A', to: 'B' } },
+    });
+
+    const key1 = mockSendNotification.mock.calls[0][0].idempotencyKey;
+
+    // Second update (same record, different change)
+    const [a2, t2, p2] = makeSelects();
+    mockDb.select.mockReturnValueOnce(a2).mockReturnValueOnce(t2).mockReturnValueOnce(p2);
+
+    await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
+      travelRecordId,
+      personId,
+      registrationId: null,
+      previous: {},
+      current: {},
+      changeSummary: { toCity: { from: 'B', to: 'C' } },
+    });
+
+    const key2 = mockSendNotification.mock.calls[1][0].idempotencyKey;
+
+    // Keys must be different to allow both notifications through
+    expect(key1).not.toBe(key2);
   });
 });

@@ -49,6 +49,23 @@ async function sendCascadeNotification(params: {
 }): Promise<void> {
   try {
     const contact = await resolvePersonContact(params.personId);
+
+    // Guard: skip notification if no recipient address for the channel
+    if (params.channel === 'email' && !contact.email) {
+      console.warn('[cascade:travel] skipping email notification — person has no email', {
+        personId: params.personId,
+        eventId: params.eventId,
+      });
+      return;
+    }
+    if (params.channel === 'whatsapp' && !contact.phoneE164) {
+      console.warn('[cascade:travel] skipping WhatsApp notification — person has no phone', {
+        personId: params.personId,
+        eventId: params.eventId,
+      });
+      return;
+    }
+
     await sendNotification({
       eventId: params.eventId,
       personId: params.personId,
@@ -145,7 +162,7 @@ async function handleTravelUpdated(params: {
     triggerEntityType: 'travel_record',
     triggerEntityId: data.travelRecordId,
     variables: { changeSummary: data.changeSummary },
-    idempotencyKey: `notify:travel-updated:${eventId}:${data.personId}:${data.travelRecordId}:email`,
+    idempotencyKey: `notify:travel-updated:${eventId}:${data.personId}:${data.travelRecordId}:${crypto.randomUUID()}:email`,
   });
 }
 
@@ -218,7 +235,7 @@ async function handleTravelCancelled(params: {
     triggerEntityType: 'travel_record',
     triggerEntityId: data.travelRecordId,
     variables: { cancelledAt: data.cancelledAt, reason: data.reason },
-    idempotencyKey: `notify:travel-cancelled:${eventId}:${data.personId}:${data.travelRecordId}:email`,
+    idempotencyKey: `notify:travel-cancelled:${eventId}:${data.personId}:${data.travelRecordId}:${crypto.randomUUID()}:email`,
   });
 }
 
