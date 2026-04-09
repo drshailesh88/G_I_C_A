@@ -6,6 +6,7 @@
  */
 
 import type { WhatsAppProvider, SendWhatsAppInput, ProviderSendResult } from './types';
+import { withTimeout, PROVIDER_TIMEOUTS } from './timeout';
 
 function getConfig() {
   const baseUrl = process.env.EVOLUTION_API_BASE_URL;
@@ -26,17 +27,22 @@ export const evolutionWhatsAppProvider: WhatsAppProvider = {
     // Evolution API expects the number without the leading '+'
     const number = input.toPhoneE164.replace(/^\+/, '');
 
-    const response = await fetch(`${baseUrl}/message/sendText`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': apiKey,
-      },
-      body: JSON.stringify({
-        number,
-        text: input.body,
+    const response = await withTimeout(
+      'evolution_api',
+      PROVIDER_TIMEOUTS.EVOLUTION_WHATSAPP,
+      async (signal) => fetch(`${baseUrl}/message/sendText`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': apiKey,
+        },
+        body: JSON.stringify({
+          number,
+          text: input.body,
+        }),
+        signal,
       }),
-    });
+    );
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'unknown');

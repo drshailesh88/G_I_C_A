@@ -26,6 +26,9 @@ import {
 import { resendEmailProvider } from './email';
 import { evolutionWhatsAppProvider } from './whatsapp';
 import { redisIdempotencyService } from './idempotency';
+import type { CircuitBreakerService } from './circuit-breaker';
+import { ProviderTimeoutError } from './timeout';
+import { CircuitOpenError } from './circuit-breaker';
 
 // ── Dependency injection for testability ──────────────────────
 
@@ -33,6 +36,7 @@ export type NotificationServiceDeps = {
   emailProvider: EmailProvider;
   whatsAppProvider: WhatsAppProvider;
   idempotencyService: IdempotencyService;
+  circuitBreaker?: CircuitBreakerService | null;
   renderTemplateFn: typeof renderTemplate;
   createLogEntryFn: typeof createLogEntry;
   updateLogStatusFn: typeof updateLogStatus;
@@ -43,6 +47,7 @@ const defaultDeps: NotificationServiceDeps = {
   emailProvider: resendEmailProvider,
   whatsAppProvider: evolutionWhatsAppProvider,
   idempotencyService: redisIdempotencyService,
+  circuitBreaker: null, // Set via getDefaultCircuitBreaker() in production wiring
   renderTemplateFn: renderTemplate,
   createLogEntryFn: createLogEntry,
   updateLogStatusFn: updateLogStatus,
@@ -154,7 +159,31 @@ export async function sendNotification(
     };
   }
 
-  // 4. Route to provider
+  // 4. Circuit breaker check
+  const providerName = providerNameForChannel(input.channel);
+  if (deps.circuitBreaker) {
+    try {
+      await deps.circuitBreaker.checkCircuit(providerName);
+    } catch (error) {
+      if (error instanceof CircuitOpenError) {
+        await updateLogStatusFn(logRow.id, input.eventId, {
+          status: 'failed',
+          lastErrorCode: 'CIRCUIT_OPEN',
+          lastErrorMessage: error.message,
+          failedAt: new Date(),
+        });
+        return {
+          notificationLogId: logRow.id,
+          provider: providerName,
+          providerMessageId: null,
+          status: 'failed',
+        };
+      }
+      throw error;
+    }
+  }
+
+  // 5. Route to provider
   let providerResult: ProviderSendResult;
 
   try {
@@ -175,23 +204,40 @@ export async function sendNotification(
       });
     }
   } catch (error) {
-    // Provider threw — mark as failed
+    // Determine error code based on error type
+    const isTimeout = error instanceof ProviderTimeoutError;
+    const errorCode = isTimeout ? 'PROVIDER_TIMEOUT' : 'PROVIDER_EXCEPTION';
     const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // Record failure in circuit breaker
+    if (deps.circuitBreaker) {
+      await deps.circuitBreaker.recordFailure(providerName);
+    }
+
     await updateLogStatusFn(logRow.id, input.eventId, {
       status: 'failed',
-      lastErrorCode: 'PROVIDER_EXCEPTION',
+      lastErrorCode: errorCode,
       lastErrorMessage: errorMessage,
       failedAt: new Date(),
     });
     return {
       notificationLogId: logRow.id,
-      provider: providerNameForChannel(input.channel),
+      provider: providerName,
       providerMessageId: null,
       status: 'failed',
     };
   }
 
-  // 5. Update log with provider response
+  // 6. Update circuit breaker with result
+  if (deps.circuitBreaker) {
+    if (providerResult.accepted) {
+      await deps.circuitBreaker.recordSuccess(providerName);
+    } else {
+      await deps.circuitBreaker.recordFailure(providerName);
+    }
+  }
+
+  // 7. Update log with provider response
   const finalStatus: NotificationStatus = providerResult.accepted ? 'sent' : 'failed';
 
   await updateLogStatusFn(logRow.id, input.eventId, {

@@ -7,6 +7,7 @@
 
 import { Resend } from 'resend';
 import type { EmailProvider, SendEmailInput, ProviderSendResult } from './types';
+import { withTimeout, PROVIDER_TIMEOUTS } from './timeout';
 
 const DEFAULT_FROM = 'GEM India <noreply@gemindia.org>';
 
@@ -28,14 +29,18 @@ export const resendEmailProvider: EmailProvider = {
           ? `GEM India <${process.env.RESEND_FROM_EMAIL}>`
           : DEFAULT_FROM);
 
-    const { data, error } = await resend.emails.send({
-      from: fromAddress,
-      to: input.toEmail,
-      subject: input.subject,
-      html: input.htmlBody,
-      text: input.textBody,
-      headers: input.metadata,
-    });
+    const { data, error } = await withTimeout(
+      'resend',
+      PROVIDER_TIMEOUTS.RESEND_EMAIL,
+      async () => resend.emails.send({
+        from: fromAddress,
+        to: input.toEmail,
+        subject: input.subject,
+        html: input.htmlBody,
+        text: input.textBody,
+        headers: input.metadata,
+      }),
+    );
 
     if (error) {
       return {
