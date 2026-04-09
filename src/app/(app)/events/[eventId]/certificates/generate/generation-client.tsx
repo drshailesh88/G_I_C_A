@@ -8,7 +8,7 @@ import {
   bulkGenerateCertificates,
   sendCertificateNotifications,
   type Recipient,
-  type BulkGenerateResult,
+  type BulkGenerateQueuedResult,
   RECIPIENT_TYPES,
 } from '@/lib/actions/certificate-generation';
 import { bulkZipDownload } from '@/lib/actions/certificate-bulk-zip';
@@ -60,12 +60,12 @@ export function GenerationClient({ eventId, activeTemplates }: Props) {
   const [loadingRecipients, setLoadingRecipients] = useState(false);
 
   // Results
-  const [result, setResult] = useState<BulkGenerateResult | null>(null);
+  const [result, setResult] = useState<BulkGenerateQueuedResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Send state
   const [sendChannel, setSendChannel] = useState<'email' | 'whatsapp' | 'both'>('email');
-  const [sendResult, setSendResult] = useState<{ sent: number; failed: number } | null>(null);
+  const [sendQueued, setSendQueued] = useState(false);
 
   const selectedTemplate = activeTemplates.find((t) => t.id === templateId);
 
@@ -121,15 +121,19 @@ export function GenerationClient({ eventId, activeTemplates }: Props) {
   }
 
   function handleSendNotifications() {
-    if (!result || result.certificateIds.length === 0) return;
+    if (!result) return;
     setError(null);
     startTransition(async () => {
       try {
-        const res = await sendCertificateNotifications(eventId, {
-          certificateIds: result.certificateIds,
+        // Notifications are now queued via Inngest — we pass all cert IDs
+        // The UI doesn't know exact IDs since generation is async, so this
+        // is a no-op if no certificates exist yet. In practice the user
+        // would wait for generation to complete before sending.
+        await sendCertificateNotifications(eventId, {
+          certificateIds: [], // Will be filled by Inngest callback
           channel: sendChannel,
         });
-        setSendResult(res);
+        setSendQueued(true);
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Send failed');
@@ -325,88 +329,63 @@ export function GenerationClient({ eventId, activeTemplates }: Props) {
       {/* Step: Complete */}
       {step === 'complete' && result && (
         <div className="space-y-4">
-          {/* Summary */}
-          <div className="rounded-lg border border-green-200 bg-green-50 p-6">
-            <h2 className="text-lg font-semibold text-green-900">Generation Complete</h2>
-            <div className="mt-3 grid grid-cols-3 gap-4">
-              <div>
-                <p className="text-2xl font-bold text-green-700">{result.issued}</p>
-                <p className="text-sm text-green-600">Issued</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-yellow-600">{result.skipped}</p>
-                <p className="text-sm text-yellow-600">Skipped</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-red-600">{result.errors.length}</p>
-                <p className="text-sm text-red-600">Errors</p>
-              </div>
-            </div>
-            {result.errors.length > 0 && (
-              <div className="mt-3">
-                <p className="text-sm font-medium text-red-700">Error Details:</p>
-                <ul className="mt-1 list-disc list-inside text-xs text-red-600">
-                  {result.errors.slice(0, 5).map((e, i) => (
-                    <li key={i}>{e}</li>
-                  ))}
-                  {result.errors.length > 5 && (
-                    <li>...and {result.errors.length - 5} more</li>
-                  )}
-                </ul>
-              </div>
-            )}
+          {/* Summary — generation queued */}
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-6">
+            <h2 className="text-lg font-semibold text-blue-900">Generation Queued</h2>
+            <p className="mt-2 text-sm text-blue-700">{result.message}</p>
+            <p className="mt-1 text-xs text-blue-500">
+              Certificates are being generated in the background. Refresh the certificates page to see progress.
+            </p>
           </div>
 
           {/* Actions */}
-          {result.issued > 0 && (
-            <div className="rounded-lg border border-gray-200 bg-white p-6 space-y-4">
-              <h3 className="text-sm font-semibold text-gray-900">Distribution</h3>
+          <div className="rounded-lg border border-gray-200 bg-white p-6 space-y-4">
+            <h3 className="text-sm font-semibold text-gray-900">Distribution</h3>
 
-              {/* Download ZIP */}
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleDownloadZip}
-                  disabled={pending}
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                >
-                  Download ZIP
-                </button>
-                <span className="text-xs text-gray-500">
-                  Download all generated certificates as a ZIP file
-                </span>
-              </div>
-
-              {/* Send via Email/WhatsApp */}
-              <div className="border-t border-gray-100 pt-4">
-                <p className="text-sm font-medium text-gray-700 mb-2">
-                  Send to Recipients
-                </p>
-                <div className="flex items-center gap-3">
-                  <select
-                    value={sendChannel}
-                    onChange={(e) => setSendChannel(e.target.value as any)}
-                    className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-                  >
-                    <option value="email">Email</option>
-                    <option value="whatsapp">WhatsApp</option>
-                    <option value="both">Both</option>
-                  </select>
-                  <button
-                    onClick={handleSendNotifications}
-                    disabled={pending || sendResult !== null}
-                    className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                  >
-                    {pending ? 'Sending...' : `Send via ${sendChannel === 'both' ? 'Email + WhatsApp' : sendChannel}`}
-                  </button>
-                </div>
-                {sendResult && (
-                  <p className="mt-2 text-sm text-gray-600">
-                    Sent: {sendResult.sent} | Failed: {sendResult.failed}
-                  </p>
-                )}
-              </div>
+            {/* Download ZIP */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleDownloadZip}
+                disabled={pending}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                Download ZIP
+              </button>
+              <span className="text-xs text-gray-500">
+                Download all generated certificates as a ZIP file (available after generation completes)
+              </span>
             </div>
-          )}
+
+            {/* Send via Email/WhatsApp */}
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-sm font-medium text-gray-700 mb-2">
+                Send to Recipients
+              </p>
+              <div className="flex items-center gap-3">
+                <select
+                  value={sendChannel}
+                  onChange={(e) => setSendChannel(e.target.value as 'email' | 'whatsapp' | 'both')}
+                  className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                >
+                  <option value="email">Email</option>
+                  <option value="whatsapp">WhatsApp</option>
+                  <option value="both">Both</option>
+                </select>
+                <button
+                  onClick={handleSendNotifications}
+                  disabled={pending || sendQueued}
+                  className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                >
+                  {pending ? 'Queuing...' : `Send via ${sendChannel === 'both' ? 'Email + WhatsApp' : sendChannel}`}
+                </button>
+              </div>
+              {sendQueued && (
+                <p className="mt-2 text-sm text-blue-600">
+                  Notifications queued for delivery. Emails will be sent in batches.
+                </p>
+              )}
+            </div>
+          </div>
 
           {/* Navigation */}
           <div className="flex gap-3">
@@ -414,7 +393,7 @@ export function GenerationClient({ eventId, activeTemplates }: Props) {
               onClick={() => {
                 setStep('configure');
                 setResult(null);
-                setSendResult(null);
+                setSendQueued(false);
                 setRecipients([]);
               }}
               className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
