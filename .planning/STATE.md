@@ -4,10 +4,10 @@
 **GEM India V1** — Created 2026-04-07
 
 ## Current Phase
-Phase 9: Production Readiness + UAT — Status: NOT STARTED
+Phase 9: Production Readiness + UAT — Status: IN PROGRESS
 
 ## Next Action
-Begin 9A-1: Full journey test script
+9B-1: Environment setup (Vercel, Neon, Clerk, R2, Evolution API, Upstash, Sentry, Inngest)
 
 ## Completed Phases
 - Phase 1: Scaffold + Auth + Event CRUD — COMPLETE (2026-04-08)
@@ -20,10 +20,10 @@ Begin 9A-1: Full journey test script
 - Phase 8: Infrastructure Hardening — COMPLETE (2026-04-09)
 
 ## Progress Summary
-- Requirements done: 108/121
-- Requirements remaining: 13 (10 scattered Must-Have + 3 Phase 9)
-- Test files: 78 | Tests passing: 1256
-- Phases remaining: 1 (Phase 9)
+- Requirements done: 119/121
+- Requirements remaining: 2 (9B-1, 9B-2) + 10 scattered Must-Have
+- Test files: 79 | Tests passing: 1279
+- Phases remaining: 1 (Phase 9 — 2 requirements left)
 - Scattered Must-Have items: 10 unchecked across Phases 1-5 (event duplication, person merge, change history, reg cancellation flags, faculty notifications, accommodation notifications, rooming list, transport suggestions)
 
 ## Phase 6-9 Requirement Tracker
@@ -56,7 +56,7 @@ Begin 9A-1: Full journey test script
 - [x] 8C-1: Provider timeout and circuit breaker (20 tests)
 
 ### Phase 9: Production Readiness + UAT (3 requirements)
-- [ ] 9A-1: Full journey test script
+- [x] 9A-1: Full journey test script (23 tests)
 - [ ] 9B-1: Environment setup
 - [ ] 9B-2: Client UAT with pilot event
 
