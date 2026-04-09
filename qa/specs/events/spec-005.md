@@ -1,8 +1,8 @@
 # events — Spec 005: withEventScope Utility
 
-STATUS: PENDING
-TESTED: 0/6
-PASS: 0
+STATUS: PASS
+TESTED: 6/6
+PASS: 6
 FAIL: 0
 BLOCKED: 0
 MODULE: events

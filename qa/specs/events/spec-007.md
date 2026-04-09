@@ -1,8 +1,8 @@
 # events — Spec 007: Slugify & Data Helpers
 
-STATUS: PENDING
-TESTED: 0/9
-PASS: 0
+STATUS: PASS
+TESTED: 9/9
+PASS: 9
 FAIL: 0
 BLOCKED: 0
 MODULE: events

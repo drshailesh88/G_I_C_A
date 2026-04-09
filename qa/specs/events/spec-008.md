@@ -1,8 +1,8 @@
 # events — Spec 008: Status Transition Actions (Gap Tests)
 
-STATUS: PENDING
-TESTED: 0/14
-PASS: 0
+STATUS: PASS
+TESTED: 14/14
+PASS: 14
 FAIL: 0
 BLOCKED: 0
 MODULE: events

@@ -1,8 +1,8 @@
 # events — Spec 003: Access Control (event-access.ts)
 
-STATUS: PENDING
-TESTED: 0/18
-PASS: 0
+STATUS: PASS
+TESTED: 18/18
+PASS: 18
 FAIL: 0
 BLOCKED: 0
 MODULE: events
