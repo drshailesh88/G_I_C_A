@@ -1,14 +1,31 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+// Mock Inngest client (not used in test mode, but imported by emit.ts)
+vi.mock('../inngest/client', () => ({
+  inngest: { send: vi.fn().mockResolvedValue({ ids: ['test-id'] }) },
+}));
+vi.mock('../sentry', () => ({
+  captureCascadeError: vi.fn(),
+}));
+
+import { beforeEach, afterAll, describe, expect, it, vi } from 'vitest';
 import {
   onCascadeEvent,
   emitCascadeEvent,
   clearCascadeHandlers,
   getHandlerCount,
+  enableTestMode,
+  disableTestMode,
 } from './emit';
 import { CASCADE_EVENTS } from './events';
 
+// Use in-memory mode for these unit tests
+enableTestMode();
+
 beforeEach(() => {
   clearCascadeHandlers();
+});
+
+afterAll(() => {
+  disableTestMode();
 });
 
 describe('Cascade event emitter', () => {

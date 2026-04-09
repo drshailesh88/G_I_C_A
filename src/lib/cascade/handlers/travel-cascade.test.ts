@@ -6,6 +6,11 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Mock Inngest client (not used in test mode, but imported transitively)
+vi.mock('@/lib/inngest/client', () => ({
+  inngest: { send: vi.fn().mockResolvedValue({ ids: ['test-id'] }) },
+}));
+
 // Mock dependencies
 vi.mock('@/lib/db', () => ({ db: { select: vi.fn() } }));
 vi.mock('@/lib/db/schema', () => ({
@@ -64,9 +69,12 @@ function createChainableSelect(rows: Record<string, unknown>[]) {
 }
 
 import { db } from '@/lib/db';
-import { clearCascadeHandlers, emitCascadeEvent } from '../emit';
+import { clearCascadeHandlers, emitCascadeEvent, enableTestMode, disableTestMode } from '../emit';
 import { CASCADE_EVENTS } from '../events';
 import { registerTravelCascadeHandlers } from './travel-cascade';
+
+// Use in-memory mode for these unit tests
+enableTestMode();
 
 const mockDb = vi.mocked(db as { select: ReturnType<typeof vi.fn> });
 

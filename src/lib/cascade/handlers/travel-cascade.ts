@@ -96,7 +96,7 @@ async function sendCascadeNotification(params: {
 }
 
 // ── Travel Updated Handler ────────────────────────────────────
-async function handleTravelUpdated(params: {
+export async function handleTravelUpdated(params: {
   eventId: string;
   actor: { type: string; id: string };
   payload: Record<string, unknown>;
@@ -185,7 +185,7 @@ async function handleTravelUpdated(params: {
 }
 
 // ── Travel Cancelled Handler ──────────────────────────────────
-async function handleTravelCancelled(params: {
+export async function handleTravelCancelled(params: {
   eventId: string;
   actor: { type: string; id: string };
   payload: Record<string, unknown>;
