@@ -208,8 +208,10 @@ export function AccommodationFormClient({
               <option value="single">Single</option>
               <option value="double">Double</option>
               <option value="twin">Twin</option>
+              <option value="triple">Triple</option>
               <option value="suite">Suite</option>
-              <option value="deluxe">Deluxe</option>
+              <option value="dormitory">Dormitory</option>
+              <option value="other">Other</option>
             </select>
           </div>
           <div>
