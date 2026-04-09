@@ -170,14 +170,26 @@ export async function bulkGenerateCertificates(
     .limit(1);
   if (!template) throw new Error('Active certificate template not found');
 
-  // Get eligible recipients
-  const recipients = await getEligibleRecipients(eventId, {
+  // Get eligible recipients and deduplicate by personId
+  const rawRecipients = await getEligibleRecipients(eventId, {
     recipientType: validated.recipientType,
     personIds: validated.personIds,
   });
 
+  const seen = new Set<string>();
+  const recipients: Recipient[] = [];
+  let skippedDuplicates = 0;
+  for (const r of rawRecipients) {
+    if (seen.has(r.id)) {
+      skippedDuplicates++;
+      continue;
+    }
+    seen.add(r.id);
+    recipients.push(r);
+  }
+
   if (recipients.length === 0) {
-    return { issued: 0, skipped: 0, certificateIds: [], errors: [] };
+    return { issued: 0, skipped: skippedDuplicates, certificateIds: [], errors: [] };
   }
 
   if (recipients.length > 500) {
@@ -209,89 +221,81 @@ export async function bulkGenerateCertificates(
 
   const certificateIds: string[] = [];
   const errors: string[] = [];
-  let skipped = 0;
 
-  // Issue certificates in a transaction
+  // Issue certificates in a transaction — atomic: all succeed or all roll back
   await db.transaction(async (tx) => {
     for (const recipient of recipients) {
-      try {
-        // Check for existing current certificate
-        const currentCert = findCurrentCertificate(
-          existingCerts as IssuedCertificateRecord[],
-          recipient.id,
+      // Check for existing current certificate
+      const currentCert = findCurrentCertificate(
+        existingCerts as IssuedCertificateRecord[],
+        recipient.id,
+        eventId,
+        template.certificateType,
+      );
+
+      const chain = buildSupersessionChain(currentCert);
+      const certificateNumber = generateCertificateNumber(
+        certType,
+        nextSeq,
+      );
+      nextSeq++;
+
+      const certId = crypto.randomUUID();
+      const storageKey = buildCertificateStorageKey(
+        eventId,
+        template.certificateType,
+        certId,
+      );
+
+      // Build rendered variables from recipient data
+      const renderedVariables: Record<string, string> = {
+        full_name: recipient.fullName,
+        recipient_name: recipient.fullName,
+        designation: recipient.designation ?? '',
+        email: recipient.email ?? '',
+        certificate_number: certificateNumber,
+      };
+
+      const [newCert] = await tx
+        .insert(issuedCertificates)
+        .values({
+          id: certId,
           eventId,
-          template.certificateType,
-        );
+          personId: recipient.id,
+          templateId: template.id,
+          templateVersionNo: template.versionNo,
+          certificateType: template.certificateType,
+          eligibilityBasisType: validated.eligibilityBasisType,
+          certificateNumber,
+          storageKey,
+          fileName: `${certificateNumber}.pdf`,
+          renderedVariablesJson: renderedVariables,
+          brandingSnapshotJson: template.brandingSnapshotJson,
+          templateSnapshotJson: template.templateJson,
+          supersedesId: chain.newCertLink?.supersedesId || null,
+          issuedBy: userId,
+        })
+        .returning();
 
-        const chain = buildSupersessionChain(currentCert);
-        const certificateNumber = generateCertificateNumber(
-          certType,
-          nextSeq,
-        );
-        nextSeq++;
-
-        const certId = crypto.randomUUID();
-        const storageKey = buildCertificateStorageKey(
-          eventId,
-          template.certificateType,
-          certId,
-        );
-
-        // Build rendered variables from recipient data
-        const renderedVariables: Record<string, string> = {
-          full_name: recipient.fullName,
-          recipient_name: recipient.fullName,
-          designation: recipient.designation ?? '',
-          email: recipient.email ?? '',
-          certificate_number: certificateNumber,
-        };
-
-        const [newCert] = await tx
-          .insert(issuedCertificates)
-          .values({
-            id: certId,
-            eventId,
-            personId: recipient.id,
-            templateId: template.id,
-            templateVersionNo: template.versionNo,
-            certificateType: template.certificateType,
-            eligibilityBasisType: validated.eligibilityBasisType,
-            certificateNumber,
-            storageKey,
-            fileName: `${certificateNumber}.pdf`,
-            renderedVariablesJson: renderedVariables,
-            brandingSnapshotJson: template.brandingSnapshotJson,
-            templateSnapshotJson: template.templateJson,
-            supersedesId: chain.newCertLink?.supersedesId || null,
-            issuedBy: userId,
+      // If superseding, update the old certificate — must succeed atomically
+      if (currentCert && chain.oldCertUpdate) {
+        await tx
+          .update(issuedCertificates)
+          .set({
+            status: 'superseded',
+            supersededById: newCert.id,
+            updatedAt: new Date(),
           })
-          .returning();
-
-        // If superseding, update the old certificate
-        if (currentCert && chain.oldCertUpdate) {
-          await tx
-            .update(issuedCertificates)
-            .set({
-              status: 'superseded',
-              supersededById: newCert.id,
-              updatedAt: new Date(),
-            })
-            .where(
-              withEventScope(
-                issuedCertificates.eventId,
-                eventId,
-                eq(issuedCertificates.id, currentCert.id),
-              ),
-            );
-        }
-
-        certificateIds.push(newCert.id);
-      } catch (err) {
-        errors.push(
-          `Failed for ${recipient.fullName}: ${err instanceof Error ? err.message : 'Unknown error'}`,
-        );
-        skipped++;
+          .where(
+            withEventScope(
+              issuedCertificates.eventId,
+              eventId,
+              eq(issuedCertificates.id, currentCert.id),
+            ),
+          );
       }
+
+      certificateIds.push(newCert.id);
     }
   });
 
@@ -299,7 +303,7 @@ export async function bulkGenerateCertificates(
 
   return {
     issued: certificateIds.length,
-    skipped,
+    skipped: skippedDuplicates,
     certificateIds,
     errors,
   };
@@ -346,6 +350,12 @@ export async function sendCertificateNotifications(
 
   for (const cert of certs) {
     try {
+      // Skip certificates without generated PDFs — no point sending "your cert is ready"
+      if (!cert.storageKey) {
+        failed++;
+        continue;
+      }
+
       const channels = validated.channel === 'both'
         ? ['email', 'whatsapp'] as const
         : [validated.channel] as const;
@@ -365,10 +375,10 @@ export async function sendCertificateNotifications(
             full_name: cert.personFullName,
             certificate_number: cert.certificateNumber,
             certificate_type: cert.certificateType.replace(/_/g, ' '),
+            recipientEmail: cert.personEmail ?? '',
+            recipientPhoneE164: cert.personPhone ?? '',
           },
-          attachments: cert.storageKey
-            ? [{ storageKey: cert.storageKey, fileName: `${cert.certificateNumber}.pdf` }]
-            : undefined,
+          attachments: [{ storageKey: cert.storageKey, fileName: `${cert.certificateNumber}.pdf` }],
         });
       }
 

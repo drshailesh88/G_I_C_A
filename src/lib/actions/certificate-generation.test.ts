@@ -252,6 +252,100 @@ describe('bulkGenerateCertificates', () => {
       }),
     ).rejects.toThrow('Active certificate template not found');
   });
+
+  it('deduplicates duplicate recipients before issuing certificates', async () => {
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      if (selectCallCount === 1) {
+        return chainedSelect([mockTemplate]);
+      }
+      if (selectCallCount === 2) {
+        return chainedSelect([
+          mockRecipients[0],
+          { ...mockRecipients[0] },
+        ]);
+      }
+      if (selectCallCount === 3) {
+        return chainedSelect([]);
+      }
+      if (selectCallCount === 4) {
+        return chainedSelect([]);
+      }
+      return chainedSelect([]);
+    });
+
+    mockDb.transaction.mockImplementation(async (fn: any) => {
+      const tx = {
+        insert: vi.fn().mockImplementation(() => chainedInsert([{ id: crypto.randomUUID() }])),
+        update: vi.fn().mockImplementation(() => chainedUpdate()),
+        select: vi.fn().mockImplementation(() => chainedSelect([])),
+      };
+      return fn(tx);
+    });
+
+    const result = await bulkGenerateCertificates(EVENT_ID, {
+      templateId: TEMPLATE_ID,
+      recipientType: 'custom',
+      personIds: [PERSON_1, PERSON_1],
+      eligibilityBasisType: 'registration',
+    });
+
+    expect(result.issued).toBe(1);
+    expect(result.skipped).toBe(1);
+  });
+
+  it('fails the bulk operation when supersession update fails after insert', async () => {
+    const existingCert = {
+      id: '990e8400-e29b-41d4-a716-446655440001',
+      eventId: EVENT_ID,
+      personId: PERSON_1,
+      certificateType: mockTemplate.certificateType,
+      status: 'issued',
+      supersededById: null,
+      supersedesId: null,
+      revokedAt: null,
+      revokeReason: null,
+    };
+
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      if (selectCallCount === 1) {
+        return chainedSelect([mockTemplate]);
+      }
+      if (selectCallCount === 2) {
+        return chainedSelect([mockRecipients[0]]);
+      }
+      if (selectCallCount === 3) {
+        return chainedSelect([existingCert]);
+      }
+      if (selectCallCount === 4) {
+        return chainedSelect([]);
+      }
+      return chainedSelect([]);
+    });
+
+    mockDb.transaction.mockImplementation(async (fn: any) => {
+      const tx = {
+        insert: vi.fn().mockImplementation(() => chainedInsert([{ id: crypto.randomUUID() }])),
+        update: vi.fn().mockImplementation(() => {
+          throw new Error('failed to supersede previous certificate');
+        }),
+        select: vi.fn().mockImplementation(() => chainedSelect([])),
+      };
+      return fn(tx);
+    });
+
+    await expect(
+      bulkGenerateCertificates(EVENT_ID, {
+        templateId: TEMPLATE_ID,
+        recipientType: 'custom',
+        personIds: [PERSON_1],
+        eligibilityBasisType: 'registration',
+      }),
+    ).rejects.toThrow('failed to supersede previous certificate');
+  });
 });
 
 // ── sendCertificateNotifications ────────────────────────────
@@ -331,5 +425,44 @@ describe('sendCertificateNotifications', () => {
 
     expect(result.sent).toBe(0);
     expect(result.failed).toBe(2);
+  });
+
+  it('does not send notifications for certificates without generated PDFs', async () => {
+    mockDb.select.mockReturnValueOnce(
+      chainedSelect([
+        {
+          ...mockCerts[0],
+          storageKey: null,
+        },
+      ]),
+    );
+    mockDb.update.mockImplementation(() => chainedUpdate());
+
+    const result = await sendCertificateNotifications(EVENT_ID, {
+      certificateIds: [CERT_ID_1],
+      channel: 'email',
+    });
+
+    expect(result.sent).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(mockSendNotification).not.toHaveBeenCalled();
+  });
+
+  it('passes recipient delivery details to the notification service', async () => {
+    mockDb.select.mockReturnValueOnce(chainedSelect([mockCerts[0]]));
+    mockDb.update.mockImplementation(() => chainedUpdate());
+
+    await sendCertificateNotifications(EVENT_ID, {
+      certificateIds: [CERT_ID_1],
+      channel: 'email',
+    });
+
+    expect(mockSendNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variables: expect.objectContaining({
+          recipientEmail: 'alice@example.com',
+        }),
+      }),
+    );
   });
 });
