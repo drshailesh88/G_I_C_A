@@ -1,31 +1,33 @@
 import { redirect } from 'next/navigation';
-import { auth } from '@clerk/nextjs/server';
+import { assertEventAccess } from '@/lib/auth/event-access';
+import { getAttendanceStats, listAttendanceRecords } from '@/lib/actions/attendance';
+import { QrCheckInClient } from './qr-checkin-client';
+
+type Params = Promise<{ eventId: string }>;
 
 export default async function QrCheckInPage({
   params,
 }: {
-  params: Promise<{ eventId: string }>;
+  params: Params;
 }) {
-  const { userId } = await auth();
-  if (!userId) redirect('/login');
-
   const { eventId } = await params;
 
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">QR Check-In</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Scan QR codes or search registrations for manual check-in.
-        </p>
-      </div>
+  try {
+    await assertEventAccess(eventId);
+  } catch {
+    redirect('/login');
+  }
 
-      <div className="rounded-lg border border-gray-200 bg-white p-8 text-center">
-        <p className="text-sm text-gray-500">
-          QR scanner, manual check-in search, and attendance tracking.
-        </p>
-        <p className="mt-2 text-xs text-gray-400">Event: {eventId}</p>
-      </div>
-    </div>
+  const [stats, records] = await Promise.all([
+    getAttendanceStats(eventId, { eventId }),
+    listAttendanceRecords(eventId, { eventId }),
+  ]);
+
+  return (
+    <QrCheckInClient
+      eventId={eventId}
+      initialStats={stats}
+      initialRecords={records}
+    />
   );
 }
