@@ -4,7 +4,6 @@ import {
   timestamp,
   uuid,
   index,
-  unique,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 import { events } from './events';
@@ -40,8 +39,12 @@ export const attendanceRecords = pgTable('attendance_records', {
   index('idx_attendance_registration_id').on(table.registrationId),
   index('idx_attendance_session_id').on(table.sessionId),
   index('idx_attendance_event_person').on(table.eventId, table.personId),
-  // Prevent duplicate check-in per person per session (or per event if session is null)
-  unique('uq_attendance_check').on(table.eventId, table.personId, table.sessionId),
+  // NOTE: Duplicate prevention for event-level check-ins (session_id IS NULL) requires
+  // a COALESCE-based unique index since PostgreSQL NULLs don't collide in standard unique
+  // constraints. This is handled by migration 0001_fix_attendance_null_uniqueness.sql:
+  //   CREATE UNIQUE INDEX uq_attendance_check ON attendance_records
+  //     (event_id, person_id, COALESCE(session_id, '00000000-0000-0000-0000-000000000000'));
+  // The application also uses deterministic IDs + catch 23505 as defense-in-depth.
 ]);
 
 export const attendanceRecordsRelations = relations(attendanceRecords, ({ one }) => ({

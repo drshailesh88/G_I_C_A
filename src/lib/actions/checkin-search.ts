@@ -24,6 +24,7 @@ export type CheckInSearchResult = {
 export async function searchRegistrationsForCheckIn(
   eventId: string,
   input: unknown,
+  sessionId?: string | null,
 ): Promise<CheckInSearchResult[]> {
   await assertEventAccess(eventId, { requireWrite: true });
   const validated = checkInSearchSchema.parse(input);
@@ -63,6 +64,12 @@ export async function searchRegistrationsForCheckIn(
   const checkedInPersonIds = new Set<string>();
 
   if (personIds.length > 0) {
+    // Build session-aware attendance condition
+    const resolvedSessionId = sessionId ?? null;
+    const sessionCondition = resolvedSessionId
+      ? eq(attendanceRecords.sessionId, resolvedSessionId)
+      : isNull(attendanceRecords.sessionId);
+
     const attendanceRows = await db
       .select({ personId: attendanceRecords.personId })
       .from(attendanceRecords)
@@ -71,7 +78,7 @@ export async function searchRegistrationsForCheckIn(
           attendanceRecords.eventId,
           eventId,
           and(
-            isNull(attendanceRecords.sessionId),
+            sessionCondition,
             or(...personIds.map((pid) => eq(attendanceRecords.personId, pid))),
           ),
         ),

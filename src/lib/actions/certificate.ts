@@ -142,34 +142,39 @@ export async function activateCertificateTemplate(eventId: string, input: unknow
     throw new Error(`Cannot activate a template with status "${template.status}"`);
   }
 
-  // Archive any existing active template of the same type
-  await db
-    .update(certificateTemplates)
-    .set({
-      status: 'archived',
-      archivedAt: new Date(),
-      updatedBy: userId,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(certificateTemplates.eventId, eventId),
-        eq(certificateTemplates.certificateType, template.certificateType),
-        eq(certificateTemplates.status, 'active'),
-        ne(certificateTemplates.id, templateId),
-      ),
-    );
+  // Wrap in transaction to prevent partial state (archived old but failed to activate new)
+  const activated = await db.transaction(async (tx) => {
+    // Archive any existing active template of the same type
+    await tx
+      .update(certificateTemplates)
+      .set({
+        status: 'archived',
+        archivedAt: new Date(),
+        updatedBy: userId,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(certificateTemplates.eventId, eventId),
+          eq(certificateTemplates.certificateType, template.certificateType),
+          eq(certificateTemplates.status, 'active'),
+          ne(certificateTemplates.id, templateId),
+        ),
+      );
 
-  // Activate this template
-  const [activated] = await db
-    .update(certificateTemplates)
-    .set({
-      status: 'active',
-      updatedBy: userId,
-      updatedAt: new Date(),
-    })
-    .where(withEventScope(certificateTemplates.eventId, eventId, eq(certificateTemplates.id, templateId)))
-    .returning();
+    // Activate this template
+    const [result] = await tx
+      .update(certificateTemplates)
+      .set({
+        status: 'active',
+        updatedBy: userId,
+        updatedAt: new Date(),
+      })
+      .where(withEventScope(certificateTemplates.eventId, eventId, eq(certificateTemplates.id, templateId)))
+      .returning();
+
+    return result;
+  });
 
   revalidatePath(`/events/${eventId}/certificates`);
   return activated;

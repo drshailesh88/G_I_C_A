@@ -28,6 +28,8 @@ export type DistributedLock = {
   acquire(eventId: string, certificateType: string, ttlSeconds?: number): Promise<LockHandle | null>;
   /** Release a lock. Only releases if the ownerToken matches. Safe to call even if expired. */
   release(handle: LockHandle): Promise<void>;
+  /** Renew a lock's TTL. Only renews if the ownerToken still matches. Returns true if renewed. */
+  renew(handle: LockHandle, ttlSeconds?: number): Promise<boolean>;
 };
 
 /**
@@ -46,6 +48,12 @@ export function buildLockKey(eventId: string, certificateType: string): string {
  * Returns 1 if deleted, 0 if not (wrong owner or expired).
  */
 const RELEASE_LUA = `if redis.call("get",KEYS[1]) == ARGV[1] then return redis.call("del",KEYS[1]) else return 0 end`;
+
+/**
+ * Lua script for atomic compare-and-expire (lock renewal).
+ * Only resets TTL if the owner token matches. Returns 1 if renewed, 0 if not.
+ */
+const RENEW_LUA = `if redis.call("get",KEYS[1]) == ARGV[1] then return redis.call("expire",KEYS[1],ARGV[2]) else return 0 end`;
 
 function getRedisClient(): Redis {
   const url = process.env.UPSTASH_REDIS_REST_URL;
@@ -78,6 +86,12 @@ export function createRedisLock(): DistributedLock {
       const redis = getRedisClient();
       await redis.eval(RELEASE_LUA, [handle.key], [handle.ownerToken]);
     },
+
+    async renew(handle, ttlSeconds = DEFAULT_LOCK_TTL_SECONDS) {
+      const redis = getRedisClient();
+      const result = await redis.eval(RENEW_LUA, [handle.key], [handle.ownerToken, ttlSeconds]);
+      return result === 1;
+    },
   };
 }
 
@@ -98,6 +112,11 @@ export function createTestLock(redis: Redis): DistributedLock {
 
     async release(handle) {
       await redis.eval(RELEASE_LUA, [handle.key], [handle.ownerToken]);
+    },
+
+    async renew(handle, ttlSeconds = DEFAULT_LOCK_TTL_SECONDS) {
+      const result = await redis.eval(RENEW_LUA, [handle.key], [handle.ownerToken, ttlSeconds]);
+      return result === 1;
     },
   };
 }
@@ -123,6 +142,11 @@ export function createStubLock(): DistributedLock & { locks: Map<string, string>
         locks.delete(handle.key);
       }
       // If owner doesn't match (lock expired + re-acquired), do nothing
+    },
+
+    async renew(handle) {
+      const current = locks.get(handle.key);
+      return current === handle.ownerToken;
     },
   };
 }

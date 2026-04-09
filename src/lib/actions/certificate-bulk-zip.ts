@@ -121,10 +121,21 @@ export async function bulkZipDownload(
       return Buffer.from(await response.arrayBuffer());
     });
 
-    // Create ZIP archive
+    // Create ZIP archive with periodic lock renewal to prevent TTL expiry on large jobs
+    let filesProcessed = 0;
+    const renewingFetchPdf = async (storageKey: string) => {
+      const buffer = await fetchPdf(storageKey);
+      filesProcessed++;
+      // Renew lock every 10 files to prevent TTL expiry
+      if (filesProcessed % 10 === 0 && lockHandle) {
+        await lock.renew(lockHandle).catch(() => {});
+      }
+      return buffer;
+    };
+
     const zipBuffer = await createZipArchive(
       downloadable.map(c => ({ storageKey: c.storageKey, fileName: c.fileName })),
-      fetchPdf,
+      renewingFetchPdf,
     );
 
     // Upload ZIP to R2

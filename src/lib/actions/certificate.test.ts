@@ -5,6 +5,7 @@ const { mockDb, mockRevalidatePath, mockAssertEventAccess } = vi.hoisted(() => (
     select: vi.fn(),
     insert: vi.fn(),
     update: vi.fn(),
+    transaction: vi.fn(),
   },
   mockRevalidatePath: vi.fn(),
   mockAssertEventAccess: vi.fn(),
@@ -98,6 +99,7 @@ const mockTemplate = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:super_admin' });
+  mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb));
 });
 
 // ── List ─────────────────────────────────────────────────────

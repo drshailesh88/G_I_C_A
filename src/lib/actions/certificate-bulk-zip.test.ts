@@ -208,6 +208,7 @@ describe('bulkZipDownload', () => {
     const brokenLock = {
       acquire: vi.fn().mockRejectedValue(new Error('ECONNREFUSED')),
       release: vi.fn(),
+      renew: vi.fn().mockResolvedValue(true),
     };
 
     await expect(

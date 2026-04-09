@@ -96,8 +96,8 @@ export async function processQrScan(eventId: string, input: unknown): Promise<Sc
     return { type: 'invalid', message: parsed.error };
   }
 
-  // Verify the event ID matches
-  if (parsed.eventId !== eventId) {
+  // Verify the event ID matches (case-insensitive — UUIDs may differ in casing)
+  if (parsed.eventId.toLowerCase() !== eventId.toLowerCase()) {
     return { type: 'invalid', message: 'QR code belongs to a different event.' };
   }
 

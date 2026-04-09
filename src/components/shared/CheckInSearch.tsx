@@ -27,7 +27,7 @@ export function CheckInSearch({ eventId, sessionId, onCheckInResult }: CheckInSe
         const found = await searchRegistrationsForCheckIn(eventId, {
           eventId,
           query: query.trim(),
-        });
+        }, sessionId);
         setResults(found);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Search failed');

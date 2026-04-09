@@ -62,7 +62,13 @@ export const createCertificateTemplateSchema = z.object({
   qrVerificationEnabled: z.boolean().default(true),
   verificationText: z.string().trim().max(500).optional(),
   notes: z.string().trim().max(2000).optional(),
-});
+}).refine(
+  (data) => {
+    const allowed = new Set(data.allowedVariablesJson);
+    return data.requiredVariablesJson.every((v) => allowed.has(v));
+  },
+  { message: 'All required variables must be included in allowed variables', path: ['requiredVariablesJson'] },
+);
 
 export type CreateCertificateTemplateInput = z.infer<typeof createCertificateTemplateSchema>;
 
