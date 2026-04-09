@@ -17,8 +17,8 @@ Begin Sub-Phase 6B-2: Branding injection into notification templates
 - Phase 5: Certificates + QR Attendance — COMPLETE (2026-04-08)
 
 ## Progress Summary
-- Requirements done: 79/116
-- Requirements remaining: 39 (across Phases 6-9)
+- Requirements done: 105/121
+- Requirements remaining: 16 (across Phases 6-9)
 - Test files: 75 | Tests passing: 1234
 - Phases remaining: 4 (Phase 6, 7, 8, 9)
 - Estimated: ~23 granular requirements across 11 sub-phases
@@ -27,8 +27,8 @@ Begin Sub-Phase 6B-2: Branding injection into notification templates
 ### Phase 6: Notification Wiring + Branding + Reports (9 requirements)
 - [x] 6A-1: Replace notification stub in cascade handlers (12 tests)
 - [x] 6A-2: Wire domain event handler H7 (9 tests)
-- [ ] 6A-3: Implement attachment flow H5 (12 tests)
-- [ ] 6A-4: Add Clerk middleware (6 tests)
+- [x] 6A-3: Implement attachment flow H5 (16 tests)
+- [x] 6A-4: Add Clerk middleware (11 tests)
 - [x] 6B-1: Branding configuration CRUD (14 tests)
 - [x] 6B-2: Branding injection into templates (12 tests)
 - [x] 6C-1: Excel export engine (19 tests)
@@ -36,8 +36,8 @@ Begin Sub-Phase 6B-2: Branding injection into notification templates
 - [x] 6D-1: Team management page (13 tests)
 
 ### Phase 7: Certificate UI + QR UI + Dashboard (6 requirements)
-- [ ] 7A-1: pdfme Designer integration (8 tests)
-- [ ] 7A-2: Certificate generation page UI (10 tests)
+- [x] 7A-1: pdfme Designer integration (13 tests)
+- [x] 7A-2: Certificate generation page UI (34 tests)
 - [x] 7A-3: View all issued certificates (16 tests)
 - [x] 7B-1: QR scanner page (12 tests)
 - [x] 7B-2: Offline sync indicator (9 tests)
@@ -48,9 +48,9 @@ Begin Sub-Phase 6B-2: Branding injection into notification templates
 - [ ] 8A-2: Move bulk operations to Inngest (8 tests)
 - [x] 8B-1: Sentry integration (manual verification)
 - [x] 8B-2: Feature flags via Upstash Redis (12 tests)
-- [ ] 8B-3: GitHub Actions CI pipeline (manual verification)
+- [x] 8B-3: GitHub Actions CI pipeline (manual verification)
 - [ ] 8B-4: Pre-event backup automation (8 tests)
-- [ ] 8C-1: Provider timeout and circuit breaker (12 tests)
+- [x] 8C-1: Provider timeout and circuit breaker (20 tests)
 
 ### Phase 9: Production Readiness + UAT (3 requirements)
 - [ ] 9A-1: Full journey test script
