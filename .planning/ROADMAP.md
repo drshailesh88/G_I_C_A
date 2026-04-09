@@ -74,7 +74,7 @@
   - **Goal:** Everything that separates "it works" from "it survives a live 500-person conference."
   - **Sub-phases:**
     - [ ] 8A: Background Job Migration (2 requirements)
-      - [ ] 8A-1: Install and configure Inngest (replace sync cascade)
+      - [x] 8A-1: Install and configure Inngest (replace sync cascade)
       - [ ] 8A-2: Move bulk operations to Inngest step functions
     - [ ] 8B: Monitoring & Safety (4 requirements)
       - [x] 8B-1: Sentry integration

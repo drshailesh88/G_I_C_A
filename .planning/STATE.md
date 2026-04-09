@@ -17,9 +17,9 @@ Begin Sub-Phase 6B-2: Branding injection into notification templates
 - Phase 5: Certificates + QR Attendance — COMPLETE (2026-04-08)
 
 ## Progress Summary
-- Requirements done: 105/121
-- Requirements remaining: 16 (across Phases 6-9)
-- Test files: 75 | Tests passing: 1234
+- Requirements done: 106/121
+- Requirements remaining: 15 (across Phases 6-9)
+- Test files: 76 | Tests passing: 1240
 - Phases remaining: 4 (Phase 6, 7, 8, 9)
 - Estimated: ~23 granular requirements across 11 sub-phases
 
@@ -44,7 +44,7 @@ Begin Sub-Phase 6B-2: Branding injection into notification templates
 - [x] 7C-1: Dashboard with real metrics (19 tests)
 
 ### Phase 8: Infrastructure Hardening (7 requirements)
-- [ ] 8A-1: Install and configure Inngest (6 tests)
+- [x] 8A-1: Install and configure Inngest (6 tests)
 - [ ] 8A-2: Move bulk operations to Inngest (8 tests)
 - [x] 8B-1: Sentry integration (manual verification)
 - [x] 8B-2: Feature flags via Upstash Redis (12 tests)
