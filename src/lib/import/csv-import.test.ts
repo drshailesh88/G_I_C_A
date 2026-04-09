@@ -180,3 +180,105 @@ describe('findDuplicates', () => {
     expect(matches[0].matchType).toBe('email'); // email match wins
   });
 });
+
+describe('autoMapColumns edge cases', () => {
+  it('maps "Participant Name" to fullName', () => {
+    const mappings = autoMapColumns(['Participant Name']);
+    expect(mappings[0].mappedTo).toBe('fullName');
+  });
+
+  it('maps "Delegate Name" to fullName', () => {
+    const mappings = autoMapColumns(['Delegate Name']);
+    expect(mappings[0].mappedTo).toBe('fullName');
+  });
+
+  it('maps "Hospital" to organization', () => {
+    const mappings = autoMapColumns(['Hospital']);
+    expect(mappings[0].mappedTo).toBe('organization');
+  });
+
+  it('maps "Department" to specialty', () => {
+    const mappings = autoMapColumns(['Department']);
+    expect(mappings[0].mappedTo).toBe('specialty');
+  });
+
+  it('maps "Category" to tags', () => {
+    const mappings = autoMapColumns(['Category']);
+    expect(mappings[0].mappedTo).toBe('tags');
+  });
+
+  it('case-insensitive header matching', () => {
+    const mappings = autoMapColumns(['EMAIL']);
+    expect(mappings[0].mappedTo).toBe('email');
+  });
+
+  it('handles duplicate mapping targets (both columns get mapped)', () => {
+    const mappings = autoMapColumns(['Email', 'E-Mail']);
+    expect(mappings[0].mappedTo).toBe('email');
+    expect(mappings[1].mappedTo).toBe('email');
+  });
+});
+
+describe('parseRows edge cases', () => {
+  const mappings = [
+    { csvColumn: 'Name', mappedTo: 'fullName' as const, confidence: 1 },
+    { csvColumn: 'Email', mappedTo: 'email' as const, confidence: 1 },
+    { csvColumn: 'Tags', mappedTo: 'tags' as const, confidence: 1 },
+    { csvColumn: 'Extra', mappedTo: null, confidence: 0 },
+  ];
+
+  it('splits tags by semicolon', () => {
+    const rows = [{ Name: 'Test', Email: 'test@example.com', Tags: 'VIP;faculty', Extra: 'ignored' }];
+    const parsed = parseRows(rows, mappings);
+    expect(parsed[0].tags).toEqual(['VIP', 'faculty']);
+  });
+
+  it('splits tags by pipe', () => {
+    const rows = [{ Name: 'Test', Email: 'test@example.com', Tags: 'VIP|faculty', Extra: '' }];
+    const parsed = parseRows(rows, mappings);
+    expect(parsed[0].tags).toEqual(['VIP', 'faculty']);
+  });
+
+  it('trims whitespace from tags', () => {
+    const rows = [{ Name: 'Test', Email: 'test@example.com', Tags: 'VIP , faculty', Extra: '' }];
+    const parsed = parseRows(rows, mappings);
+    expect(parsed[0].tags).toEqual(['VIP', 'faculty']);
+  });
+
+  it('empty tags field yields undefined', () => {
+    const rows = [{ Name: 'Test', Email: 'test@example.com', Tags: '', Extra: '' }];
+    const parsed = parseRows(rows, mappings);
+    expect(parsed[0].tags).toBeUndefined();
+  });
+
+  it('skipped columns not included in output', () => {
+    const rows = [{ Name: 'Test', Email: 'test@example.com', Tags: '', Extra: 'should-be-ignored' }];
+    const parsed = parseRows(rows, mappings);
+    expect(parsed[0]).not.toHaveProperty('extra');
+    expect(parsed[0]).not.toHaveProperty('Extra');
+  });
+});
+
+describe('parseCsvString edge cases', () => {
+  it('handles CSV with only headers (no data rows)', () => {
+    const csv = 'Name,Email,City';
+    const result = parseCsvString(csv);
+    expect(result.headers).toEqual(['Name', 'Email', 'City']);
+    expect(result.rows).toHaveLength(0);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('handles quoted fields with commas', () => {
+    const csv = `Name,Email
+"Kumar, Dr. Rajesh",rajesh@example.com`;
+    const result = parseCsvString(csv);
+    expect(result.rows[0].Name).toBe('Kumar, Dr. Rajesh');
+  });
+
+  it('handles UTF-8 characters', () => {
+    const csv = `Name,Email
+Müller François,test@example.com`;
+    const result = parseCsvString(csv);
+    expect(result.rows[0].Name).toBe('Müller François');
+  });
+});

@@ -1,8 +1,8 @@
 # people — Spec 001: Validation Schemas (Gap Tests)
 
-STATUS: PENDING
-TESTED: 0/22
-PASS: 0
+STATUS: PASS
+TESTED: 22/22
+PASS: 22
 FAIL: 0
 BLOCKED: 0
 MODULE: people

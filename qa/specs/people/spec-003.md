@@ -1,8 +1,8 @@
 # people — Spec 003: CSV Import Utilities (Gap Tests)
 
-STATUS: PENDING
-TESTED: 0/15
-PASS: 0
+STATUS: PASS
+TESTED: 15/15
+PASS: 15
 FAIL: 0
 BLOCKED: 0
 MODULE: people

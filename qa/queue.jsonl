@@ -9,6 +9,6 @@
 {"module":"certificates","spec":"spec-09-issuance-utils","checkpoints":20,"passing":20,"status":"PASS"}
 {"module":"certificates","spec":"spec-10-notification-resend","checkpoints":5,"passing":5,"status":"PASS"}
 {"module":"certificates","spec":"spec-11-exports","checkpoints":6,"passing":6,"status":"PASS"}
-{"module":"people","spec":"spec-001","checkpoints":22,"passing":0,"status":"PENDING"}
-{"module":"people","spec":"spec-002","checkpoints":31,"passing":0,"status":"PENDING"}
-{"module":"people","spec":"spec-003","checkpoints":15,"passing":0,"status":"PENDING"}
+{"module":"people","spec":"spec-001","checkpoints":22,"passing":22,"status":"PASS"}
+{"module":"people","spec":"spec-002","checkpoints":31,"passing":31,"status":"PASS"}
+{"module":"people","spec":"spec-003","checkpoints":15,"passing":15,"status":"PASS"}

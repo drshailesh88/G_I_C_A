@@ -1,8 +1,8 @@
 # people — Spec 002: Server Actions (Gap Tests)
 
-STATUS: PENDING
-TESTED: 0/31
-PASS: 0
+STATUS: PASS
+TESTED: 31/31
+PASS: 31
 FAIL: 0
 BLOCKED: 0
 MODULE: people
