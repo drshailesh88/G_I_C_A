@@ -216,5 +216,54 @@ describe('Team Management (6D-1)', () => {
       expect(result.success).toBe(false);
       expect(result.error).toMatch(/yourself/i);
     });
+
+    it('blocks removing the last super admin', async () => {
+      authAsSuperAdmin();
+      mockOrgClient([
+        makeMembership(USER_SA, 'admin@gem.org', ROLES.SUPER_ADMIN),
+        makeMembership(USER_OPS, 'ops@gem.org', ROLES.SUPER_ADMIN),
+      ]);
+      // Only USER_OPS is super admin (USER_SA shows as coordinator in member list)
+      mockOrgClient([
+        makeMembership(USER_SA, 'admin@gem.org', ROLES.EVENT_COORDINATOR),
+        makeMembership(USER_OPS, 'ops@gem.org', ROLES.SUPER_ADMIN),
+      ]);
+
+      const result = await removeTeamMember({ userId: USER_OPS });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/last Super Admin/i);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('rejects unauthenticated users', async () => {
+      mockAuth.mockResolvedValue({ userId: null, orgId: null, has: () => false });
+
+      await expect(getTeamMembers()).rejects.toThrow('Not authenticated');
+    });
+
+    it('rejects invite with invalid role', async () => {
+      authAsSuperAdmin();
+      mockOrgClient([]);
+
+      const result = await inviteTeamMember({
+        emailAddress: 'test@gem.org',
+        role: 'org:hacker',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/role/i);
+    });
+
+    it('rejects remove with empty userId', async () => {
+      authAsSuperAdmin();
+      mockOrgClient([]);
+
+      const result = await removeTeamMember({ userId: '' });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeDefined();
+    });
   });
 });

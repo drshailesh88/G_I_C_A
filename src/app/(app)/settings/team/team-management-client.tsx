@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { ArrowLeft, UserPlus, MoreVertical, Trash2, Shield } from 'lucide-react';
+import { ArrowLeft, UserPlus, Trash2, Shield } from 'lucide-react';
 import Link from 'next/link';
 import {
   type TeamMember,
