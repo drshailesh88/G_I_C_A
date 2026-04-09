@@ -401,3 +401,68 @@ describe('sendNotification passes fromDisplayName from branding', () => {
     expect(result.brandingVars.emailSenderName).toBe('Dr. Gupta Conference');
   });
 });
+
+// ── Codex Adversarial Fixes ──────────────────────────────────
+
+describe('adversarial: Codex-found bugs', () => {
+  it('FIX #1: throws when the event row is missing instead of silently using defaults', async () => {
+    // loadEventBranding should throw if the event doesn't exist
+    setupDbReturnsSequence([
+      [], // No event found
+    ]);
+
+    await expect(
+      loadEventBranding('nonexistent-evt', 'event_branding', null, mockGetSignedUrl),
+    ).rejects.toThrow('Event not found');
+  });
+
+  it('FIX #2: custom mode with null customBrandingJson uses defaults, not event branding', async () => {
+    // When brandingMode is "custom" but customBrandingJson is null,
+    // should use DEFAULT_BRANDING — not fall through to event branding query
+    const result = await loadEventBranding(
+      'evt-1',
+      'custom',
+      null, // no custom JSON
+      mockGetSignedUrl,
+    );
+
+    // Should get default colors, NOT event branding
+    expect(result.primaryColor).toBe('#1E40AF');
+    expect(result.secondaryColor).toBe('#9333EA');
+  });
+
+  it('FIX #3: falls back to defaults when stored branding has invalid values', async () => {
+    // Invalid hex color in stored branding should not crash rendering
+    const eventWithBadBranding = makeEventRow({
+      primaryColor: 'not-a-hex-color',
+      emailSenderName: 'Valid Name',
+    });
+
+    setupDbReturnsSequence([
+      [eventWithBadBranding],
+    ]);
+
+    const result = await loadEventBranding('evt-1', 'event_branding', null, mockGetSignedUrl);
+
+    // Should degrade to defaults, not throw
+    expect(result.primaryColor).toBe('#1E40AF');
+    expect(result.secondaryColor).toBe('#9333EA');
+  });
+
+  it('FIX #4: strips CRLF from emailSenderName to prevent header injection', async () => {
+    const eventBranding = makeEventRow({
+      emailSenderName: 'Legit Name\r\nBcc: attacker@evil.com',
+    });
+
+    setupDbReturnsSequence([
+      [eventBranding],
+    ]);
+
+    const result = await loadEventBranding('evt-1', 'event_branding', null, mockGetSignedUrl);
+
+    // CRLF characters must be stripped
+    expect(result.emailSenderName).not.toContain('\r');
+    expect(result.emailSenderName).not.toContain('\n');
+    expect(result.emailSenderName).toBe('Legit NameBcc: attacker@evil.com');
+  });
+});

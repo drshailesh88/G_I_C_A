@@ -83,6 +83,22 @@ export async function resolveTemplate(
 }
 
 /**
+ * FIX #3: Parse branding with safe fallback — if stored branding has invalid
+ * values (e.g., bad hex color), degrade to defaults instead of crashing.
+ */
+function safeParseBranding(raw: Record<string, unknown>): EventBranding {
+  const result = eventBrandingSchema.safeParse(raw);
+  if (result.success) return result.data;
+  // Invalid stored branding → use defaults
+  return eventBrandingSchema.parse(DEFAULT_BRANDING);
+}
+
+/** FIX #4: Strip CRLF and control characters from strings used in email headers */
+function sanitizeHeaderValue(value: string): string {
+  return value.replace(/[\r\n\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
+}
+
+/**
  * Load event branding from DB, resolve image URLs, return as template variables.
  * Uses brandingMode from the template to determine which branding to use.
  */
@@ -95,9 +111,12 @@ export async function loadEventBranding(
 ): Promise<BrandingTemplateVars> {
   let branding: EventBranding;
 
-  if (brandingMode === 'custom' && customBrandingJson) {
-    // Use template-level custom branding
-    branding = eventBrandingSchema.parse({ ...DEFAULT_BRANDING, ...(customBrandingJson as Record<string, unknown>) });
+  if (brandingMode === 'custom') {
+    // FIX #2: Custom mode with null JSON → use defaults, not event branding
+    const customData = customBrandingJson
+      ? (customBrandingJson as Record<string, unknown>)
+      : {};
+    branding = safeParseBranding({ ...DEFAULT_BRANDING, ...customData });
   } else {
     // Default: load from event's branding JSONB
     const [event] = await db
@@ -106,8 +125,14 @@ export async function loadEventBranding(
       .where(eq(events.id, eventId))
       .limit(1);
 
-    const stored = (event?.branding ?? {}) as Record<string, unknown>;
-    branding = eventBrandingSchema.parse({ ...DEFAULT_BRANDING, ...stored });
+    // FIX #1: Missing event row → throw instead of silently using defaults
+    if (!event) {
+      throw new Error(`Event not found: ${eventId}`);
+    }
+
+    const stored = (event.branding ?? {}) as Record<string, unknown>;
+    // FIX #3: Invalid stored branding → degrade to defaults, don't crash
+    branding = safeParseBranding({ ...DEFAULT_BRANDING, ...stored });
   }
 
   // Resolve storage keys to signed URLs
@@ -136,7 +161,8 @@ export async function loadEventBranding(
     headerImageUrl,
     primaryColor: branding.primaryColor,
     secondaryColor: branding.secondaryColor,
-    emailSenderName: branding.emailSenderName,
+    // FIX #4: Sanitize emailSenderName to prevent CRLF header injection
+    emailSenderName: sanitizeHeaderValue(branding.emailSenderName),
     emailFooterText: branding.emailFooterText,
     whatsappPrefix: branding.whatsappPrefix,
   };
