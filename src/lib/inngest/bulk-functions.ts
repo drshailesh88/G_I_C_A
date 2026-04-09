@@ -20,6 +20,7 @@ import {
   eventRegistrations,
   sessionAssignments,
   attendanceRecords,
+  eventPeople,
 } from '@/lib/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
@@ -136,10 +137,13 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
         }
         case 'custom': {
           if (!personIds || personIds.length === 0) return { template: null, recipients: [], eligibilityBasisType };
+          // Defense-in-depth: join with eventPeople to enforce eventId scoping
+          // even though custom personIds should already be event-scoped from UI
           recipients = await db
             .select({ id: people.id, fullName: people.fullName, email: people.email, designation: people.designation })
             .from(people)
-            .where(inArray(people.id, personIds));
+            .innerJoin(eventPeople, eq(eventPeople.personId, people.id))
+            .where(and(eq(eventPeople.eventId, eventId), inArray(people.id, personIds))!);
           break;
         }
       }
@@ -328,6 +332,7 @@ export const bulkCertificateNotifyFn = inngest.createFunction(
     const certsWithStorage = certs.filter((c: CertRecord) => c.storageKey);
     let sent = 0;
     let failed = 0;
+    const sentCertIds: string[] = []; // Track only successfully sent certs
 
     const channels = channel === 'both' ? ['email', 'whatsapp'] as const : [channel] as const;
     const wantsEmail = channels.includes('email');
@@ -338,10 +343,11 @@ export const bulkCertificateNotifyFn = inngest.createFunction(
       const emailBatches = chunk(certsWithStorage, 20);
       for (let i = 0; i < emailBatches.length; i++) {
         const batchCerts = emailBatches[i];
-        const batchResult = await step.run(`email-batch-${i + 1}`, async (): Promise<{ sent: number; failed: number }> => {
+        const batchResult = await step.run(`email-batch-${i + 1}`, async (): Promise<{ sent: number; failed: number; sentIds: string[] }> => {
           const { sendNotification } = await import('@/lib/notifications/send');
           let batchSent = 0;
           let batchFailed = 0;
+          const batchSentIds: string[] = [];
 
           for (const cert of batchCerts) {
             try {
@@ -365,16 +371,18 @@ export const bulkCertificateNotifyFn = inngest.createFunction(
                 attachments: [{ storageKey: cert.storageKey!, fileName: `${cert.certificateNumber}.pdf` }],
               });
               batchSent++;
+              batchSentIds.push(cert.id);
             } catch {
               batchFailed++;
             }
           }
 
-          return { sent: batchSent, failed: batchFailed };
+          return { sent: batchSent, failed: batchFailed, sentIds: batchSentIds };
         });
 
         sent += batchResult.sent;
         failed += batchResult.failed;
+        sentCertIds.push(...batchResult.sentIds);
 
         // Rate limit: 30s sleep between email batches (except after last)
         if (i < emailBatches.length - 1) {
@@ -387,7 +395,7 @@ export const bulkCertificateNotifyFn = inngest.createFunction(
     if (wantsWhatsApp) {
       for (let i = 0; i < certsWithStorage.length; i++) {
         const cert = certsWithStorage[i];
-        const msgResult = await step.run(`whatsapp-msg-${i + 1}`, async (): Promise<{ sent: number; failed: number }> => {
+        const msgResult = await step.run(`whatsapp-msg-${i + 1}`, async (): Promise<{ sent: number; failed: number; sentId: string | null }> => {
           try {
             const { sendNotification } = await import('@/lib/notifications/send');
             await sendNotification({
@@ -409,14 +417,15 @@ export const bulkCertificateNotifyFn = inngest.createFunction(
               },
               attachments: [{ storageKey: cert.storageKey!, fileName: `${cert.certificateNumber}.pdf` }],
             });
-            return { sent: 1, failed: 0 };
+            return { sent: 1, failed: 0, sentId: cert.id };
           } catch {
-            return { sent: 0, failed: 1 };
+            return { sent: 0, failed: 1, sentId: null };
           }
         });
 
         sent += msgResult.sent;
         failed += msgResult.failed;
+        if (msgResult.sentId) sentCertIds.push(msgResult.sentId);
 
         // Rate limit: 2s sleep between WhatsApp messages (except after last)
         if (i < certsWithStorage.length - 1) {
@@ -425,10 +434,10 @@ export const bulkCertificateNotifyFn = inngest.createFunction(
       }
     }
 
-    // Step 4: Update lastSentAt for all successfully processed certs
-    if (certsWithStorage.length > 0) {
+    // Step 4: Update lastSentAt ONLY for successfully sent certs
+    if (sentCertIds.length > 0) {
+      const uniqueSentIds = [...new Set(sentCertIds)];
       await step.run('update-sent-timestamps', async () => {
-        const certIds = certsWithStorage.map((c: CertRecord) => c.id);
         await db
           .update(issuedCertificates)
           .set({ lastSentAt: new Date(), updatedAt: new Date() })
@@ -436,7 +445,7 @@ export const bulkCertificateNotifyFn = inngest.createFunction(
             withEventScope(
               issuedCertificates.eventId,
               eventId,
-              inArray(issuedCertificates.id, certIds),
+              inArray(issuedCertificates.id, uniqueSentIds),
             ),
           );
       });
@@ -529,17 +538,19 @@ export const archiveGenerateFn = inngest.createFunction(
         }
       }
 
-      const finalizePromise = archive.finalize();
       const archiveKey = buildArchiveStorageKey(eventId);
 
-      // Buffer and upload
+      // Attach listeners BEFORE finalize to avoid race condition
       const chunks: Buffer[] = [];
       passThrough.on('data', (chunk: Buffer) => chunks.push(chunk));
-      await new Promise<void>((resolve, reject) => {
+      const endPromise = new Promise<void>((resolve, reject) => {
         passThrough.on('end', resolve);
         passThrough.on('error', reject);
       });
-      await finalizePromise;
+
+      // Now finalize — triggers flush and stream close
+      await archive.finalize();
+      await endPromise;
       const fullBuffer = Buffer.concat(chunks);
       await storageProvider.upload(archiveKey, fullBuffer, 'application/zip');
 

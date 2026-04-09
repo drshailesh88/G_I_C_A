@@ -8,6 +8,7 @@ import {
   eventRegistrations,
   sessionAssignments,
   attendanceRecords,
+  eventPeople,
 } from '@/lib/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
 import { z } from 'zod';
@@ -116,6 +117,7 @@ export async function getEligibleRecipients(
       if (!validated.personIds || validated.personIds.length === 0) {
         return [];
       }
+      // Defense-in-depth: join with eventPeople to enforce eventId scoping
       const rows = await db
         .select({
           id: people.id,
@@ -124,7 +126,8 @@ export async function getEligibleRecipients(
           designation: people.designation,
         })
         .from(people)
-        .where(inArray(people.id, validated.personIds));
+        .innerJoin(eventPeople, eq(eventPeople.personId, people.id))
+        .where(and(eq(eventPeople.eventId, eventId), inArray(people.id, validated.personIds))!);
       return rows;
     }
   }
