@@ -69,6 +69,7 @@ function createChainableSelect(rows: Record<string, unknown>[]) {
 }
 
 import { db } from '@/lib/db';
+import { upsertRedFlag } from '../red-flags';
 import { clearCascadeHandlers, emitCascadeEvent, enableTestMode, disableTestMode } from '../emit';
 import { CASCADE_EVENTS } from '../events';
 import { registerTravelCascadeHandlers } from './travel-cascade';
@@ -208,5 +209,144 @@ describe('Travel cascade → real notification', () => {
     const key2 = mockSendNotification.mock.calls[1][0].idempotencyKey;
 
     expect(key1).not.toBe(key2);
+  });
+});
+
+describe('Travel cascade → red flag creation', () => {
+  const eventId = 'evt-100';
+  const personId = 'person-200';
+  const travelRecordId = 'tr-300';
+  const actor = { type: 'user' as const, id: 'user_1' };
+
+  const mockedUpsertRedFlag = vi.mocked(upsertRedFlag);
+
+  it('creates red flags on accommodation records when travel is updated', async () => {
+    mockDb.select
+      .mockReturnValueOnce(createChainableSelect([{ id: 'accom-1' }, { id: 'accom-2' }])) // accommodation
+      .mockReturnValueOnce(createChainableSelect([])) // transport
+      .mockReturnValueOnce(createChainableSelect(personWithBoth)) // person (email)
+      .mockReturnValueOnce(createChainableSelect(personWithBoth)); // person (whatsapp)
+
+    await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
+      travelRecordId, personId, registrationId: null,
+      previous: {}, current: {},
+      changeSummary: { departureAtUtc: { from: '2026-04-10', to: '2026-04-11' }, toCity: { from: 'A', to: 'B' } },
+    });
+
+    expect(mockedUpsertRedFlag).toHaveBeenCalledTimes(2);
+
+    expect(mockedUpsertRedFlag).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      eventId,
+      flagType: 'travel_change',
+      targetEntityType: 'accommodation_record',
+      targetEntityId: 'accom-1',
+      sourceEntityType: 'travel_record',
+      sourceEntityId: travelRecordId,
+    }));
+    expect(mockedUpsertRedFlag.mock.calls[0][0].flagDetail).toContain('Travel record updated');
+    expect(mockedUpsertRedFlag.mock.calls[0][0].flagDetail).toContain('departureAtUtc');
+    expect(mockedUpsertRedFlag.mock.calls[0][0].flagDetail).toContain('toCity');
+
+    expect(mockedUpsertRedFlag).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      eventId,
+      flagType: 'travel_change',
+      targetEntityType: 'accommodation_record',
+      targetEntityId: 'accom-2',
+      sourceEntityType: 'travel_record',
+      sourceEntityId: travelRecordId,
+    }));
+  });
+
+  it('creates red flags on transport assignments when travel is updated', async () => {
+    mockDb.select
+      .mockReturnValueOnce(createChainableSelect([])) // accommodation (empty)
+      .mockReturnValueOnce(createChainableSelect([{ id: 'tpa-1' }])) // transport
+      .mockReturnValueOnce(createChainableSelect(personWithBoth)) // person (email)
+      .mockReturnValueOnce(createChainableSelect(personWithBoth)); // person (whatsapp)
+
+    await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
+      travelRecordId, personId, registrationId: null,
+      previous: {}, current: {},
+      changeSummary: { arrivalAtUtc: { from: '2026-04-10', to: '2026-04-12' } },
+    });
+
+    expect(mockedUpsertRedFlag).toHaveBeenCalledTimes(1);
+    expect(mockedUpsertRedFlag).toHaveBeenCalledWith(expect.objectContaining({
+      eventId,
+      flagType: 'travel_change',
+      targetEntityType: 'transport_passenger_assignment',
+      targetEntityId: 'tpa-1',
+      sourceEntityType: 'travel_record',
+      sourceEntityId: travelRecordId,
+    }));
+    expect(mockedUpsertRedFlag.mock.calls[0][0].flagDetail).toContain('review transport assignment');
+  });
+
+  it('creates red flags on accommodation records when travel is cancelled', async () => {
+    mockDb.select
+      .mockReturnValueOnce(createChainableSelect([{ id: 'accom-10' }])) // accommodation
+      .mockReturnValueOnce(createChainableSelect([])) // transport (empty)
+      .mockReturnValueOnce(createChainableSelect(personWithBoth)) // person (email)
+      .mockReturnValueOnce(createChainableSelect(personWithBoth)); // person (whatsapp)
+
+    await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_CANCELLED, eventId, actor, {
+      travelRecordId, personId, registrationId: null,
+      cancelledAt: '2026-04-09T10:00:00Z',
+      reason: null,
+    });
+
+    expect(mockedUpsertRedFlag).toHaveBeenCalledTimes(1);
+    expect(mockedUpsertRedFlag).toHaveBeenCalledWith(expect.objectContaining({
+      eventId,
+      flagType: 'travel_cancelled',
+      targetEntityType: 'accommodation_record',
+      targetEntityId: 'accom-10',
+      sourceEntityType: 'travel_record',
+      sourceEntityId: travelRecordId,
+    }));
+    expect(mockedUpsertRedFlag.mock.calls[0][0].flagDetail).toContain('review accommodation');
+  });
+
+  it('creates red flags on transport assignments when travel is cancelled', async () => {
+    mockDb.select
+      .mockReturnValueOnce(createChainableSelect([])) // accommodation (empty)
+      .mockReturnValueOnce(createChainableSelect([{ id: 'tpa-20' }])) // transport
+      .mockReturnValueOnce(createChainableSelect(personWithBoth)) // person (email)
+      .mockReturnValueOnce(createChainableSelect(personWithBoth)); // person (whatsapp)
+
+    await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_CANCELLED, eventId, actor, {
+      travelRecordId, personId, registrationId: null,
+      cancelledAt: '2026-04-09T10:00:00Z',
+      reason: null,
+    });
+
+    expect(mockedUpsertRedFlag).toHaveBeenCalledTimes(1);
+    expect(mockedUpsertRedFlag).toHaveBeenCalledWith(expect.objectContaining({
+      eventId,
+      flagType: 'travel_cancelled',
+      targetEntityType: 'transport_passenger_assignment',
+      targetEntityId: 'tpa-20',
+      sourceEntityType: 'travel_record',
+      sourceEntityId: travelRecordId,
+    }));
+    expect(mockedUpsertRedFlag.mock.calls[0][0].flagDetail).toContain('review and reassign transport');
+  });
+
+  it('includes cancellation reason in flag detail when reason is provided', async () => {
+    mockDb.select
+      .mockReturnValueOnce(createChainableSelect([{ id: 'accom-30' }])) // accommodation
+      .mockReturnValueOnce(createChainableSelect([])) // transport (empty)
+      .mockReturnValueOnce(createChainableSelect(personWithBoth)) // person (email)
+      .mockReturnValueOnce(createChainableSelect(personWithBoth)); // person (whatsapp)
+
+    await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_CANCELLED, eventId, actor, {
+      travelRecordId, personId, registrationId: null,
+      cancelledAt: '2026-04-09T10:00:00Z',
+      reason: 'Flight changed',
+    });
+
+    expect(mockedUpsertRedFlag).toHaveBeenCalledTimes(1);
+    expect(mockedUpsertRedFlag.mock.calls[0][0].flagDetail).toContain('Flight changed');
+    expect(mockedUpsertRedFlag.mock.calls[0][0].flagDetail).toContain('review accommodation');
   });
 });

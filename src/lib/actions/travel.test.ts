@@ -184,6 +184,20 @@ describe('updateTravelRecord', () => {
       updateTravelRecord(EVENT_ID, { travelRecordId: RECORD_ID, fromCity: 'Pune' }),
     ).rejects.toThrow('Cannot update a cancelled travel record');
   });
+
+  it('marks sent record as changed on update', async () => {
+    const sentRecord = { ...existingRecord, recordStatus: 'sent' };
+    chainedSelect([sentRecord]);
+    const updateChain = chainedUpdate([{ ...sentRecord, recordStatus: 'changed' }]);
+
+    await updateTravelRecord(EVENT_ID, {
+      travelRecordId: RECORD_ID,
+      fromCity: 'Pune',
+    });
+
+    const setCall = updateChain.set.mock.calls[0][0];
+    expect(setCall.recordStatus).toBe('changed');
+  });
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -261,6 +275,78 @@ describe('updateTravelRecordStatus', () => {
 
     const setCall = updateChain.set.mock.calls[0][0];
     expect(setCall.cancelledAt).toBeInstanceOf(Date);
+  });
+
+  it('allows valid transition confirmed → sent', async () => {
+    chainedSelect([{ id: RECORD_ID, recordStatus: 'confirmed' }]);
+    chainedUpdate([{ id: RECORD_ID, recordStatus: 'sent' }]);
+
+    const result = await updateTravelRecordStatus(EVENT_ID, RECORD_ID, 'sent');
+    expect(result.recordStatus).toBe('sent');
+  });
+
+  it('allows valid transition confirmed → changed', async () => {
+    chainedSelect([{ id: RECORD_ID, recordStatus: 'confirmed' }]);
+    chainedUpdate([{ id: RECORD_ID, recordStatus: 'changed' }]);
+
+    const result = await updateTravelRecordStatus(EVENT_ID, RECORD_ID, 'changed');
+    expect(result.recordStatus).toBe('changed');
+  });
+
+  it('allows valid transition sent → changed', async () => {
+    chainedSelect([{ id: RECORD_ID, recordStatus: 'sent' }]);
+    chainedUpdate([{ id: RECORD_ID, recordStatus: 'changed' }]);
+
+    const result = await updateTravelRecordStatus(EVENT_ID, RECORD_ID, 'changed');
+    expect(result.recordStatus).toBe('changed');
+  });
+
+  it('allows valid transition sent → cancelled', async () => {
+    chainedSelect([{ id: RECORD_ID, recordStatus: 'sent' }]);
+    chainedUpdate([{ id: RECORD_ID, recordStatus: 'cancelled' }]);
+
+    const result = await updateTravelRecordStatus(EVENT_ID, RECORD_ID, 'cancelled');
+    expect(result.recordStatus).toBe('cancelled');
+  });
+
+  it('allows valid transition changed → confirmed', async () => {
+    chainedSelect([{ id: RECORD_ID, recordStatus: 'changed' }]);
+    chainedUpdate([{ id: RECORD_ID, recordStatus: 'confirmed' }]);
+
+    const result = await updateTravelRecordStatus(EVENT_ID, RECORD_ID, 'confirmed');
+    expect(result.recordStatus).toBe('confirmed');
+  });
+
+  it('allows valid transition changed → sent', async () => {
+    chainedSelect([{ id: RECORD_ID, recordStatus: 'changed' }]);
+    chainedUpdate([{ id: RECORD_ID, recordStatus: 'sent' }]);
+
+    const result = await updateTravelRecordStatus(EVENT_ID, RECORD_ID, 'sent');
+    expect(result.recordStatus).toBe('sent');
+  });
+
+  it('allows valid transition changed → cancelled', async () => {
+    chainedSelect([{ id: RECORD_ID, recordStatus: 'changed' }]);
+    chainedUpdate([{ id: RECORD_ID, recordStatus: 'cancelled' }]);
+
+    const result = await updateTravelRecordStatus(EVENT_ID, RECORD_ID, 'cancelled');
+    expect(result.recordStatus).toBe('cancelled');
+  });
+
+  it('rejects invalid transition draft → sent', async () => {
+    chainedSelect([{ id: RECORD_ID, recordStatus: 'draft' }]);
+
+    await expect(
+      updateTravelRecordStatus(EVENT_ID, RECORD_ID, 'sent'),
+    ).rejects.toThrow('Cannot transition');
+  });
+
+  it('rejects invalid transition draft → changed', async () => {
+    chainedSelect([{ id: RECORD_ID, recordStatus: 'draft' }]);
+
+    await expect(
+      updateTravelRecordStatus(EVENT_ID, RECORD_ID, 'changed'),
+    ).rejects.toThrow('Cannot transition');
   });
 });
 

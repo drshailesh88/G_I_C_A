@@ -273,3 +273,112 @@ describe('hasCascadeTriggerChanges', () => {
     )).toBe(false);
   });
 });
+
+// ── Validation boundary conditions ───────────────────────────
+describe('Validation boundary conditions', () => {
+  const validInput = {
+    personId: '550e8400-e29b-41d4-a716-446655440000',
+    direction: 'inbound' as const,
+    travelMode: 'flight' as const,
+    fromCity: 'Mumbai',
+    toCity: 'Delhi',
+  };
+
+  describe('createTravelRecordSchema max-length boundaries', () => {
+    it('accepts fromCity at exactly 200 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, fromCity: 'a'.repeat(200) })).not.toThrow();
+    });
+
+    it('rejects fromCity at 201 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, fromCity: 'a'.repeat(201) })).toThrow();
+    });
+
+    it('accepts toCity at exactly 200 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, toCity: 'a'.repeat(200) })).not.toThrow();
+    });
+
+    it('rejects toCity at 201 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, toCity: 'a'.repeat(201) })).toThrow();
+    });
+
+    it('accepts carrierName at exactly 200 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, carrierName: 'a'.repeat(200) })).not.toThrow();
+    });
+
+    it('rejects carrierName at 201 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, carrierName: 'a'.repeat(201) })).toThrow();
+    });
+
+    it('accepts serviceNumber at exactly 50 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, serviceNumber: 'a'.repeat(50) })).not.toThrow();
+    });
+
+    it('rejects serviceNumber at 51 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, serviceNumber: 'a'.repeat(51) })).toThrow();
+    });
+
+    it('accepts pnrOrBookingRef at exactly 50 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, pnrOrBookingRef: 'a'.repeat(50) })).not.toThrow();
+    });
+
+    it('rejects pnrOrBookingRef at 51 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, pnrOrBookingRef: 'a'.repeat(51) })).toThrow();
+    });
+
+    it('accepts notes at exactly 2000 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, notes: 'a'.repeat(2000) })).not.toThrow();
+    });
+
+    it('rejects notes at 2001 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, notes: 'a'.repeat(2001) })).toThrow();
+    });
+
+    it('accepts fromLocation at exactly 300 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, fromLocation: 'a'.repeat(300) })).not.toThrow();
+    });
+
+    it('rejects fromLocation at 301 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, fromLocation: 'a'.repeat(301) })).toThrow();
+    });
+
+    it('accepts terminalOrGate at exactly 100 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, terminalOrGate: 'a'.repeat(100) })).not.toThrow();
+    });
+
+    it('rejects terminalOrGate at 101 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, terminalOrGate: 'a'.repeat(101) })).toThrow();
+    });
+
+    it('accepts attachmentUrl at exactly 500 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, attachmentUrl: 'https://example.com/' + 'a'.repeat(480) })).not.toThrow();
+    });
+
+    it('rejects attachmentUrl at 501 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, attachmentUrl: 'https://example.com/' + 'a'.repeat(481) })).toThrow();
+    });
+
+    it('accepts seatOrCoach at exactly 50 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, seatOrCoach: 'a'.repeat(50) })).not.toThrow();
+    });
+
+    it('rejects seatOrCoach at 51 chars', () => {
+      expect(() => createTravelRecordSchema.parse({ ...validInput, seatOrCoach: 'a'.repeat(51) })).toThrow();
+    });
+  });
+
+  describe('cancelTravelRecordSchema max-length boundaries', () => {
+    it('accepts reason at exactly 500 chars', () => {
+      expect(() => cancelTravelRecordSchema.parse({
+        travelRecordId: '550e8400-e29b-41d4-a716-446655440000',
+        reason: 'a'.repeat(500),
+      })).not.toThrow();
+    });
+
+    it('rejects reason at 501 chars', () => {
+      expect(() => cancelTravelRecordSchema.parse({
+        travelRecordId: '550e8400-e29b-41d4-a716-446655440000',
+        reason: 'a'.repeat(501),
+      })).toThrow();
+    });
+  });
+});
