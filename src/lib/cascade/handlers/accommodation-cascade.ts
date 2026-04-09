@@ -82,7 +82,7 @@ async function safeSendNotification(params: {
 }
 
 // ── Accommodation Updated Handler ─────────────────────────────
-async function handleAccommodationUpdated(params: {
+export async function handleAccommodationUpdated(params: {
   eventId: string;
   actor: { type: string; id: string };
   payload: Record<string, unknown>;
@@ -188,7 +188,7 @@ async function handleAccommodationUpdated(params: {
 }
 
 // ── Accommodation Cancelled Handler ───────────────────────────
-async function handleAccommodationCancelled(params: {
+export async function handleAccommodationCancelled(params: {
   eventId: string;
   actor: { type: string; id: string };
   payload: Record<string, unknown>;

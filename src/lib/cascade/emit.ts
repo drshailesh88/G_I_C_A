@@ -1,14 +1,14 @@
 /**
  * Cascade Event Emitter
  *
- * Abstraction over the event bus. In production this will use Inngest.
- * For now, it runs handlers synchronously (in-process) since Inngest
- * is not yet installed. The interface stays the same.
+ * Production: sends events through Inngest for durable, retried execution.
+ * Test: runs handlers synchronously via in-memory registry (for unit tests).
  *
  * Usage: await emitCascadeEvent('conference/travel.updated', eventId, actor, payload)
  */
 
 import type { CascadeActor, CascadeEventName } from './events';
+import { inngest } from '../inngest/client';
 
 type CascadeHandler = (params: {
   eventId: string;
@@ -16,37 +16,65 @@ type CascadeHandler = (params: {
   payload: Record<string, unknown>;
 }) => Promise<void>;
 
-// Registry of handlers per event name
+// In-memory registry — used only in test mode
 const handlerRegistry = new Map<string, CascadeHandler[]>();
 
-/** Register a handler for a cascade event */
+/** Whether to use in-memory handlers (test mode) vs Inngest (production) */
+let useInMemoryMode = false;
+
+/** Enable in-memory mode for tests */
+export function enableTestMode() {
+  useInMemoryMode = true;
+}
+
+/** Disable in-memory mode (back to Inngest) */
+export function disableTestMode() {
+  useInMemoryMode = false;
+}
+
+/** Register a handler for a cascade event (test mode only — in production, Inngest functions handle events) */
 export function onCascadeEvent(eventName: CascadeEventName, handler: CascadeHandler) {
   const existing = handlerRegistry.get(eventName) ?? [];
   existing.push(handler);
   handlerRegistry.set(eventName, existing);
 }
 
-/** Emit a cascade event — fans out to all registered handlers */
+/** Emit a cascade event — sends to Inngest in production, runs in-memory in tests */
 export async function emitCascadeEvent(
   eventName: CascadeEventName,
   eventId: string,
   actor: CascadeActor,
   payload: Record<string, unknown>,
 ): Promise<{ handlersRun: number; errors: Error[] }> {
-  const handlers = handlerRegistry.get(eventName) ?? [];
-  const errors: Error[] = [];
+  // Test mode: run in-memory handlers synchronously (existing behavior)
+  if (useInMemoryMode) {
+    const handlers = handlerRegistry.get(eventName) ?? [];
+    const errors: Error[] = [];
 
-  // Fan out to all handlers — continue on individual handler failure
-  for (const handler of handlers) {
-    try {
-      await handler({ eventId, actor, payload });
-    } catch (err) {
-      errors.push(err instanceof Error ? err : new Error(String(err)));
-      console.error(`[cascade] Handler error for ${eventName}:`, err);
+    for (const handler of handlers) {
+      try {
+        await handler({ eventId, actor, payload });
+      } catch (err) {
+        errors.push(err instanceof Error ? err : new Error(String(err)));
+        console.error(`[cascade] Handler error for ${eventName}:`, err);
+      }
     }
+
+    return { handlersRun: handlers.length, errors };
   }
 
-  return { handlersRun: handlers.length, errors };
+  // Production mode: send event to Inngest
+  try {
+    await inngest.send({
+      name: eventName,
+      data: { eventId, actor, payload },
+    });
+    return { handlersRun: 1, errors: [] };
+  } catch (err) {
+    const error = err instanceof Error ? err : new Error(String(err));
+    console.error(`[cascade] Inngest send error for ${eventName}:`, err);
+    return { handlersRun: 0, errors: [error] };
+  }
 }
 
 /** Clear all registered handlers (for testing) */
