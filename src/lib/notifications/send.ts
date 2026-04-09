@@ -30,6 +30,7 @@ import type { CircuitBreakerService } from './circuit-breaker';
 import { ProviderTimeoutError } from './timeout';
 import { CircuitOpenError } from './circuit-breaker';
 import { captureNotificationError } from '@/lib/sentry';
+import { isChannelEnabled, type FlagReader } from '@/lib/flags';
 
 // ── Dependency injection for testability ──────────────────────
 
@@ -42,6 +43,7 @@ export type NotificationServiceDeps = {
   createLogEntryFn: typeof createLogEntry;
   updateLogStatusFn: typeof updateLogStatus;
   getLogByIdFn: typeof getLogById;
+  flagService?: FlagReader | null;
 };
 
 const defaultDeps: NotificationServiceDeps = {
@@ -53,6 +55,7 @@ const defaultDeps: NotificationServiceDeps = {
   createLogEntryFn: createLogEntry,
   updateLogStatusFn: updateLogStatus,
   getLogByIdFn: getLogById,
+  flagService: null, // Uses default flag service when null
 };
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -75,6 +78,24 @@ export async function sendNotification(
     createLogEntryFn,
     updateLogStatusFn,
   } = deps;
+
+  // 0. Feature flag check — skip silently if channel is disabled
+  try {
+    const channelEnabled = await isChannelEnabled(
+      input.channel,
+      deps.flagService ?? undefined,
+    );
+    if (!channelEnabled) {
+      return {
+        notificationLogId: null as unknown as string,
+        provider: providerNameForChannel(input.channel),
+        providerMessageId: null,
+        status: 'sent' as NotificationStatus, // Skipped, not failed
+      };
+    }
+  } catch {
+    // Flag check is best-effort — proceed if Redis is down
+  }
 
   // 1. Render template (before any durable side effects)
   let rendered;

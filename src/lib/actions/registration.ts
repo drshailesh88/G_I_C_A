@@ -18,10 +18,20 @@ import { normalizePhone } from '@/lib/validations/person';
 import { findDuplicatePerson } from './person';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { isRegistrationOpen } from '@/lib/flags';
 
 // ── Public registration (no auth required) ─────────────────────
 export async function registerForEvent(eventId: string, input: unknown) {
   const validated = publicRegistrationSchema.parse(input);
+
+  // Feature flag check — registration_open per event
+  try {
+    const regOpen = await isRegistrationOpen(eventId);
+    if (!regOpen) throw new Error('Registration is currently closed for this event');
+  } catch (err) {
+    // Re-throw flag-based errors, swallow Redis failures (best-effort)
+    if (err instanceof Error && err.message.includes('currently closed')) throw err;
+  }
 
   // Fetch event to check status and settings
   const [event] = await db

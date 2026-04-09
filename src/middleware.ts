@@ -1,5 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
 import * as Sentry from '@sentry/nextjs';
+import { isMaintenanceMode } from '@/lib/flags';
 
 const isPublicRoute = createRouteMatcher([
   '/',
@@ -11,9 +13,29 @@ const isPublicRoute = createRouteMatcher([
   '/api/webhooks/(.*)',
   '/api/inngest',
   '/api/health',
+  '/maintenance',
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
+  // Maintenance mode check — skip for /maintenance itself, API health, and webhooks
+  const pathname = request.nextUrl.pathname;
+  const isMaintenanceExempt =
+    pathname === '/maintenance' ||
+    pathname === '/api/health' ||
+    pathname.startsWith('/api/webhooks/');
+
+  if (!isMaintenanceExempt) {
+    try {
+      const maintenance = await isMaintenanceMode();
+      if (maintenance) {
+        const maintenanceUrl = new URL('/maintenance', request.url);
+        return NextResponse.rewrite(maintenanceUrl);
+      }
+    } catch {
+      // Flag check is best-effort — never block the request on Redis failure
+    }
+  }
+
   if (!isPublicRoute(request)) {
     await auth.protect();
   }

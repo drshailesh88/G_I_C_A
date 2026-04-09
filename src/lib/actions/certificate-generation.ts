@@ -23,6 +23,7 @@ import {
 } from '@/lib/certificates/issuance-utils';
 import { generateCertificateNumber, getCertificateTypeConfig } from '@/lib/certificates/certificate-types';
 import { buildCertificateStorageKey } from '@/lib/certificates/storage';
+import { isCertificateGenerationEnabled } from '@/lib/flags';
 
 // ── Recipient types ─────────────────────────────────────────
 export const RECIPIENT_TYPES = [
@@ -150,6 +151,14 @@ export async function bulkGenerateCertificates(
   eventId: string,
   input: unknown,
 ): Promise<BulkGenerateResult> {
+  // Feature flag check
+  try {
+    const enabled = await isCertificateGenerationEnabled();
+    if (!enabled) throw new Error('Certificate generation is currently disabled');
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('currently disabled')) throw err;
+  }
+
   const { userId } = await assertEventAccess(eventId, { requireWrite: true });
   const validated = bulkGenerateRequestSchema.parse(input);
 
