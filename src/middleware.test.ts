@@ -5,7 +5,7 @@
  * for each route — specifically whether auth.protect() is called (private)
  * or skipped (public).
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 // Shared state for mock capture — must be declared with vi.hoisted()
 // so they exist when the mock factory runs (vi.mock is hoisted)
@@ -25,6 +25,11 @@ vi.mock('@clerk/nextjs/server', () => ({
       const pathname =
         request.nextUrl?.pathname ?? new URL(request.url).pathname;
       return patterns.some((pattern) => {
+        // Exact match for patterns without capture groups
+        if (!pattern.includes('(')) {
+          return pathname === pattern;
+        }
+        // Sub-path match: /e/(.*) matches /e/anything but not /efoo
         const regexStr = '^' + pattern.replace(/\(\.?\*\)/g, '.*') + '$';
         return new RegExp(regexStr).test(pathname);
       });
@@ -47,10 +52,12 @@ function makeAuth() {
 }
 
 describe('Clerk middleware (6A-4)', () => {
-  it('calls auth.protect() for protected routes like /events', async () => {
+  // --- Public routes: auth.protect() must NOT be called ---
+
+  it('skips auth.protect() for the homepage /', async () => {
     const auth = makeAuth();
-    await shared.middlewareCallback!(auth, makeRequest('/events'));
-    expect(auth.protect).toHaveBeenCalled();
+    await shared.middlewareCallback!(auth, makeRequest('/'));
+    expect(auth.protect).not.toHaveBeenCalled();
   });
 
   it('skips auth.protect() for public event page /e/test-event', async () => {
@@ -65,18 +72,26 @@ describe('Clerk middleware (6A-4)', () => {
     expect(auth.protect).not.toHaveBeenCalled();
   });
 
-  it('skips auth.protect() for the homepage /', async () => {
-    const auth = makeAuth();
-    await shared.middlewareCallback!(auth, makeRequest('/'));
-    expect(auth.protect).not.toHaveBeenCalled();
-  });
-
   it('skips auth.protect() for /login, /forgot-password, /reset-password, /verify', async () => {
-    for (const path of ['/login', '/forgot-password', '/reset-password', '/verify/abc123']) {
+    for (const path of ['/login', '/forgot-password', '/reset-password', '/verify']) {
       const auth = makeAuth();
       await shared.middlewareCallback!(auth, makeRequest(path));
       expect(auth.protect).not.toHaveBeenCalled();
     }
+  });
+
+  it('skips auth.protect() for /api/inngest (Inngest webhook)', async () => {
+    const auth = makeAuth();
+    await shared.middlewareCallback!(auth, makeRequest('/api/inngest'));
+    expect(auth.protect).not.toHaveBeenCalled();
+  });
+
+  // --- Protected routes: auth.protect() MUST be called ---
+
+  it('calls auth.protect() for protected routes like /events', async () => {
+    const auth = makeAuth();
+    await shared.middlewareCallback!(auth, makeRequest('/events'));
+    expect(auth.protect).toHaveBeenCalled();
   });
 
   it('calls auth.protect() for dashboard routes /people, /program, /travel', async () => {
@@ -87,14 +102,31 @@ describe('Clerk middleware (6A-4)', () => {
     }
   });
 
+  // --- Adversarial: overbroad patterns must NOT match ---
+
+  it('protects /loginfoo — exact /login must not match prefix extensions', async () => {
+    const auth = makeAuth();
+    await shared.middlewareCallback!(auth, makeRequest('/loginfoo'));
+    expect(auth.protect).toHaveBeenCalled();
+  });
+
+  it('protects /forgot-password-admin — must not match overbroad patterns', async () => {
+    const auth = makeAuth();
+    await shared.middlewareCallback!(auth, makeRequest('/forgot-password-admin'));
+    expect(auth.protect).toHaveBeenCalled();
+  });
+
+  // --- Config and pattern registration ---
+
   it('registers all required public route patterns', () => {
     expect(shared.routePatterns).toContain('/');
-    expect(shared.routePatterns).toContain('/login(.*)');
-    expect(shared.routePatterns).toContain('/forgot-password(.*)');
-    expect(shared.routePatterns).toContain('/reset-password(.*)');
+    expect(shared.routePatterns).toContain('/login');
+    expect(shared.routePatterns).toContain('/forgot-password');
+    expect(shared.routePatterns).toContain('/reset-password');
     expect(shared.routePatterns).toContain('/e/(.*)');
-    expect(shared.routePatterns).toContain('/verify/(.*)');
+    expect(shared.routePatterns).toContain('/verify');
     expect(shared.routePatterns).toContain('/api/webhooks/(.*)');
+    expect(shared.routePatterns).toContain('/api/inngest');
     expect(shared.routePatterns).toContain('/api/health');
   });
 
