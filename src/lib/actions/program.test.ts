@@ -44,11 +44,24 @@ import {
   getSession,
   getSessions,
   createRoleRequirement,
+  updateRoleRequirement,
+  deleteRoleRequirement,
+  getSessionRoleRequirements,
   createAssignment,
+  updateAssignment,
+  deleteAssignment,
+  getSessionAssignments,
   createFacultyInvite,
   updateFacultyInviteStatus,
+  getFacultyInvite,
+  getFacultyInviteByToken,
+  getEventFacultyInvites,
   publishProgramVersion,
+  getProgramVersions,
+  getProgramVersion,
   detectConflicts,
+  getScheduleData,
+  getPublicScheduleData,
 } from './program';
 
 // ── Chain helpers ─────────────────────────────────────────────
@@ -738,5 +751,560 @@ describe('publishProgramVersion', () => {
       changesDescription: 'Initial program',
     });
     expect(result).toEqual(version);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// GAP TESTS — updateSession
+// ══════════════════════════════════════════════════════════════
+
+describe('updateSession', () => {
+  const sessionId = '550e8400-e29b-41d4-a716-446655440000';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
+  });
+
+  it('updates session title', async () => {
+    // Select: existing session
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+      chain.from = vi.fn().mockReturnValue(chain);
+      chain.where = vi.fn().mockReturnValue(chain);
+      chain.limit = vi.fn().mockResolvedValue(
+        selectCallCount === 1 ? [{ id: sessionId, parentSessionId: null }] : [],
+      );
+      return chain;
+    });
+
+    const updated = { id: sessionId, title: 'Updated Title' };
+    chainedUpdate([updated]);
+
+    const result = await updateSession(EVENT_ID, { sessionId, title: 'Updated Title' });
+    expect(result).toEqual(updated);
+  });
+
+  it('throws when session not found', async () => {
+    chainedSelect([]);
+
+    await expect(
+      updateSession(EVENT_ID, { sessionId, title: 'X' }),
+    ).rejects.toThrow('Session not found');
+  });
+
+  it('rejects self-referencing parent', async () => {
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+      chain.from = vi.fn().mockReturnValue(chain);
+      chain.where = vi.fn().mockReturnValue(chain);
+      chain.limit = vi.fn().mockResolvedValue(
+        selectCallCount === 1
+          ? [{ id: sessionId, parentSessionId: null }] // existing session
+          : [{ id: sessionId, parentSessionId: null }], // parent lookup returns self
+      );
+      return chain;
+    });
+
+    await expect(
+      updateSession(EVENT_ID, { sessionId, parentSessionId: sessionId }),
+    ).rejects.toThrow('cannot be its own parent');
+  });
+
+  it('enforces one-level hierarchy on parent change', async () => {
+    const newParentId = '550e8400-e29b-41d4-a716-446655440001';
+
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+      chain.from = vi.fn().mockReturnValue(chain);
+      chain.where = vi.fn().mockReturnValue(chain);
+      chain.limit = vi.fn().mockResolvedValue(
+        selectCallCount === 1
+          ? [{ id: sessionId, parentSessionId: null }] // existing session
+          : [{ id: newParentId, parentSessionId: 'some-grandparent' }], // parent already has parent
+      );
+      return chain;
+    });
+
+    await expect(
+      updateSession(EVENT_ID, { sessionId, parentSessionId: newParentId }),
+    ).rejects.toThrow('Cannot nest more than one level deep');
+  });
+
+  it('validates hall exists on update', async () => {
+    const badHallId = '550e8400-e29b-41d4-a716-446655440002';
+
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+      chain.from = vi.fn().mockReturnValue(chain);
+      chain.where = vi.fn().mockReturnValue(chain);
+      chain.limit = vi.fn().mockResolvedValue(
+        selectCallCount === 1
+          ? [{ id: sessionId, parentSessionId: null }] // existing session
+          : [], // hall not found
+      );
+      return chain;
+    });
+
+    await expect(
+      updateSession(EVENT_ID, { sessionId, hallId: badHallId }),
+    ).rejects.toThrow('Hall not found');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// GAP TESTS — Read actions
+// ══════════════════════════════════════════════════════════════
+
+describe('getSession', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
+  });
+
+  it('returns session by ID', async () => {
+    const session = { id: '550e8400-e29b-41d4-a716-446655440000', title: 'Test' };
+    chainedSelect([session]);
+
+    const result = await getSession(EVENT_ID, '550e8400-e29b-41d4-a716-446655440000');
+    expect(result).toEqual(session);
+  });
+
+  it('throws when not found', async () => {
+    chainedSelect([]);
+
+    await expect(
+      getSession(EVENT_ID, '550e8400-e29b-41d4-a716-446655440000'),
+    ).rejects.toThrow('Session not found');
+  });
+});
+
+describe('getSessions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
+  });
+
+  it('returns ordered session list', async () => {
+    const sessions = [
+      { id: 's1', title: 'First', sortOrder: 0 },
+      { id: 's2', title: 'Second', sortOrder: 1 },
+    ];
+    const chain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockResolvedValue(sessions),
+    };
+    mockDb.select.mockReturnValue(chain);
+
+    const result = await getSessions(EVENT_ID);
+    expect(result).toEqual(sessions);
+    expect(result).toHaveLength(2);
+  });
+});
+
+describe('getHalls', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
+  });
+
+  it('returns ordered hall list', async () => {
+    const hallList = [
+      { id: 'h1', name: 'Hall A', sortOrder: '0' },
+      { id: 'h2', name: 'Hall B', sortOrder: '1' },
+    ];
+    const chain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockResolvedValue(hallList),
+    };
+    mockDb.select.mockReturnValue(chain);
+
+    const result = await getHalls(EVENT_ID);
+    expect(result).toEqual(hallList);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// GAP TESTS — Role Requirements (update + delete)
+// ══════════════════════════════════════════════════════════════
+
+describe('updateRoleRequirement', () => {
+  const requirementId = '550e8400-e29b-41d4-a716-446655440000';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
+  });
+
+  it('updates requirement count', async () => {
+    const chain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([{ id: requirementId, sessionId: 's1' }]),
+      innerJoin: vi.fn().mockReturnThis(),
+    };
+    mockDb.select.mockReturnValue(chain);
+
+    const updated = { id: requirementId, requiredCount: 5 };
+    chainedUpdate([updated]);
+
+    const result = await updateRoleRequirement(EVENT_ID, {
+      requirementId,
+      requiredCount: 5,
+    });
+    expect(result).toEqual(updated);
+  });
+
+  it('throws when requirement not found', async () => {
+    const chain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([]),
+      innerJoin: vi.fn().mockReturnThis(),
+    };
+    mockDb.select.mockReturnValue(chain);
+
+    await expect(
+      updateRoleRequirement(EVENT_ID, { requirementId, requiredCount: 3 }),
+    ).rejects.toThrow('Role requirement not found');
+  });
+});
+
+describe('deleteRoleRequirement', () => {
+  const requirementId = '550e8400-e29b-41d4-a716-446655440000';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
+  });
+
+  it('deletes requirement with ownership check', async () => {
+    const chain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([{ id: requirementId }]),
+      innerJoin: vi.fn().mockReturnThis(),
+    };
+    mockDb.select.mockReturnValue(chain);
+
+    const deleteChain = {
+      where: vi.fn().mockResolvedValue(undefined),
+    };
+    mockDb.delete.mockReturnValue(deleteChain);
+
+    const result = await deleteRoleRequirement(EVENT_ID, requirementId);
+    expect(result).toEqual({ success: true });
+  });
+
+  it('throws when requirement not found', async () => {
+    const chain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([]),
+      innerJoin: vi.fn().mockReturnThis(),
+    };
+    mockDb.select.mockReturnValue(chain);
+
+    await expect(
+      deleteRoleRequirement(EVENT_ID, requirementId),
+    ).rejects.toThrow('Role requirement not found');
+  });
+});
+
+describe('getSessionRoleRequirements', () => {
+  const sessionId = '550e8400-e29b-41d4-a716-446655440000';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
+  });
+
+  it('returns requirements for session', async () => {
+    const reqs = [{ id: 'r1', role: 'speaker', requiredCount: 2 }];
+    const chain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockResolvedValue(reqs),
+      innerJoin: vi.fn().mockReturnThis(),
+    };
+    mockDb.select.mockReturnValue(chain);
+
+    const result = await getSessionRoleRequirements(EVENT_ID, sessionId);
+    expect(result).toEqual(reqs);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// GAP TESTS — Assignments (update + delete + list)
+// ══════════════════════════════════════════════════════════════
+
+describe('updateAssignment', () => {
+  const assignmentId = '550e8400-e29b-41d4-a716-446655440000';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
+  });
+
+  it('updates assignment fields', async () => {
+    chainedSelect([{ id: assignmentId, role: 'speaker' }]);
+
+    const updated = { id: assignmentId, role: 'chair', presentationTitle: 'New Title' };
+    chainedUpdate([updated]);
+
+    const result = await updateAssignment(EVENT_ID, {
+      assignmentId,
+      role: 'chair',
+      presentationTitle: 'New Title',
+    });
+    expect(result).toEqual(updated);
+  });
+
+  it('throws when assignment not found', async () => {
+    chainedSelect([]);
+
+    await expect(
+      updateAssignment(EVENT_ID, { assignmentId, role: 'chair' }),
+    ).rejects.toThrow('Assignment not found');
+  });
+});
+
+describe('deleteAssignment', () => {
+  const assignmentId = '550e8400-e29b-41d4-a716-446655440000';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
+  });
+
+  it('deletes existing assignment', async () => {
+    chainedDelete([{ id: assignmentId }]);
+
+    const result = await deleteAssignment(EVENT_ID, assignmentId);
+    expect(result).toEqual({ success: true });
+  });
+
+  it('throws when assignment not found', async () => {
+    chainedDelete([]);
+
+    await expect(
+      deleteAssignment(EVENT_ID, assignmentId),
+    ).rejects.toThrow('Assignment not found');
+  });
+});
+
+describe('getSessionAssignments', () => {
+  const sessionId = '550e8400-e29b-41d4-a716-446655440000';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
+  });
+
+  it('returns assignments ordered by sortOrder', async () => {
+    const assignments = [
+      { id: 'a1', role: 'chair', sortOrder: 0 },
+      { id: 'a2', role: 'speaker', sortOrder: 1 },
+    ];
+    const chain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockResolvedValue(assignments),
+    };
+    mockDb.select.mockReturnValue(chain);
+
+    const result = await getSessionAssignments(EVENT_ID, sessionId);
+    expect(result).toEqual(assignments);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// GAP TESTS — Faculty Invite reads
+// ══════════════════════════════════════════════════════════════
+
+describe('getFacultyInvite', () => {
+  const inviteId = '550e8400-e29b-41d4-a716-446655440000';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
+  });
+
+  it('returns invite by ID', async () => {
+    const invite = { id: inviteId, status: 'sent' };
+    chainedSelect([invite]);
+
+    const result = await getFacultyInvite(EVENT_ID, inviteId);
+    expect(result).toEqual(invite);
+  });
+
+  it('throws when not found', async () => {
+    chainedSelect([]);
+
+    await expect(
+      getFacultyInvite(EVENT_ID, inviteId),
+    ).rejects.toThrow('Invite not found');
+  });
+});
+
+describe('getFacultyInviteByToken', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns invite by token (no auth needed)', async () => {
+    const invite = { id: 'inv-1', token: 'valid-token', status: 'sent' };
+    chainedSelect([invite]);
+
+    const result = await getFacultyInviteByToken('valid-token');
+    expect(result).toEqual(invite);
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+  });
+
+  it('throws when invite not found', async () => {
+    chainedSelect([]);
+
+    await expect(
+      getFacultyInviteByToken('nonexistent-token'),
+    ).rejects.toThrow('Invite not found');
+  });
+
+  it('rejects empty token', async () => {
+    await expect(
+      getFacultyInviteByToken(''),
+    ).rejects.toThrow('Invalid invite token');
+  });
+
+  it('rejects excessively long token', async () => {
+    await expect(
+      getFacultyInviteByToken('x'.repeat(101)),
+    ).rejects.toThrow('Invalid invite token');
+  });
+});
+
+describe('getEventFacultyInvites', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
+  });
+
+  it('returns all invites for event', async () => {
+    const invites = [
+      { id: 'i1', status: 'sent' },
+      { id: 'i2', status: 'accepted' },
+    ];
+    const chain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockResolvedValue(invites),
+    };
+    mockDb.select.mockReturnValue(chain);
+
+    const result = await getEventFacultyInvites(EVENT_ID);
+    expect(result).toEqual(invites);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// GAP TESTS — Program Version reads
+// ══════════════════════════════════════════════════════════════
+
+describe('getProgramVersions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
+  });
+
+  it('returns versions ordered by versionNo desc', async () => {
+    const versions = [
+      { id: 'v2', versionNo: 2 },
+      { id: 'v1', versionNo: 1 },
+    ];
+    const chain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockResolvedValue(versions),
+    };
+    mockDb.select.mockReturnValue(chain);
+
+    const result = await getProgramVersions(EVENT_ID);
+    expect(result).toEqual(versions);
+  });
+});
+
+describe('getProgramVersion', () => {
+  const versionId = '550e8400-e29b-41d4-a716-446655440000';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
+  });
+
+  it('returns specific version', async () => {
+    const version = { id: versionId, versionNo: 1 };
+    chainedSelect([version]);
+
+    const result = await getProgramVersion(EVENT_ID, versionId);
+    expect(result).toEqual(version);
+  });
+
+  it('throws when not found', async () => {
+    chainedSelect([]);
+
+    await expect(
+      getProgramVersion(EVENT_ID, versionId),
+    ).rejects.toThrow('Program version not found');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// GAP TESTS — Session cancellation sets cancelledAt
+// ══════════════════════════════════════════════════════════════
+
+describe('updateSessionStatus (cancelledAt)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
+  });
+
+  it('sets cancelledAt when transitioning to cancelled', async () => {
+    const sessionId = '550e8400-e29b-41d4-a716-446655440000';
+    const session = { id: sessionId, status: 'draft' };
+    chainedSelect([session]);
+
+    const updatedSession = { id: sessionId, status: 'cancelled', cancelledAt: new Date() };
+    const updateChain = chainedUpdate([updatedSession]);
+
+    await updateSessionStatus(EVENT_ID, { sessionId, newStatus: 'cancelled' });
+
+    // Verify set() was called with cancelledAt
+    const setCall = updateChain.set.mock.calls[0][0];
+    expect(setCall.status).toBe('cancelled');
+    expect(setCall.cancelledAt).toBeInstanceOf(Date);
+  });
+
+  it('does not set cancelledAt for non-cancel transitions', async () => {
+    const sessionId = '550e8400-e29b-41d4-a716-446655440000';
+    const session = { id: sessionId, status: 'draft' };
+    chainedSelect([session]);
+
+    const updatedSession = { id: sessionId, status: 'scheduled' };
+    const updateChain = chainedUpdate([updatedSession]);
+
+    await updateSessionStatus(EVENT_ID, { sessionId, newStatus: 'scheduled' });
+
+    const setCall = updateChain.set.mock.calls[0][0];
+    expect(setCall.status).toBe('scheduled');
+    expect(setCall.cancelledAt).toBeUndefined();
   });
 });
