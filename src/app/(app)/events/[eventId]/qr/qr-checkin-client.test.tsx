@@ -19,6 +19,15 @@ vi.mock('@/components/shared/CheckInSearch', () => ({
 vi.mock('@/lib/hooks/use-online-status', () => ({
   useOnlineStatus: () => true,
 }));
+vi.mock('@/lib/hooks/use-offline-sync', () => ({
+  useOfflineSync: () => ({
+    syncStatus: 'idle',
+    pendingCount: 0,
+    lastSyncedCount: 0,
+    lastSyncError: null,
+    syncNow: vi.fn(),
+  }),
+}));
 
 import { QrCheckInClient } from './qr-checkin-client';
 

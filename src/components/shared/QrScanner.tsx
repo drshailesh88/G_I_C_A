@@ -1,11 +1,19 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { useOnlineStatus } from '@/lib/hooks/use-online-status';
 import { useOfflineSync } from '@/lib/hooks/use-offline-sync';
 import { queueOfflineScan, generateScanId, getPendingCount } from '@/lib/attendance/offline-queue';
 import type { ScanLookupResult } from '@/lib/attendance/qr-utils';
+
+type SyncState = {
+  syncStatus: 'idle' | 'syncing' | 'synced' | 'error';
+  pendingCount: number;
+  lastSyncedCount: number;
+  lastSyncError: string | null;
+  syncNow: () => Promise<void>;
+};
 
 export type QrScannerProps = {
   eventId: string;
@@ -13,6 +21,8 @@ export type QrScannerProps = {
   deviceId?: string;
   onScan: (result: ScanLookupResult) => void;
   disabled?: boolean;
+  /** When provided, uses external sync state instead of creating its own */
+  externalSync?: SyncState;
 };
 
 export function QrScanner({
@@ -21,17 +31,27 @@ export function QrScanner({
   deviceId,
   onScan,
   disabled = false,
+  externalSync,
 }: QrScannerProps) {
   const [processing, setProcessing] = useState(false);
   const [lastScannedPayload, setLastScannedPayload] = useState<string | null>(null);
   const [offlinePendingCount, setOfflinePendingCount] = useState(0);
   const isOnline = useOnlineStatus();
+  const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auto-sync when connectivity returns
-  const { syncStatus, pendingCount, lastSyncError, syncNow } = useOfflineSync({
+  // Cleanup cooldown timer on unmount
+  useEffect(() => {
+    return () => {
+      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+    };
+  }, []);
+
+  // Use external sync state if provided, otherwise manage internally
+  const internalSync = useOfflineSync({
     eventId,
-    enabled: true,
+    enabled: !externalSync,
   });
+  const { syncStatus, pendingCount, lastSyncedCount, lastSyncError, syncNow } = externalSync ?? internalSync;
 
   const handleScan = useCallback(
     async (detectedCodes: { rawValue: string }[]) => {
@@ -76,16 +96,19 @@ export function QrScanner({
           onScan({ type: 'invalid', message: 'Failed to process scan. Please try again.' });
         }
       } finally {
-        setTimeout(() => {
+        cooldownTimerRef.current = setTimeout(() => {
           setProcessing(false);
           setLastScannedPayload(null);
+          cooldownTimerRef.current = null;
         }, 2000);
       }
     },
     [eventId, sessionId, deviceId, onScan, disabled, processing, lastScannedPayload, isOnline],
   );
 
-  const displayPendingCount = pendingCount || offlinePendingCount;
+  // After sync completes (synced/idle with 0 pending), trust the hook's count over stale local state
+  const syncHasRun = syncStatus === 'synced' || syncStatus === 'error';
+  const displayPendingCount = syncHasRun ? pendingCount : Math.max(pendingCount, offlinePendingCount);
 
   return (
     <div className="relative w-full max-w-sm mx-auto">
@@ -118,7 +141,7 @@ export function QrScanner({
       )}
       {isOnline && syncStatus === 'synced' && (
         <div className="mt-2 rounded-md bg-green-50 px-3 py-2 text-center text-xs text-green-800">
-          Offline scans synced successfully
+          {lastSyncedCount > 0 ? `Synced ${lastSyncedCount} check-in${lastSyncedCount !== 1 ? 's' : ''}` : 'Offline scans synced successfully'}
         </div>
       )}
       {isOnline && syncStatus === 'error' && (

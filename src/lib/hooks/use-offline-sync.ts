@@ -15,6 +15,7 @@ type UseOfflineSyncOptions = {
 type UseOfflineSyncReturn = {
   syncStatus: SyncStatus;
   pendingCount: number;
+  lastSyncedCount: number;
   lastSyncError: string | null;
   syncNow: () => Promise<void>;
 };
@@ -27,16 +28,27 @@ export function useOfflineSync({
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [pendingCount, setPendingCount] = useState(0);
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
+  const [lastSyncedCount, setLastSyncedCount] = useState(0);
   const syncingRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  // Track mounted state for safe async updates
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   const syncNow = useCallback(async () => {
     if (syncingRef.current || !isOnline) return;
     syncingRef.current = true;
+    if (!mountedRef.current) return;
     setSyncStatus('syncing');
     setLastSyncError(null);
+    setLastSyncedCount(0);
 
     try {
       const pending = await getPendingScans();
+      if (!mountedRef.current) return;
       setPendingCount(pending.length);
 
       if (pending.length === 0) {
@@ -66,11 +78,16 @@ export function useOfflineSync({
       await markScansAsSynced(syncedIds);
       await clearSyncedScans();
 
+      if (!mountedRef.current) return;
+      setLastSyncedCount(syncedIds.length);
+
       const remainingPending = await getPendingScans();
+      if (!mountedRef.current) return;
       setPendingCount(remainingPending.length);
 
       setSyncStatus('synced');
     } catch (err) {
+      if (!mountedRef.current) return;
       setLastSyncError(err instanceof Error ? err.message : 'Sync failed');
       setSyncStatus('error');
     } finally {
@@ -97,7 +114,7 @@ export function useOfflineSync({
     const checkPending = async () => {
       try {
         const pending = await getPendingScans();
-        setPendingCount(pending.length);
+        if (mountedRef.current) setPendingCount(pending.length);
       } catch {
         // IndexedDB might not be available in SSR
       }
@@ -108,5 +125,5 @@ export function useOfflineSync({
     return () => clearInterval(interval);
   }, [enabled]);
 
-  return { syncStatus, pendingCount, lastSyncError, syncNow };
+  return { syncStatus, pendingCount, lastSyncedCount, lastSyncError, syncNow };
 }

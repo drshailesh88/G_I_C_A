@@ -6,6 +6,7 @@ import { QrScanner } from '@/components/shared/QrScanner';
 import { ScanFeedback } from '@/components/shared/ScanFeedback';
 import { CheckInSearch } from '@/components/shared/CheckInSearch';
 import { useOnlineStatus } from '@/lib/hooks/use-online-status';
+import { useOfflineSync } from '@/lib/hooks/use-offline-sync';
 import type { ScanLookupResult } from '@/lib/attendance/qr-utils';
 import type { AttendanceRecord, AttendanceStats } from '@/lib/actions/attendance';
 
@@ -27,6 +28,18 @@ export function QrCheckInClient({
   const [showManualSearch, setShowManualSearch] = useState(false);
   const isOnline = useOnlineStatus();
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Lift sync state to page level for banners and badges
+  const sync = useOfflineSync({ eventId, enabled: true });
+
+  // Refresh stats after successful sync
+  const prevSyncStatusRef = useRef(sync.syncStatus);
+  useEffect(() => {
+    if (prevSyncStatusRef.current === 'syncing' && sync.syncStatus === 'synced') {
+      router.refresh();
+    }
+    prevSyncStatusRef.current = sync.syncStatus;
+  }, [sync.syncStatus, router]);
 
   // Auto-dismiss ScanFeedback after 3 seconds
   useEffect(() => {
@@ -64,6 +77,68 @@ export function QrCheckInClient({
         <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">QR Check-In</h1>
       </div>
 
+      {/* Offline banner */}
+      {!isOnline && (
+        <div
+          className="mx-4 mb-3 flex items-center justify-between rounded-lg bg-amber-50 border border-amber-200 px-4 py-3"
+          role="alert"
+          data-testid="offline-banner"
+        >
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse" />
+            <span className="text-sm font-medium text-amber-800">
+              You are offline — scans will sync when connected
+            </span>
+            {sync.pendingCount > 0 && (
+              <span
+                className="ml-1 inline-flex items-center rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-900"
+                data-testid="queued-count-badge"
+              >
+                {sync.pendingCount} queued
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Synced banner — only when queue is fully drained */}
+      {isOnline && sync.syncStatus === 'synced' && sync.lastSyncedCount > 0 && sync.pendingCount === 0 && (
+        <div
+          className="mx-4 mb-3 flex items-center justify-between rounded-lg bg-green-50 border border-green-200 px-4 py-3"
+          role="status"
+          data-testid="synced-banner"
+        >
+          <div className="flex items-center gap-2">
+            <svg className="h-4 w-4 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            <span className="text-sm font-medium text-green-800">
+              Synced {sync.lastSyncedCount} check-in{sync.lastSyncedCount !== 1 ? 's' : ''}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Sync error banner */}
+      {isOnline && sync.syncStatus === 'error' && (
+        <div
+          className="mx-4 mb-3 flex items-center justify-between rounded-lg bg-red-50 border border-red-200 px-4 py-3"
+          role="alert"
+          data-testid="sync-error-banner"
+        >
+          <span className="text-sm font-medium text-red-800">
+            Sync failed: {sync.lastSyncError}
+          </span>
+          <button
+            onClick={sync.syncNow}
+            className="text-sm font-medium text-red-700 underline hover:no-underline"
+            data-testid="retry-sync-btn"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Three-panel layout: stacked on mobile (375px), side-by-side on desktop */}
       <div className="flex-1 overflow-y-auto px-4 pb-20">
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr] xl:grid-cols-[1fr_1fr_auto]">
@@ -83,6 +158,7 @@ export function QrCheckInClient({
                 <QrScanner
                   eventId={eventId}
                   onScan={handleScan}
+                  externalSync={sync}
                 />
               </div>
             )}
@@ -162,7 +238,19 @@ export function QrCheckInClient({
           </button>
 
           <div className="flex items-center gap-3">
-            {/* Offline badge */}
+            {/* Manual sync button — visible when online with pending scans or after error */}
+            {isOnline && (sync.pendingCount > 0 || sync.syncStatus === 'error') && (
+              <button
+                onClick={sync.syncNow}
+                disabled={sync.syncStatus === 'syncing'}
+                className="rounded-lg bg-blue-100 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-200 disabled:opacity-50"
+                data-testid="manual-sync-btn"
+              >
+                {sync.syncStatus === 'syncing' ? 'Syncing...' : `Sync Now${sync.pendingCount > 0 ? ` (${sync.pendingCount})` : ''}`}
+              </button>
+            )}
+
+            {/* Connectivity badge */}
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
                 isOnline
