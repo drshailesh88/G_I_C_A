@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { issuedCertificates, certificateTemplates, people } from '@/lib/db/schema';
+import { issuedCertificates, certificateTemplates, people, eventRegistrations } from '@/lib/db/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
@@ -208,13 +208,37 @@ export async function revokeCertificate(eventId: string, input: unknown) {
   return revoked;
 }
 
-// ── List issued certificates ─────────────────────────────────
+// ── List issued certificates (with recipient info) ──────────
 export async function listIssuedCertificates(eventId: string) {
   await assertEventAccess(eventId);
 
   return db
-    .select()
+    .select({
+      id: issuedCertificates.id,
+      certificateNumber: issuedCertificates.certificateNumber,
+      certificateType: issuedCertificates.certificateType,
+      status: issuedCertificates.status,
+      personId: issuedCertificates.personId,
+      issuedAt: issuedCertificates.issuedAt,
+      revokedAt: issuedCertificates.revokedAt,
+      revokeReason: issuedCertificates.revokeReason,
+      downloadCount: issuedCertificates.downloadCount,
+      verificationCount: issuedCertificates.verificationCount,
+      lastDownloadedAt: issuedCertificates.lastDownloadedAt,
+      lastSentAt: issuedCertificates.lastSentAt,
+      storageKey: issuedCertificates.storageKey,
+      recipientName: people.fullName,
+      registrationNumber: eventRegistrations.registrationNumber,
+    })
     .from(issuedCertificates)
+    .innerJoin(people, eq(issuedCertificates.personId, people.id))
+    .leftJoin(
+      eventRegistrations,
+      and(
+        eq(eventRegistrations.personId, issuedCertificates.personId),
+        eq(eventRegistrations.eventId, issuedCertificates.eventId),
+      ),
+    )
     .where(eq(issuedCertificates.eventId, eventId))
     .orderBy(desc(issuedCertificates.issuedAt));
 }
@@ -383,4 +407,88 @@ export async function verifyCertificate(verificationToken: string) {
     certificateType: cert.certificateType,
     issuedAt: cert.issuedAt,
   };
+}
+
+// ── Resend certificate notification (single cert) ───────────
+const resendCertSchema = z.object({
+  certificateId: z.string().uuid('Invalid certificate ID'),
+  channel: z.enum(['email', 'whatsapp', 'both']),
+});
+
+export async function resendCertificateNotification(eventId: string, input: unknown) {
+  await assertEventAccess(eventId, { requireWrite: true });
+  const validated = resendCertSchema.parse(input);
+
+  const [cert] = await db
+    .select({
+      id: issuedCertificates.id,
+      certificateNumber: issuedCertificates.certificateNumber,
+      certificateType: issuedCertificates.certificateType,
+      status: issuedCertificates.status,
+      storageKey: issuedCertificates.storageKey,
+      personId: issuedCertificates.personId,
+      personFullName: people.fullName,
+      personEmail: people.email,
+      personPhone: people.phoneE164,
+    })
+    .from(issuedCertificates)
+    .innerJoin(people, eq(issuedCertificates.personId, people.id))
+    .where(
+      withEventScope(
+        issuedCertificates.eventId,
+        eventId,
+        eq(issuedCertificates.id, validated.certificateId),
+      ),
+    )
+    .limit(1);
+
+  if (!cert) throw new Error('Certificate not found');
+  if (cert.status !== 'issued') throw new Error('Can only resend issued certificates');
+  if (!cert.storageKey) throw new Error('Certificate PDF has not been generated yet');
+
+  const { sendNotification } = await import('@/lib/notifications/send');
+
+  const channels = validated.channel === 'both'
+    ? ['email', 'whatsapp'] as const
+    : [validated.channel] as const;
+
+  for (const channel of channels) {
+    const result = await sendNotification({
+      eventId,
+      personId: cert.personId,
+      channel,
+      templateKey: 'certificate_delivery',
+      triggerType: 'certificate.generated',
+      triggerEntityType: 'issued_certificate',
+      triggerEntityId: cert.id,
+      sendMode: 'manual',
+      idempotencyKey: `cert-resend-${cert.id}-${channel}-${Date.now()}`,
+      variables: {
+        full_name: cert.personFullName,
+        certificate_number: cert.certificateNumber,
+        certificate_type: cert.certificateType.replace(/_/g, ' '),
+        recipientEmail: cert.personEmail ?? '',
+        recipientPhoneE164: cert.personPhone ?? '',
+      },
+      attachments: [{ storageKey: cert.storageKey, fileName: `${cert.certificateNumber}.pdf` }],
+    });
+    if (result.status === 'failed') {
+      throw new Error(`Certificate notification failed via ${channel}`);
+    }
+  }
+
+  // Update lastSentAt
+  await db
+    .update(issuedCertificates)
+    .set({ lastSentAt: new Date(), updatedAt: new Date() })
+    .where(
+      withEventScope(
+        issuedCertificates.eventId,
+        eventId,
+        eq(issuedCertificates.id, cert.id),
+      ),
+    );
+
+  revalidatePath(`/events/${eventId}/certificates`);
+  return { sent: true, channels: channels.length };
 }

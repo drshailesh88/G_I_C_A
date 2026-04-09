@@ -17,9 +17,9 @@ Begin Sub-Phase 6A-3: Implement attachment flow (H5)
 - Phase 5: Certificates + QR Attendance — COMPLETE (2026-04-08)
 
 ## Progress Summary
-- Requirements done: 76/116
-- Requirements remaining: 42 (across Phases 6-9)
-- Test files: 53 | Tests passing: 958
+- Requirements done: 77/116
+- Requirements remaining: 41 (across Phases 6-9)
+- Test files: 67 | Tests passing: 1113
 - Phases remaining: 4 (Phase 6, 7, 8, 9)
 - Estimated: ~23 granular requirements across 11 sub-phases
 
@@ -31,16 +31,16 @@ Begin Sub-Phase 6A-3: Implement attachment flow (H5)
 - [ ] 6A-4: Add Clerk middleware (6 tests)
 - [ ] 6B-1: Branding configuration CRUD (10 tests)
 - [ ] 6B-2: Branding injection into templates (6 tests)
-- [ ] 6C-1: Excel export engine (18 tests)
+- [x] 6C-1: Excel export engine (19 tests)
 - [ ] 6C-2: Per-event PDF archive (8 tests)
 - [ ] 6D-1: Team management page (8 tests)
 
 ### Phase 7: Certificate UI + QR UI + Dashboard (6 requirements)
 - [ ] 7A-1: pdfme Designer integration (8 tests)
 - [ ] 7A-2: Certificate generation page UI (10 tests)
-- [ ] 7A-3: View all issued certificates (8 tests)
+- [x] 7A-3: View all issued certificates (16 tests)
 - [x] 7B-1: QR scanner page (12 tests)
-- [ ] 7B-2: Offline sync indicator (6 tests)
+- [x] 7B-2: Offline sync indicator (9 tests)
 - [ ] 7C-1: Dashboard with real metrics (10 tests)
 
 ### Phase 8: Infrastructure Hardening (7 requirements)

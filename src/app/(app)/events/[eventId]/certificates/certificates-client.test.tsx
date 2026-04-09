@@ -12,6 +12,7 @@ vi.mock('@/lib/actions/certificate-issuance', () => ({
   issueCertificate: vi.fn(),
   revokeCertificate: vi.fn(),
   getCertificateDownloadUrl: vi.fn(),
+  resendCertificateNotification: vi.fn(),
 }));
 vi.mock('@/lib/actions/person', () => ({
   searchPeople: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
@@ -62,6 +63,8 @@ function makeCert(overrides: Partial<Parameters<typeof CertificatesClient>[0]['i
     lastDownloadedAt: new Date('2026-04-08'),
     lastSentAt: null,
     storageKey: 'certificates/key.pdf',
+    recipientName: 'Dr. Smith',
+    registrationNumber: 'GEM2026-DEL-00001',
     ...overrides,
   };
 }
@@ -148,5 +151,86 @@ describe('CertificatesClient', () => {
       templates: [makeTemplate({ notes: 'For day 1 delegates only' })],
     });
     expect(html).toContain('For day 1 delegates only');
+  });
+});
+
+// ── 7A-3: View All Issued Certificates ─────────────────────────
+// Note: SSR renders with tab='templates' by default. The issued tab content
+// is conditionally rendered only when the tab state is 'issued'. We test:
+// 1. Summary counts (always visible regardless of tab)
+// 2. Tab navigation presence
+// 3. Data types/props accepted by the component (via compile-time checking)
+describe('CertificatesClient — Issued Certificates View (7A-3)', () => {
+  it('counts issued certificates correctly with recipient info', () => {
+    const html = render({
+      issuedCertificates: [
+        makeCert({ recipientName: 'Dr. Sharma', registrationNumber: 'GEM2026-DEL-00042' }),
+        makeCert({ id: 'c2', recipientName: 'Dr. Patel', status: 'revoked' }),
+      ],
+    });
+    // Only status='issued' counted in header summary
+    expect(html).toContain('1 issued');
+  });
+
+  it('accepts issuedCertificates with recipientName and registrationNumber props', () => {
+    // This verifies the type contract — the component accepts the new fields
+    const certs = [
+      makeCert({ recipientName: 'Dr. A', registrationNumber: 'REG-001' }),
+      makeCert({ id: 'c2', recipientName: 'Dr. B', registrationNumber: null }),
+    ];
+    // Should not throw during render
+    const html = render({ issuedCertificates: certs });
+    expect(html).toContain('Certificates');
+    expect(html).toContain('2 issued');
+  });
+
+  it('renders Issued Certificates tab button', () => {
+    const html = render({ issuedCertificates: [makeCert()] });
+    expect(html).toContain('Issued Certificates');
+  });
+
+  it('handles empty issued certificates list', () => {
+    const html = render({ issuedCertificates: [] });
+    expect(html).toContain('0 issued');
+  });
+
+  it('counts multiple certificate types in summary', () => {
+    const html = render({
+      issuedCertificates: [
+        makeCert({ id: 'c1', certificateType: 'delegate_attendance' }),
+        makeCert({ id: 'c2', certificateType: 'faculty_participation' }),
+        makeCert({ id: 'c3', certificateType: 'speaker_recognition', status: 'superseded' }),
+      ],
+    });
+    // 2 issued (c1, c2), c3 is superseded
+    expect(html).toContain('2 issued');
+  });
+
+  it('handles certificates with null registration numbers', () => {
+    const html = render({
+      issuedCertificates: [
+        makeCert({ registrationNumber: null }),
+      ],
+    });
+    // Should not crash
+    expect(html).toContain('1 issued');
+  });
+
+  it('pluralizes template count correctly', () => {
+    const html = render({
+      templates: [makeTemplate()],
+      issuedCertificates: [makeCert()],
+    });
+    expect(html).toContain('1 template');
+    expect(html).not.toContain('1 templates');
+  });
+
+  it('shows Bulk Generate link when active templates exist', () => {
+    const html = render({
+      templates: [makeTemplate({ status: 'active' })],
+      issuedCertificates: [makeCert()],
+    });
+    expect(html).toContain('Bulk Generate');
+    expect(html).toContain(`/events/${EVENT_ID}/certificates/generate`);
   });
 });

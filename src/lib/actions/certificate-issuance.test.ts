@@ -38,6 +38,7 @@ import {
   getIssuedCertificate,
   getCertificateDownloadUrl,
   verifyCertificate,
+  resendCertificateNotification,
 } from './certificate-issuance';
 
 // ── Chain helpers ─────────────────────────────────────────────
@@ -358,17 +359,37 @@ describe('revokeCertificate', () => {
 
 // ── List Issued Certificates ─────────────────────────────────
 describe('listIssuedCertificates', () => {
-  it('returns certificates for the event', async () => {
-    chainedSelectSequence([[mockIssuedCert]]);
+  function chainedSelectWithJoins(rows: unknown[]) {
+    const chain: any = {
+      from: vi.fn().mockImplementation(() => chain),
+      innerJoin: vi.fn().mockImplementation(() => chain),
+      leftJoin: vi.fn().mockImplementation(() => chain),
+      where: vi.fn().mockImplementation(() => chain),
+      orderBy: vi.fn().mockResolvedValue(rows),
+    };
+    mockDb.select.mockReturnValue(chain);
+    return chain;
+  }
+
+  it('returns certificates with recipient info', async () => {
+    const certWithPerson = {
+      ...mockIssuedCert,
+      recipientName: 'Dr. Smith',
+      registrationNumber: 'GEM2026-DEL-00001',
+    };
+    const chain = chainedSelectWithJoins([certWithPerson]);
     const result = await listIssuedCertificates(EVENT_ID);
-    expect(result).toEqual([mockIssuedCert]);
+    expect(result).toEqual([certWithPerson]);
+    expect(chain.innerJoin).toHaveBeenCalledTimes(1);
+    expect(chain.leftJoin).toHaveBeenCalledTimes(1);
   });
 
   it('returns empty array when no certificates', async () => {
-    chainedSelectSequence([[]]);
+    chainedSelectWithJoins([]);
     const result = await listIssuedCertificates(EVENT_ID);
     expect(result).toEqual([]);
   });
+
 });
 
 // ── Get Issued Certificate ───────────────────────────────────
@@ -542,5 +563,158 @@ describe('verifyCertificate', () => {
 
   it('rejects non-UUID token', async () => {
     await expect(verifyCertificate('not-a-uuid')).rejects.toThrow();
+  });
+});
+
+// ── Resend Certificate Notification (7A-3) ─────────────────────
+describe('resendCertificateNotification', () => {
+  const mockSendNotification = vi.fn().mockResolvedValue({ success: true });
+
+  beforeEach(() => {
+    mockSendNotification.mockClear();
+    // Mock dynamic import of notification send
+    vi.doMock('@/lib/notifications/send', () => ({
+      sendNotification: mockSendNotification,
+    }));
+  });
+
+  function chainedSelectWithJoin(rows: unknown[]) {
+    const chain: any = {
+      from: vi.fn().mockImplementation(() => chain),
+      innerJoin: vi.fn().mockImplementation(() => chain),
+      where: vi.fn().mockImplementation(() => chain),
+      limit: vi.fn().mockResolvedValue(rows),
+      then: (resolve: (val: unknown) => void) => Promise.resolve(rows).then(resolve),
+    };
+    mockDb.select.mockReturnValue(chain);
+    return chain;
+  }
+
+  it('resends notification for an issued certificate', async () => {
+    const certWithPerson = {
+      id: CERT_ID,
+      certificateNumber: 'GEM2026-ATT-00001',
+      certificateType: 'delegate_attendance',
+      status: 'issued',
+      storageKey: 'certificates/ev/type/id.pdf',
+      personId: PERSON_ID,
+      personFullName: 'Dr. Smith',
+      personEmail: 'smith@example.com',
+      personPhone: '+919876543210',
+    };
+    chainedSelectWithJoin([certWithPerson]);
+    chainedUpdate([]);
+
+    const result = await resendCertificateNotification(EVENT_ID, {
+      certificateId: CERT_ID,
+      channel: 'email',
+    });
+    expect(result.sent).toBe(true);
+    expect(result.channels).toBe(1);
+    expect(mockSendNotification).toHaveBeenCalledTimes(1);
+    expect(mockRevalidatePath).toHaveBeenCalledWith(`/events/${EVENT_ID}/certificates`);
+  });
+
+  it('throws when certificate not found', async () => {
+    chainedSelectWithJoin([]);
+    await expect(resendCertificateNotification(EVENT_ID, {
+      certificateId: CERT_ID,
+      channel: 'email',
+    })).rejects.toThrow('Certificate not found');
+  });
+
+  it('throws when certificate is revoked', async () => {
+    chainedSelectWithJoin([{
+      id: CERT_ID,
+      status: 'revoked',
+      storageKey: 'k',
+      personId: PERSON_ID,
+    }]);
+    await expect(resendCertificateNotification(EVENT_ID, {
+      certificateId: CERT_ID,
+      channel: 'email',
+    })).rejects.toThrow('Can only resend issued certificates');
+  });
+
+  it('throws when PDF not generated', async () => {
+    chainedSelectWithJoin([{
+      id: CERT_ID,
+      status: 'issued',
+      storageKey: null,
+      personId: PERSON_ID,
+    }]);
+    await expect(resendCertificateNotification(EVENT_ID, {
+      certificateId: CERT_ID,
+      channel: 'email',
+    })).rejects.toThrow('not been generated');
+  });
+
+  it('rejects invalid input', async () => {
+    await expect(resendCertificateNotification(EVENT_ID, {
+      certificateId: 'not-a-uuid',
+      channel: 'carrier_pigeon',
+    })).rejects.toThrow();
+  });
+
+  it('rejects unauthorized access', async () => {
+    mockAssertEventAccess.mockRejectedValue(new Error('Forbidden'));
+    await expect(resendCertificateNotification(EVENT_ID, {
+      certificateId: CERT_ID,
+      channel: 'email',
+    })).rejects.toThrow('Forbidden');
+  });
+
+  it('fails when the notification service reports a failed send instead of marking the certificate as sent', async () => {
+    chainedSelectWithJoin([{
+      id: CERT_ID,
+      certificateNumber: 'GEM2026-ATT-00001',
+      certificateType: 'delegate_attendance',
+      status: 'issued',
+      storageKey: 'certificates/ev/type/id.pdf',
+      personId: PERSON_ID,
+      personFullName: 'Dr. Smith',
+      personEmail: 'smith@example.com',
+      personPhone: '+919876543210',
+    }]);
+    chainedUpdate([]);
+    mockSendNotification.mockResolvedValueOnce({
+      notificationLogId: 'log-1',
+      provider: 'resend',
+      providerMessageId: null,
+      status: 'failed',
+    });
+
+    await expect(resendCertificateNotification(EVENT_ID, {
+      certificateId: CERT_ID,
+      channel: 'email',
+    })).rejects.toThrow('failed');
+  });
+});
+
+// ── List Issued Certificates — Enhanced (7A-3) ─────────────────
+describe('listIssuedCertificates — enhanced with joins', () => {
+  it('calls select with join fields', async () => {
+    const certWithRecipient = {
+      ...mockIssuedCert,
+      recipientName: 'Dr. Sharma',
+      registrationNumber: 'GEM2026-DEL-00042',
+    };
+    // Enhanced query chains through innerJoin and leftJoin
+    const chain: any = {
+      from: vi.fn().mockImplementation(() => chain),
+      innerJoin: vi.fn().mockImplementation(() => chain),
+      leftJoin: vi.fn().mockImplementation(() => chain),
+      where: vi.fn().mockImplementation(() => chain),
+      orderBy: vi.fn().mockResolvedValue([certWithRecipient]),
+    };
+    mockDb.select.mockReturnValue(chain);
+
+    const result = await listIssuedCertificates(EVENT_ID);
+    expect(result).toEqual([certWithRecipient]);
+    expect(result[0].recipientName).toBe('Dr. Sharma');
+    expect(result[0].registrationNumber).toBe('GEM2026-DEL-00042');
+    // Verify joins were called
+    expect(chain.innerJoin).toHaveBeenCalledTimes(1);
+    expect(chain.leftJoin).toHaveBeenCalledTimes(1);
   });
 });
