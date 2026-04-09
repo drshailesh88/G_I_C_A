@@ -7,7 +7,7 @@
 Phase 6: Notification Wiring + Branding + Reports — Status: NOT STARTED
 
 ## Next Action
-Begin Sub-Phase 6A-3: Implement attachment flow (H5)
+Begin Sub-Phase 6B-2: Branding injection into notification templates
 
 ## Completed Phases
 - Phase 1: Scaffold + Auth + Event CRUD — COMPLETE (2026-04-08)
@@ -17,9 +17,9 @@ Begin Sub-Phase 6A-3: Implement attachment flow (H5)
 - Phase 5: Certificates + QR Attendance — COMPLETE (2026-04-08)
 
 ## Progress Summary
-- Requirements done: 77/116
-- Requirements remaining: 41 (across Phases 6-9)
-- Test files: 67 | Tests passing: 1113
+- Requirements done: 78/116
+- Requirements remaining: 40 (across Phases 6-9)
+- Test files: 74 | Tests passing: 1222
 - Phases remaining: 4 (Phase 6, 7, 8, 9)
 - Estimated: ~23 granular requirements across 11 sub-phases
 
@@ -29,11 +29,11 @@ Begin Sub-Phase 6A-3: Implement attachment flow (H5)
 - [x] 6A-2: Wire domain event handler H7 (9 tests)
 - [ ] 6A-3: Implement attachment flow H5 (12 tests)
 - [ ] 6A-4: Add Clerk middleware (6 tests)
-- [ ] 6B-1: Branding configuration CRUD (10 tests)
+- [x] 6B-1: Branding configuration CRUD (14 tests)
 - [ ] 6B-2: Branding injection into templates (6 tests)
 - [x] 6C-1: Excel export engine (19 tests)
-- [ ] 6C-2: Per-event PDF archive (8 tests)
-- [ ] 6D-1: Team management page (8 tests)
+- [x] 6C-2: Per-event PDF archive (16 tests)
+- [x] 6D-1: Team management page (13 tests)
 
 ### Phase 7: Certificate UI + QR UI + Dashboard (6 requirements)
 - [ ] 7A-1: pdfme Designer integration (8 tests)
@@ -41,13 +41,13 @@ Begin Sub-Phase 6A-3: Implement attachment flow (H5)
 - [x] 7A-3: View all issued certificates (16 tests)
 - [x] 7B-1: QR scanner page (12 tests)
 - [x] 7B-2: Offline sync indicator (9 tests)
-- [ ] 7C-1: Dashboard with real metrics (10 tests)
+- [x] 7C-1: Dashboard with real metrics (19 tests)
 
 ### Phase 8: Infrastructure Hardening (7 requirements)
 - [ ] 8A-1: Install and configure Inngest (6 tests)
 - [ ] 8A-2: Move bulk operations to Inngest (8 tests)
-- [ ] 8B-1: Sentry integration (manual verification)
-- [ ] 8B-2: Feature flags via Upstash Redis (10 tests)
+- [x] 8B-1: Sentry integration (manual verification)
+- [x] 8B-2: Feature flags via Upstash Redis (12 tests)
 - [ ] 8B-3: GitHub Actions CI pipeline (manual verification)
 - [ ] 8B-4: Pre-event backup automation (8 tests)
 - [ ] 8C-1: Provider timeout and circuit breaker (12 tests)

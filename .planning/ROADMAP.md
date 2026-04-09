@@ -49,13 +49,13 @@
       - [ ] 6A-3: Implement attachment flow (H5 from deferred tickets)
       - [ ] 6A-4: Add Clerk middleware for route protection
     - [ ] 6B: Per-Event Branding (2 requirements)
-      - [ ] 6B-1: Branding configuration CRUD (M15)
+      - [x] 6B-1: Branding configuration CRUD (M15)
       - [ ] 6B-2: Branding injection into notification templates
     - [ ] 6C: Reports & Exports (2 requirements)
       - [ ] 6C-1: Excel export engine + Reports page (M47)
       - [ ] 6C-2: Per-event PDF archive
-    - [ ] 6D: Team Management (1 requirement)
-      - [ ] 6D-1: Team management page (M19)
+    - [x] 6D: Team Management (1 requirement)
+      - [x] 6D-1: Team management page (M19)
 
 - [ ] Phase 7: Certificate UI + QR UI + Dashboard Polish (Milestone 4 part 1)
   - **Goal:** Placeholder pages become fully functional. Dashboard becomes operational command center.
@@ -77,8 +77,8 @@
       - [ ] 8A-1: Install and configure Inngest (replace sync cascade)
       - [ ] 8A-2: Move bulk operations to Inngest step functions
     - [ ] 8B: Monitoring & Safety (4 requirements)
-      - [ ] 8B-1: Sentry integration
-      - [ ] 8B-2: Feature flags via Upstash Redis
+      - [x] 8B-1: Sentry integration
+      - [x] 8B-2: Feature flags via Upstash Redis
       - [ ] 8B-3: GitHub Actions CI pipeline
       - [ ] 8B-4: Pre-event backup automation
     - [ ] 8C: Circuit Breakers & Resilience (1 requirement)
