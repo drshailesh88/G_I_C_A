@@ -173,7 +173,9 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
     const config = getCertificateTypeConfig(certType);
 
     // Step 2: Load existing certificates and numbers
-    const existing = await step.run('load-existing-certs', async (): Promise<ExistingCertsData> => {
+    // Note: step.run serializes return values through JSON (Inngest memoization),
+    // so we store the raw data and cast when needed.
+    const existing = await step.run('load-existing-certs', async () => {
       const existingCerts = await db
         .select()
         .from(issuedCertificates)
@@ -188,7 +190,7 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
         .where(eq(issuedCertificates.eventId, eventId));
 
       return {
-        existingCerts: existingCerts as IssuedCertificateRecord[],
+        existingCerts,
         numbers: existingNumbers.map(r => r.certificateNumber),
       };
     });
@@ -209,7 +211,7 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
         await db.transaction(async (tx) => {
           for (const recipient of batch) {
             const currentCert = findCurrentCertificate(
-              existing.existingCerts,
+              existing.existingCerts as unknown as IssuedCertificateRecord[],
               recipient.id,
               eventId,
               setup.template!.certificateType,
