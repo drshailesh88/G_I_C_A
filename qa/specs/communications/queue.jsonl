@@ -1,0 +1,11 @@
+{"id":"communications.spec-001","module":"communications","spec_file":"qa/specs/communications/spec-001.md","priority":1,"status":"pending","checkpoints":20,"page_url":"unit-test","attempts":0,"max_attempts":3}
+{"id":"communications.spec-002","module":"communications","spec_file":"qa/specs/communications/spec-002.md","priority":2,"status":"pending","checkpoints":16,"page_url":"unit-test","attempts":0,"max_attempts":3}
+{"id":"communications.spec-003","module":"communications","spec_file":"qa/specs/communications/spec-003.md","priority":3,"status":"pending","checkpoints":20,"page_url":"unit-test","attempts":0,"max_attempts":3}
+{"id":"communications.spec-004","module":"communications","spec_file":"qa/specs/communications/spec-004.md","priority":4,"status":"pending","checkpoints":17,"page_url":"unit-test","attempts":0,"max_attempts":3}
+{"id":"communications.spec-005","module":"communications","spec_file":"qa/specs/communications/spec-005.md","priority":5,"status":"pending","checkpoints":22,"page_url":"unit-test","attempts":0,"max_attempts":3}
+{"id":"communications.spec-006","module":"communications","spec_file":"qa/specs/communications/spec-006.md","priority":6,"status":"pending","checkpoints":22,"page_url":"unit-test","attempts":0,"max_attempts":3}
+{"id":"communications.spec-007","module":"communications","spec_file":"qa/specs/communications/spec-007.md","priority":7,"status":"pending","checkpoints":21,"page_url":"unit-test","attempts":0,"max_attempts":3}
+{"id":"communications.spec-008","module":"communications","spec_file":"qa/specs/communications/spec-008.md","priority":8,"status":"pending","checkpoints":22,"page_url":"unit-test","attempts":0,"max_attempts":3}
+{"id":"communications.spec-009","module":"communications","spec_file":"qa/specs/communications/spec-009.md","priority":9,"status":"pending","checkpoints":17,"page_url":"unit-test","attempts":0,"max_attempts":3}
+{"id":"communications.spec-010","module":"communications","spec_file":"qa/specs/communications/spec-010.md","priority":10,"status":"pending","checkpoints":18,"page_url":"unit-test","attempts":0,"max_attempts":3}
+{"id":"communications.spec-011","module":"communications","spec_file":"qa/specs/communications/spec-011.md","priority":11,"status":"pending","checkpoints":15,"page_url":"unit-test","attempts":0,"max_attempts":3}
