@@ -15,6 +15,7 @@ type UseOfflineSyncOptions = {
 type UseOfflineSyncReturn = {
   syncStatus: SyncStatus;
   pendingCount: number;
+  lastSyncedCount: number;
   lastSyncError: string | null;
   syncNow: () => Promise<void>;
 };
@@ -27,6 +28,7 @@ export function useOfflineSync({
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [pendingCount, setPendingCount] = useState(0);
   const [lastSyncError, setLastSyncError] = useState<string | null>(null);
+  const [lastSyncedCount, setLastSyncedCount] = useState(0);
   const syncingRef = useRef(false);
 
   const syncNow = useCallback(async () => {
@@ -34,6 +36,7 @@ export function useOfflineSync({
     syncingRef.current = true;
     setSyncStatus('syncing');
     setLastSyncError(null);
+    setLastSyncedCount(0);
 
     try {
       const pending = await getPendingScans();
@@ -65,6 +68,8 @@ export function useOfflineSync({
 
       await markScansAsSynced(syncedIds);
       await clearSyncedScans();
+
+      setLastSyncedCount(syncedIds.length);
 
       const remainingPending = await getPendingScans();
       setPendingCount(remainingPending.length);
@@ -108,5 +113,5 @@ export function useOfflineSync({
     return () => clearInterval(interval);
   }, [enabled]);
 
-  return { syncStatus, pendingCount, lastSyncError, syncNow };
+  return { syncStatus, pendingCount, lastSyncedCount, lastSyncError, syncNow };
 }

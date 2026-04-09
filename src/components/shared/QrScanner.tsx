@@ -7,12 +7,22 @@ import { useOfflineSync } from '@/lib/hooks/use-offline-sync';
 import { queueOfflineScan, generateScanId, getPendingCount } from '@/lib/attendance/offline-queue';
 import type { ScanLookupResult } from '@/lib/attendance/qr-utils';
 
+type SyncState = {
+  syncStatus: 'idle' | 'syncing' | 'synced' | 'error';
+  pendingCount: number;
+  lastSyncedCount: number;
+  lastSyncError: string | null;
+  syncNow: () => Promise<void>;
+};
+
 export type QrScannerProps = {
   eventId: string;
   sessionId?: string | null;
   deviceId?: string;
   onScan: (result: ScanLookupResult) => void;
   disabled?: boolean;
+  /** When provided, uses external sync state instead of creating its own */
+  externalSync?: SyncState;
 };
 
 export function QrScanner({
@@ -21,17 +31,19 @@ export function QrScanner({
   deviceId,
   onScan,
   disabled = false,
+  externalSync,
 }: QrScannerProps) {
   const [processing, setProcessing] = useState(false);
   const [lastScannedPayload, setLastScannedPayload] = useState<string | null>(null);
   const [offlinePendingCount, setOfflinePendingCount] = useState(0);
   const isOnline = useOnlineStatus();
 
-  // Auto-sync when connectivity returns
-  const { syncStatus, pendingCount, lastSyncError, syncNow } = useOfflineSync({
+  // Use external sync state if provided, otherwise manage internally
+  const internalSync = useOfflineSync({
     eventId,
-    enabled: true,
+    enabled: !externalSync,
   });
+  const { syncStatus, pendingCount, lastSyncedCount, lastSyncError, syncNow } = externalSync ?? internalSync;
 
   const handleScan = useCallback(
     async (detectedCodes: { rawValue: string }[]) => {
@@ -118,7 +130,7 @@ export function QrScanner({
       )}
       {isOnline && syncStatus === 'synced' && (
         <div className="mt-2 rounded-md bg-green-50 px-3 py-2 text-center text-xs text-green-800">
-          Offline scans synced successfully
+          {lastSyncedCount > 0 ? `Synced ${lastSyncedCount} check-in${lastSyncedCount !== 1 ? 's' : ''}` : 'Offline scans synced successfully'}
         </div>
       )}
       {isOnline && syncStatus === 'error' && (
