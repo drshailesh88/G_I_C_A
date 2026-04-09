@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { EXPORT_TYPES, type ExportType } from '@/lib/exports/excel';
+import { EXPORT_TYPES, type ExportType } from '@/lib/exports/types';
 
 const EXPORT_ICONS: Record<ExportType, string> = {
   'attendee-list': '👥',

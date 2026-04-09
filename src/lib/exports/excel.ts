@@ -26,7 +26,10 @@ import {
   halls,
 } from '@/lib/db/schema';
 import { withEventScope } from '@/lib/db/with-event-scope';
-import { eq, and, ne } from 'drizzle-orm';
+import { eq, ne } from 'drizzle-orm';
+import { EXPORT_TYPES, type ExportType } from './types';
+
+export { EXPORT_TYPES, type ExportType };
 
 // ── Shared Helpers ─────────────────────────────────────────────
 
@@ -78,43 +81,6 @@ function formatDateTime(d: Date | null | undefined): string {
   if (!d) return '';
   return d.toISOString().replace('T', ' ').slice(0, 19);
 }
-
-// ── Export Type Map ────────────────────────────────────────────
-
-export type ExportType =
-  | 'attendee-list'
-  | 'travel-roster'
-  | 'rooming-list'
-  | 'transport-plan'
-  | 'faculty-responsibilities'
-  | 'attendance-report';
-
-export const EXPORT_TYPES: Record<ExportType, { label: string; description: string }> = {
-  'attendee-list': {
-    label: 'Attendee List',
-    description: 'All registrations with person details and status',
-  },
-  'travel-roster': {
-    label: 'Travel Roster',
-    description: 'All travel records with journey details',
-  },
-  'rooming-list': {
-    label: 'Rooming List',
-    description: 'Accommodation records grouped by hotel',
-  },
-  'transport-plan': {
-    label: 'Transport Plan',
-    description: 'Transport batches with vehicles and passenger assignments',
-  },
-  'faculty-responsibilities': {
-    label: 'Faculty Responsibilities',
-    description: 'Session assignments per faculty member',
-  },
-  'attendance-report': {
-    label: 'Attendance Report',
-    description: 'Check-in records with method and timestamp',
-  },
-};
 
 // ── 1. Attendee List ───────────────────────────────────────────
 
