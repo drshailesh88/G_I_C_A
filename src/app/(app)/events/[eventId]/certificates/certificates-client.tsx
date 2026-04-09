@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import {
   createCertificateTemplate,
   updateCertificateTemplate,
@@ -211,6 +212,14 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
                     {t.notes && <p className="mt-1 text-xs text-gray-400 italic">{t.notes}</p>}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    {(t.status === 'draft' || t.status === 'active') && (
+                      <Link
+                        href={`/events/${eventId}/certificates/editor/${t.id}`}
+                        className="rounded px-3 py-1 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100"
+                      >
+                        Design
+                      </Link>
+                    )}
                     {(t.status === 'draft' || t.status === 'active') && (
                       <button
                         onClick={() => setEditingTemplate(t)}

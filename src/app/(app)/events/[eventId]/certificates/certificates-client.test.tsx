@@ -22,6 +22,12 @@ vi.mock('@/lib/actions/certificate-bulk-zip', () => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
 }));
+vi.mock('next/link', () => ({
+  default: ({ href, children, ...props }: { href: string; children: React.ReactNode; [key: string]: unknown }) => {
+    const { createElement } = require('react');
+    return createElement('a', { href, ...props }, children);
+  },
+}));
 
 import { CertificatesClient } from './certificates-client';
 
