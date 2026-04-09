@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db';
 import { certificateTemplates, issuedCertificates } from '@/lib/db/schema';
-import { eq, and, desc, ne } from 'drizzle-orm';
+import { eq, and, desc, ne, sql } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
@@ -108,9 +108,10 @@ export async function updateCertificateTemplate(eventId: string, input: unknown)
   if (fields.verificationText !== undefined) updateFields.verificationText = fields.verificationText;
   if (fields.notes !== undefined) updateFields.notes = fields.notes;
 
-  // If updating an active template, bump the version
+  // If updating an active template, bump the version atomically in SQL
+  // This prevents concurrent saves from writing the same version number
   if (existing.status === 'active' && fields.templateJson !== undefined) {
-    updateFields.versionNo = existing.versionNo + 1;
+    updateFields.versionNo = sql`${certificateTemplates.versionNo} + 1`;
   }
 
   const [updated] = await db
