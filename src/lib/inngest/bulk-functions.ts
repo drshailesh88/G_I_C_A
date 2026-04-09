@@ -81,6 +81,7 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
   {
     id: 'bulk-certificate-generate',
     retries: 3,
+    concurrency: [{ key: 'event.data.eventId', limit: 1 }],
     triggers: [{ event: 'bulk/certificates.generate' }],
   },
   async ({ event, step }) => {
@@ -296,6 +297,7 @@ export const bulkCertificateNotifyFn = inngest.createFunction(
   {
     id: 'bulk-certificate-notify',
     retries: 3,
+    concurrency: [{ key: 'event.data.eventId', limit: 1 }],
     triggers: [{ event: 'bulk/certificates.notify' }],
   },
   async ({ event, step }) => {
@@ -461,6 +463,7 @@ export const archiveGenerateFn = inngest.createFunction(
   {
     id: 'bulk-archive-generate',
     retries: 3,
+    concurrency: [{ key: 'event.data.eventId', limit: 1 }],
     triggers: [{ event: 'bulk/archive.generate' }],
   },
   async ({ event, step }) => {

@@ -1,38 +1,60 @@
 import { NextResponse } from 'next/server';
 import { assertEventAccess } from '@/lib/auth/event-access';
-import { inngest } from '@/lib/inngest/client';
+import { generateEventArchive } from '@/lib/exports/archive';
+import { createR2Provider } from '@/lib/certificates/storage';
+import { z } from 'zod';
 
 type Params = Promise<{ eventId: string }>;
+
+const paramsSchema = z.object({
+  eventId: z.string().uuid('Invalid event ID'),
+});
 
 export async function POST(
   _request: Request,
   { params }: { params: Params },
 ) {
-  const { eventId } = await params;
+  const { eventId: rawEventId } = await params;
 
-  // Auth check — read access is sufficient for archive download
+  // Validate eventId
+  const parsed = paramsSchema.safeParse({ eventId: rawEventId });
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid event ID' }, { status: 400 });
+  }
+  const { eventId } = parsed.data;
+
+  // Auth check — write access required (creates R2 artifact)
   try {
-    await assertEventAccess(eventId);
+    await assertEventAccess(eventId, { requireWrite: true });
   } catch {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   try {
-    // Dispatch to Inngest — archive generation runs as stepped background job
-    const { ids } = await inngest.send({
-      name: 'bulk/archive.generate',
-      data: { eventId },
+    const storageProvider = createR2Provider();
+
+    const fetchCertificatePdf = async (storageKey: string): Promise<Buffer> => {
+      const url = await storageProvider.getSignedUrl(storageKey, 300);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Failed to fetch certificate: ${storageKey}`);
+      return Buffer.from(await res.arrayBuffer());
+    };
+
+    const result = await generateEventArchive({
+      eventId,
+      storageProvider,
+      fetchCertificatePdf,
     });
 
     return NextResponse.json({
-      queued: true,
-      message: 'Archive generation queued. You will be notified when it is ready.',
-      inngestEventId: ids?.[0] ?? null,
+      archiveUrl: result.archiveUrl,
+      fileCount: result.fileCount,
+      archiveSizeBytes: result.archiveSizeBytes,
     });
   } catch (err) {
-    console.error(`Archive generation dispatch failed for eventId=${eventId}:`, err);
+    console.error(`Archive generation failed for eventId=${eventId}:`, err);
     return NextResponse.json(
-      { error: 'Failed to queue archive generation' },
+      { error: 'Archive generation failed' },
       { status: 500 },
     );
   }
