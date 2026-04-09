@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx tsc --noEmit
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run test:run
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [typecheck, test]
+    env:
+      # Mock env vars required by Next.js build — not real secrets
+      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+      CLERK_SECRET_KEY: "sk_test_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      CLERK_WEBHOOK_SECRET: "whsec_ci_mock"
+      R2_ACCESS_KEY_ID: "ci_r2_key"
+      R2_SECRET_ACCESS_KEY: "ci_r2_secret"
+      R2_BUCKET_NAME: "ci-bucket"
+      R2_ENDPOINT: "https://ci.r2.cloudflarestorage.com"
+      R2_PUBLIC_URL: "https://ci.files.example.com"
+      UPSTASH_REDIS_REST_URL: "https://ci.upstash.io"
+      UPSTASH_REDIS_REST_TOKEN: "ci_redis_token"
+      RESEND_API_KEY: "re_ci_mock_key"
+      RESEND_FROM_EMAIL: "noreply@example.com"
+      INNGEST_EVENT_KEY: "ci_inngest_event_key"
+      INNGEST_SIGNING_KEY: "ci_inngest_signing_key"
+      NEXT_PUBLIC_APP_URL: "https://example.com"
+      NEXT_PUBLIC_APP_NAME: "GEM India CI"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build

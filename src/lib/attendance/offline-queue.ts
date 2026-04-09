@@ -51,7 +51,7 @@ export async function getPendingScans(): Promise<OfflineScanRecord[]> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, 'readonly');
     const index = tx.objectStore(STORE_NAME).index('synced');
-    const request = index.getAll(false);
+    const request = index.getAll(IDBKeyRange.only(0));
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
@@ -86,7 +86,7 @@ export async function clearSyncedScans(): Promise<void> {
     const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     const index = store.index('synced');
-    const request = index.openCursor(true);
+    const request = index.openCursor(IDBKeyRange.only(1));
 
     request.onsuccess = () => {
       const cursor = request.result;
