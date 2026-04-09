@@ -136,9 +136,9 @@ describe('Inngest cascade integration', () => {
     consoleSpy.mockRestore();
   });
 
-  // Test 4: All 7 Inngest functions are registered (4 cascade + 3 bulk)
-  it('registers all 7 Inngest functions', () => {
-    expect(inngestFunctions).toHaveLength(7);
+  // Test 4: All 8 Inngest functions are registered (4 cascade + 3 bulk + 1 scheduled)
+  it('registers all 8 Inngest functions', () => {
+    expect(inngestFunctions).toHaveLength(8);
 
     // Since createFunction is mocked, we get { _config, _handler } objects
     const configs = inngestFunctions.map((fn: unknown) => (fn as { _config: { id: string } })._config);
@@ -152,25 +152,38 @@ describe('Inngest cascade integration', () => {
     expect(ids).toContain('bulk-certificate-generate');
     expect(ids).toContain('bulk-certificate-notify');
     expect(ids).toContain('bulk-archive-generate');
+    // Scheduled functions (8B-4)
+    expect(ids).toContain('pre-event-backup');
   });
 
-  // Test 5: All functions configured with 3 retries
-  it('all Inngest functions have retries set to 3', () => {
+  // Test 5: Cascade functions configured with 3 retries, scheduled with 2
+  it('cascade functions have 3 retries, scheduled functions have 2 retries', () => {
+    const cascadeIds = ['cascade-travel-updated', 'cascade-travel-cancelled', 'cascade-accommodation-updated', 'cascade-accommodation-cancelled'];
     for (const fn of inngestFunctions) {
-      const config = (fn as unknown as { _config: { retries: number } })._config;
-      expect(config.retries).toBe(3);
+      const config = (fn as unknown as { _config: { id: string; retries: number } })._config;
+      if (cascadeIds.includes(config.id)) {
+        expect(config.retries).toBe(3);
+      } else {
+        expect(config.retries).toBe(2);
+      }
     }
   });
 
-  // Test 6: Each function triggers on the correct event
-  it('functions trigger on correct cascade event names', () => {
-    const triggerEvents = inngestFunctions.map((fn: unknown) => {
-      const config = (fn as { _config: { triggers: Array<{ event: string }> } })._config;
-      return config.triggers[0].event;
+  // Test 6: Each function triggers on the correct event or cron
+  it('functions trigger on correct cascade event names and cron schedule', () => {
+    const triggers = inngestFunctions.map((fn: unknown) => {
+      const config = (fn as { _config: { triggers: Array<Record<string, string>> } })._config;
+      return config.triggers[0];
     });
-    expect(triggerEvents).toContain('conference/travel.updated');
-    expect(triggerEvents).toContain('conference/travel.cancelled');
-    expect(triggerEvents).toContain('conference/accommodation.updated');
-    expect(triggerEvents).toContain('conference/accommodation.cancelled');
+    const eventTriggers = triggers.filter((t) => 'event' in t).map((t) => t.event);
+    expect(eventTriggers).toContain('conference/travel.updated');
+    expect(eventTriggers).toContain('conference/travel.cancelled');
+    expect(eventTriggers).toContain('conference/accommodation.updated');
+    expect(eventTriggers).toContain('conference/accommodation.cancelled');
+
+    // Verify cron trigger for pre-event backup
+    const cronTriggers = triggers.filter((t) => 'cron' in t);
+    expect(cronTriggers).toHaveLength(1);
+    expect(cronTriggers[0].cron).toBe('0 0 * * *');
   });
 });

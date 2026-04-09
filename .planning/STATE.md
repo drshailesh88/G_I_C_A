@@ -49,7 +49,7 @@ Begin Sub-Phase 6B-2: Branding injection into notification templates
 - [x] 8B-1: Sentry integration (manual verification)
 - [x] 8B-2: Feature flags via Upstash Redis (12 tests)
 - [x] 8B-3: GitHub Actions CI pipeline (manual verification)
-- [ ] 8B-4: Pre-event backup automation (8 tests)
+- [x] 8B-4: Pre-event backup automation (8 tests)
 - [x] 8C-1: Provider timeout and circuit breaker (20 tests)
 
 ### Phase 9: Production Readiness + UAT (3 requirements)
