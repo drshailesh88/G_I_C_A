@@ -32,17 +32,63 @@
   - **Infrastructure:** Evolution API Docker sidecar on DigitalOcean, Resend integration, Upstash Redis idempotency
   - **Risk:** MEDIUM — provider integration is well-documented (Evolution API, Resend). Main risk is template variable resolution across 10 template keys and ensuring idempotency key formula works across all trigger types.
 
-- [ ] Phase 5: Certificates + QR Attendance
-  - **Deliverable:** Coordinator can design certificate templates visually, bulk generate PDFs for delegates/faculty, deliver via email + WhatsApp. Scanner crew can check in attendees via QR PWA with offline support.
-  - **Requirements addressed:** Certificates (pdfme editor, 7 types, bulk gen, supersession chain, revocation, signed URLs, ZIP download), QR & Attendance (QR generation, PWA scanner, scan feedback, manual check-in, offline queue, attendance records)
-  - **Screens:** M12 Certificate Generation, M56 Template Editor, M61 Progress + Done, M11 QR Scanner, M44 Scan Success, M45 Duplicate, M46 Manual Check-in, M58 Attendance Report
+- [x] Phase 5: Certificates + QR Attendance — COMPLETE (2026-04-08)
+  - **Deliverable:** Certificate templates via pdfme, 7 types, bulk generation with R2 storage, supersession chain, revocation. QR PWA scanner with offline sync, manual check-in, attendance records.
+  - **Screens:** M12, M56, M61, M11, M44, M45, M46, M58
   - **Schema:** certificate_templates, issued_certificates, attendance_records
-  - **Deferred items to design FIRST:** D6 (View All Issued Certificates)
-  - **Risk:** MEDIUM — pdfme integration is proven (100K+ PDFs/month on < $10 infra). QR offline sync is standard PWA pattern but needs careful conflict resolution rules.
+  - **Tests:** 958 total passing (157 new in Phase 5)
+  - **Codex Reviews:** 6 sessions, 13 bugs found and fixed
 
-- [ ] Phase 6: Branding + Reports + Polish
-  - **Deliverable:** Per-event branding configurable without code, all report exports working, team management, program version history, event field builder, event duplication, pre-event backup, and remaining polish items
-  - **Requirements addressed:** Branding (logo, colors, header, sender name, letterhead), Reports (agenda, rosters, travel summary, rooming list, transport plan, attendance), Settings (team management, role assignment), Polish (program versioning UI, event fields, duplication, backup)
-  - **Screens:** M15 Branding, M19 Team & Roles, M54 Ops Variant, M47 Reports, M52 Version History, M51 Event Fields
-  - **Deferred items to design FIRST:** D4 (Invite Member modal), D8 (Notification drawer), D9 (Profile/account sheet)
-  - **Risk:** LOW — these are mostly CRUD screens and export utilities. Event duplication is a well-defined clone operation. Pre-event backup is a single Inngest scheduled function.
+- [ ] Phase 6: Notification Wiring + Branding + Reports (Milestone 3 — 20% payment)
+  - **Goal:** Every cascade and business event sends real notifications. Per-event branding works. All export/report features functional. Turns "demo" into "working system."
+  - **Screens:** M13, M15, M19, M39, M47, M51, M52, M53, M54
+  - **Sub-phases:**
+    - [ ] 6A: Wire Real Notifications to Cascade (4 requirements — CRITICAL)
+      - [ ] 6A-1: Replace notification stub with real service in cascade handlers
+      - [ ] 6A-2: Wire domain event handler (H7 from deferred tickets)
+      - [ ] 6A-3: Implement attachment flow (H5 from deferred tickets)
+      - [ ] 6A-4: Add Clerk middleware for route protection
+    - [ ] 6B: Per-Event Branding (2 requirements)
+      - [ ] 6B-1: Branding configuration CRUD (M15)
+      - [ ] 6B-2: Branding injection into notification templates
+    - [ ] 6C: Reports & Exports (2 requirements)
+      - [ ] 6C-1: Excel export engine + Reports page (M47)
+      - [ ] 6C-2: Per-event PDF archive
+    - [ ] 6D: Team Management (1 requirement)
+      - [ ] 6D-1: Team management page (M19)
+
+- [ ] Phase 7: Certificate UI + QR UI + Dashboard Polish (Milestone 4 part 1)
+  - **Goal:** Placeholder pages become fully functional. Dashboard becomes operational command center.
+  - **Sub-phases:**
+    - [ ] 7A: Certificate Template Editor UI (3 requirements)
+      - [ ] 7A-1: Integrate pdfme Designer component (M56)
+      - [ ] 7A-2: Certificate generation page UI (M12)
+      - [ ] 7A-3: View all issued certificates (D6)
+    - [ ] 7B: QR Check-in UI (2 requirements)
+      - [ ] 7B-1: Build QR scanner page (M11)
+      - [ ] 7B-2: Offline sync indicator and manual trigger
+    - [ ] 7C: Dashboard Enrichment (1 requirement)
+      - [ ] 7C-1: Dashboard with real metrics and quick actions (M01)
+
+- [ ] Phase 8: Infrastructure Hardening (Milestone 4 part 2 — 20% payment)
+  - **Goal:** Everything that separates "it works" from "it survives a live 500-person conference."
+  - **Sub-phases:**
+    - [ ] 8A: Background Job Migration (2 requirements)
+      - [ ] 8A-1: Install and configure Inngest (replace sync cascade)
+      - [ ] 8A-2: Move bulk operations to Inngest step functions
+    - [ ] 8B: Monitoring & Safety (4 requirements)
+      - [ ] 8B-1: Sentry integration
+      - [ ] 8B-2: Feature flags via Upstash Redis
+      - [ ] 8B-3: GitHub Actions CI pipeline
+      - [ ] 8B-4: Pre-event backup automation
+    - [ ] 8C: Circuit Breakers & Resilience (1 requirement)
+      - [ ] 8C-1: Provider timeout and circuit breaker (H6)
+
+- [ ] Phase 9: Production Readiness + UAT (Milestone 5 — 10% payment)
+  - **Goal:** Ship. Everything tested end-to-end with real data.
+  - **Sub-phases:**
+    - [ ] 9A: End-to-End Integration Test (1 requirement)
+      - [ ] 9A-1: Full journey test script (Playwright or documented manual)
+    - [ ] 9B: Production Deploy & UAT (2 requirements)
+      - [ ] 9B-1: Environment setup (Vercel, Neon, Clerk, R2, Evolution API, Upstash, Sentry, Inngest)
+      - [ ] 9B-2: Client UAT with pilot event

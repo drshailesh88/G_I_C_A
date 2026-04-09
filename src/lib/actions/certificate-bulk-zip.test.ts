@@ -218,4 +218,62 @@ describe('bulkZipDownload', () => {
       }),
     ).rejects.toThrow('Redis unavailable');
   });
+
+  it('uses uploadStream when provider supports it (no buffered upload)', async () => {
+    const mockUploadStream = vi.fn().mockResolvedValue({
+      storageKey: 'bulk-stream.zip',
+      fileSizeBytes: 500,
+      fileChecksumSha256: 'stream-hash',
+    });
+
+    const streamProvider = {
+      upload: vi.fn(),
+      uploadStream: mockUploadStream,
+      getSignedUrl: vi.fn().mockResolvedValue('https://r2.example.com/bulk-stream.zip?signed=true'),
+      delete: vi.fn(),
+    };
+
+    const certs = [
+      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+    ];
+    chainedSelect(certs);
+
+    const result = await bulkZipDownload(EVENT_ID, { certificateType: 'delegate_attendance' }, {
+      storageProvider: streamProvider,
+      fetchPdf: vi.fn().mockResolvedValue(Buffer.from('fake-pdf')),
+      lock: createStubLock(),
+    });
+
+    expect(mockUploadStream).toHaveBeenCalledTimes(1);
+    expect(streamProvider.upload).not.toHaveBeenCalled(); // Buffered path NOT used
+    expect(result.zipSizeBytes).toBe(500);
+    expect(result.zipUrl).toContain('bulk-stream.zip');
+  });
+
+  it('falls back to buffered upload when uploadStream is not available', async () => {
+    const bufferProvider = {
+      upload: vi.fn().mockResolvedValue({
+        storageKey: 'bulk-buffer.zip',
+        fileSizeBytes: 300,
+        fileChecksumSha256: 'buffer-hash',
+      }),
+      // No uploadStream method
+      getSignedUrl: vi.fn().mockResolvedValue('https://r2.example.com/bulk-buffer.zip?signed=true'),
+      delete: vi.fn(),
+    };
+
+    const certs = [
+      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+    ];
+    chainedSelect(certs);
+
+    const result = await bulkZipDownload(EVENT_ID, { certificateType: 'delegate_attendance' }, {
+      storageProvider: bufferProvider,
+      fetchPdf: vi.fn().mockResolvedValue(Buffer.from('fake-pdf')),
+      lock: createStubLock(),
+    });
+
+    expect(bufferProvider.upload).toHaveBeenCalledTimes(1);
+    expect(result.zipSizeBytes).toBeGreaterThan(0);
+  });
 });

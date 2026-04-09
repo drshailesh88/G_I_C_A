@@ -14,6 +14,7 @@ import {
   getCertificateDownloadUrl,
 } from '@/lib/actions/certificate-issuance';
 import { bulkZipDownload } from '@/lib/actions/certificate-bulk-zip';
+import { searchPeople } from '@/lib/actions/person';
 import { CERTIFICATE_TYPES, AUDIENCE_SCOPES, ELIGIBILITY_BASIS_TYPES } from '@/lib/validations/certificate';
 
 type Template = {
@@ -535,36 +536,69 @@ function EditTemplateModal({
 }
 
 // ── Issue Certificate Modal ──────────────────────────────────
+type PersonResult = { id: string; fullName: string; email: string | null; designation: string | null };
+
 function IssueCertificateModal({
   eventId, activeTemplates, onClose, onIssued,
 }: { eventId: string; activeTemplates: Template[]; onClose: () => void; onIssued: () => void }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState(activeTemplates[0]?.id ?? '');
-  const [personId, setPersonId] = useState('');
   const [eligibilityType, setEligibilityType] = useState<string>(ELIGIBILITY_BASIS_TYPES[0]);
-  const [variablesJson, setVariablesJson] = useState('{\n  "full_name": "",\n  "event_name": ""\n}');
 
+  // Person search state
+  const [personQuery, setPersonQuery] = useState('');
+  const [personResults, setPersonResults] = useState<PersonResult[]>([]);
+  const [selectedPerson, setSelectedPerson] = useState<PersonResult | null>(null);
+  const [searching, setSearching] = useState(false);
+
+  // Variable values (auto-populated from template + person)
   const selectedTemplate = activeTemplates.find(t => t.id === templateId);
+  const templateVars = Array.isArray(selectedTemplate?.allowedVariablesJson)
+    ? (selectedTemplate.allowedVariablesJson as string[])
+    : [];
+  const [varValues, setVarValues] = useState<Record<string, string>>({});
+
+  async function handlePersonSearch() {
+    if (!personQuery.trim()) return;
+    setSearching(true);
+    try {
+      const result = await searchPeople({ query: personQuery.trim(), page: 1, limit: 10, view: 'all' });
+      setPersonResults(result.people?.map((r: any) => ({
+        id: r.id, fullName: r.fullName, email: r.email, designation: r.designation,
+      })) ?? []);
+    } catch {
+      setPersonResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function handleSelectPerson(person: PersonResult) {
+    setSelectedPerson(person);
+    setPersonResults([]);
+    setPersonQuery(person.fullName);
+    // Auto-populate known variables
+    setVarValues((prev) => ({
+      ...prev,
+      full_name: person.fullName,
+      recipient_name: person.fullName,
+      designation: person.designation ?? '',
+      email: person.email ?? '',
+    }));
+  }
 
   function handleIssue() {
-    if (!personId.trim() || !templateId) return;
+    if (!selectedPerson || !templateId) return;
     setError(null);
     startTransition(async () => {
       try {
-        let renderedVars: Record<string, unknown>;
-        try {
-          renderedVars = JSON.parse(variablesJson);
-        } catch {
-          setError('Invalid JSON in rendered variables');
-          return;
-        }
         await issueCertificate(eventId, {
-          personId: personId.trim(),
+          personId: selectedPerson.id,
           templateId,
           certificateType: selectedTemplate?.certificateType ?? CERTIFICATE_TYPES[0],
           eligibilityBasisType: eligibilityType,
-          renderedVariablesJson: renderedVars,
+          renderedVariablesJson: varValues,
         });
         onIssued();
       } catch (err) {
@@ -587,11 +621,45 @@ function IssueCertificateModal({
             ))}
           </select>
         </Field>
-        <Field label="Person ID (UUID)">
-          <input type="text" value={personId} onChange={(e) => setPersonId(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono"
-            placeholder="550e8400-e29b-41d4-a716-446655440000" />
+
+        {/* Person search picker */}
+        <Field label="Recipient">
+          <div className="relative">
+            <div className="flex gap-2">
+              <input type="text" value={personQuery}
+                onChange={(e) => { setPersonQuery(e.target.value); setSelectedPerson(null); }}
+                onKeyDown={(e) => e.key === 'Enter' && handlePersonSearch()}
+                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="Search by name, email, or phone..." />
+              <button onClick={handlePersonSearch} disabled={searching || !personQuery.trim()}
+                className="rounded-md bg-gray-100 px-3 py-2 text-sm text-gray-700 hover:bg-gray-200 disabled:opacity-50">
+                {searching ? '...' : 'Search'}
+              </button>
+            </div>
+            {selectedPerson && (
+              <div className="mt-1 flex items-center gap-2 rounded bg-blue-50 px-2 py-1 text-sm text-blue-800">
+                <span className="font-medium">{selectedPerson.fullName}</span>
+                {selectedPerson.email && <span className="text-blue-600 text-xs">{selectedPerson.email}</span>}
+                <button onClick={() => { setSelectedPerson(null); setPersonQuery(''); }}
+                  className="ml-auto text-blue-400 hover:text-blue-600 text-xs">Clear</button>
+              </div>
+            )}
+            {personResults.length > 0 && !selectedPerson && (
+              <ul className="absolute z-10 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg max-h-48 overflow-y-auto">
+                {personResults.map((p) => (
+                  <li key={p.id}>
+                    <button onClick={() => handleSelectPerson(p)}
+                      className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50">
+                      <span className="font-medium">{p.fullName}</span>
+                      {p.email && <span className="ml-2 text-gray-500 text-xs">{p.email}</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </Field>
+
         <Field label="Eligibility Basis">
           <select value={eligibilityType} onChange={(e) => setEligibilityType(e.target.value)}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
@@ -600,13 +668,27 @@ function IssueCertificateModal({
             ))}
           </select>
         </Field>
-        <Field label="Rendered Variables (JSON)">
-          <textarea value={variablesJson} onChange={(e) => setVariablesJson(e.target.value)} rows={4}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono" />
-        </Field>
+
+        {/* Auto-populated template variables */}
+        {templateVars.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-gray-500 uppercase">Certificate Variables</p>
+            {templateVars.map((varName) => (
+              <div key={varName} className="flex items-center gap-2">
+                <label className="w-32 text-xs text-gray-600 truncate" title={varName}>
+                  {varName.replace(/_/g, ' ')}
+                </label>
+                <input type="text"
+                  value={varValues[varName] ?? ''}
+                  onChange={(e) => setVarValues((prev) => ({ ...prev, [varName]: e.target.value }))}
+                  className="flex-1 rounded border border-gray-200 px-2 py-1 text-sm" />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       <ModalActions onClose={onClose} onConfirm={handleIssue} pending={pending}
-        disabled={!personId.trim() || !templateId} label="Issue Certificate" />
+        disabled={!selectedPerson || !templateId} label="Issue Certificate" />
     </ModalShell>
   );
 }

@@ -4,7 +4,10 @@
 **GEM India V1** — Created 2026-04-07
 
 ## Current Phase
-Phase 5: Certificates + QR Attendance — Status: COMPLETE (2026-04-08)
+Phase 6: Notification Wiring + Branding + Reports — Status: NOT STARTED
+
+## Next Action
+Begin Sub-Phase 6A-1: Replace notification stub with real service in cascade handlers
 
 ## Completed Phases
 - Phase 1: Scaffold + Auth + Event CRUD — COMPLETE (2026-04-08)
@@ -13,14 +16,54 @@ Phase 5: Certificates + QR Attendance — Status: COMPLETE (2026-04-08)
 - Phase 4: Communications Engine — COMPLETE (2026-04-08)
 - Phase 5: Certificates + QR Attendance — COMPLETE (2026-04-08)
 
-## Next Phase
-Phase 6: Branding, Reports & Settings
-
 ## Progress Summary
 - Requirements done: 74/116
-- Requirements remaining: 42
+- Requirements remaining: 42 (across Phases 6-9)
 - Test files: 53 | Tests passing: 958
-- New dependencies: (none this session)
+- Phases remaining: 4 (Phase 6, 7, 8, 9)
+- Estimated: ~23 granular requirements across 11 sub-phases
+
+## Phase 6-9 Requirement Tracker
+### Phase 6: Notification Wiring + Branding + Reports (9 requirements)
+- [ ] 6A-1: Replace notification stub in cascade handlers (6 tests)
+- [ ] 6A-2: Wire domain event handler H7 (8 tests)
+- [ ] 6A-3: Implement attachment flow H5 (12 tests)
+- [ ] 6A-4: Add Clerk middleware (6 tests)
+- [ ] 6B-1: Branding configuration CRUD (10 tests)
+- [ ] 6B-2: Branding injection into templates (6 tests)
+- [ ] 6C-1: Excel export engine (18 tests)
+- [ ] 6C-2: Per-event PDF archive (8 tests)
+- [ ] 6D-1: Team management page (8 tests)
+
+### Phase 7: Certificate UI + QR UI + Dashboard (6 requirements)
+- [ ] 7A-1: pdfme Designer integration (8 tests)
+- [ ] 7A-2: Certificate generation page UI (10 tests)
+- [ ] 7A-3: View all issued certificates (8 tests)
+- [ ] 7B-1: QR scanner page (8 tests)
+- [ ] 7B-2: Offline sync indicator (6 tests)
+- [ ] 7C-1: Dashboard with real metrics (10 tests)
+
+### Phase 8: Infrastructure Hardening (7 requirements)
+- [ ] 8A-1: Install and configure Inngest (6 tests)
+- [ ] 8A-2: Move bulk operations to Inngest (8 tests)
+- [ ] 8B-1: Sentry integration (manual verification)
+- [ ] 8B-2: Feature flags via Upstash Redis (10 tests)
+- [ ] 8B-3: GitHub Actions CI pipeline (manual verification)
+- [ ] 8B-4: Pre-event backup automation (8 tests)
+- [ ] 8C-1: Provider timeout and circuit breaker (12 tests)
+
+### Phase 9: Production Readiness + UAT (3 requirements)
+- [ ] 9A-1: Full journey test script
+- [ ] 9B-1: Environment setup
+- [ ] 9B-2: Client UAT with pilot event
+
+## Execution Protocol (Every Requirement)
+1. `/playbook:sprint-build-perfect` → picks up next unchecked requirement
+2. TDD loop: RED → GREEN → REFACTOR → all tests pass
+3. Codex adversarial review → fix findings → re-test
+4. Commit with conventional message
+5. Update this file: check off requirement, update test count
+6. Move to next requirement
 
 ## Phase 5 Completion Notes
 ### Certificates (Req 1-9)
@@ -44,11 +87,20 @@ Phase 6: Branding, Reports & Settings
 ## Readiness Score
 9.0/10 — PRD passed all readiness gate dimensions
 
+## Payment Milestones
+| Phase | Maps To | Payment |
+|-------|---------|---------|
+| Phase 6 | Milestone 3 | 20% |
+| Phase 7 + 8 | Milestone 4 | 20% |
+| Phase 9 | Milestone 5 | 10% |
+
 ## Source Documents
 - PRD: `.planning/PRD.md`
 - GitHub Issue: [drshailesh88/G_I_C_A#1](https://github.com/drshailesh88/G_I_C_A/issues/1)
 - Requirements: `.planning/REQUIREMENTS.md`
 - Roadmap: `.planning/ROADMAP.md`
+- Remaining Phases Detail: `~/Downloads/GemIndia_Remaining_Phases.md`
+- Execution Prompts: `~/Downloads/GemIndia_Claude_Code_Prompts.md`
 - Schema: `SCHEMA_DECISIONS.md`
 - State machines: `STATE_MACHINES.md`
 - Cascade events: `CASCADE_EVENT_MAP.md`
@@ -60,8 +112,3 @@ Phase 6: Branding, Reports & Settings
 - Click map: `research-hub/CLICK_MAP_AND_TRACEABILITY.md`
 - Backend architecture: `research-hub/BACKEND_ARCHITECTURE_MAP.md`
 - Frontend architecture: `research-hub/FRONTEND_ARCHITECTURE.md`
-
-## Quick Reference
-- Next action: begin Phase 6 (Branding, Reports & Settings)
-- Phase 6 screens: M15 Letterheads, M47 Reports, M19 Team & Roles
-- Phase 6 exports: exceljs (Excel/PDF), R2 archive

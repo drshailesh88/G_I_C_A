@@ -173,6 +173,142 @@ describe('issueCertificate', () => {
     const result = await issueCertificate(EVENT_ID, validIssueInput);
     expect(result.supersedesId).toBe('old-cert-id');
   });
+
+  it('retries on certificate_number collision and succeeds on second attempt', async () => {
+    let txCallCount = 0;
+    const collisionError = Object.assign(
+      new Error('duplicate key value violates unique constraint "issued_certificates_certificate_number_unique"'),
+      { code: '23505' },
+    );
+
+    // Global select counter across both outer calls and inner transaction calls
+    let globalSelectCount = 0;
+    const selectResponses = [
+      // Outer: person
+      [{ id: PERSON_ID }],
+      // Outer: template
+      [mockTemplate],
+      // TX attempt 1: existing certs (FOR UPDATE)
+      [],
+      // TX attempt 1: cert numbers
+      [{ certificateNumber: 'GEM2026-ATT-00001' }],
+      // TX attempt 2: existing certs (FOR UPDATE)
+      [],
+      // TX attempt 2: cert numbers
+      [{ certificateNumber: 'GEM2026-ATT-00001' }],
+    ];
+
+    mockDb.select.mockImplementation(() => {
+      const rows = selectResponses[globalSelectCount] ?? [];
+      globalSelectCount++;
+      const chain: any = {
+        from: vi.fn().mockImplementation(() => chain),
+        where: vi.fn().mockImplementation(() => chain),
+        limit: vi.fn().mockResolvedValue(rows),
+        for: vi.fn().mockResolvedValue(rows),
+        orderBy: vi.fn().mockResolvedValue(rows),
+        then: (resolve: (val: unknown) => void) => Promise.resolve(rows).then(resolve),
+      };
+      return chain;
+    });
+
+    mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
+      txCallCount++;
+      if (txCallCount === 1) {
+        mockDb.insert.mockReturnValue({
+          values: vi.fn().mockReturnThis(),
+          returning: vi.fn().mockRejectedValue(collisionError),
+        });
+      } else {
+        chainedInsert([{ ...mockIssuedCert, certificateNumber: 'GEM2026-ATT-00002' }]);
+      }
+      return callback(mockDb);
+    });
+
+    const result = await issueCertificate(EVENT_ID, validIssueInput);
+    expect(result).toBeDefined();
+    expect(txCallCount).toBe(2);
+  });
+
+  it('gives up after 3 collision retries', async () => {
+    const collisionError = Object.assign(
+      new Error('duplicate key value violates unique constraint "issued_certificates_certificate_number_unique"'),
+      { code: '23505' },
+    );
+
+    // Person + template + 3x (existing certs + cert numbers) = 2 + 6 = 8 selects
+    let globalSelectCount = 0;
+    const selectResponses = [
+      [{ id: PERSON_ID }], [mockTemplate],
+      [], [], // attempt 1
+      [], [], // attempt 2
+      [], [], // attempt 3
+    ];
+
+    mockDb.select.mockImplementation(() => {
+      const rows = selectResponses[globalSelectCount] ?? [];
+      globalSelectCount++;
+      const chain: any = {
+        from: vi.fn().mockImplementation(() => chain),
+        where: vi.fn().mockImplementation(() => chain),
+        limit: vi.fn().mockResolvedValue(rows),
+        for: vi.fn().mockResolvedValue(rows),
+        orderBy: vi.fn().mockResolvedValue(rows),
+        then: (resolve: (val: unknown) => void) => Promise.resolve(rows).then(resolve),
+      };
+      return chain;
+    });
+
+    mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
+      mockDb.insert.mockReturnValue({
+        values: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockRejectedValue(collisionError),
+      });
+      return callback(mockDb);
+    });
+
+    await expect(issueCertificate(EVENT_ID, validIssueInput)).rejects.toThrow('certificate_number');
+  });
+
+  it('does not retry on non-certificate_number unique violations', async () => {
+    let txCallCount = 0;
+    const otherUniqueError = Object.assign(
+      new Error('duplicate key value violates unique constraint "uq_issued_cert_one_current"'),
+      { code: '23505' },
+    );
+
+    let globalSelectCount = 0;
+    const selectResponses = [
+      [{ id: PERSON_ID }], [mockTemplate],
+      [], [],
+    ];
+
+    mockDb.select.mockImplementation(() => {
+      const rows = selectResponses[globalSelectCount] ?? [];
+      globalSelectCount++;
+      const chain: any = {
+        from: vi.fn().mockImplementation(() => chain),
+        where: vi.fn().mockImplementation(() => chain),
+        limit: vi.fn().mockResolvedValue(rows),
+        for: vi.fn().mockResolvedValue(rows),
+        orderBy: vi.fn().mockResolvedValue(rows),
+        then: (resolve: (val: unknown) => void) => Promise.resolve(rows).then(resolve),
+      };
+      return chain;
+    });
+
+    mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
+      txCallCount++;
+      mockDb.insert.mockReturnValue({
+        values: vi.fn().mockReturnThis(),
+        returning: vi.fn().mockRejectedValue(otherUniqueError),
+      });
+      return callback(mockDb);
+    });
+
+    await expect(issueCertificate(EVENT_ID, validIssueInput)).rejects.toThrow();
+    expect(txCallCount).toBe(1);
+  });
 });
 
 // ── Revoke Certificate ───────────────────────────────────────

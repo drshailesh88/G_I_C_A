@@ -13,6 +13,9 @@ vi.mock('@/lib/actions/certificate-issuance', () => ({
   revokeCertificate: vi.fn(),
   getCertificateDownloadUrl: vi.fn(),
 }));
+vi.mock('@/lib/actions/person', () => ({
+  searchPeople: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
+}));
 vi.mock('@/lib/actions/certificate-bulk-zip', () => ({
   bulkZipDownload: vi.fn(),
 }));
