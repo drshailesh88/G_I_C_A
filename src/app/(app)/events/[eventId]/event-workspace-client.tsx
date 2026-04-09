@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   Settings,
+  ToggleRight,
   LayoutGrid,
   Calendar,
   FileText,
@@ -71,6 +72,8 @@ const MODULE_TILES = [
   // CERTIFICATES & QR
   { key: 'certificates', section: 'CERTIFICATES & QR', label: 'Certificates', icon: Award, href: '/certificates' },
   { key: 'qr_checkin', section: 'CERTIFICATES & QR', label: 'QR Check-in', icon: QrCode, href: '/qr' },
+  // ADMIN
+  { key: null, section: 'ADMIN', label: 'Feature Flags', icon: ToggleRight, href: '/flags' },
 ];
 
 export function EventWorkspaceClient({ event }: { event: Event }) {

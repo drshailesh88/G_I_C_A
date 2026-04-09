@@ -30,6 +30,7 @@ import type { CircuitBreakerService } from './circuit-breaker';
 import { ProviderTimeoutError } from './timeout';
 import { CircuitOpenError } from './circuit-breaker';
 import { captureNotificationError } from '@/lib/sentry';
+import { isChannelEnabled, type FlagReader } from '@/lib/flags';
 
 // ── Dependency injection for testability ──────────────────────
 
@@ -42,6 +43,7 @@ export type NotificationServiceDeps = {
   createLogEntryFn: typeof createLogEntry;
   updateLogStatusFn: typeof updateLogStatus;
   getLogByIdFn: typeof getLogById;
+  flagService?: FlagReader | null;
 };
 
 const defaultDeps: NotificationServiceDeps = {
@@ -53,6 +55,7 @@ const defaultDeps: NotificationServiceDeps = {
   createLogEntryFn: createLogEntry,
   updateLogStatusFn: updateLogStatus,
   getLogByIdFn: getLogById,
+  flagService: null, // Uses default flag service when null
 };
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -75,6 +78,47 @@ export async function sendNotification(
     createLogEntryFn,
     updateLogStatusFn,
   } = deps;
+
+  // 0. Feature flag check — skip with audit log if channel is disabled
+  try {
+    const channelEnabled = await isChannelEnabled(
+      input.channel,
+      deps.flagService ?? undefined,
+    );
+    if (!channelEnabled) {
+      // Create a log entry so the skip is auditable
+      const skipLog = await createLogEntryFn({
+        eventId: input.eventId,
+        personId: input.personId,
+        templateId: null,
+        templateKeySnapshot: input.templateKey,
+        templateVersionNo: null,
+        channel: input.channel,
+        provider: providerNameForChannel(input.channel),
+        triggerType: input.triggerType,
+        triggerEntityType: input.triggerEntityType ?? null,
+        triggerEntityId: input.triggerEntityId ?? null,
+        sendMode: input.sendMode,
+        idempotencyKey: input.idempotencyKey,
+        recipientEmail: input.channel === 'email' ? (input.variables['recipientEmail'] as string ?? null) : null,
+        recipientPhoneE164: input.channel === 'whatsapp' ? (input.variables['recipientPhoneE164'] as string ?? null) : null,
+        renderedSubject: null,
+        renderedBody: `[CHANNEL_DISABLED] ${input.channel} channel is disabled via feature flag`,
+        renderedVariablesJson: input.variables,
+        attachmentManifestJson: input.attachments ?? null,
+        status: 'sent', // Not a failure — intentionally skipped
+        initiatedByUserId: input.initiatedByUserId ?? null,
+      });
+      return {
+        notificationLogId: skipLog.id,
+        provider: providerNameForChannel(input.channel),
+        providerMessageId: null,
+        status: 'sent' as NotificationStatus,
+      };
+    }
+  } catch {
+    // Flag check is best-effort — proceed if Redis is down
+  }
 
   // 1. Render template (before any durable side effects)
   let rendered;
