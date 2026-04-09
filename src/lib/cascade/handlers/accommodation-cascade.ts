@@ -4,68 +4,56 @@
  * When accommodation records are updated or cancelled:
  *   1. Create/update red flags on transport passenger assignments
  *   2. If shared room group changed, flag all linked occupants
- *   3. Send notification to delegate (stubbed in Phase 3)
+ *   3. Send notification to delegate via email + WhatsApp
  *
  * Cascade direction: Accommodation → Transport
  */
 
 import { db } from '@/lib/db';
-import { accommodationRecords, transportPassengerAssignments } from '@/lib/db/schema';
+import {
+  accommodationRecords,
+  transportPassengerAssignments,
+} from '@/lib/db/schema';
+import { people } from '@/lib/db/schema/people';
 import { eq, ne, and } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { upsertRedFlag } from '../red-flags';
 import { sendNotification } from '@/lib/notifications/send';
+import type { Channel } from '@/lib/notifications/types';
 import { onCascadeEvent } from '../emit';
 import { CASCADE_EVENTS } from '../events';
-import type { AccommodationUpdatedPayload, AccommodationCancelledPayload } from '../events';
-import { people } from '@/lib/db/schema';
-import type { NotificationTriggerType } from '@/lib/notifications/types';
+import type {
+  AccommodationUpdatedPayload,
+  AccommodationCancelledPayload,
+} from '../events';
 
-/** Resolve person email and phone for notification variables */
-async function resolvePersonContact(personId: string): Promise<{
-  email: string | null;
-  phoneE164: string | null;
-  fullName: string | null;
-}> {
+// ── Helper: resolve person contact info ──────────────────────
+async function resolvePersonContact(personId: string) {
   const [person] = await db
-    .select({ email: people.email, phoneE164: people.phoneE164, fullName: people.fullName })
+    .select({
+      email: people.email,
+      phoneE164: people.phoneE164,
+      fullName: people.fullName,
+    })
     .from(people)
     .where(eq(people.id, personId))
     .limit(1);
-  return person ?? { email: null, phoneE164: null, fullName: null };
+  return person ?? null;
 }
 
-/** Send notification from cascade handler — never throws (cascade must not fail on notification) */
-async function sendCascadeNotification(params: {
+// ── Helper: safe notification send (never throws) ────────────
+async function safeSendNotification(params: {
   eventId: string;
   personId: string;
-  channel: 'email' | 'whatsapp';
+  channel: Channel;
   templateKey: string;
-  triggerType: NotificationTriggerType;
+  triggerType: 'accommodation.updated' | 'accommodation.cancelled';
   triggerEntityType: string;
   triggerEntityId: string;
-  variables: Record<string, unknown>;
   idempotencyKey: string;
-}): Promise<void> {
+  variables: Record<string, unknown>;
+}) {
   try {
-    const contact = await resolvePersonContact(params.personId);
-
-    // Guard: skip notification if no recipient address for the channel
-    if (params.channel === 'email' && !contact.email) {
-      console.warn('[cascade:accommodation] skipping email notification — person has no email', {
-        personId: params.personId,
-        eventId: params.eventId,
-      });
-      return;
-    }
-    if (params.channel === 'whatsapp' && !contact.phoneE164) {
-      console.warn('[cascade:accommodation] skipping WhatsApp notification — person has no phone', {
-        personId: params.personId,
-        eventId: params.eventId,
-      });
-      return;
-    }
-
     await sendNotification({
       eventId: params.eventId,
       personId: params.personId,
@@ -76,16 +64,14 @@ async function sendCascadeNotification(params: {
       triggerEntityId: params.triggerEntityId,
       sendMode: 'automatic',
       idempotencyKey: params.idempotencyKey,
-      variables: {
-        ...params.variables,
-        recipientEmail: contact.email,
-        recipientPhoneE164: contact.phoneE164,
-        recipientName: contact.fullName,
-      },
+      variables: params.variables,
     });
   } catch (error) {
-    // Cascade must never fail due to notification failure
-    console.error('[cascade:accommodation] notification send failed:', error);
+    // Cascade must never fail because of notification failure
+    console.error(
+      `[cascade:accommodation] Notification send failed for ${params.channel}:`,
+      error instanceof Error ? error.message : error,
+    );
   }
 }
 
@@ -128,7 +114,10 @@ async function handleAccommodationUpdated(params: {
   // 2. If shared room group changed, flag all linked occupants' accommodation records
   if (data.changeSummary.sharedRoomGroup && data.sharedRoomGroup) {
     const linkedOccupants = await db
-      .select({ id: accommodationRecords.id, personId: accommodationRecords.personId })
+      .select({
+        id: accommodationRecords.id,
+        personId: accommodationRecords.personId,
+      })
       .from(accommodationRecords)
       .where(
         withEventScope(
@@ -153,18 +142,43 @@ async function handleAccommodationUpdated(params: {
     }
   }
 
-  // 3. Notify delegate of accommodation update
-  await sendCascadeNotification({
-    eventId,
-    personId: data.personId,
-    channel: 'email',
-    templateKey: 'accommodation_update',
-    triggerType: 'accommodation.updated',
-    triggerEntityType: 'accommodation_record',
-    triggerEntityId: data.accommodationRecordId,
-    variables: { changeSummary: data.changeSummary },
-    idempotencyKey: `notify:accom-updated:${eventId}:${data.personId}:${data.accommodationRecordId}:${crypto.randomUUID()}:email`,
-  });
+  // 3. Notify delegate via email + WhatsApp
+  const person = await resolvePersonContact(data.personId);
+  const ts = Date.now();
+  const baseVars: Record<string, unknown> = {
+    changeSummary: data.changeSummary,
+    recipientEmail: person?.email ?? null,
+    recipientPhoneE164: person?.phoneE164 ?? null,
+    recipientName: person?.fullName ?? null,
+  };
+
+  if (person?.email) {
+    await safeSendNotification({
+      eventId,
+      personId: data.personId,
+      channel: 'email',
+      templateKey: 'accommodation_update',
+      triggerType: 'accommodation.updated',
+      triggerEntityType: 'accommodation_record',
+      triggerEntityId: data.accommodationRecordId,
+      idempotencyKey: `notify:accom-updated:${eventId}:${data.personId}:${data.accommodationRecordId}:${ts}:email`,
+      variables: baseVars,
+    });
+  }
+
+  if (person?.phoneE164) {
+    await safeSendNotification({
+      eventId,
+      personId: data.personId,
+      channel: 'whatsapp',
+      templateKey: 'accommodation_update',
+      triggerType: 'accommodation.updated',
+      triggerEntityType: 'accommodation_record',
+      triggerEntityId: data.accommodationRecordId,
+      idempotencyKey: `notify:accom-updated:${eventId}:${data.personId}:${data.accommodationRecordId}:${ts}:whatsapp`,
+      variables: baseVars,
+    });
+  }
 }
 
 // ── Accommodation Cancelled Handler ───────────────────────────
@@ -201,22 +215,54 @@ async function handleAccommodationCancelled(params: {
     });
   }
 
-  // Notify delegate of accommodation cancellation
-  await sendCascadeNotification({
-    eventId,
-    personId: data.personId,
-    channel: 'email',
-    templateKey: 'accommodation_cancelled',
-    triggerType: 'accommodation.cancelled',
-    triggerEntityType: 'accommodation_record',
-    triggerEntityId: data.accommodationRecordId,
-    variables: { cancelledAt: data.cancelledAt, reason: data.reason },
-    idempotencyKey: `notify:accom-cancelled:${eventId}:${data.personId}:${data.accommodationRecordId}:${crypto.randomUUID()}:email`,
-  });
+  // Notify delegate via email + WhatsApp
+  const person = await resolvePersonContact(data.personId);
+  const ts = Date.now();
+  const baseVars: Record<string, unknown> = {
+    cancelledAt: data.cancelledAt,
+    reason: data.reason,
+    recipientEmail: person?.email ?? null,
+    recipientPhoneE164: person?.phoneE164 ?? null,
+    recipientName: person?.fullName ?? null,
+  };
+
+  if (person?.email) {
+    await safeSendNotification({
+      eventId,
+      personId: data.personId,
+      channel: 'email',
+      templateKey: 'accommodation_cancelled',
+      triggerType: 'accommodation.cancelled',
+      triggerEntityType: 'accommodation_record',
+      triggerEntityId: data.accommodationRecordId,
+      idempotencyKey: `notify:accom-cancelled:${eventId}:${data.personId}:${data.accommodationRecordId}:${ts}:email`,
+      variables: baseVars,
+    });
+  }
+
+  if (person?.phoneE164) {
+    await safeSendNotification({
+      eventId,
+      personId: data.personId,
+      channel: 'whatsapp',
+      templateKey: 'accommodation_cancelled',
+      triggerType: 'accommodation.cancelled',
+      triggerEntityType: 'accommodation_record',
+      triggerEntityId: data.accommodationRecordId,
+      idempotencyKey: `notify:accom-cancelled:${eventId}:${data.personId}:${data.accommodationRecordId}:${ts}:whatsapp`,
+      variables: baseVars,
+    });
+  }
 }
 
 // ── Register handlers ─────────────────────────────────────────
 export function registerAccommodationCascadeHandlers() {
-  onCascadeEvent(CASCADE_EVENTS.ACCOMMODATION_UPDATED, handleAccommodationUpdated);
-  onCascadeEvent(CASCADE_EVENTS.ACCOMMODATION_CANCELLED, handleAccommodationCancelled);
+  onCascadeEvent(
+    CASCADE_EVENTS.ACCOMMODATION_UPDATED,
+    handleAccommodationUpdated,
+  );
+  onCascadeEvent(
+    CASCADE_EVENTS.ACCOMMODATION_CANCELLED,
+    handleAccommodationCancelled,
+  );
 }

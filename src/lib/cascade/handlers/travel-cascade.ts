@@ -152,7 +152,8 @@ async function handleTravelUpdated(params: {
     });
   }
 
-  // 3. Notify delegate of travel update
+  // 3. Notify delegate of travel update (email + WhatsApp)
+  const ts = Date.now();
   await sendCascadeNotification({
     eventId,
     personId: data.personId,
@@ -162,7 +163,18 @@ async function handleTravelUpdated(params: {
     triggerEntityType: 'travel_record',
     triggerEntityId: data.travelRecordId,
     variables: { changeSummary: data.changeSummary },
-    idempotencyKey: `notify:travel-updated:${eventId}:${data.personId}:${data.travelRecordId}:${crypto.randomUUID()}:email`,
+    idempotencyKey: `notify:travel-updated:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:email`,
+  });
+  await sendCascadeNotification({
+    eventId,
+    personId: data.personId,
+    channel: 'whatsapp',
+    templateKey: 'travel_update',
+    triggerType: 'travel.updated',
+    triggerEntityType: 'travel_record',
+    triggerEntityId: data.travelRecordId,
+    variables: { changeSummary: data.changeSummary },
+    idempotencyKey: `notify:travel-updated:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:whatsapp`,
   });
 }
 
@@ -225,7 +237,8 @@ async function handleTravelCancelled(params: {
     });
   }
 
-  // 3. Notify delegate of travel cancellation
+  // 3. Notify delegate of travel cancellation (email + WhatsApp)
+  const ts = Date.now();
   await sendCascadeNotification({
     eventId,
     personId: data.personId,
@@ -235,7 +248,18 @@ async function handleTravelCancelled(params: {
     triggerEntityType: 'travel_record',
     triggerEntityId: data.travelRecordId,
     variables: { cancelledAt: data.cancelledAt, reason: data.reason },
-    idempotencyKey: `notify:travel-cancelled:${eventId}:${data.personId}:${data.travelRecordId}:${crypto.randomUUID()}:email`,
+    idempotencyKey: `notify:travel-cancelled:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:email`,
+  });
+  await sendCascadeNotification({
+    eventId,
+    personId: data.personId,
+    channel: 'whatsapp',
+    templateKey: 'travel_cancelled',
+    triggerType: 'travel.cancelled',
+    triggerEntityType: 'travel_record',
+    triggerEntityId: data.travelRecordId,
+    variables: { cancelledAt: data.cancelledAt, reason: data.reason },
+    idempotencyKey: `notify:travel-cancelled:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:whatsapp`,
   });
 }
 
