@@ -14,10 +14,63 @@ import { accommodationRecords, transportPassengerAssignments } from '@/lib/db/sc
 import { eq, ne } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { upsertRedFlag } from '../red-flags';
-import { sendNotification } from '@/lib/notifications/stub';
+import { sendNotification } from '@/lib/notifications/send';
 import { onCascadeEvent } from '../emit';
 import { CASCADE_EVENTS } from '../events';
 import type { TravelUpdatedPayload, TravelCancelledPayload } from '../events';
+import { people } from '@/lib/db/schema';
+import type { NotificationTriggerType } from '@/lib/notifications/types';
+
+/** Resolve person email and phone for notification variables */
+async function resolvePersonContact(personId: string): Promise<{
+  email: string | null;
+  phoneE164: string | null;
+  fullName: string | null;
+}> {
+  const [person] = await db
+    .select({ email: people.email, phoneE164: people.phoneE164, fullName: people.fullName })
+    .from(people)
+    .where(eq(people.id, personId))
+    .limit(1);
+  return person ?? { email: null, phoneE164: null, fullName: null };
+}
+
+/** Send notification from cascade handler — never throws (cascade must not fail on notification) */
+async function sendCascadeNotification(params: {
+  eventId: string;
+  personId: string;
+  channel: 'email' | 'whatsapp';
+  templateKey: string;
+  triggerType: NotificationTriggerType;
+  triggerEntityType: string;
+  triggerEntityId: string;
+  variables: Record<string, unknown>;
+  idempotencyKey: string;
+}): Promise<void> {
+  try {
+    const contact = await resolvePersonContact(params.personId);
+    await sendNotification({
+      eventId: params.eventId,
+      personId: params.personId,
+      channel: params.channel,
+      templateKey: params.templateKey,
+      triggerType: params.triggerType,
+      triggerEntityType: params.triggerEntityType,
+      triggerEntityId: params.triggerEntityId,
+      sendMode: 'automatic',
+      idempotencyKey: params.idempotencyKey,
+      variables: {
+        ...params.variables,
+        recipientEmail: contact.email,
+        recipientPhoneE164: contact.phoneE164,
+        recipientName: contact.fullName,
+      },
+    });
+  } catch (error) {
+    // Cascade must never fail due to notification failure
+    console.error('[cascade:travel] notification send failed:', error);
+  }
+}
 
 // ── Travel Updated Handler ────────────────────────────────────
 async function handleTravelUpdated(params: {
@@ -82,13 +135,16 @@ async function handleTravelUpdated(params: {
     });
   }
 
-  // 3. Stub notification to delegate
-  await sendNotification({
+  // 3. Notify delegate of travel update
+  await sendCascadeNotification({
+    eventId,
+    personId: data.personId,
     channel: 'email',
     templateKey: 'travel_update',
-    recipientPersonId: data.personId,
+    triggerType: 'travel.updated',
+    triggerEntityType: 'travel_record',
+    triggerEntityId: data.travelRecordId,
     variables: { changeSummary: data.changeSummary },
-    eventId,
     idempotencyKey: `notify:travel-updated:${eventId}:${data.personId}:${data.travelRecordId}:email`,
   });
 }
@@ -152,13 +208,16 @@ async function handleTravelCancelled(params: {
     });
   }
 
-  // 3. Stub notification
-  await sendNotification({
+  // 3. Notify delegate of travel cancellation
+  await sendCascadeNotification({
+    eventId,
+    personId: data.personId,
     channel: 'email',
     templateKey: 'travel_cancelled',
-    recipientPersonId: data.personId,
+    triggerType: 'travel.cancelled',
+    triggerEntityType: 'travel_record',
+    triggerEntityId: data.travelRecordId,
     variables: { cancelledAt: data.cancelledAt, reason: data.reason },
-    eventId,
     idempotencyKey: `notify:travel-cancelled:${eventId}:${data.personId}:${data.travelRecordId}:email`,
   });
 }
