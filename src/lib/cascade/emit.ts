@@ -9,6 +9,7 @@
 
 import type { CascadeActor, CascadeEventName } from './events';
 import { inngest } from '../inngest/client';
+import { captureCascadeError } from '../sentry';
 
 type CascadeHandler = (params: {
   eventId: string;
@@ -73,6 +74,11 @@ export async function emitCascadeEvent(
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));
     console.error(`[cascade] Inngest send error for ${eventName}:`, err);
+    captureCascadeError(err, {
+      handler: 'inngest-emit',
+      eventId,
+      cascadeEvent: eventName,
+    });
     return { handlersRun: 0, errors: [error] };
   }
 }

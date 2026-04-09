@@ -107,8 +107,9 @@ describe('Inngest cascade integration', () => {
     });
   });
 
-  // Test 3: Inngest send failure is caught — does not throw
-  it('catches Inngest send failure and returns error', async () => {
+  // Test 3: Inngest send failure is caught, reported to Sentry, does not throw
+  it('catches Inngest send failure, reports to Sentry, and returns error', async () => {
+    const { captureCascadeError } = await import('@/lib/sentry');
     mockSend.mockRejectedValueOnce(new Error('Inngest unreachable'));
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -122,6 +123,16 @@ describe('Inngest cascade integration', () => {
     expect(result.handlersRun).toBe(0);
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0].message).toBe('Inngest unreachable');
+
+    // Verify Sentry capture was called
+    expect(captureCascadeError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        handler: 'inngest-emit',
+        eventId: 'evt-300',
+        cascadeEvent: 'conference/travel.cancelled',
+      }),
+    );
     consoleSpy.mockRestore();
   });
 

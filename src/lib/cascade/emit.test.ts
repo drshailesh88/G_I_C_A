@@ -2,6 +2,9 @@
 vi.mock('../inngest/client', () => ({
   inngest: { send: vi.fn().mockResolvedValue({ ids: ['test-id'] }) },
 }));
+vi.mock('../sentry', () => ({
+  captureCascadeError: vi.fn(),
+}));
 
 import { beforeEach, afterAll, describe, expect, it, vi } from 'vitest';
 import {
