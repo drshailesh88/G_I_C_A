@@ -21,8 +21,7 @@ export default clerkMiddleware(async (auth, request) => {
   const pathname = request.nextUrl.pathname;
   const isMaintenanceExempt =
     pathname === '/maintenance' ||
-    pathname === '/api/health' ||
-    pathname.startsWith('/api/webhooks/');
+    pathname.startsWith('/api/');
 
   if (!isMaintenanceExempt) {
     try {

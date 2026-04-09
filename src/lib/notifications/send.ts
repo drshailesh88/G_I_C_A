@@ -79,18 +79,41 @@ export async function sendNotification(
     updateLogStatusFn,
   } = deps;
 
-  // 0. Feature flag check — skip silently if channel is disabled
+  // 0. Feature flag check — skip with audit log if channel is disabled
   try {
     const channelEnabled = await isChannelEnabled(
       input.channel,
       deps.flagService ?? undefined,
     );
     if (!channelEnabled) {
+      // Create a log entry so the skip is auditable
+      const skipLog = await createLogEntryFn({
+        eventId: input.eventId,
+        personId: input.personId,
+        templateId: null,
+        templateKeySnapshot: input.templateKey,
+        templateVersionNo: null,
+        channel: input.channel,
+        provider: providerNameForChannel(input.channel),
+        triggerType: input.triggerType,
+        triggerEntityType: input.triggerEntityType ?? null,
+        triggerEntityId: input.triggerEntityId ?? null,
+        sendMode: input.sendMode,
+        idempotencyKey: input.idempotencyKey,
+        recipientEmail: input.channel === 'email' ? (input.variables['recipientEmail'] as string ?? null) : null,
+        recipientPhoneE164: input.channel === 'whatsapp' ? (input.variables['recipientPhoneE164'] as string ?? null) : null,
+        renderedSubject: null,
+        renderedBody: `[CHANNEL_DISABLED] ${input.channel} channel is disabled via feature flag`,
+        renderedVariablesJson: input.variables,
+        attachmentManifestJson: input.attachments ?? null,
+        status: 'sent', // Not a failure — intentionally skipped
+        initiatedByUserId: input.initiatedByUserId ?? null,
+      });
       return {
-        notificationLogId: null as unknown as string,
+        notificationLogId: skipLog.id,
         provider: providerNameForChannel(input.channel),
         providerMessageId: null,
-        status: 'sent' as NotificationStatus, // Skipped, not failed
+        status: 'sent' as NotificationStatus,
       };
     }
   } catch {

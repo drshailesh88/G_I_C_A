@@ -8,6 +8,22 @@ import {
   type GlobalFlag,
   type EventFlag,
 } from '@/lib/flags';
+import { ROLES } from '@/lib/auth/roles';
+
+// ── Role guard — only Super Admin can toggle flags ──────────
+
+async function assertSuperAdmin(): Promise<string> {
+  const session = await auth();
+  const userId = session.userId;
+  if (!userId) throw new Error('Unauthorized');
+
+  const isSuperAdmin = session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
+  if (!isSuperAdmin) {
+    throw new Error('Forbidden: only Super Admin can manage feature flags');
+  }
+
+  return userId;
+}
 
 // ── Get all flags for admin UI ──────────────────────────────
 
@@ -27,11 +43,10 @@ export async function getEventFlags(eventId: string) {
   return svc.getAllEventFlags(eventId);
 }
 
-// ── Toggle a global flag ────────────────────────────────────
+// ── Toggle a global flag (Super Admin only) ─────────────────
 
 export async function toggleGlobalFlag(flag: string, enabled: boolean) {
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
+  await assertSuperAdmin();
 
   if (!GLOBAL_FLAGS.includes(flag as GlobalFlag)) {
     throw new Error(`Invalid global flag: ${flag}`);
@@ -43,11 +58,10 @@ export async function toggleGlobalFlag(flag: string, enabled: boolean) {
   return { flag, enabled };
 }
 
-// ── Toggle an event flag ────────────────────────────────────
+// ── Toggle an event flag (Super Admin only) ─────────────────
 
 export async function toggleEventFlag(eventId: string, flag: string, enabled: boolean) {
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
+  await assertSuperAdmin();
 
   if (!EVENT_FLAGS.includes(flag as EventFlag)) {
     throw new Error(`Invalid event flag: ${flag}`);
