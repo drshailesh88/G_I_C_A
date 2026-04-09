@@ -9,6 +9,7 @@
 
 import type { WhatsAppProvider, SendWhatsAppInput, ProviderSendResult, AttachmentDescriptor } from './types';
 import { createR2Provider } from '@/lib/certificates/storage';
+import { withTimeout, PROVIDER_TIMEOUTS } from './timeout';
 
 const ATTACHMENT_URL_EXPIRY_SECONDS = 900; // 15 minutes
 
@@ -42,17 +43,22 @@ export const evolutionWhatsAppProvider: WhatsAppProvider = {
       return sendMediaMessage(baseUrl, apiKey, number, input.body, input.mediaAttachments);
     }
 
-    const response = await fetch(`${baseUrl}/message/sendText`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': apiKey,
-      },
-      body: JSON.stringify({
-        number,
-        text: input.body,
+    const response = await withTimeout(
+      'evolution_api',
+      PROVIDER_TIMEOUTS.EVOLUTION_WHATSAPP,
+      async (signal) => fetch(`${baseUrl}/message/sendText`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': apiKey,
+        },
+        body: JSON.stringify({
+          number,
+          text: input.body,
+        }),
+        signal,
       }),
-    });
+    );
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'unknown');
@@ -123,20 +129,25 @@ async function sendMediaMessage(
   const signedUrl = await r2.getSignedUrl(att.storageKey, ATTACHMENT_URL_EXPIRY_SECONDS);
   const mediaType = getMediaType(att.contentType);
 
-  const response = await fetch(`${baseUrl}/message/sendMedia`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': apiKey,
-    },
-    body: JSON.stringify({
-      number,
-      mediatype: mediaType,
-      media: signedUrl,
-      caption,
-      fileName: sanitizeFileName(att.fileName),
+  const response = await withTimeout(
+    'evolution_api',
+    PROVIDER_TIMEOUTS.EVOLUTION_WHATSAPP,
+    async (signal) => fetch(`${baseUrl}/message/sendMedia`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': apiKey,
+      },
+      body: JSON.stringify({
+        number,
+        mediatype: mediaType,
+        media: signedUrl,
+        caption,
+        fileName: sanitizeFileName(att.fileName),
+      }),
+      signal,
     }),
-  });
+  );
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => 'unknown');

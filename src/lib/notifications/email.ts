@@ -10,6 +10,7 @@
 import { Resend } from 'resend';
 import type { EmailProvider, SendEmailInput, ProviderSendResult, AttachmentDescriptor } from './types';
 import { createR2Provider } from '@/lib/certificates/storage';
+import { withTimeout, PROVIDER_TIMEOUTS } from './timeout';
 
 const DEFAULT_FROM = 'GEM India <noreply@gemindia.org>';
 const ATTACHMENT_URL_EXPIRY_SECONDS = 900; // 15 minutes
@@ -81,15 +82,19 @@ export const resendEmailProvider: EmailProvider = {
 
     const attachments = await resolveAttachments(input.attachments);
 
-    const { data, error } = await resend.emails.send({
-      from: fromAddress,
-      to: input.toEmail,
-      subject: input.subject,
-      html: input.htmlBody,
-      text: input.textBody,
-      headers: input.metadata,
-      ...(attachments.length > 0 ? { attachments } : {}),
-    });
+    const { data, error } = await withTimeout(
+      'resend',
+      PROVIDER_TIMEOUTS.RESEND_EMAIL,
+      async () => resend.emails.send({
+        from: fromAddress,
+        to: input.toEmail,
+        subject: input.subject,
+        html: input.htmlBody,
+        text: input.textBody,
+        headers: input.metadata,
+        ...(attachments.length > 0 ? { attachments } : {}),
+      }),
+    );
 
     if (error) {
       return {
