@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import * as Sentry from '@sentry/nextjs';
 
 const isPublicRoute = createRouteMatcher([
   '/',
@@ -15,6 +16,17 @@ const isPublicRoute = createRouteMatcher([
 export default clerkMiddleware(async (auth, request) => {
   if (!isPublicRoute(request)) {
     await auth.protect();
+  }
+
+  // Set Clerk user context on Sentry (userId only — no PII)
+  try {
+    const authState = typeof auth === 'function' ? await auth() : auth;
+    const userId = authState?.userId;
+    if (userId) {
+      Sentry.setUser({ id: userId });
+    }
+  } catch {
+    // Sentry context is best-effort — never block the request
   }
 });
 

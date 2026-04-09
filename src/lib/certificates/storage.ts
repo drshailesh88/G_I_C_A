@@ -6,6 +6,8 @@
  * No permanent public file URLs.
  */
 
+import { captureStorageError } from '@/lib/sentry';
+
 export type StorageUploadResult = {
   storageKey: string;
   fileSizeBytes: number;
@@ -48,33 +50,38 @@ export function createR2Provider(): StorageProvider {
   // Lazy import to avoid side effects in test environments
   return {
     async upload(key, data, contentType) {
-      const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
-      const crypto = await import('crypto');
+      try {
+        const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
+        const crypto = await import('crypto');
 
-      const client = new S3Client({
-        region: 'auto',
-        endpoint: process.env.R2_ENDPOINT!,
-        credentials: {
-          accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-          secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-        },
-      });
+        const client = new S3Client({
+          region: 'auto',
+          endpoint: process.env.R2_ENDPOINT!,
+          credentials: {
+            accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+            secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+          },
+        });
 
-      const checksum = crypto.createHash('sha256').update(data).digest('hex');
+        const checksum = crypto.createHash('sha256').update(data).digest('hex');
 
-      await client.send(new PutObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME!,
-        Key: key,
-        Body: data,
-        ContentType: contentType,
-        ContentLength: data.length,
-      }));
+        await client.send(new PutObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME!,
+          Key: key,
+          Body: data,
+          ContentType: contentType,
+          ContentLength: data.length,
+        }));
 
-      return {
-        storageKey: key,
-        fileSizeBytes: data.length,
-        fileChecksumSha256: checksum,
-      };
+        return {
+          storageKey: key,
+          fileSizeBytes: data.length,
+          fileChecksumSha256: checksum,
+        };
+      } catch (error) {
+        captureStorageError(error, { operation: 'upload', storageKey: key });
+        throw error;
+      }
     },
 
     async uploadStream(key, stream, contentType) {
@@ -126,40 +133,50 @@ export function createR2Provider(): StorageProvider {
     },
 
     async getSignedUrl(key, expiresInSeconds = DEFAULT_SIGNED_URL_EXPIRY) {
-      const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
-      const { getSignedUrl: s3GetSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+      try {
+        const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
+        const { getSignedUrl: s3GetSignedUrl } = await import('@aws-sdk/s3-request-presigner');
 
-      const client = new S3Client({
-        region: 'auto',
-        endpoint: process.env.R2_ENDPOINT!,
-        credentials: {
-          accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-          secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-        },
-      });
+        const client = new S3Client({
+          region: 'auto',
+          endpoint: process.env.R2_ENDPOINT!,
+          credentials: {
+            accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+            secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+          },
+        });
 
-      return s3GetSignedUrl(client, new GetObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME!,
-        Key: key,
-      }), { expiresIn: expiresInSeconds });
+        return s3GetSignedUrl(client, new GetObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME!,
+          Key: key,
+        }), { expiresIn: expiresInSeconds });
+      } catch (error) {
+        captureStorageError(error, { operation: 'getSignedUrl', storageKey: key });
+        throw error;
+      }
     },
 
     async delete(key) {
-      const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
+      try {
+        const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
 
-      const client = new S3Client({
-        region: 'auto',
-        endpoint: process.env.R2_ENDPOINT!,
-        credentials: {
-          accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-          secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-        },
-      });
+        const client = new S3Client({
+          region: 'auto',
+          endpoint: process.env.R2_ENDPOINT!,
+          credentials: {
+            accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+            secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+          },
+        });
 
-      await client.send(new DeleteObjectCommand({
-        Bucket: process.env.R2_BUCKET_NAME!,
-        Key: key,
-      }));
+        await client.send(new DeleteObjectCommand({
+          Bucket: process.env.R2_BUCKET_NAME!,
+          Key: key,
+        }));
+      } catch (error) {
+        captureStorageError(error, { operation: 'delete', storageKey: key });
+        throw error;
+      }
     },
   };
 }

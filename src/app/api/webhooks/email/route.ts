@@ -8,6 +8,7 @@
 import { NextResponse } from 'next/server';
 import { ingestEmailStatus } from '@/lib/notifications/webhook-ingest';
 import { verifyResendSignature } from '@/lib/notifications/webhook-auth';
+import { captureError } from '@/lib/sentry';
 
 export async function POST(request: Request) {
   // Read raw body for signature verification
@@ -30,6 +31,7 @@ export async function POST(request: Request) {
     // Still return 200 — ingest already handles DLQ on failure.
     // This catch is for JSON parse errors only.
     console.error('[webhook/email] Failed to process webhook:', error);
+    captureError(error, { module: 'webhook', tags: { webhook_type: 'email' } });
   }
 
   return NextResponse.json({ received: true }, { status: 200 });

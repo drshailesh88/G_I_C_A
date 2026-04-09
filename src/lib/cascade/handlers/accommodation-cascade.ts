@@ -26,6 +26,7 @@ import type {
   AccommodationUpdatedPayload,
   AccommodationCancelledPayload,
 } from '../events';
+import { captureCascadeError } from '@/lib/sentry';
 
 // ── Helper: resolve person contact info ──────────────────────
 async function resolvePersonContact(personId: string) {
@@ -72,6 +73,11 @@ async function safeSendNotification(params: {
       `[cascade:accommodation] Notification send failed for ${params.channel}:`,
       error instanceof Error ? error.message : error,
     );
+    captureCascadeError(error, {
+      handler: 'accommodation-cascade',
+      eventId: params.eventId,
+      cascadeEvent: `accommodation:${params.templateKey}`,
+    });
   }
 }
 
