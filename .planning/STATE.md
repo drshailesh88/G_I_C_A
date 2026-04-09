@@ -4,10 +4,10 @@
 **GEM India V1** — Created 2026-04-07
 
 ## Current Phase
-Phase 6: Notification Wiring + Branding + Reports — Status: NOT STARTED
+Phase 9: Production Readiness + UAT — Status: NOT STARTED
 
 ## Next Action
-Begin Sub-Phase 6B-2: Branding injection into notification templates
+Begin 9A-1: Full journey test script
 
 ## Completed Phases
 - Phase 1: Scaffold + Auth + Event CRUD — COMPLETE (2026-04-08)
@@ -15,13 +15,16 @@ Begin Sub-Phase 6B-2: Branding injection into notification templates
 - Phase 3: Logistics + Cascade System — COMPLETE (2026-04-08)
 - Phase 4: Communications Engine — COMPLETE (2026-04-08)
 - Phase 5: Certificates + QR Attendance — COMPLETE (2026-04-08)
+- Phase 6: Notification Wiring + Branding + Reports — COMPLETE (2026-04-09)
+- Phase 7: Certificate UI + QR UI + Dashboard — COMPLETE (2026-04-09)
+- Phase 8: Infrastructure Hardening — COMPLETE (2026-04-09)
 
 ## Progress Summary
 - Requirements done: 108/121
-- Requirements remaining: 15 (across Phases 6-9)
-- Test files: 78 | Tests passing: 1252
-- Phases remaining: 4 (Phase 6, 7, 8, 9)
-- Estimated: ~23 granular requirements across 11 sub-phases
+- Requirements remaining: 13 (10 scattered Must-Have + 3 Phase 9)
+- Test files: 78 | Tests passing: 1256
+- Phases remaining: 1 (Phase 9)
+- Scattered Must-Have items: 10 unchecked across Phases 1-5 (event duplication, person merge, change history, reg cancellation flags, faculty notifications, accommodation notifications, rooming list, transport suggestions)
 
 ## Phase 6-9 Requirement Tracker
 ### Phase 6: Notification Wiring + Branding + Reports (9 requirements)
@@ -45,7 +48,7 @@ Begin Sub-Phase 6B-2: Branding injection into notification templates
 
 ### Phase 8: Infrastructure Hardening (7 requirements)
 - [x] 8A-1: Install and configure Inngest (6 tests)
-- [x] 8A-2: Move bulk operations to Inngest (8 tests)
+- [x] 8A-2: Move bulk operations to Inngest (10 tests)
 - [x] 8B-1: Sentry integration (manual verification)
 - [x] 8B-2: Feature flags via Upstash Redis (12 tests)
 - [x] 8B-3: GitHub Actions CI pipeline (manual verification)
