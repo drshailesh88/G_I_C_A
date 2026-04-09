@@ -24,6 +24,8 @@ export default clerkMiddleware(async (auth, request) => {
     const userId = authState?.userId;
     if (userId) {
       Sentry.setUser({ id: userId });
+    } else {
+      Sentry.setUser(null);
     }
   } catch {
     // Sentry context is best-effort — never block the request
