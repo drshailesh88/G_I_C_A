@@ -126,7 +126,11 @@ async function sendMediaMessage(
 
   const att = attachments[0];
   validateAttachment(att);
-  const signedUrl = await r2.getSignedUrl(att.storageKey, ATTACHMENT_URL_EXPIRY_SECONDS);
+  const signedUrl = await withTimeout(
+    'r2_signed_url',
+    PROVIDER_TIMEOUTS.R2_SIGNED_URL,
+    async () => r2.getSignedUrl(att.storageKey, ATTACHMENT_URL_EXPIRY_SECONDS),
+  );
   const mediaType = getMediaType(att.contentType);
 
   const response = await withTimeout(

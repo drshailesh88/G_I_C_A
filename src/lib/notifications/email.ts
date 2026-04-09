@@ -60,7 +60,11 @@ async function resolveAttachments(
 
   for (const att of attachments) {
     validateAttachment(att);
-    const signedUrl = await r2.getSignedUrl(att.storageKey, ATTACHMENT_URL_EXPIRY_SECONDS);
+    const signedUrl = await withTimeout(
+      'r2_signed_url',
+      PROVIDER_TIMEOUTS.R2_SIGNED_URL,
+      async () => r2.getSignedUrl(att.storageKey, ATTACHMENT_URL_EXPIRY_SECONDS),
+    );
     resolved.push({
       filename: sanitizeFileName(att.fileName),
       path: signedUrl,
