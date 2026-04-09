@@ -246,6 +246,7 @@ export async function sendNotification(
         toEmail: input.variables['recipientEmail'] as string,
         subject: rendered.subject ?? '',
         htmlBody: rendered.body,
+        fromDisplayName: rendered.brandingVars?.emailSenderName || undefined,
         attachments: input.attachments,
       });
     } else {
