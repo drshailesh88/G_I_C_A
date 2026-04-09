@@ -101,8 +101,8 @@ export function QrCheckInClient({
         </div>
       )}
 
-      {/* Synced banner */}
-      {isOnline && sync.syncStatus === 'synced' && sync.lastSyncedCount > 0 && (
+      {/* Synced banner — only when queue is fully drained */}
+      {isOnline && sync.syncStatus === 'synced' && sync.lastSyncedCount > 0 && sync.pendingCount === 0 && (
         <div
           className="mx-4 mb-3 flex items-center justify-between rounded-lg bg-green-50 border border-green-200 px-4 py-3"
           role="status"

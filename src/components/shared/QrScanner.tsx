@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { useOnlineStatus } from '@/lib/hooks/use-online-status';
 import { useOfflineSync } from '@/lib/hooks/use-offline-sync';
@@ -37,6 +37,14 @@ export function QrScanner({
   const [lastScannedPayload, setLastScannedPayload] = useState<string | null>(null);
   const [offlinePendingCount, setOfflinePendingCount] = useState(0);
   const isOnline = useOnlineStatus();
+  const cooldownTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup cooldown timer on unmount
+  useEffect(() => {
+    return () => {
+      if (cooldownTimerRef.current) clearTimeout(cooldownTimerRef.current);
+    };
+  }, []);
 
   // Use external sync state if provided, otherwise manage internally
   const internalSync = useOfflineSync({
@@ -88,16 +96,19 @@ export function QrScanner({
           onScan({ type: 'invalid', message: 'Failed to process scan. Please try again.' });
         }
       } finally {
-        setTimeout(() => {
+        cooldownTimerRef.current = setTimeout(() => {
           setProcessing(false);
           setLastScannedPayload(null);
+          cooldownTimerRef.current = null;
         }, 2000);
       }
     },
     [eventId, sessionId, deviceId, onScan, disabled, processing, lastScannedPayload, isOnline],
   );
 
-  const displayPendingCount = pendingCount || offlinePendingCount;
+  // After sync completes (synced/idle with 0 pending), trust the hook's count over stale local state
+  const syncHasRun = syncStatus === 'synced' || syncStatus === 'error';
+  const displayPendingCount = syncHasRun ? pendingCount : Math.max(pendingCount, offlinePendingCount);
 
   return (
     <div className="relative w-full max-w-sm mx-auto">
