@@ -7,7 +7,7 @@
 Phase 6: Notification Wiring + Branding + Reports — Status: NOT STARTED
 
 ## Next Action
-Begin Sub-Phase 6A-2: Wire domain event handler (H7)
+Begin Sub-Phase 6A-3: Implement attachment flow (H5)
 
 ## Completed Phases
 - Phase 1: Scaffold + Auth + Event CRUD — COMPLETE (2026-04-08)
@@ -17,7 +17,7 @@ Begin Sub-Phase 6A-2: Wire domain event handler (H7)
 - Phase 5: Certificates + QR Attendance — COMPLETE (2026-04-08)
 
 ## Progress Summary
-- Requirements done: 75/116
+- Requirements done: 76/116
 - Requirements remaining: 42 (across Phases 6-9)
 - Test files: 53 | Tests passing: 958
 - Phases remaining: 4 (Phase 6, 7, 8, 9)
@@ -26,7 +26,7 @@ Begin Sub-Phase 6A-2: Wire domain event handler (H7)
 ## Phase 6-9 Requirement Tracker
 ### Phase 6: Notification Wiring + Branding + Reports (9 requirements)
 - [x] 6A-1: Replace notification stub in cascade handlers (12 tests)
-- [ ] 6A-2: Wire domain event handler H7 (8 tests)
+- [x] 6A-2: Wire domain event handler H7 (9 tests)
 - [ ] 6A-3: Implement attachment flow H5 (12 tests)
 - [ ] 6A-4: Add Clerk middleware (6 tests)
 - [ ] 6B-1: Branding configuration CRUD (10 tests)
