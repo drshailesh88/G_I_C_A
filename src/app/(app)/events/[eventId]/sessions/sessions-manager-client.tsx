@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRole } from '@/hooks/use-role';
+import { useResponsiveNav } from '@/hooks/use-responsive-nav';
+import { DetailView } from '@/components/responsive/detail-view';
 import { deleteSession } from '@/lib/actions/program';
 import type { ScheduleSession, ConflictWarning } from '@/lib/actions/program';
 
@@ -79,11 +81,13 @@ export function SessionsManagerClient({
 }) {
   const router = useRouter();
   const { canWrite } = useRole();
+  const { isMobile } = useResponsiveNav();
   const [isPending, startTransition] = useTransition();
   const [searchQuery, setSearchQuery] = useState('');
   const [showHallManager, setShowHallManager] = useState(false);
   const [error, setError] = useState('');
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
 
   // Build conflict lookup: sessionId -> warnings
   const conflictsBySession = new Map<string, ConflictWarning[]>();
@@ -127,6 +131,12 @@ export function SessionsManagerClient({
     sessionsByDate.set(dateKey, group);
   }
 
+  const selectedSession = selectedSessionId
+    ? sessions.find((s) => s.id === selectedSessionId) ??
+      sessions.flatMap((s) => s.childSessions).find((s) => s.id === selectedSessionId) ??
+      null
+    : null;
+
   function toggleExpand(sessionId: string) {
     setExpandedSessions((prev) => {
       const next = new Set(prev);
@@ -142,6 +152,7 @@ export function SessionsManagerClient({
     startTransition(async () => {
       try {
         await deleteSession(eventId, sessionId);
+        if (selectedSessionId === sessionId) setSelectedSessionId(null);
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to delete session');
@@ -149,7 +160,17 @@ export function SessionsManagerClient({
     });
   }
 
-  return (
+  function handleSelectSession(sessionId: string) {
+    if (isMobile) {
+      // On mobile, navigate to the session detail page
+      router.push(`/events/${eventId}/sessions/${sessionId}`);
+    } else {
+      setSelectedSessionId(sessionId);
+    }
+  }
+
+  // ── List panel content ──
+  const listContent = (
     <div className="px-4 py-6">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -161,8 +182,8 @@ export function SessionsManagerClient({
             <ArrowLeft className="h-5 w-5" />
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-text-primary">Sessions</h1>
-            <p className="text-sm text-text-secondary">{totalCount} sessions</p>
+            <h1 className="text-fluid-lg font-bold text-text-primary">Sessions</h1>
+            <p className="text-fluid-sm text-text-secondary">{totalCount} sessions</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -263,29 +284,243 @@ export function SessionsManagerClient({
                         month: 'long',
                       })}
                 </h2>
-                <div className="space-y-2">
-                  {dateSessions.map((session) => (
-                    <SessionCard
-                      key={session.id}
-                      session={session}
-                      eventId={eventId}
-                      conflicts={conflictsBySession.get(session.id) ?? []}
-                      hallMap={hallMap}
-                      canWrite={canWrite}
-                      isExpanded={expandedSessions.has(session.id)}
-                      onToggleExpand={() => toggleExpand(session.id)}
-                      onDelete={() => handleDelete(session.id)}
-                    />
-                  ))}
-                </div>
+
+                {/* Desktop: table layout */}
+                {!isMobile ? (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-xs text-text-muted">
+                        <th className="pb-2 font-medium">Title</th>
+                        <th className="pb-2 font-medium">Hall</th>
+                        <th className="pb-2 font-medium">Time</th>
+                        <th className="pb-2 font-medium">Type</th>
+                        <th className="pb-2 font-medium">Status</th>
+                        {canWrite && <th className="pb-2 font-medium sr-only">Actions</th>}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dateSessions.map((session) => {
+                        const colors = SESSION_TYPE_COLORS[session.sessionType] ?? SESSION_TYPE_COLORS.other;
+                        const typeLabel = SESSION_TYPE_LABELS[session.sessionType] ?? session.sessionType;
+                        const hasConflicts = (conflictsBySession.get(session.id) ?? []).length > 0;
+                        return (
+                          <tr
+                            key={session.id}
+                            onClick={() => handleSelectSession(session.id)}
+                            className={cn(
+                              'cursor-pointer border-b border-border/50 transition-colors hover:bg-surface',
+                              selectedSessionId === session.id && 'bg-accent/5',
+                              hasConflicts && 'bg-warning/5',
+                            )}
+                          >
+                            <td className="py-2 pr-3">
+                              <span className="text-fluid-sm font-medium text-text-primary">{session.title}</span>
+                              {session.childSessions.length > 0 && (
+                                <span className="ml-1 text-xs text-text-muted">
+                                  ({session.childSessions.length} sub)
+                                </span>
+                              )}
+                            </td>
+                            <td className="py-2 pr-3 text-text-muted">{session.hallName ?? '\u2014'}</td>
+                            <td className="py-2 pr-3 text-text-muted whitespace-nowrap">
+                              {formatTime(session.startAtUtc)}\u2013{formatTime(session.endAtUtc)}
+                            </td>
+                            <td className="py-2 pr-3">
+                              <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', colors.bg, colors.text)}>
+                                {typeLabel}
+                              </span>
+                            </td>
+                            <td className="py-2 pr-3 text-xs capitalize text-text-muted">
+                              {session.status}
+                            </td>
+                            {canWrite && (
+                              <td className="py-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDelete(session.id);
+                                  }}
+                                  className="rounded p-1 text-text-muted hover:bg-error/10 hover:text-error"
+                                  title="Delete session"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  /* Mobile: card layout */
+                  <div className="space-y-2">
+                    {dateSessions.map((session) => (
+                      <SessionCard
+                        key={session.id}
+                        session={session}
+                        eventId={eventId}
+                        conflicts={conflictsBySession.get(session.id) ?? []}
+                        hallMap={hallMap}
+                        canWrite={canWrite}
+                        isExpanded={expandedSessions.has(session.id)}
+                        onToggleExpand={() => toggleExpand(session.id)}
+                        onDelete={() => handleDelete(session.id)}
+                        onSelect={() => handleSelectSession(session.id)}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             ))
         )}
       </div>
     </div>
   );
+
+  // ── Detail panel content ──
+  const detailContent = selectedSession ? (
+    <div className="p-4">
+      <SessionDetailPanel session={selectedSession} eventId={eventId} hallMap={hallMap} />
+    </div>
+  ) : null;
+
+  return (
+    <DetailView
+      list={listContent}
+      detail={detailContent}
+      showDetail={!!selectedSessionId}
+      onBack={() => setSelectedSessionId(null)}
+      emptyMessage="Select a session to view details"
+    />
+  );
 }
 
+// ── Session Detail Panel ──────────────────────────────────────
+function SessionDetailPanel({
+  session,
+  eventId,
+  hallMap,
+}: {
+  session: ScheduleSession;
+  eventId: string;
+  hallMap: Map<string, string>;
+}) {
+  const colors = SESSION_TYPE_COLORS[session.sessionType] ?? SESSION_TYPE_COLORS.other;
+  const typeLabel = SESSION_TYPE_LABELS[session.sessionType] ?? session.sessionType;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', colors.bg, colors.text)}>
+          {typeLabel}
+        </span>
+        <Link
+          href={`/events/${eventId}/sessions/${session.id}`}
+          className="text-sm text-accent hover:underline"
+        >
+          Edit
+        </Link>
+      </div>
+
+      <h2 className="text-fluid-lg font-bold text-text-primary">{session.title}</h2>
+
+      {session.description && (
+        <p className="text-fluid-sm text-text-secondary">{session.description}</p>
+      )}
+
+      <div className="space-y-2 text-sm text-text-muted">
+        {session.hallName && (
+          <div className="flex items-center gap-2">
+            <MapPin className="h-4 w-4" />
+            <span>{session.hallName}</span>
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <Clock className="h-4 w-4" />
+          <span>
+            {formatTime(session.startAtUtc)} \u2013 {formatTime(session.endAtUtc)}
+            {session.sessionDate && (
+              <> \u00b7 {formatDate(session.sessionDate)}</>
+            )}
+          </span>
+        </div>
+      </div>
+
+      {session.assignments.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-text-primary">Speakers</h3>
+          <div className="mt-1 space-y-1">
+            {session.assignments.map((a) => (
+              <div key={a.id} className="text-sm text-text-muted">
+                {a.role.replace('_', ' ')}: {a.presentationTitle || 'Assigned'}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {session.roleRequirements.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-text-primary">Role Requirements</h3>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {session.roleRequirements.map((req) => {
+              const filled = session.assignments.filter((a) => a.role === req.role).length;
+              const isFull = filled >= req.requiredCount;
+              return (
+                <span
+                  key={req.id}
+                  className={cn(
+                    'flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium',
+                    isFull ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning',
+                  )}
+                >
+                  <Users className="h-3 w-3" />
+                  {req.role.replace('_', ' ')}: {filled}/{req.requiredCount}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {session.cmeCredits != null && session.cmeCredits > 0 && (
+        <span className="inline-block rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+          {session.cmeCredits} CME Credits
+        </span>
+      )}
+
+      {session.childSessions.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-text-primary">
+            Sub-sessions ({session.childSessions.length})
+          </h3>
+          <div className="mt-2 space-y-1">
+            {session.childSessions.map((child) => (
+              <Link
+                key={child.id}
+                href={`/events/${eventId}/sessions/${child.id}`}
+                className="block rounded-lg border border-border bg-surface p-3 transition-colors hover:border-accent/30"
+              >
+                <div className="flex items-center justify-between text-xs text-text-muted">
+                  <span>
+                    {formatTime(child.startAtUtc)}-{formatTime(child.endAtUtc)}
+                  </span>
+                  <span className={cn('rounded-full px-2 py-0.5 text-[10px] font-medium', colors.bg, colors.text)}>
+                    {SESSION_TYPE_LABELS[child.sessionType] ?? child.sessionType}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm font-medium text-text-primary">{child.title}</p>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Session Card (mobile) ─────────────────────────────────────
 function SessionCard({
   session,
   eventId,
@@ -295,6 +530,7 @@ function SessionCard({
   isExpanded,
   onToggleExpand,
   onDelete,
+  onSelect,
 }: {
   session: ScheduleSession;
   eventId: string;
@@ -304,6 +540,7 @@ function SessionCard({
   isExpanded: boolean;
   onToggleExpand: () => void;
   onDelete: () => void;
+  onSelect: () => void;
 }) {
   const colors = SESSION_TYPE_COLORS[session.sessionType] ?? SESSION_TYPE_COLORS.other;
   const typeLabel = SESSION_TYPE_LABELS[session.sessionType] ?? session.sessionType;
@@ -326,9 +563,9 @@ function SessionCard({
           colors.border,
         )}
       >
-        <Link
-          href={`/events/${eventId}/sessions/${session.id}`}
-          className="block p-4"
+        <button
+          onClick={onSelect}
+          className="block w-full p-4 text-left"
         >
           {/* Top row: time + hall + type badge */}
           <div className="flex items-center justify-between">
@@ -339,7 +576,7 @@ function SessionCard({
               </span>
               {session.hallName && (
                 <>
-                  <span className="text-border">·</span>
+                  <span className="text-border">\u00b7</span>
                   <MapPin className="h-3.5 w-3.5" />
                   <span>{session.hallName}</span>
                 </>
@@ -351,7 +588,7 @@ function SessionCard({
           </div>
 
           {/* Title */}
-          <h3 className="mt-2 font-medium text-text-primary">{session.title}</h3>
+          <h3 className="mt-2 text-fluid-sm font-medium text-text-primary">{session.title}</h3>
 
           {/* Faculty assignments */}
           {session.assignments.length > 0 && (
@@ -394,7 +631,7 @@ function SessionCard({
               {session.cmeCredits} CME
             </span>
           )}
-        </Link>
+        </button>
 
         {/* Conflict warnings inline */}
         {hasConflicts && (
