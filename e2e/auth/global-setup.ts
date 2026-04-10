@@ -17,16 +17,21 @@ setup('global setup', async ({}) => {
 });
 
 setup('authenticate and save state', async ({ page }) => {
-  // Navigate to a page that loads Clerk JS
+  // Give this test more time — Clerk JS can be slow to init
+  setup.setTimeout(60000);
+
+  // Clear any previous auth state
+  await page.context().clearCookies();
+
+  // Navigate to login page where Clerk JS loads
   await page.goto('/login');
   await page.waitForLoadState('networkidle');
 
-  // Sign out first if already signed in (from previous storageState)
-  try {
-    await clerk.signOut({ page });
-  } catch {
-    // Not signed in — that's fine
-  }
+  // Wait for Clerk to be ready (the SignIn component renders)
+  await page.waitForSelector('[data-clerk-component]', { timeout: 15000 }).catch(() => {
+    // Fallback: wait for the email input
+    return page.waitForSelector('input[name="identifier"], input[type="email"]', { timeout: 10000 });
+  });
 
   // Use emailAddress shortcut — signs in via Backend API, no UI interaction needed.
   await clerk.signIn({
