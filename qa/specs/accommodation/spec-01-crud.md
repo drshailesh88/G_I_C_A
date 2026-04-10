@@ -2,6 +2,15 @@
 
 Module: accommodation
 Source: feature-census/accommodation/CENSUS.md
+Coverage: vitest (unit/integration) — all checkpoints passing
+Playwright: BLOCKED — dev server unresponsive, no Clerk auth infra
+
+STATUS: COMPLETE (vitest)
+TESTED: 12/12
+PASS: 12
+FAIL: 0
+BLOCKED: 0
+E2E: BLOCKED (no Clerk auth infra, dev server unresponsive)
 
 ## Checkpoints
 
