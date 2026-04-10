@@ -1,0 +1,110 @@
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — PRE-FLIGHT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[10:23:26][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;32m[10:23:27] ✓[0m Linear CLI authenticated
+[0;32m[10:23:27] ✓[0m Builder agent: claude
+[0;32m[10:23:27] ✓[0m Reviewer agent: codex
+[0;34m[10:23:27][0m Auto-detected test command: npx vitest run
+[0;34m[10:23:32][0m Auto-detected Linear team: DRS
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING 1 ISSUE(S)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[10:23:32][0m Issue DRS-48 (1/1)
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING: DRS-48[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[10:23:32][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;34m[10:23:32][0m Reading issue DRS-48 from Linear...
+[0;32m[10:23:35] ✓[0m Loaded: DRS-48: [4.2] Accessibility pass — touch targets, focus, motion
+[0;34m[10:23:35][0m Dependency found: **Parent:** DRS-10 | **Depends on:** All Phase 3 subtasks complete | **Scope:** \~80 lines across 15 files
+[0;32m[10:23:37] ✓[0m All dependencies satisfied
+Updating issue DRS-48
+
+✓ Updated issue DRS-48: [4.2] Accessibility pass — touch targets, focus, motion
+https://linear.app/drshailesh88/issue/DRS-48/42-accessibility-pass-touch-targets-focus-motion
+✓ Comment added to DRS-48
+https://linear.app/drshailesh88/issue/DRS-48/42-accessibility-pass-touch-targets-focus-motion#comment-e1062b01
+[0;34m[10:23:46][0m Measuring test baseline...
+[0;32m[10:24:00] ✓[0m Baseline: 96 tests passing
+[0;34m[10:24:00][0m Creating git worktree: ../worktree-sprint-DRS-48
+HEAD is now at 2c56c75 feat(DRS-16): useResponsiveNav hook — matchMedia breakpoints, localStorage sidebar persistence
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 1: BUILD (claude)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+I need write permission to modify the project files. Could you please approve the edit to `src/app/globals.css`? This adds:
+1. Focus-visible outline styles for all interactive elements
+2. A `prefers-reduced-motion` media query to disable animations
+[0;34m[10:32:19][0m After build: 96 tests passing (was: 96)
+[wt/sprint-DRS-48-1775796840 79c07a7] feat: DRS-48: [4.2] Accessibility pass — touch targets, focus, motion (DRS-48) — TDD implementation
+ 3 files changed, 1741 insertions(+), 77 deletions(-)
+ create mode 100644 .planning/sprint-executor-status.json
+ create mode 100644 src/accessibility.test.ts
+✓ Comment added to DRS-48
+https://linear.app/drshailesh88/issue/DRS-48/42-accessibility-pass-touch-targets-focus-motion#comment-2d0c1a7f
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 2: ADVERSARIAL REVIEW (codex)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Error: stdin is not a terminal
+✓ Comment added to DRS-48
+https://linear.app/drshailesh88/issue/DRS-48/42-accessibility-pass-touch-targets-focus-motion#comment-eb2f9750
+[0;32m[10:32:22] ✓[0m No bugs found by codex. Skipping fix phase.
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  FINAL VALIDATION[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+src/lib/actions/full-journey.test.ts(327,16): error TS2339: Property 'passengerStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; eventId: string; personId: string; batchId: string; assignmentStatus: string; vehicleAssignmentId: string | null; travelRecordId: string; pickupNote: string | null; dropNote: string | null; }'.
+src/lib/actions/full-journey.test.ts(530,16): error TS2339: Property 'inviteStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; status: string; eventId: string; personId: string; token: string; sentAt: Date; respondedAt: Date | null; programVersionId: string | null; }'.
+src/lib/actions/person.test.ts(321,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/actions/person.test.ts(330,31): error TS2345: Argument of type '{}' is not assignable to parameter of type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Type '{}' is missing the following properties from type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }': limit, view, page
+src/lib/actions/person.test.ts(352,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/cascade/handlers/accommodation-cascade-census.test.ts(88,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-48/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/accommodation-cascade.test.ts(81,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-48/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/travel-cascade.test.ts(80,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-48/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+[0;34m[10:32:38][0m Final score: 96 passing (baseline was: 96)
+[0;34m[10:32:38][0m Type check: FAIL
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  MERGING: DRS-48[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Updating issue DRS-48
+
+✓ Updated issue DRS-48: [4.2] Accessibility pass — touch targets, focus, motion
+https://linear.app/drshailesh88/issue/DRS-48/42-accessibility-pass-touch-targets-focus-motion
+✓ Comment added to DRS-48
+https://linear.app/drshailesh88/issue/DRS-48/42-accessibility-pass-touch-targets-focus-motion#comment-64f7a0aa
+[0;32m[10:32:47] ✓[0m MERGED: DRS-48 | Score: 96 → 96 | Time: 9min
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — FINAL REPORT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Builder:   claude
+Reviewer:  codex
+Fixer:     claude
+
+Total:     1
+[0;32mCompleted: 1[0m
+[0;31mFailed:    0[0m
+[1;33mBlocked:   0[0m

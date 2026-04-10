@@ -1,0 +1,120 @@
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — PRE-FLIGHT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[09:03:59][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;32m[09:04:01] ✓[0m Linear CLI authenticated
+[0;32m[09:04:01] ✓[0m Builder agent: claude
+[0;32m[09:04:01] ✓[0m Reviewer agent: codex
+[0;34m[09:04:01][0m Auto-detected test command: npx vitest run
+[0;34m[09:04:02][0m Auto-detected Linear team: DRS
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING 1 ISSUE(S)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[09:04:02][0m Issue DRS-19 (1/1)
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING: DRS-19[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[09:04:02][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;34m[09:04:02][0m Reading issue DRS-19 from Linear...
+[0;32m[09:04:03] ✓[0m Loaded: DRS-19: [2.1] Build ResponsiveList pattern component
+[0;34m[09:04:03][0m Dependency found: **Depends on:** DRS-15 \[1.1\] tokens, DRS-14 \[0.3\] container queries confirmed
+[0;32m[09:04:05] ✓[0m All dependencies satisfied
+Updating issue DRS-19
+
+✓ Updated issue DRS-19: [2.1] Build ResponsiveList pattern component
+https://linear.app/drshailesh88/issue/DRS-19/21-build-responsivelist-pattern-component
+✓ Comment added to DRS-19
+https://linear.app/drshailesh88/issue/DRS-19/21-build-responsivelist-pattern-component#comment-ea0cc0ba
+[0;34m[09:04:11][0m Measuring test baseline...
+[0;32m[09:04:24] ✓[0m Baseline: 95 tests passing
+[0;34m[09:04:24][0m Creating git worktree: ../worktree-sprint-DRS-19
+HEAD is now at 7a6df7a ops: responsive design PRD + Linear execution plan — 6 phases, 33 subtasks
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 1: BUILD (claude)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Done. Here's a summary:
+
+**Created 2 files:**
+- `src/components/responsive/responsive-list.tsx` — Generic `ResponsiveList<T>` component using CSS container queries
+- `src/components/responsive/responsive-list.test.tsx` — 15 tests covering all acceptance criteria
+
+**How it works:** Both card and table views render simultaneously; Tailwind v4 container query classes (`@[640px]:`, `@[1024px]:`, `@[1280px]:`) toggle visibility based on the parent's inline size. The outer `div` sets `container-type: inline-size`.
+
+**Results:**
+- 15/15 tests passing
+- 0 type errors in new files
+- No new build issues (pre-existing `team.ts` export error is unrelated)
+[0;34m[09:11:02][0m After build: 96 tests passing (was: 95)
+[wt/sprint-DRS-19-1775792064 145ce2e] feat: DRS-19: [2.1] Build ResponsiveList pattern component (DRS-19) — TDD implementation
+ 5 files changed, 1917 insertions(+), 78 deletions(-)
+ create mode 100644 .planning/sprint-executor-status.json
+ create mode 100644 src/components/responsive/responsive-list.test.tsx
+ create mode 100644 src/components/responsive/responsive-list.tsx
+✓ Comment added to DRS-19
+https://linear.app/drshailesh88/issue/DRS-19/21-build-responsivelist-pattern-component#comment-cd275feb
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 2: ADVERSARIAL REVIEW (codex)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+/Users/shaileshsingh/G_I_C_A/adapters/linear/sprint-executor.sh: line 189: /Users/shaileshsingh/.nvm/versions/node/v22.21.1/bin/codex: Argument list too long
+✓ Comment added to DRS-19
+https://linear.app/drshailesh88/issue/DRS-19/21-build-responsivelist-pattern-component#comment-87be59f3
+[0;32m[09:11:06] ✓[0m No bugs found by codex. Skipping fix phase.
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  FINAL VALIDATION[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+src/lib/actions/full-journey.test.ts(327,16): error TS2339: Property 'passengerStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; eventId: string; personId: string; batchId: string; assignmentStatus: string; vehicleAssignmentId: string | null; travelRecordId: string; pickupNote: string | null; dropNote: string | null; }'.
+src/lib/actions/full-journey.test.ts(530,16): error TS2339: Property 'inviteStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; status: string; eventId: string; personId: string; token: string; sentAt: Date; respondedAt: Date | null; programVersionId: string | null; }'.
+src/lib/actions/person.test.ts(321,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/actions/person.test.ts(330,31): error TS2345: Argument of type '{}' is not assignable to parameter of type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Type '{}' is missing the following properties from type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }': limit, view, page
+src/lib/actions/person.test.ts(352,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/cascade/handlers/accommodation-cascade-census.test.ts(88,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-19/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/accommodation-cascade.test.ts(81,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-19/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/travel-cascade.test.ts(80,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-19/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+[0;34m[09:11:22][0m Final score: 96 passing (baseline was: 95)
+[0;34m[09:11:22][0m Type check: FAIL
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  MERGING: DRS-19[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Updating issue DRS-19
+
+✓ Updated issue DRS-19: [2.1] Build ResponsiveList pattern component
+https://linear.app/drshailesh88/issue/DRS-19/21-build-responsivelist-pattern-component
+✓ Comment added to DRS-19
+https://linear.app/drshailesh88/issue/DRS-19/21-build-responsivelist-pattern-component#comment-e3fcbd6f
+[0;32m[09:11:27] ✓[0m MERGED: DRS-19 | Score: 95 → 96 | Time: 7min
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — FINAL REPORT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Builder:   claude
+Reviewer:  codex
+Fixer:     claude
+
+Total:     1
+[0;32mCompleted: 1[0m
+[0;31mFailed:    0[0m
+[1;33mBlocked:   0[0m

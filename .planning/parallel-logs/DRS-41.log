@@ -1,0 +1,122 @@
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — PRE-FLIGHT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[09:40:06][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;32m[09:40:08] ✓[0m Linear CLI authenticated
+[0;32m[09:40:08] ✓[0m Builder agent: claude
+[0;32m[09:40:08] ✓[0m Reviewer agent: codex
+[0;34m[09:40:08][0m Auto-detected test command: npx vitest run
+[0;34m[09:40:10][0m Auto-detected Linear team: DRS
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING 1 ISSUE(S)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[09:40:10][0m Issue DRS-41 (1/1)
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING: DRS-41[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[09:40:10][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;34m[09:40:10][0m Reading issue DRS-41 from Linear...
+[0;32m[09:40:11] ✓[0m Loaded: DRS-41: [3.3.6] Responsive faculty-invite-client
+[0;34m[09:40:11][0m Dependency found: **Parent:** DRS-9 | **Depends on:** DRS-22 \[2.4\] FormGrid | **Scope:** \~60 lines in 1 file
+[0;32m[09:40:14] ✓[0m All dependencies satisfied
+Updating issue DRS-41
+
+✓ Updated issue DRS-41: [3.3.6] Responsive faculty-invite-client
+https://linear.app/drshailesh88/issue/DRS-41/336-responsive-faculty-invite-client
+✓ Comment added to DRS-41
+https://linear.app/drshailesh88/issue/DRS-41/336-responsive-faculty-invite-client#comment-93921e3b
+[0;34m[09:40:21][0m Measuring test baseline...
+[0;32m[09:41:37] ✓[0m Baseline: 95 tests passing
+[0;34m[09:41:37][0m Creating git worktree: ../worktree-sprint-DRS-41
+HEAD is now at 2c56c75 feat(DRS-16): useResponsiveNav hook — matchMedia breakpoints, localStorage sidebar persistence
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 1: BUILD (claude)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Done. Here's what was built:
+
+**DRS-41: Responsive faculty-invite-client**
+
+**Created:**
+- `src/components/responsive/form-grid.tsx` — FormGrid component (lightweight CSS Grid utility, 1-col mobile / 2-col desktop)
+- `src/components/responsive/form-grid.test.tsx` — 7 tests
+- `src/app/(app)/events/[eventId]/faculty/invite/faculty-invite-client.test.tsx` — 7 tests
+
+**Modified:**
+- `src/app/(app)/events/[eventId]/faculty/invite/faculty-invite-client.tsx` — Wrapped form fields in `FormGrid` with `col-span-full` for full-width fields (person ID, send button)
+
+**Results:** 14/14 tests passing, no new type errors, build failure is pre-existing (unrelated `getRoleLabel` export). Changes are staged but not committed.
+[0;34m[09:52:40][0m After build: 98 tests passing (was: 95)
+[wt/sprint-DRS-41-1775794297 30d515f] feat: DRS-41: [3.3.6] Responsive faculty-invite-client (DRS-41) — TDD implementation
+ 7 files changed, 1827 insertions(+), 102 deletions(-)
+ create mode 100644 .planning/sprint-executor-status.json
+ create mode 100644 src/app/(app)/events/[eventId]/faculty/invite/faculty-invite-client.test.tsx
+ create mode 100644 src/components/responsive/form-grid.test.tsx
+ create mode 100644 src/components/responsive/form-grid.tsx
+✓ Comment added to DRS-41
+https://linear.app/drshailesh88/issue/DRS-41/336-responsive-faculty-invite-client#comment-63f53df0
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 2: ADVERSARIAL REVIEW (codex)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+/Users/shaileshsingh/G_I_C_A/adapters/linear/sprint-executor.sh: line 189: /Users/shaileshsingh/.nvm/versions/node/v22.21.1/bin/codex: Argument list too long
+✓ Comment added to DRS-41
+https://linear.app/drshailesh88/issue/DRS-41/336-responsive-faculty-invite-client#comment-4b638ded
+[0;32m[09:52:52] ✓[0m No bugs found by codex. Skipping fix phase.
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  FINAL VALIDATION[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+src/lib/actions/full-journey.test.ts(327,16): error TS2339: Property 'passengerStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; eventId: string; personId: string; batchId: string; assignmentStatus: string; vehicleAssignmentId: string | null; travelRecordId: string; pickupNote: string | null; dropNote: string | null; }'.
+src/lib/actions/full-journey.test.ts(530,16): error TS2339: Property 'inviteStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; status: string; eventId: string; personId: string; token: string; sentAt: Date; respondedAt: Date | null; programVersionId: string | null; }'.
+src/lib/actions/person.test.ts(321,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/actions/person.test.ts(330,31): error TS2345: Argument of type '{}' is not assignable to parameter of type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Type '{}' is missing the following properties from type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }': limit, view, page
+src/lib/actions/person.test.ts(352,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/cascade/handlers/accommodation-cascade-census.test.ts(88,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-41/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/accommodation-cascade.test.ts(81,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-41/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/travel-cascade.test.ts(80,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-41/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+[0;34m[09:53:58][0m Final score: 98 passing (baseline was: 95)
+[0;34m[09:53:58][0m Type check: FAIL
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  MERGING: DRS-41[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Updating issue DRS-41
+
+✓ Updated issue DRS-41: [3.3.6] Responsive faculty-invite-client
+https://linear.app/drshailesh88/issue/DRS-41/336-responsive-faculty-invite-client
+✓ Comment added to DRS-41
+https://linear.app/drshailesh88/issue/DRS-41/336-responsive-faculty-invite-client#comment-13d2404e
+[0;32m[09:54:06] ✓[0m MERGED: DRS-41 | Score: 95 → 98 | Time: 13min
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — FINAL REPORT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Builder:   claude
+Reviewer:  codex
+Fixer:     claude
+
+Total:     1
+[0;32mCompleted: 1[0m
+[0;31mFailed:    0[0m
+[1;33mBlocked:   0[0m

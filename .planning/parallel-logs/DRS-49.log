@@ -1,0 +1,110 @@
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — PRE-FLIGHT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[10:23:26][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;32m[10:23:28] ✓[0m Linear CLI authenticated
+[0;32m[10:23:28] ✓[0m Builder agent: claude
+[0;32m[10:23:28] ✓[0m Reviewer agent: codex
+[0;34m[10:23:28][0m Auto-detected test command: npx vitest run
+[0;34m[10:23:35][0m Auto-detected Linear team: DRS
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING 1 ISSUE(S)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[10:23:35][0m Issue DRS-49 (1/1)
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING: DRS-49[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[10:23:35][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;34m[10:23:35][0m Reading issue DRS-49 from Linear...
+[0;32m[10:23:37] ✓[0m Loaded: DRS-49: [4.3] Performance verification — Lighthouse + profiling
+[0;34m[10:23:37][0m Dependency found: **Parent:** DRS-10 | **Depends on:** DRS-47 \[4.1\], DRS-48 \[4.2\] | **Scope:** \~40 lines (config + fixes)
+[0;32m[10:23:43] ✓[0m All dependencies satisfied
+Updating issue DRS-49
+
+✓ Updated issue DRS-49: [4.3] Performance verification — Lighthouse + profiling
+https://linear.app/drshailesh88/issue/DRS-49/43-performance-verification-lighthouse-profiling
+✓ Comment added to DRS-49
+https://linear.app/drshailesh88/issue/DRS-49/43-performance-verification-lighthouse-profiling#comment-b6cd3041
+[0;34m[10:23:52][0m Measuring test baseline...
+[0;32m[10:24:04] ✓[0m Baseline: 96 tests passing
+[0;34m[10:24:04][0m Creating git worktree: ../worktree-sprint-DRS-49
+HEAD is now at 2c56c75 feat(DRS-16): useResponsiveNav hook — matchMedia breakpoints, localStorage sidebar persistence
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 1: BUILD (claude)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+I need permission to edit the branding form client file. The header image at line 381 has `className="w-full object-cover"` but no height constraint — this causes CLS when the image loads. I need to add `max-h-48` to prevent layout shift.
+
+Could you grant me edit access to `src/app/(app)/events/[eventId]/branding/branding-form-client.tsx`?
+[0;34m[10:31:25][0m After build: 96 tests passing (was: 96)
+[wt/sprint-DRS-49-1775796844 0ab0648] feat: DRS-49: [4.3] Performance verification — Lighthouse + profiling (DRS-49) — TDD implementation
+ 3 files changed, 1781 insertions(+), 77 deletions(-)
+ create mode 100644 .planning/sprint-executor-status.json
+ create mode 100644 src/perf/performance-verification.test.ts
+✓ Comment added to DRS-49
+https://linear.app/drshailesh88/issue/DRS-49/43-performance-verification-lighthouse-profiling#comment-f964fdb7
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 2: ADVERSARIAL REVIEW (codex)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Error: stdin is not a terminal
+✓ Comment added to DRS-49
+https://linear.app/drshailesh88/issue/DRS-49/43-performance-verification-lighthouse-profiling#comment-eb087269
+[0;32m[10:31:36] ✓[0m No bugs found by codex. Skipping fix phase.
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  FINAL VALIDATION[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+src/lib/actions/full-journey.test.ts(327,16): error TS2339: Property 'passengerStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; eventId: string; personId: string; batchId: string; assignmentStatus: string; vehicleAssignmentId: string | null; travelRecordId: string; pickupNote: string | null; dropNote: string | null; }'.
+src/lib/actions/full-journey.test.ts(530,16): error TS2339: Property 'inviteStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; status: string; eventId: string; personId: string; token: string; sentAt: Date; respondedAt: Date | null; programVersionId: string | null; }'.
+src/lib/actions/person.test.ts(321,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/actions/person.test.ts(330,31): error TS2345: Argument of type '{}' is not assignable to parameter of type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Type '{}' is missing the following properties from type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }': limit, view, page
+src/lib/actions/person.test.ts(352,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/cascade/handlers/accommodation-cascade-census.test.ts(88,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-49/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/accommodation-cascade.test.ts(81,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-49/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/travel-cascade.test.ts(80,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-49/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+[0;34m[10:32:02][0m Final score: 96 passing (baseline was: 96)
+[0;34m[10:32:02][0m Type check: FAIL
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  MERGING: DRS-49[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Updating issue DRS-49
+
+✓ Updated issue DRS-49: [4.3] Performance verification — Lighthouse + profiling
+https://linear.app/drshailesh88/issue/DRS-49/43-performance-verification-lighthouse-profiling
+✓ Comment added to DRS-49
+https://linear.app/drshailesh88/issue/DRS-49/43-performance-verification-lighthouse-profiling#comment-44e64aa7
+[0;32m[10:32:09] ✓[0m MERGED: DRS-49 | Score: 96 → 96 | Time: 8min
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — FINAL REPORT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Builder:   claude
+Reviewer:  codex
+Fixer:     claude
+
+Total:     1
+[0;32mCompleted: 1[0m
+[0;31mFailed:    0[0m
+[1;33mBlocked:   0[0m

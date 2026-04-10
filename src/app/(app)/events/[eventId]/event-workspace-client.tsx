@@ -22,6 +22,7 @@ import {
   Bus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ResponsiveMetricGrid } from '@/components/responsive/responsive-metric-grid';
 import { format } from 'date-fns';
 import { updateEventStatus } from '@/lib/actions/event';
 import { EVENT_TRANSITIONS, type EventStatus } from '@/lib/validations/event';
@@ -162,7 +163,7 @@ export function EventWorkspaceClient({ event }: { event: Event }) {
       {sections.map((section) => (
         <div key={section} className="mt-6">
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">{section}</h2>
-          <div className="grid grid-cols-2 gap-3">
+          <ResponsiveMetricGrid minCardWidth={180}>
             {visibleTiles
               .filter((t) => t.section === section)
               .map((tile) => {
@@ -178,7 +179,7 @@ export function EventWorkspaceClient({ event }: { event: Event }) {
                   </Link>
                 );
               })}
-          </div>
+          </ResponsiveMetricGrid>
         </div>
       ))}
     </div>

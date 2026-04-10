@@ -1,0 +1,116 @@
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — PRE-FLIGHT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[09:40:06][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;32m[09:40:08] ✓[0m Linear CLI authenticated
+[0;32m[09:40:08] ✓[0m Builder agent: claude
+[0;32m[09:40:08] ✓[0m Reviewer agent: codex
+[0;34m[09:40:08][0m Auto-detected test command: npx vitest run
+[0;34m[09:40:09][0m Auto-detected Linear team: DRS
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING 1 ISSUE(S)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[09:40:09][0m Issue DRS-37 (1/1)
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING: DRS-37[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[09:40:09][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;34m[09:40:09][0m Reading issue DRS-37 from Linear...
+[0;32m[09:40:11] ✓[0m Loaded: DRS-37: [3.3.2] Responsive travel-form-client
+[0;34m[09:40:11][0m Dependency found: **Parent:** DRS-9 | **Depends on:** DRS-22 \[2.4\] FormGrid | **Scope:** \~80 lines in 1 file
+[0;32m[09:40:13] ✓[0m All dependencies satisfied
+Updating issue DRS-37
+
+✓ Updated issue DRS-37: [3.3.2] Responsive travel-form-client
+https://linear.app/drshailesh88/issue/DRS-37/332-responsive-travel-form-client
+✓ Comment added to DRS-37
+https://linear.app/drshailesh88/issue/DRS-37/332-responsive-travel-form-client#comment-56bea776
+[0;34m[09:40:19][0m Measuring test baseline...
+[0;32m[09:41:29] ✓[0m Baseline: 96 tests passing
+[0;34m[09:41:29][0m Creating git worktree: ../worktree-sprint-DRS-37
+HEAD is now at 2c56c75 feat(DRS-16): useResponsiveNav hook — matchMedia breakpoints, localStorage sidebar persistence
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 1: BUILD (claude)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Done. Here's what was built:
+
+**FormGrid component** (`src/components/responsive/form-grid.tsx`, ~28 lines) — lightweight CSS Grid utility that renders `grid-cols-1` on mobile and `md:grid-cols-2` on desktop. Supports 1/2/3 column configs.
+
+**travel-form-client.tsx migration** — replaced all 6 hardcoded `grid grid-cols-2 gap-3` divs with `<FormGrid>` for the paired fields (direction+mode, cities, locations, departure/arrival, carrier+service, PNR+terminal). Full-width fields (person, seat, attachment, notes) remain outside FormGrid.
+
+**8 tests passing** — 4 for FormGrid class logic, 4 for travel-form responsive structure. No new type errors. Changes are staged but not committed. The `npm run build` failure is pre-existing (unrelated `getRoleLabel` import in team-management-client).
+[0;34m[09:55:05][0m After build: 98 tests passing (was: 96)
+[wt/sprint-DRS-37-1775794289 05db5da] feat: DRS-37: [3.3.2] Responsive travel-form-client (DRS-37) — TDD implementation
+ 7 files changed, 1720 insertions(+), 101 deletions(-)
+ create mode 100644 .planning/sprint-executor-status.json
+ create mode 100644 src/app/(app)/events/[eventId]/travel/travel-form-client.test.tsx
+ create mode 100644 src/components/responsive/form-grid.test.tsx
+ create mode 100644 src/components/responsive/form-grid.tsx
+✓ Comment added to DRS-37
+https://linear.app/drshailesh88/issue/DRS-37/332-responsive-travel-form-client#comment-c573c906
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 2: ADVERSARIAL REVIEW (codex)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+/Users/shaileshsingh/G_I_C_A/adapters/linear/sprint-executor.sh: line 189: /Users/shaileshsingh/.nvm/versions/node/v22.21.1/bin/codex: Argument list too long
+✓ Comment added to DRS-37
+https://linear.app/drshailesh88/issue/DRS-37/332-responsive-travel-form-client#comment-80ea5856
+[0;32m[09:55:09] ✓[0m No bugs found by codex. Skipping fix phase.
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  FINAL VALIDATION[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+src/lib/actions/full-journey.test.ts(327,16): error TS2339: Property 'passengerStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; eventId: string; personId: string; batchId: string; assignmentStatus: string; vehicleAssignmentId: string | null; travelRecordId: string; pickupNote: string | null; dropNote: string | null; }'.
+src/lib/actions/full-journey.test.ts(530,16): error TS2339: Property 'inviteStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; status: string; eventId: string; personId: string; token: string; sentAt: Date; respondedAt: Date | null; programVersionId: string | null; }'.
+src/lib/actions/person.test.ts(321,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/actions/person.test.ts(330,31): error TS2345: Argument of type '{}' is not assignable to parameter of type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Type '{}' is missing the following properties from type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }': limit, view, page
+src/lib/actions/person.test.ts(352,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/cascade/handlers/accommodation-cascade-census.test.ts(88,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-37/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/accommodation-cascade.test.ts(81,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-37/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/travel-cascade.test.ts(80,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-37/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+[0;34m[09:55:29][0m Final score: 98 passing (baseline was: 96)
+[0;34m[09:55:29][0m Type check: FAIL
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  MERGING: DRS-37[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Updating issue DRS-37
+
+✓ Updated issue DRS-37: [3.3.2] Responsive travel-form-client
+https://linear.app/drshailesh88/issue/DRS-37/332-responsive-travel-form-client
+✓ Comment added to DRS-37
+https://linear.app/drshailesh88/issue/DRS-37/332-responsive-travel-form-client#comment-49bc663c
+[0;32m[09:55:43] ✓[0m MERGED: DRS-37 | Score: 96 → 98 | Time: 15min
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — FINAL REPORT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Builder:   claude
+Reviewer:  codex
+Fixer:     claude
+
+Total:     1
+[0;32mCompleted: 1[0m
+[0;31mFailed:    0[0m
+[1;33mBlocked:   0[0m

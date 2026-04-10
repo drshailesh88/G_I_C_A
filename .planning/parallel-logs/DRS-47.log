@@ -1,0 +1,116 @@
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — PRE-FLIGHT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[10:23:26][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;32m[10:23:28] ✓[0m Linear CLI authenticated
+[0;32m[10:23:28] ✓[0m Builder agent: claude
+[0;32m[10:23:28] ✓[0m Reviewer agent: codex
+[0;34m[10:23:28][0m Auto-detected test command: npx vitest run
+[0;34m[10:23:35][0m Auto-detected Linear team: DRS
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING 1 ISSUE(S)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[10:23:35][0m Issue DRS-47 (1/1)
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING: DRS-47[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[10:23:35][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;34m[10:23:35][0m Reading issue DRS-47 from Linear...
+[0;32m[10:23:36] ✓[0m Loaded: DRS-47: [4.1] Safe area sweep + foldable support
+[0;34m[10:23:36][0m Dependency found: **Parent:** DRS-10 | **Depends on:** All Phase 3 subtasks complete | **Scope:** \~100 lines across 10 files
+[0;32m[10:23:38] ✓[0m All dependencies satisfied
+Updating issue DRS-47
+
+✓ Updated issue DRS-47: [4.1] Safe area sweep + foldable support
+https://linear.app/drshailesh88/issue/DRS-47/41-safe-area-sweep-foldable-support
+✓ Comment added to DRS-47
+https://linear.app/drshailesh88/issue/DRS-47/41-safe-area-sweep-foldable-support#comment-76ca0a25
+[0;34m[10:23:47][0m Measuring test baseline...
+[0;32m[10:24:01] ✓[0m Baseline: 96 tests passing
+[0;34m[10:24:02][0m Creating git worktree: ../worktree-sprint-DRS-47
+HEAD is now at 2c56c75 feat(DRS-16): useResponsiveNav hook — matchMedia breakpoints, localStorage sidebar persistence
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 1: BUILD (claude)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+I'm unable to proceed without permission to edit the source files. Could you approve edits to the project files? I need to modify:
+
+1. `src/app/globals.css` — add safe-area CSS utilities + foldable media query
+2. `src/app/layout.tsx` — add `viewport-fit=cover` 
+3. `src/components/tab-bar.tsx` — add safe-area padding classes
+4. `src/app/(app)/events/[eventId]/qr/qr-checkin-client.tsx` — add landscape safe-area classes
+5. `src/app/(app)/events/[eventId]/certificates/certificates-client.tsx` — add safe-area to modal
+6. `src/app/(app)/people/people-list-client.tsx` — add foldable class
+7. `src/app/(app)/events/[eventId]/registrations/registrations-list-client.tsx` — add foldable class
+[0;34m[10:31:49][0m After build: 96 tests passing (was: 96)
+[wt/sprint-DRS-47-1775796841 9bcccd3] feat: DRS-47: [4.1] Safe area sweep + foldable support (DRS-47) — TDD implementation
+ 3 files changed, 1713 insertions(+), 77 deletions(-)
+ create mode 100644 .planning/sprint-executor-status.json
+ create mode 100644 src/app/safe-area.test.ts
+✓ Comment added to DRS-47
+https://linear.app/drshailesh88/issue/DRS-47/41-safe-area-sweep-foldable-support#comment-32940a55
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 2: ADVERSARIAL REVIEW (codex)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Error: stdin is not a terminal
+✓ Comment added to DRS-47
+https://linear.app/drshailesh88/issue/DRS-47/41-safe-area-sweep-foldable-support#comment-f60bcd4b
+[0;32m[10:31:54] ✓[0m No bugs found by codex. Skipping fix phase.
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  FINAL VALIDATION[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+src/lib/actions/full-journey.test.ts(327,16): error TS2339: Property 'passengerStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; eventId: string; personId: string; batchId: string; assignmentStatus: string; vehicleAssignmentId: string | null; travelRecordId: string; pickupNote: string | null; dropNote: string | null; }'.
+src/lib/actions/full-journey.test.ts(530,16): error TS2339: Property 'inviteStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; status: string; eventId: string; personId: string; token: string; sentAt: Date; respondedAt: Date | null; programVersionId: string | null; }'.
+src/lib/actions/person.test.ts(321,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/actions/person.test.ts(330,31): error TS2345: Argument of type '{}' is not assignable to parameter of type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Type '{}' is missing the following properties from type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }': limit, view, page
+src/lib/actions/person.test.ts(352,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "all" | "faculty" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/cascade/handlers/accommodation-cascade-census.test.ts(88,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-47/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/accommodation-cascade.test.ts(81,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-47/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/travel-cascade.test.ts(80,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-47/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+[0;34m[10:32:15][0m Final score: 96 passing (baseline was: 96)
+[0;34m[10:32:15][0m Type check: FAIL
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  MERGING: DRS-47[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Updating issue DRS-47
+
+✓ Updated issue DRS-47: [4.1] Safe area sweep + foldable support
+https://linear.app/drshailesh88/issue/DRS-47/41-safe-area-sweep-foldable-support
+✓ Comment added to DRS-47
+https://linear.app/drshailesh88/issue/DRS-47/41-safe-area-sweep-foldable-support#comment-f6731845
+[0;32m[10:32:19] ✓[0m MERGED: DRS-47 | Score: 96 → 96 | Time: 8min
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — FINAL REPORT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Builder:   claude
+Reviewer:  codex
+Fixer:     claude
+
+Total:     1
+[0;32mCompleted: 1[0m
+[0;31mFailed:    0[0m
+[1;33mBlocked:   0[0m

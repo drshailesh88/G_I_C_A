@@ -1,0 +1,123 @@
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — PRE-FLIGHT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[10:02:05][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;32m[10:02:06] ✓[0m Linear CLI authenticated
+[0;32m[10:02:06] ✓[0m Builder agent: claude
+[0;32m[10:02:06] ✓[0m Reviewer agent: codex
+[0;34m[10:02:06][0m Auto-detected test command: npx vitest run
+[0;34m[10:02:08][0m Auto-detected Linear team: DRS
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING 1 ISSUE(S)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[10:02:08][0m Issue DRS-28 (1/1)
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING: DRS-28[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[10:02:08][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;34m[10:02:08][0m Reading issue DRS-28 from Linear...
+[0;32m[10:02:09] ✓[0m Loaded: DRS-28: [3.1.5] Responsive certificates-client + print CSS
+[0;34m[10:02:09][0m Dependency found: **Depends on:** DRS-21 \[2.3\] DetailView, DRS-22 \[2.4\] ResponsiveImage
+[0;32m[10:02:12] ✓[0m All dependencies satisfied
+Updating issue DRS-28
+
+✓ Updated issue DRS-28: [3.1.5] Responsive certificates-client + print CSS
+https://linear.app/drshailesh88/issue/DRS-28/315-responsive-certificates-client-print-css
+✓ Comment added to DRS-28
+https://linear.app/drshailesh88/issue/DRS-28/315-responsive-certificates-client-print-css#comment-71901da3
+[0;34m[10:02:18][0m Measuring test baseline...
+[0;32m[10:02:32] ✓[0m Baseline: 96 tests passing
+[0;34m[10:02:32][0m Creating git worktree: ../worktree-sprint-DRS-28
+HEAD is now at 2c56c75 feat(DRS-16): useResponsiveNav hook — matchMedia breakpoints, localStorage sidebar persistence
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 1: BUILD (claude)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+## DRS-28 Complete
+
+**What was built:**
+
+1. **`DetailView` component** (`src/components/responsive/detail-view.tsx`) — master-detail layout with mobile toggle / desktop side-by-side at `md:` breakpoint
+
+2. **`certificates-client.tsx` migration** — wrapped in `<DetailView>`, template cards are now selectable (click to show detail panel), all interactive controls marked `print:hidden`
+
+3. **Print CSS** (`globals.css`) — `@media print` rules that hide nav/sidebar/buttons, expand certificate to full page, zero margins, preserve background colors, and handle page breaks for multi-certificate output
+
+**Results:**
+- 1735/1735 tests passing
+- No type errors in modified files
+- `npm run build` fails on a pre-existing issue in `src/lib/actions/team.ts` (unrelated)
+- Changes left unstaged per instructions
+[0;34m[10:19:28][0m After build: 97 tests passing (was: 96)
+[wt/sprint-DRS-28-1775795552 5947e2c] feat: DRS-28: [3.1.5] Responsive certificates-client + print CSS (DRS-28) — TDD implementation
+ 8 files changed, 1885 insertions(+), 93 deletions(-)
+ create mode 100644 .planning/sprint-executor-status.json
+ create mode 100644 src/components/responsive/detail-view.test.tsx
+ create mode 100644 src/components/responsive/detail-view.tsx
+✓ Comment added to DRS-28
+https://linear.app/drshailesh88/issue/DRS-28/315-responsive-certificates-client-print-css#comment-46649497
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 2: ADVERSARIAL REVIEW (codex)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+/Users/shaileshsingh/G_I_C_A/adapters/linear/sprint-executor.sh: line 189: /Users/shaileshsingh/.nvm/versions/node/v22.21.1/bin/codex: Argument list too long
+✓ Comment added to DRS-28
+https://linear.app/drshailesh88/issue/DRS-28/315-responsive-certificates-client-print-css#comment-ee2e9c92
+[0;32m[10:19:35] ✓[0m No bugs found by codex. Skipping fix phase.
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  FINAL VALIDATION[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+src/lib/actions/full-journey.test.ts(327,16): error TS2339: Property 'passengerStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; eventId: string; personId: string; batchId: string; assignmentStatus: string; vehicleAssignmentId: string | null; travelRecordId: string; pickupNote: string | null; dropNote: string | null; }'.
+src/lib/actions/full-journey.test.ts(530,16): error TS2339: Property 'inviteStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; status: string; eventId: string; personId: string; token: string; sentAt: Date; respondedAt: Date | null; programVersionId: string | null; }'.
+src/lib/actions/person.test.ts(321,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/actions/person.test.ts(330,31): error TS2345: Argument of type '{}' is not assignable to parameter of type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Type '{}' is missing the following properties from type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }': limit, view, page
+src/lib/actions/person.test.ts(352,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/cascade/handlers/accommodation-cascade-census.test.ts(88,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-28/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/accommodation-cascade.test.ts(81,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-28/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/travel-cascade.test.ts(80,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-28/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+[0;34m[10:19:56][0m Final score: 97 passing (baseline was: 96)
+[0;34m[10:19:56][0m Type check: FAIL
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  MERGING: DRS-28[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Updating issue DRS-28
+
+✓ Updated issue DRS-28: [3.1.5] Responsive certificates-client + print CSS
+https://linear.app/drshailesh88/issue/DRS-28/315-responsive-certificates-client-print-css
+✓ Comment added to DRS-28
+https://linear.app/drshailesh88/issue/DRS-28/315-responsive-certificates-client-print-css#comment-6a89636d
+[0;32m[10:20:02] ✓[0m MERGED: DRS-28 | Score: 96 → 97 | Time: 17min
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — FINAL REPORT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Builder:   claude
+Reviewer:  codex
+Fixer:     claude
+
+Total:     1
+[0;32mCompleted: 1[0m
+[0;31mFailed:    0[0m
+[1;33mBlocked:   0[0m

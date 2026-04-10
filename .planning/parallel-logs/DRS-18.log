@@ -1,0 +1,125 @@
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — PRE-FLIGHT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[09:16:13][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;32m[09:16:14] ✓[0m Linear CLI authenticated
+[0;32m[09:16:14] ✓[0m Builder agent: claude
+[0;32m[09:16:14] ✓[0m Reviewer agent: codex
+[0;34m[09:16:14][0m Auto-detected test command: npx vitest run
+[0;34m[09:16:16][0m Auto-detected Linear team: DRS
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING 1 ISSUE(S)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[09:16:16][0m Issue DRS-18 (1/1)
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  EXECUTING: DRS-18[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+[0;34m[09:16:16][0m Builder: claude | Reviewer: codex | Fixer: claude
+[0;34m[09:16:16][0m Reading issue DRS-18 from Linear...
+[0;32m[09:16:17] ✓[0m Loaded: DRS-18: [1.4] Build AppShell and wire responsive layout
+[0;34m[09:16:17][0m Dependency found: **Depends on:** DRS-15 \[1.1\] tokens, DRS-16 \[1.2\] hook, DRS-17 \[1.3\] sidebar
+[0;32m[09:16:20] ✓[0m All dependencies satisfied
+Updating issue DRS-18
+
+✓ Updated issue DRS-18: [1.4] Build AppShell and wire responsive layout
+https://linear.app/drshailesh88/issue/DRS-18/14-build-appshell-and-wire-responsive-layout
+✓ Comment added to DRS-18
+https://linear.app/drshailesh88/issue/DRS-18/14-build-appshell-and-wire-responsive-layout#comment-63e5ddff
+[0;34m[09:16:25][0m Measuring test baseline...
+[0;32m[09:16:33] ✓[0m Baseline: 96 tests passing
+[0;34m[09:16:33][0m Creating git worktree: ../worktree-sprint-DRS-18
+HEAD is now at 2c56c75 feat(DRS-16): useResponsiveNav hook — matchMedia breakpoints, localStorage sidebar persistence
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 1: BUILD (claude)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Done. Here's what was built for **DRS-18**:
+
+### Files created (3)
+- **`src/components/app-shell.tsx`** — Feature-flagged layout component with CSS Grid. Flag OFF = old `max-w-lg` layout. Flag ON = sidebar + `max-w-6xl` responsive grid.
+- **`src/components/app-shell.test.ts`** — 12 tests covering `isResponsiveShellEnabled()`, `shouldShowSidebar()`, and `shouldShowTabBar()` pure helpers.
+- **`src/components/sidebar.tsx`** — Stub placeholder (DRS-17 not yet built).
+
+### Files modified (2)
+- **`src/app/(app)/layout.tsx`** — Replaced raw `<main>` with `<AppShell>`.
+- **`src/components/tab-bar.tsx`** — Conditionally renders based on `shouldShowTabBar()` + added `pb-[env(safe-area-inset-bottom)]` for iOS safe area.
+
+### Results
+- **1737 tests passing** (12 new)
+- **0 type errors** in modified files
+- Changes staged, not committed
+- Summary written to `/tmp/sprint-DRS-18-build-summary.txt`
+[0;34m[09:25:31][0m After build: 97 tests passing (was: 96)
+[wt/sprint-DRS-18-1775792793 507c113] feat: DRS-18: [1.4] Build AppShell and wire responsive layout (DRS-18) — TDD implementation
+ 8 files changed, 1781 insertions(+), 83 deletions(-)
+ create mode 100644 .planning/sprint-executor-status.json
+ create mode 100644 src/components/app-shell.test.ts
+ create mode 100644 src/components/app-shell.tsx
+ create mode 100644 src/components/sidebar.tsx
+✓ Comment added to DRS-18
+https://linear.app/drshailesh88/issue/DRS-18/14-build-appshell-and-wire-responsive-layout#comment-b3aa73ca
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  PHASE 2: ADVERSARIAL REVIEW (codex)[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+/Users/shaileshsingh/G_I_C_A/adapters/linear/sprint-executor.sh: line 189: /Users/shaileshsingh/.nvm/versions/node/v22.21.1/bin/codex: Argument list too long
+✓ Comment added to DRS-18
+https://linear.app/drshailesh88/issue/DRS-18/14-build-appshell-and-wire-responsive-layout#comment-d2505f7b
+[0;32m[09:25:37] ✓[0m No bugs found by codex. Skipping fix phase.
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  FINAL VALIDATION[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+src/lib/actions/full-journey.test.ts(327,16): error TS2339: Property 'passengerStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; eventId: string; personId: string; batchId: string; assignmentStatus: string; vehicleAssignmentId: string | null; travelRecordId: string; pickupNote: string | null; dropNote: string | null; }'.
+src/lib/actions/full-journey.test.ts(530,16): error TS2339: Property 'inviteStatus' does not exist on type '{ id: string; createdAt: Date; updatedAt: Date; status: string; eventId: string; personId: string; token: string; sentAt: Date; respondedAt: Date | null; programVersionId: string | null; }'.
+src/lib/actions/person.test.ts(321,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/actions/person.test.ts(330,31): error TS2345: Argument of type '{}' is not assignable to parameter of type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Type '{}' is missing the following properties from type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }': limit, view, page
+src/lib/actions/person.test.ts(352,39): error TS2345: Argument of type '{ page: number; limit: number; }' is not assignable to parameter of type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+  Property 'view' is missing in type '{ page: number; limit: number; }' but required in type '{ limit: number; view: "faculty" | "all" | "delegates" | "sponsors" | "vips" | "recent"; page: number; query?: string | undefined; organization?: string | undefined; specialty?: string | undefined; city?: string | undefined; tag?: string | undefined; }'.
+src/lib/cascade/handlers/accommodation-cascade-census.test.ts(88,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-18/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/accommodation-cascade.test.ts(81,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-18/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+src/lib/cascade/handlers/travel-cascade.test.ts(80,26): error TS2352: Conversion of type 'NeonHttpDatabase<typeof import("/Users/shaileshsingh/worktree-sprint-DRS-18/src/lib/db/schema/index")> & { $client: NeonQueryFunction<false, false>; }' to type '{ select: Mock<Procedure>; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Types of property 'select' are incompatible.
+    Type '{ (): PgSelectBuilder<undefined, "db">; <TSelection extends SelectedFields>(fields: TSelection): PgSelectBuilder<TSelection, "db">; }' is missing the following properties from type 'Mock<Procedure>': getMockName, mockName, mock, mockClear, and 14 more.
+[0;34m[09:25:52][0m Final score: 97 passing (baseline was: 96)
+[0;34m[09:25:52][0m Type check: FAIL
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  MERGING: DRS-18[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Updating issue DRS-18
+
+✓ Updated issue DRS-18: [1.4] Build AppShell and wire responsive layout
+https://linear.app/drshailesh88/issue/DRS-18/14-build-appshell-and-wire-responsive-layout
+✓ Comment added to DRS-18
+https://linear.app/drshailesh88/issue/DRS-18/14-build-appshell-and-wire-responsive-layout#comment-cac6753f
+[0;32m[09:25:56] ✓[0m MERGED: DRS-18 | Score: 96 → 97 | Time: 9min
+
+[0;36m═══════════════════════════════════════════════════[0m
+[0;36m  SPRINT EXECUTOR — FINAL REPORT[0m
+[0;36m═══════════════════════════════════════════════════[0m
+
+Builder:   claude
+Reviewer:  codex
+Fixer:     claude
+
+Total:     1
+[0;32mCompleted: 1[0m
+[0;31mFailed:    0[0m
+[1;33mBlocked:   0[0m
