@@ -18,3 +18,11 @@
 {"module":"transport","spec":"spec-04-cascade-integration","checkpoints":10,"passing":10,"status":"PASS"}
 {"module":"transport","spec":"spec-05-auth-and-event-scope","checkpoints":5,"passing":5,"status":"PASS"}
 {"module":"transport","spec":"spec-06-validation-schemas","checkpoints":10,"passing":10,"status":"PASS"}
+{"module":"accommodation","spec":"spec-01-crud","checkpoints":12,"passing":12,"status":"PASS"}
+{"module":"accommodation","spec":"spec-02-validation","checkpoints":14,"passing":14,"status":"PASS"}
+{"module":"accommodation","spec":"spec-03-status-machine","checkpoints":12,"passing":12,"status":"PASS"}
+{"module":"accommodation","spec":"spec-04-cascade","checkpoints":10,"passing":10,"status":"PASS"}
+{"module":"accommodation","spec":"spec-05-notifications","checkpoints":11,"passing":11,"status":"PASS"}
+{"module":"accommodation","spec":"spec-06-red-flags","checkpoints":7,"passing":7,"status":"PASS"}
+{"module":"accommodation","spec":"spec-07-auth-db","checkpoints":9,"passing":9,"status":"PASS"}
+{"module":"accommodation","spec":"spec-08-gaps","checkpoints":12,"passing":12,"status":"PASS"}
