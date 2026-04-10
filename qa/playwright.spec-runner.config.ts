@@ -1,17 +1,15 @@
 import { defineConfig } from '@playwright/test';
-import path from 'path';
+import * as path from 'path';
 
 const PORT = process.env.PORT || 4000;
 const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
-  testDir: './generated',
+  testDir: '.',
   fullyParallel: true,
   retries: 0,
   reporter: 'json',
   timeout: 20000,
-
-  globalSetup: require.resolve('../e2e/auth/global-setup.ts'),
 
   use: {
     baseURL: BASE_URL,
@@ -22,11 +20,13 @@ export default defineConfig({
   projects: [
     {
       name: 'setup',
+      testDir: '../e2e/auth',
       testMatch: /global-setup\.ts/,
       use: { storageState: undefined },
     },
     {
       name: 'laptop',
+      testDir: './generated',
       use: { viewport: { width: 1280, height: 800 }, browserName: 'chromium' },
       dependencies: ['setup'],
     },

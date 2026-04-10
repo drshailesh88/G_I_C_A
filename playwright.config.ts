@@ -11,8 +11,6 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: "html",
 
-  globalSetup: require.resolve("./e2e/auth/global-setup.ts"),
-
   expect: {
     toHaveScreenshot: {
       maxDiffPixelRatio: 0.01,
@@ -32,6 +30,7 @@ export default defineConfig({
     // Auth setup — runs first, no storageState
     {
       name: "setup",
+      testDir: "./e2e/auth",
       testMatch: /global-setup\.ts/,
       use: { storageState: undefined },
     },
