@@ -332,6 +332,26 @@ describe('Travel cascade → red flag creation', () => {
     expect(mockedUpsertRedFlag.mock.calls[0][0].flagDetail).toContain('review and reassign transport');
   });
 
+  // ANNEAL GAP: Spec-04-CP-10 — cancelled transport assignments are not flagged
+  it('does not flag cancelled transport passenger assignments', async () => {
+    // The query uses ne(assignmentStatus, 'cancelled') to filter.
+    // When no non-cancelled transport assignments match, no transport flags are created.
+    mockDb.select
+      .mockReturnValueOnce(createChainableSelect([])) // accommodation (empty)
+      .mockReturnValueOnce(createChainableSelect([])) // transport — returns empty because cancelled ones are filtered out by ne()
+      .mockReturnValueOnce(createChainableSelect(personWithBoth)) // person (email)
+      .mockReturnValueOnce(createChainableSelect(personWithBoth)); // person (whatsapp)
+
+    await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
+      travelRecordId, personId, registrationId: null,
+      previous: {}, current: {},
+      changeSummary: { departureAtUtc: { from: '2026-04-10', to: '2026-04-11' } },
+    });
+
+    // No red flags should be created (neither accom nor transport)
+    expect(mockedUpsertRedFlag).not.toHaveBeenCalled();
+  });
+
   it('includes cancellation reason in flag detail when reason is provided', async () => {
     mockDb.select
       .mockReturnValueOnce(createChainableSelect([{ id: 'accom-30' }])) // accommodation

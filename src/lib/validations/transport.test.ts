@@ -10,6 +10,7 @@ import {
   passengerIdSchema,
   BATCH_STATUSES,
   BATCH_TRANSITIONS,
+  BATCH_SOURCES,
   VEHICLE_STATUSES,
   VEHICLE_TRANSITIONS,
   PASSENGER_STATUSES,
@@ -327,5 +328,38 @@ describe('updateBatchSchema', () => {
     });
     expect(result.sourceCity).toBe('Delhi');
     expect(result.pickupHub).toBeUndefined();
+  });
+});
+
+// ── ANNEAL GAP: Spec-06-CP-04 — BATCH_SOURCES constant ─────
+describe('BATCH_SOURCES', () => {
+  it('contains exactly ["auto", "manual"]', () => {
+    expect(BATCH_SOURCES).toEqual(['auto', 'manual']);
+  });
+
+  it('createBatchSchema defaults batchSource to "manual"', () => {
+    const result = createBatchSchema.parse({
+      movementType: 'arrival',
+      serviceDate: '2026-05-01T00:00:00Z',
+      timeWindowStart: '2026-05-01T08:00:00Z',
+      timeWindowEnd: '2026-05-01T10:00:00Z',
+      sourceCity: 'Mumbai',
+      pickupHub: 'BOM T2',
+      dropHub: 'Hotel Leela',
+    });
+    expect(result.batchSource).toBe('manual');
+  });
+});
+
+// ── ANNEAL GAP: Spec-03-CP-04 — travelRecordId UUID validation ─
+describe('assignPassengerSchema — travelRecordId UUID', () => {
+  it('rejects invalid travelRecordId UUID', () => {
+    expect(() =>
+      assignPassengerSchema.parse({
+        batchId: '550e8400-e29b-41d4-a716-446655440000',
+        personId: '550e8400-e29b-41d4-a716-446655440001',
+        travelRecordId: 'not-a-uuid',
+      }),
+    ).toThrow();
   });
 });

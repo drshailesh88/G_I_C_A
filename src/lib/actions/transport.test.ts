@@ -405,3 +405,221 @@ describe('Read actions — auth', () => {
     expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_ID);
   });
 });
+
+// ══════════════════════════════════════════════════════════════
+// ANNEAL GAP: Spec-01-CP-15 — getEventTransportBatches filters by eventId
+// ══════════════════════════════════════════════════════════════
+describe('getEventTransportBatches — event filtering', () => {
+  it('returns only batches for the given eventId', async () => {
+    const batches = [
+      { id: BATCH_ID, eventId: EVENT_ID, batchStatus: 'planned' },
+    ];
+    const chain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockResolvedValue(batches),
+    };
+    mockDb.select.mockReturnValue(chain);
+
+    const result = await getEventTransportBatches(EVENT_ID);
+    expect(result).toEqual(batches);
+    expect(chain.where).toHaveBeenCalled();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// ANNEAL GAP: Spec-01-CP-16 — getEventTransportBatches sorts descending
+// ══════════════════════════════════════════════════════════════
+describe('getEventTransportBatches — sorting', () => {
+  it('returns batches sorted by serviceDate descending', async () => {
+    const batches = [
+      { id: 'b2', serviceDate: '2026-05-02' },
+      { id: 'b1', serviceDate: '2026-05-01' },
+    ];
+    const chain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockResolvedValue(batches),
+    };
+    mockDb.select.mockReturnValue(chain);
+
+    const result = await getEventTransportBatches(EVENT_ID);
+    expect(result).toEqual(batches);
+    expect(chain.orderBy).toHaveBeenCalled();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// ANNEAL GAP: Spec-02-CP-05 — optional fields stored on vehicle
+// ══════════════════════════════════════════════════════════════
+describe('createVehicleAssignment — optional fields', () => {
+  it('stores optional fields (plateNumber, vendorName, driver, scheduled times)', async () => {
+    chainedSelect([{ id: BATCH_ID }]);
+    const insertChain = chainedInsert([{
+      id: VEHICLE_ID,
+      assignmentStatus: 'assigned',
+      plateNumber: 'MH12AB1234',
+      vendorName: 'FastCabs',
+      driverName: 'Ramesh',
+      driverMobileE164: '+919876543210',
+      scheduledPickupAtUtc: '2026-05-01T08:00:00Z',
+    }]);
+
+    const result = await createVehicleAssignment(EVENT_ID, {
+      batchId: BATCH_ID,
+      vehicleLabel: 'Van-1',
+      vehicleType: 'van',
+      capacity: 12,
+      plateNumber: 'MH12AB1234',
+      vendorName: 'FastCabs',
+      driverName: 'Ramesh',
+      driverMobileE164: '+919876543210',
+      scheduledPickupAtUtc: '2026-05-01T08:00:00Z',
+    });
+
+    expect(result.assignmentStatus).toBe('assigned');
+    // Verify insert was called with optional fields
+    const insertCall = insertChain.values.mock.calls[0][0];
+    expect(insertCall.plateNumber).toBe('MH12AB1234');
+    expect(insertCall.vendorName).toBe('FastCabs');
+    expect(insertCall.driverName).toBe('Ramesh');
+    expect(insertCall.driverMobileE164).toBe('+919876543210');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// ANNEAL GAP: Spec-02-CP-07 — vehicle cancellation transitions
+// ══════════════════════════════════════════════════════════════
+describe('updateVehicleStatus — cancellation', () => {
+  it('allows assigned → cancelled', async () => {
+    chainedSelect([{ id: VEHICLE_ID, assignmentStatus: 'assigned' }]);
+    chainedUpdate([{ id: VEHICLE_ID, assignmentStatus: 'cancelled' }]);
+    const result = await updateVehicleStatus(EVENT_ID, VEHICLE_ID, 'cancelled');
+    expect(result.assignmentStatus).toBe('cancelled');
+  });
+
+  it('allows dispatched → cancelled', async () => {
+    chainedSelect([{ id: VEHICLE_ID, assignmentStatus: 'dispatched' }]);
+    chainedUpdate([{ id: VEHICLE_ID, assignmentStatus: 'cancelled' }]);
+    const result = await updateVehicleStatus(EVENT_ID, VEHICLE_ID, 'cancelled');
+    expect(result.assignmentStatus).toBe('cancelled');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// ANNEAL GAP: Spec-03-CP-09 — movePassenger blocks cancelled
+// ══════════════════════════════════════════════════════════════
+describe('movePassenger — cancelled', () => {
+  it('throws when moving cancelled passenger', async () => {
+    chainedSelect([{ id: PASSENGER_ID, assignmentStatus: 'cancelled' }]);
+    await expect(movePassenger(EVENT_ID, {
+      passengerAssignmentId: PASSENGER_ID,
+      targetVehicleAssignmentId: VEHICLE_ID,
+    })).rejects.toThrow('Cannot move a passenger in "cancelled" status');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// ANNEAL GAP: Spec-03-CP-10 — full passenger lifecycle chain
+// ══════════════════════════════════════════════════════════════
+describe('updatePassengerStatus — full lifecycle', () => {
+  it('allows pending → assigned → boarded → completed', async () => {
+    // pending → assigned
+    chainedSelect([{ id: PASSENGER_ID, assignmentStatus: 'pending' }]);
+    chainedUpdate([{ id: PASSENGER_ID, assignmentStatus: 'assigned' }]);
+    let result = await updatePassengerStatus(EVENT_ID, PASSENGER_ID, 'assigned');
+    expect(result.assignmentStatus).toBe('assigned');
+
+    // assigned → boarded
+    chainedSelect([{ id: PASSENGER_ID, assignmentStatus: 'assigned' }]);
+    chainedUpdate([{ id: PASSENGER_ID, assignmentStatus: 'boarded' }]);
+    result = await updatePassengerStatus(EVENT_ID, PASSENGER_ID, 'boarded');
+    expect(result.assignmentStatus).toBe('boarded');
+
+    // boarded → completed
+    chainedSelect([{ id: PASSENGER_ID, assignmentStatus: 'boarded' }]);
+    chainedUpdate([{ id: PASSENGER_ID, assignmentStatus: 'completed' }]);
+    result = await updatePassengerStatus(EVENT_ID, PASSENGER_ID, 'completed');
+    expect(result.assignmentStatus).toBe('completed');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// ANNEAL GAP: Spec-03-CP-13 — completed terminal state
+// ══════════════════════════════════════════════════════════════
+describe('updatePassengerStatus — completed terminal', () => {
+  it('rejects completed → assigned (terminal)', async () => {
+    chainedSelect([{ id: PASSENGER_ID, assignmentStatus: 'completed' }]);
+    await expect(updatePassengerStatus(EVENT_ID, PASSENGER_ID, 'assigned')).rejects.toThrow('Cannot transition');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// ANNEAL GAP: Spec-03-CP-15 — getBatchPassengers joins person data
+// ══════════════════════════════════════════════════════════════
+describe('getBatchPassengers — person join', () => {
+  it('returns passengers with person name and phone joined', async () => {
+    const rows = [
+      {
+        id: PASSENGER_ID,
+        batchId: BATCH_ID,
+        personId: PERSON_ID,
+        assignmentStatus: 'assigned',
+        personName: 'Dr. Test',
+        personPhone: '+919876543210',
+      },
+    ];
+    const innerJoinChain = {
+      from: vi.fn().mockReturnValue({
+        innerJoin: vi.fn().mockReturnValue({
+          where: vi.fn().mockResolvedValue(rows),
+        }),
+      }),
+    };
+    mockDb.select.mockReturnValue(innerJoinChain);
+
+    const result = await getBatchPassengers(EVENT_ID, BATCH_ID);
+    expect(result[0].personName).toBe('Dr. Test');
+    expect(result[0].personPhone).toBe('+919876543210');
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// ANNEAL GAP: Spec-05-CP-02 — write actions use requireWrite
+// ══════════════════════════════════════════════════════════════
+describe('Write actions — requireWrite', () => {
+  it('createTransportBatch calls assertEventAccess with requireWrite: true', async () => {
+    chainedInsert([{ id: BATCH_ID, batchStatus: 'planned' }]);
+    await createTransportBatch(EVENT_ID, {
+      movementType: 'arrival',
+      serviceDate: '2026-05-01T00:00:00Z',
+      timeWindowStart: '2026-05-01T08:00:00Z',
+      timeWindowEnd: '2026-05-01T10:00:00Z',
+      sourceCity: 'Mumbai',
+      pickupHub: 'BOM T2',
+      dropHub: 'Hotel',
+    });
+    expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_ID, { requireWrite: true });
+  });
+
+  it('assignPassenger calls assertEventAccess with requireWrite: true', async () => {
+    chainedSelect([{ id: BATCH_ID }]);
+    chainedInsert([{ id: PASSENGER_ID, assignmentStatus: 'pending' }]);
+    await assignPassenger(EVENT_ID, {
+      batchId: BATCH_ID,
+      personId: PERSON_ID,
+      travelRecordId: TRAVEL_ID,
+    });
+    expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_ID, { requireWrite: true });
+  });
+
+  it('movePassenger calls assertEventAccess with requireWrite: true', async () => {
+    chainedSelect([{ id: PASSENGER_ID, assignmentStatus: 'assigned' }]);
+    chainedUpdate([{ id: PASSENGER_ID }]);
+    await movePassenger(EVENT_ID, {
+      passengerAssignmentId: PASSENGER_ID,
+      targetVehicleAssignmentId: VEHICLE_ID,
+    });
+    expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_ID, { requireWrite: true });
+  });
+});

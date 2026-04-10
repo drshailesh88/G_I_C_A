@@ -12,3 +12,9 @@
 {"module":"people","spec":"spec-001","checkpoints":22,"passing":22,"status":"PASS"}
 {"module":"people","spec":"spec-002","checkpoints":31,"passing":31,"status":"PASS"}
 {"module":"people","spec":"spec-003","checkpoints":15,"passing":15,"status":"PASS"}
+{"module":"transport","spec":"spec-01-batch-lifecycle","checkpoints":17,"passing":17,"status":"PASS"}
+{"module":"transport","spec":"spec-02-vehicle-lifecycle","checkpoints":10,"passing":10,"status":"PASS"}
+{"module":"transport","spec":"spec-03-passenger-lifecycle","checkpoints":16,"passing":16,"status":"PASS"}
+{"module":"transport","spec":"spec-04-cascade-integration","checkpoints":10,"passing":10,"status":"PASS"}
+{"module":"transport","spec":"spec-05-auth-and-event-scope","checkpoints":5,"passing":5,"status":"PASS"}
+{"module":"transport","spec":"spec-06-validation-schemas","checkpoints":10,"passing":10,"status":"PASS"}
