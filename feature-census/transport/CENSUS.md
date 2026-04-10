@@ -131,7 +131,24 @@ Not performed — app not running. All features catalogued from code.
 
 | Test File | Tests |
 |-----------|-------|
-| `src/lib/validations/transport.test.ts` | 28 tests — constants, state machines, schemas |
-| `src/lib/actions/transport.test.ts` | 23 tests — all server actions |
-| `src/lib/cascade/handlers/travel-cascade.test.ts` | 6 tests — cascade notifications |
-| **Total** | **57 tests, all passing** |
+| `src/lib/validations/transport.test.ts` | 42 tests — constants, state machines, schemas, BATCH_SOURCES |
+| `src/lib/actions/transport.test.ts` | 49 tests — all server actions, auth, filtering, sorting, lifecycle chains |
+| `src/lib/cascade/handlers/travel-cascade.test.ts` | 12 tests — cascade notifications, red flags, cancelled filtering |
+| **Total** | **103 tests, all passing** |
+
+## Spec Coverage
+
+| Spec | Checkpoints | Status |
+|------|-------------|--------|
+| spec-01-batch-lifecycle | 17/17 | COMPLETE |
+| spec-02-vehicle-lifecycle | 10/10 | COMPLETE |
+| spec-03-passenger-lifecycle | 16/16 | COMPLETE |
+| spec-04-cascade-integration | 10/10 | COMPLETE |
+| spec-05-auth-and-event-scope | 5/5 | COMPLETE |
+| spec-06-validation-schemas | 10/10 | COMPLETE |
+| **Total** | **68/68** | **100%** |
+
+### Uncovered Census Items (Not in Specs)
+
+UI features (U1–U16) and Data Model (D1–D3) are not covered by unit test specs.
+UI features would require Playwright E2E specs targeting the transport planning page and kanban board.
