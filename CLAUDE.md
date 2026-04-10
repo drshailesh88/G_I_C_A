@@ -19,6 +19,7 @@ Monorepo. App Router. TypeScript strict mode.
 - NEVER modify shared utilities in `lib/` without being explicitly asked.
 
 ### Always Do These
+- Dev server runs on **port 4000** (`PORT=4000 npm run dev`). Never use 3000.
 - Every API route validates input with Zod before processing.
 - Every database query filters by `eventId` (per-event data isolation).
 - Every mutation to travel/accommodation/transport writes to the audit log.
@@ -115,7 +116,24 @@ Event definitions live in `lib/cascade/events.ts`. Handler functions in `lib/cas
 
 ## Testing
 
-Use the TDD skill (/tdd) for all business logic. The cycle is:
+**Full governance rules: `docs/TEST_GOVERNANCE.md`**
+
+### Anti-Cheating Rule (MANDATORY)
+The agent that wrote the code MUST NOT be the authority on expected test outcomes.
+- Derive test expectations from SPECS, SCHEMAS, and DOMAIN RULES — never from reading implementation code.
+- Use property-based testing (fast-check) for boundary conditions instead of hand-picked examples.
+- Run `npm run test:mutate` (Stryker) to validate test quality — mutation score < 50% = tests are theater.
+- Everything under `qa/generated/` is NON-AUTHORITATIVE. It is not a quality gate.
+
+### Test Layers
+1. **Vitest unit** — business logic, Zod validation, RBAC, cascade. Agent may write. (`npm run test:run`)
+2. **fast-check property** — random edge case discovery. Agent scaffolds, properties from specs. (`npm run test:property`)
+3. **Stryker mutation** — "who tests the tests?" Nightly gate. (`npm run test:mutate`)
+4. **Playwright private** — human-authored acceptance tests, hidden from agent. Agent only sees pass/fail.
+5. **Visual + a11y** — screenshot baselines + axe-core WCAG checks. (`npm run test:a11y`)
+
+### TDD Cycle
+Use the TDD skill (/tdd) for all business logic:
 1. RED — one failing test for the next behavior
 2. GREEN — minimal code to pass only that test
 3. REFACTOR — clean up, then repeat
