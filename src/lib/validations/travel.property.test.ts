@@ -197,10 +197,15 @@ describe('Property: Schema validation boundaries', () => {
     );
   });
 
-  it('cancel reason > 500 chars is always rejected', () => {
+  it('cancel reason > 500 trimmed chars is always rejected', () => {
+    // .trim() runs before .max(500), so we need strings whose trimmed length > 500
+    const longTrimmedReason = fc
+      .string({ minLength: 501, maxLength: 1000 })
+      .filter((s) => s.trim().length > 500);
+
     fc.assert(
       fc.property(
-        fc.string({ minLength: 501, maxLength: 1000 }),
+        longTrimmedReason,
         validUuid,
         (reason, travelRecordId) => {
           const result = cancelTravelRecordSchema.safeParse({

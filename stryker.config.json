@@ -9,7 +9,7 @@
     "src/lib/validations/travel.ts",
     "src/lib/cascade/handlers/travel-cascade.ts"
   ],
-  "reporters": ["html", "clear-text", "progress"],
+  "reporters": ["html", "json", "clear-text", "progress"],
   "htmlReporter": {
     "fileName": "reports/mutation/mutation.html"
   },
