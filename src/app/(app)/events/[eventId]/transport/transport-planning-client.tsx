@@ -38,6 +38,27 @@ const MOVEMENT_LABELS: Record<string, string> = {
   departure: 'Departure',
 };
 
+export function buildTransportBatchPayload(form: FormData): Record<string, string> {
+  const data: Record<string, string> = {};
+  form.forEach((value, key) => {
+    data[key] = value as string;
+  });
+
+  const serviceDate = (form.get('_date') as string | null) ?? '';
+  if (serviceDate) {
+    data.serviceDate = new Date(`${serviceDate}T00:00:00`).toISOString();
+  }
+  if (data.timeWindowStart && serviceDate) {
+    data.timeWindowStart = new Date(`${serviceDate}T${data.timeWindowStart}`).toISOString();
+  }
+  if (data.timeWindowEnd && serviceDate) {
+    data.timeWindowEnd = new Date(`${serviceDate}T${data.timeWindowEnd}`).toISOString();
+  }
+  delete data._date;
+
+  return data;
+}
+
 export function TransportPlanningClient({
   eventId,
   batches,
@@ -60,16 +81,7 @@ export function TransportPlanningClient({
     setError('');
 
     const form = new FormData(e.currentTarget);
-    const data: Record<string, string> = {};
-    form.forEach((value, key) => {
-      data[key] = value as string;
-    });
-
-    // Convert date + times to ISO
-    if (data.serviceDate) data.serviceDate = new Date(data.serviceDate).toISOString();
-    if (data.timeWindowStart) data.timeWindowStart = new Date(`${form.get('_date')}T${data.timeWindowStart}`).toISOString();
-    if (data.timeWindowEnd) data.timeWindowEnd = new Date(`${form.get('_date')}T${data.timeWindowEnd}`).toISOString();
-    delete data._date;
+    const data = buildTransportBatchPayload(form);
 
     try {
       const { createTransportBatch } = await import('@/lib/actions/transport');
@@ -119,7 +131,6 @@ export function TransportPlanningClient({
               <div>
                 <label className="mb-1 block text-xs font-medium text-text-primary">Date *</label>
                 <input name="_date" type="date" required className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent" />
-                <input name="serviceDate" type="hidden" />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">

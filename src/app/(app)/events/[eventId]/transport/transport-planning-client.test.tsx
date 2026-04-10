@@ -23,7 +23,7 @@ vi.mock('@/hooks/use-responsive-nav', () => ({
   }),
 }));
 
-import { TransportPlanningClient } from './transport-planning-client';
+import { TransportPlanningClient, buildTransportBatchPayload } from './transport-planning-client';
 
 const EVENT_ID = 'evt-1';
 
@@ -184,5 +184,23 @@ describe('TransportPlanningClient — shared elements', () => {
     const html = render();
     // The grouped heading for May 15, 2026
     expect(html).toContain('2026');
+  });
+});
+
+describe('buildTransportBatchPayload', () => {
+  it('derives serviceDate from the visible _date field before deleting it', () => {
+    const form = new FormData();
+    form.set('_date', '2026-05-15');
+    form.set('movementType', 'arrival');
+    form.set('timeWindowStart', '08:00');
+    form.set('timeWindowEnd', '10:00');
+    form.set('sourceCity', 'Mumbai');
+
+    const payload = buildTransportBatchPayload(form);
+
+    expect(payload.serviceDate).toBe(new Date('2026-05-15T00:00:00').toISOString());
+    expect(payload.timeWindowStart).toBe(new Date('2026-05-15T08:00:00').toISOString());
+    expect(payload.timeWindowEnd).toBe(new Date('2026-05-15T10:00:00').toISOString());
+    expect(payload._date).toBeUndefined();
   });
 });

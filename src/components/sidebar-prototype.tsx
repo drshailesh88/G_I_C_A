@@ -34,7 +34,8 @@ export function SidebarPrototype() {
 
   function isActive(href: string) {
     if (href === '/dashboard') return pathname === '/dashboard';
-    return pathname.startsWith(href);
+    if (href === '/events') return pathname === '/events';
+    return pathname === href || pathname.startsWith(`${href}/`);
   }
 
   return (

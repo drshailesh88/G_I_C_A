@@ -23,6 +23,11 @@ describe('ResponsiveList — source structure', () => {
     expect(source).toMatch(/hidden @\[1024px\]:block/);
   });
 
+  it('uses theme-aware sticky column backgrounds', () => {
+    expect(source).toContain('bg-surface');
+    expect(source).not.toContain('bg-white');
+  });
+
   it('supports column priority (high, medium, low)', () => {
     expect(source).toMatch(/priority.*'high'.*'medium'.*'low'/);
   });

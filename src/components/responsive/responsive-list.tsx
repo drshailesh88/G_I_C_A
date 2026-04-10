@@ -60,6 +60,23 @@ function SkeletonTable() {
   );
 }
 
+function getInteractiveRowProps<T>(item: T, onRowClick?: (item: T) => void) {
+  if (!onRowClick) return {};
+
+  const activate = () => onRowClick(item);
+  return {
+    role: 'button' as const,
+    tabIndex: 0,
+    onClick: activate,
+    onKeyDown: (event: { key: string; preventDefault: () => void }) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        activate();
+      }
+    },
+  };
+}
+
 export function ResponsiveList<T>({
   data,
   columns,
@@ -99,7 +116,7 @@ export function ResponsiveList<T>({
         {data.map((item, index) => (
           <div
             key={keyExtractor ? keyExtractor(item) : defaultKeyExtractor(item, index)}
-            onClick={onRowClick ? () => onRowClick(item) : undefined}
+            {...getInteractiveRowProps(item, onRowClick)}
             className={onRowClick ? 'cursor-pointer' : undefined}
           >
             {renderCard(item)}
@@ -115,7 +132,7 @@ export function ResponsiveList<T>({
                 <th
                   key={col.key}
                   className={`px-4 py-3 text-left text-sm font-medium text-text-secondary ${
-                    index === 0 ? 'sticky left-0 z-[1] bg-white' : ''
+                    index === 0 ? 'sticky left-0 z-[1] bg-surface' : ''
                   }`}
                   style={index === 0 ? { position: 'sticky', left: 0 } : undefined}
                 >
@@ -136,16 +153,16 @@ export function ResponsiveList<T>({
             {data.map((item, index) => (
               <tr
                 key={keyExtractor ? keyExtractor(item) : defaultKeyExtractor(item, index)}
-                onClick={onRowClick ? () => onRowClick(item) : undefined}
+                {...getInteractiveRowProps(item, onRowClick)}
                 className={`border-b border-border hover:bg-background/50 ${
                   onRowClick ? 'cursor-pointer' : ''
                 }`}
               >
                 {tableColumns.map((col, colIndex) => (
                   <td
-                    key={col.key}
-                    className={`px-4 py-3 text-sm ${
-                      colIndex === 0 ? 'sticky left-0 z-[1] bg-white' : ''
+                  key={col.key}
+                  className={`px-4 py-3 text-sm ${
+                      colIndex === 0 ? 'sticky left-0 z-[1] bg-surface' : ''
                     }`}
                     style={colIndex === 0 ? { position: 'sticky', left: 0 } : undefined}
                   >

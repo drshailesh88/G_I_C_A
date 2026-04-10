@@ -36,33 +36,9 @@ export function getDefaultSidebarState(mode: NavMode): boolean {
 // ── Hook ─────────────────────────────────────────────────────
 
 export function useResponsiveNav() {
-  const [navMode, setNavMode] = useState<NavMode>(() => {
-    if (typeof window === 'undefined') return 'mobile';
-    return getNavMode(window.innerWidth);
-  });
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  });
-
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-
-    const mode = getNavMode(window.innerWidth);
-
-    // Only desktop persists sidebar state to localStorage
-    if (mode === 'desktop') {
-      try {
-        const stored = localStorage.getItem(SIDEBAR_STORAGE_KEY);
-        if (stored !== null) return stored === 'true';
-      } catch {
-        // localStorage unavailable (SSR, incognito, etc.)
-      }
-      return true; // desktop default = open
-    }
-
-    return false; // tablet/mobile default = closed
-  });
+  const [navMode, setNavMode] = useState<NavMode>('mobile');
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState<boolean>(false);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
 
   // Persist desktop sidebar state to localStorage
   const toggleSidebar = useCallback(() => {
@@ -131,6 +107,9 @@ export function useResponsiveNav() {
     function updateReducedMotion() {
       setPrefersReducedMotion(reducedMotionMql.matches);
     }
+
+    update();
+    updateReducedMotion();
 
     desktopMql.addEventListener('change', update);
     tabletMql.addEventListener('change', update);

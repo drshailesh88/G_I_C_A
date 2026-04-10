@@ -33,14 +33,13 @@ export function SidebarProvider({
     setInternalCollapsed(collapsed);
   }, [collapsed]);
 
-  const setCollapsed = React.useCallback(
-    (value: React.SetStateAction<boolean>) => {
-      const next = typeof value === 'function' ? value(internalCollapsed) : value;
-      setInternalCollapsed(next);
+  const setCollapsed = React.useCallback((value: React.SetStateAction<boolean>) => {
+    setInternalCollapsed((prev) => {
+      const next = typeof value === 'function' ? value(prev) : value;
       onCollapsedChange?.(next);
-    },
-    [internalCollapsed, onCollapsedChange],
-  );
+      return next;
+    });
+  }, [onCollapsedChange]);
 
   const ctx = React.useMemo(
     () => ({ collapsed: internalCollapsed, setCollapsed }),
@@ -139,11 +138,13 @@ export const SidebarMenuButton = React.forwardRef<
     tooltip?: string;
   }
 >(({ className, asChild, isActive, tooltip: _tooltip, ...props }, ref) => {
+  const ctx = React.useContext(SidebarCtx);
   const Comp = asChild ? Slot : 'button';
   return (
     <Comp
       ref={ref}
       data-active={isActive || undefined}
+      title={ctx?.collapsed ? _tooltip : undefined}
       className={cn(
         'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium outline-none transition-colors',
         'focus-visible:ring-2 focus-visible:ring-accent',
@@ -174,7 +175,7 @@ export function SidebarTrigger({
       )}
       onClick={(e) => {
         onClick?.(e);
-        setCollapsed(!collapsed);
+        setCollapsed((prev) => !prev);
       }}
       {...props}
     >

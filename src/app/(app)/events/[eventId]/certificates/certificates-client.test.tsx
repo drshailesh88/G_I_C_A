@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import fs from 'node:fs';
 
 vi.mock('@/lib/actions/certificate', () => ({
   createCertificateTemplate: vi.fn(),
@@ -37,6 +38,8 @@ vi.mock('@/components/responsive/detail-view', () => ({
 }));
 
 import { CertificatesClient } from './certificates-client';
+
+const source = fs.readFileSync(new URL('./certificates-client.tsx', import.meta.url), 'utf8');
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 
@@ -87,6 +90,7 @@ function render(props: Partial<Parameters<typeof CertificatesClient>[0]> = {}) {
       eventId: EVENT_ID,
       templates: [],
       issuedCertificates: [],
+      initialTab: 'templates',
       ...props,
     }),
   );
@@ -275,6 +279,23 @@ describe('CertificatesClient — Responsive DetailView (DRS-28)', () => {
     expect(listMatch).toBeTruthy();
     expect(html).toContain('Templates');
     expect(html).toContain('Issued Certificates');
+  });
+});
+
+describe('CertificatesClient — issued certificates responsiveness', () => {
+  it('renders issued certificate cards when the issued tab is selected', () => {
+    const html = render({
+      initialTab: 'issued',
+      issuedCertificates: [makeCert()],
+    });
+    expect(html).toContain('data-testid="issued-cert-card"');
+    expect(html).toContain('Dr. Smith');
+    expect(html).toContain('delivery-not-sent');
+  });
+
+  it('uses ResponsiveList for the issued certificates tab', () => {
+    expect(source).toContain('ResponsiveList');
+    expect(source).toContain('issued-cert-card');
   });
 });
 

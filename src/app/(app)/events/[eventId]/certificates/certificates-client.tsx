@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { DetailView } from '@/components/responsive/detail-view';
 import {
+  ResponsiveList,
+  type Column,
+} from '@/components/responsive/responsive-list';
+import {
   createCertificateTemplate,
   updateCertificateTemplate,
   activateCertificateTemplate,
@@ -59,6 +63,7 @@ type Props = {
   eventId: string;
   templates: Template[];
   issuedCertificates: IssuedCert[];
+  initialTab?: 'templates' | 'issued';
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -70,11 +75,20 @@ const STATUS_BADGE: Record<string, string> = {
   revoked: 'bg-red-100 text-red-700',
 };
 
-export function CertificatesClient({ eventId, templates, issuedCertificates }: Props) {
+function formatIssuedDate(value: Date) {
+  return new Date(value).toLocaleDateString();
+}
+
+export function CertificatesClient({
+  eventId,
+  templates,
+  issuedCertificates,
+  initialTab = 'templates',
+}: Props) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState<'templates' | 'issued'>('templates');
+  const [tab, setTab] = useState<'templates' | 'issued'>(initialTab);
   const [showCreate, setShowCreate] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [showIssue, setShowIssue] = useState(false);
@@ -186,6 +200,101 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
 
   const activeTemplates = templates.filter(t => t.status === 'active');
   const selectedTemplate = selectedTemplateId ? templates.find(t => t.id === selectedTemplateId) : null;
+
+  const issuedColumns: Column<IssuedCert>[] = [
+    {
+      key: 'recipient',
+      header: 'Recipient',
+      priority: 'high',
+      render: (cert) => (
+        <div>
+          <p className="text-sm font-medium text-gray-900">{cert.recipientName}</p>
+          <p className="text-xs font-mono text-gray-400">{cert.certificateNumber}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      priority: 'high',
+      render: (cert) => (
+        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[cert.status] ?? 'bg-gray-100'}`}>
+          {cert.status}
+        </span>
+      ),
+    },
+    {
+      key: 'delivery',
+      header: 'Delivery',
+      priority: 'high',
+      render: (cert) => (
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          {cert.lastSentAt ? (
+            <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-green-700" data-testid="delivery-sent">
+              Sent
+            </span>
+          ) : (
+            <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-gray-500" data-testid="delivery-not-sent">
+              Not sent
+            </span>
+          )}
+          <span title="Downloads">{cert.downloadCount} dl</span>
+        </div>
+      ),
+    },
+    {
+      key: 'registration',
+      header: 'Reg #',
+      priority: 'medium',
+      render: (cert) => (
+        <span className="text-sm font-mono text-gray-600">{cert.registrationNumber ?? '-'}</span>
+      ),
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      priority: 'medium',
+      render: (cert) => (
+        <span className="text-sm text-gray-600">{cert.certificateType.replace(/_/g, ' ')}</span>
+      ),
+    },
+    {
+      key: 'issued',
+      header: 'Issued',
+      priority: 'medium',
+      render: (cert) => (
+        <span className="text-sm text-gray-500">{formatIssuedDate(cert.issuedAt)}</span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      priority: 'medium',
+      render: (cert) => renderIssuedCertificateActions({
+        cert,
+        pending,
+        resendTarget,
+        resendChannel,
+        setResendTarget,
+        setResendChannel,
+        revokeTarget,
+        revokeReason,
+        setRevokeTarget,
+        setRevokeReason,
+        handlePreview,
+        handleResend,
+        handleRevoke,
+      }),
+    },
+  ];
+
+  const issuedEmptyState = (
+    <p className="py-8 text-center text-sm text-gray-500">
+      {issuedCertificates.length === 0
+        ? 'No certificates issued yet.'
+        : 'No certificates match the current filters.'}
+    </p>
+  );
 
   // ── List panel content ──────────────────────────────────────
   const listPanel = (
@@ -377,158 +486,30 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
 
           {/* Table */}
           <div className="overflow-hidden rounded-lg border border-gray-200">
-            {filteredCerts.length === 0 ? (
-              <p className="py-8 text-center text-sm text-gray-500">
-                {issuedCertificates.length === 0
-                  ? 'No certificates issued yet.'
-                  : 'No certificates match the current filters.'}
-              </p>
-            ) : (
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Recipient</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Reg #</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Issued</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Delivery</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase print:hidden">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
-                  {filteredCerts.map((cert) => (
-                    <tr key={cert.id} data-testid="cert-row">
-                      <td className="px-4 py-2">
-                        <p className="text-sm font-medium text-gray-900">{cert.recipientName}</p>
-                        <p className="text-xs font-mono text-gray-400">{cert.certificateNumber}</p>
-                      </td>
-                      <td className="px-4 py-2 text-sm font-mono text-gray-600">
-                        {cert.registrationNumber ?? '-'}
-                      </td>
-                      <td className="px-4 py-2 text-sm text-gray-600">
-                        {cert.certificateType.replace(/_/g, ' ')}
-                      </td>
-                      <td className="px-4 py-2 text-sm text-gray-500">
-                        {new Date(cert.issuedAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-4 py-2">
-                        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[cert.status] ?? 'bg-gray-100'}`}>
-                          {cert.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          {cert.lastSentAt ? (
-                            <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-green-700" data-testid="delivery-sent">
-                              Sent
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-gray-500" data-testid="delivery-not-sent">
-                              Not sent
-                            </span>
-                          )}
-                          <span title="Downloads">{cert.downloadCount} dl</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2 text-right print:hidden">
-                        <div className="flex justify-end gap-2">
-                          {/* Preview PDF */}
-                          {cert.status === 'issued' && cert.storageKey && (
-                            <button
-                              onClick={() => handlePreview(cert.id)}
-                              className="text-xs text-indigo-600 hover:underline"
-                              data-testid="btn-preview"
-                            >
-                              Preview
-                            </button>
-                          )}
-                          {/* Resend */}
-                          {cert.status === 'issued' && cert.storageKey && (
-                            resendTarget === cert.id ? (
-                              <div className="flex items-center gap-1">
-                                <select
-                                  value={resendChannel}
-                                  onChange={(e) => setResendChannel(e.target.value as 'email' | 'whatsapp' | 'both')}
-                                  className="rounded border px-1 py-0.5 text-xs"
-                                >
-                                  <option value="email">Email</option>
-                                  <option value="whatsapp">WhatsApp</option>
-                                  <option value="both">Both</option>
-                                </select>
-                                <button
-                                  onClick={() => handleResend(cert.id)}
-                                  disabled={pending}
-                                  className="text-xs text-green-600 hover:underline disabled:opacity-50"
-                                  data-testid="btn-resend-confirm"
-                                >
-                                  Send
-                                </button>
-                                <button
-                                  onClick={() => setResendTarget(null)}
-                                  className="text-xs text-gray-400 hover:underline"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => setResendTarget(cert.id)}
-                                className="text-xs text-green-600 hover:underline"
-                                data-testid="btn-resend"
-                              >
-                                Resend
-                              </button>
-                            )
-                          )}
-                          {/* Revoke */}
-                          {cert.status === 'issued' && (
-                            revokeTarget === cert.id ? (
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="text"
-                                  value={revokeReason}
-                                  onChange={(e) => setRevokeReason(e.target.value)}
-                                  placeholder="Reason..."
-                                  className="w-32 rounded border px-2 py-0.5 text-xs"
-                                />
-                                <button
-                                  onClick={() => handleRevoke(cert.id)}
-                                  disabled={pending || !revokeReason.trim()}
-                                  className="text-xs text-red-600 hover:underline disabled:opacity-50"
-                                  data-testid="btn-revoke-confirm"
-                                >
-                                  Confirm
-                                </button>
-                                <button
-                                  onClick={() => { setRevokeTarget(null); setRevokeReason(''); }}
-                                  className="text-xs text-gray-400 hover:underline"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => setRevokeTarget(cert.id)}
-                                className="text-xs text-red-600 hover:underline"
-                                data-testid="btn-revoke"
-                              >
-                                Revoke
-                              </button>
-                            )
-                          )}
-                          {cert.status === 'revoked' && cert.revokeReason && (
-                            <span className="text-xs text-gray-400 italic" title={cert.revokeReason}>
-                              {cert.revokeReason.length > 30 ? `${cert.revokeReason.slice(0, 30)}...` : cert.revokeReason}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
+            <ResponsiveList
+              data={filteredCerts}
+              columns={issuedColumns}
+              keyExtractor={(cert) => cert.id}
+              renderCard={(cert) => (
+                <IssuedCertificateCard
+                  cert={cert}
+                  pending={pending}
+                  resendTarget={resendTarget}
+                  resendChannel={resendChannel}
+                  setResendTarget={setResendTarget}
+                  setResendChannel={setResendChannel}
+                  revokeTarget={revokeTarget}
+                  revokeReason={revokeReason}
+                  setRevokeTarget={setRevokeTarget}
+                  setRevokeReason={setRevokeReason}
+                  handlePreview={handlePreview}
+                  handleResend={handleResend}
+                  handleRevoke={handleRevoke}
+                />
+              )}
+              emptyState={issuedEmptyState}
+              isLoading={false}
+            />
           </div>
         </div>
       )}
@@ -606,6 +587,173 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
         />
       )}
     </>
+  );
+}
+
+type IssuedActionsProps = {
+  cert: IssuedCert;
+  pending: boolean;
+  resendTarget: string | null;
+  resendChannel: 'email' | 'whatsapp' | 'both';
+  setResendTarget: (value: string | null) => void;
+  setResendChannel: (value: 'email' | 'whatsapp' | 'both') => void;
+  revokeTarget: string | null;
+  revokeReason: string;
+  setRevokeTarget: (value: string | null) => void;
+  setRevokeReason: (value: string) => void;
+  handlePreview: (certificateId: string) => void;
+  handleResend: (certificateId: string) => void;
+  handleRevoke: (certificateId: string) => void;
+};
+
+function renderIssuedCertificateActions({
+  cert,
+  pending,
+  resendTarget,
+  resendChannel,
+  setResendTarget,
+  setResendChannel,
+  revokeTarget,
+  revokeReason,
+  setRevokeTarget,
+  setRevokeReason,
+  handlePreview,
+  handleResend,
+  handleRevoke,
+}: IssuedActionsProps) {
+  return (
+    <div className="flex flex-wrap justify-end gap-2">
+      {cert.status === 'issued' && cert.storageKey && (
+        <button
+          onClick={() => handlePreview(cert.id)}
+          className="text-xs text-indigo-600 hover:underline"
+          data-testid="btn-preview"
+        >
+          Preview
+        </button>
+      )}
+      {cert.status === 'issued' && cert.storageKey && (
+        resendTarget === cert.id ? (
+          <div className="flex flex-wrap items-center gap-1">
+            <select
+              value={resendChannel}
+              onChange={(e) => setResendChannel(e.target.value as 'email' | 'whatsapp' | 'both')}
+              className="rounded border px-1 py-0.5 text-xs"
+            >
+              <option value="email">Email</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="both">Both</option>
+            </select>
+            <button
+              onClick={() => handleResend(cert.id)}
+              disabled={pending}
+              className="text-xs text-green-600 hover:underline disabled:opacity-50"
+              data-testid="btn-resend-confirm"
+            >
+              Send
+            </button>
+            <button
+              onClick={() => setResendTarget(null)}
+              className="text-xs text-gray-400 hover:underline"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setResendTarget(cert.id)}
+            className="text-xs text-green-600 hover:underline"
+            data-testid="btn-resend"
+          >
+            Resend
+          </button>
+        )
+      )}
+      {cert.status === 'issued' && (
+        revokeTarget === cert.id ? (
+          <div className="flex flex-wrap items-center gap-1">
+            <input
+              type="text"
+              value={revokeReason}
+              onChange={(e) => setRevokeReason(e.target.value)}
+              placeholder="Reason..."
+              className="w-32 rounded border px-2 py-0.5 text-xs"
+            />
+            <button
+              onClick={() => handleRevoke(cert.id)}
+              disabled={pending || !revokeReason.trim()}
+              className="text-xs text-red-600 hover:underline disabled:opacity-50"
+              data-testid="btn-revoke-confirm"
+            >
+              Confirm
+            </button>
+            <button
+              onClick={() => {
+                setRevokeTarget(null);
+                setRevokeReason('');
+              }}
+              className="text-xs text-gray-400 hover:underline"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setRevokeTarget(cert.id)}
+            className="text-xs text-red-600 hover:underline"
+            data-testid="btn-revoke"
+          >
+            Revoke
+          </button>
+        )
+      )}
+      {cert.status === 'revoked' && cert.revokeReason && (
+        <span className="text-xs text-gray-400 italic" title={cert.revokeReason}>
+          {cert.revokeReason.length > 30 ? `${cert.revokeReason.slice(0, 30)}...` : cert.revokeReason}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function IssuedCertificateCard(props: IssuedActionsProps) {
+  const { cert } = props;
+  return (
+    <div data-testid="issued-cert-card" className="space-y-3 rounded-lg border border-gray-200 bg-surface p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-gray-900">{cert.recipientName}</p>
+          <p className="text-xs font-mono text-gray-400">{cert.certificateNumber}</p>
+        </div>
+        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[cert.status] ?? 'bg-gray-100'}`}>
+          {cert.status}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
+        <div>
+          <span className="font-medium text-gray-700">Reg #:</span> {cert.registrationNumber ?? '-'}
+        </div>
+        <div>
+          <span className="font-medium text-gray-700">Issued:</span> {formatIssuedDate(cert.issuedAt)}
+        </div>
+        <div className="col-span-2">
+          <span className="font-medium text-gray-700">Type:</span> {cert.certificateType.replace(/_/g, ' ')}
+        </div>
+      </div>
+      <div className="flex items-center gap-2 text-xs text-gray-500">
+        {cert.lastSentAt ? (
+          <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-green-700" data-testid="delivery-sent">
+            Sent
+          </span>
+        ) : (
+          <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-gray-500" data-testid="delivery-not-sent">
+            Not sent
+          </span>
+        )}
+        <span title="Downloads">{cert.downloadCount} dl</span>
+      </div>
+      {renderIssuedCertificateActions(props)}
+    </div>
   );
 }
 

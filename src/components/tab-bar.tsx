@@ -43,15 +43,16 @@ export function TabBar() {
           ? ROLES.READ_ONLY
           : null;
 
+  if (!isLoaded || !userRole) return null;
+
   function isActive(href: string) {
     if (href === '/dashboard') return pathname === '/dashboard';
     return pathname.startsWith(href);
   }
 
   function isVisible(tabKey: string) {
-    if (!isLoaded || !userRole) return true; // Show all while loading
     const allowedRoles = TAB_ACCESS[tabKey];
-    return allowedRoles?.includes(userRole) ?? true;
+    return allowedRoles?.includes(userRole) ?? false;
   }
 
   return (

@@ -79,7 +79,8 @@ function extractEventId(pathname: string): string | null {
 
 function isActive(pathname: string, href: string): boolean {
   if (href === '/dashboard') return pathname === '/dashboard';
-  return pathname.startsWith(href);
+  if (href === '/events') return pathname === '/events';
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export function AppSidebar() {

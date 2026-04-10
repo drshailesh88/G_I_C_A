@@ -25,7 +25,11 @@ interface LegacySplitViewProps {
 export type DetailViewProps = StandardDetailViewProps | LegacySplitViewProps;
 
 function isLegacySplitView(props: DetailViewProps): props is LegacySplitViewProps {
-  return 'main' in props;
+  return !('list' in props) && props.main !== undefined;
+}
+
+function getSafeListWidth(listWidth: string): string {
+  return /^(\d{1,3}%|\d+(?:\.\d+)?(px|rem|fr))$/.test(listWidth) ? listWidth : '40%';
 }
 
 export function DetailView(props: DetailViewProps) {
@@ -61,6 +65,7 @@ export function DetailView(props: DetailViewProps) {
     emptyMessage = 'Select an item to view details',
   } = props;
   const { isMobile } = useResponsiveNav();
+  const safeListWidth = getSafeListWidth(listWidth);
 
   if (isMobile) {
     if (showDetail && detail) {
@@ -88,7 +93,7 @@ export function DetailView(props: DetailViewProps) {
       className="grid h-full gap-0"
       style={{
         display: 'grid',
-        gridTemplateColumns: properties ? `${listWidth} 1fr minmax(18rem, 25%)` : `${listWidth} 1fr`,
+        gridTemplateColumns: properties ? `${safeListWidth} 1fr minmax(18rem, 25%)` : `${safeListWidth} 1fr`,
       }}
     >
       <div data-testid="detail-view-list" className={cn('overflow-y-auto border-r border-border')}>
