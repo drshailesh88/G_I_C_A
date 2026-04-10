@@ -158,7 +158,7 @@ export function CsvImportClient() {
       </div>
 
       {/* Steps indicator */}
-      <div className="mt-6 flex items-center gap-2">
+      <div className="mt-6 flex flex-wrap items-center gap-2">
         {['Upload', 'Map Columns', 'Preview', 'Import'].map((label, i) => {
           const stepIndex = ['upload', 'mapping', 'preview', 'importing'].indexOf(step);
           const isActive = i === stepIndex;
@@ -233,7 +233,7 @@ export function CsvImportClient() {
 
           <div className="mt-4 space-y-3">
             {mappings.map((m) => (
-              <div key={m.csvColumn} className="flex items-center gap-3 rounded-lg border border-border bg-surface p-3">
+              <div key={m.csvColumn} className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 sm:flex-row sm:items-center sm:gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-text-primary">{m.csvColumn}</p>
                   {m.confidence > 0 && m.confidence < 1 && (
@@ -242,11 +242,11 @@ export function CsvImportClient() {
                     </p>
                   )}
                 </div>
-                <ArrowRight className="h-4 w-4 shrink-0 text-text-muted" />
+                <ArrowRight className="hidden h-4 w-4 shrink-0 text-text-muted sm:block" />
                 <select
                   value={m.mappedTo || ''}
                   onChange={(e) => handleMappingChange(m.csvColumn, e.target.value)}
-                  className="rounded-lg border border-border bg-background px-3 py-2 text-sm text-text-primary"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-text-primary sm:w-auto"
                 >
                   <option value="">Skip</option>
                   {Object.entries(KNOWN_FIELDS).map(([key, label]) => (
@@ -267,7 +267,7 @@ export function CsvImportClient() {
             </div>
           )}
 
-          <div className="mt-6 flex gap-3">
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <button
               onClick={() => setStep('upload')}
               className="rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-secondary hover:bg-background"
@@ -288,16 +288,16 @@ export function CsvImportClient() {
       {/* Step: Preview */}
       {step === 'preview' && (
         <div className="mt-6">
-          <div className="flex gap-3">
-            <div className="flex-1 rounded-lg border border-border bg-surface p-3 text-center">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-lg border border-border bg-surface p-3 text-center">
               <p className="text-2xl font-bold text-success">{validRows.length}</p>
               <p className="text-xs text-text-secondary">Valid rows</p>
             </div>
-            <div className="flex-1 rounded-lg border border-border bg-surface p-3 text-center">
+            <div className="rounded-lg border border-border bg-surface p-3 text-center">
               <p className="text-2xl font-bold text-error">{errorRows.length}</p>
               <p className="text-xs text-text-secondary">Errors</p>
             </div>
-            <div className="flex-1 rounded-lg border border-border bg-surface p-3 text-center">
+            <div className="rounded-lg border border-border bg-surface p-3 text-center">
               <p className="text-2xl font-bold text-text-primary">{parsed.length}</p>
               <p className="text-xs text-text-secondary">Total rows</p>
             </div>
@@ -339,7 +339,7 @@ export function CsvImportClient() {
             </div>
           </div>
 
-          <div className="mt-6 flex gap-3">
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <button
               onClick={() => setStep('mapping')}
               disabled={isImporting}

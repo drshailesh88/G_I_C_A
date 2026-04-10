@@ -107,13 +107,13 @@ export function AttendeeProgram({
   }
 
   return (
-    <div className="px-4 py-6 pb-24">
+    <div style={{ padding: 'var(--space-sm) var(--space-sm) var(--space-3xl)' }}>
       {/* Title */}
-      <h1 className="text-xl font-bold text-text-primary">Scientific Program</h1>
+      <h1 style={{ fontSize: 'var(--font-size-xl)' }} className="font-bold text-text-primary">Scientific Program</h1>
 
       {/* Day tabs */}
       {dates.length > 0 && (
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-2 overflow-x-auto pb-1" style={{ marginTop: 'var(--space-sm)' }}>
           {dates.map((d, i) => {
             const dateObj = new Date(d + 'T00:00:00');
             const label = dateObj.toLocaleDateString('en-IN', {
@@ -125,11 +125,12 @@ export function AttendeeProgram({
                 key={d}
                 onClick={() => setActiveDate(d)}
                 className={cn(
-                  'shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors',
+                  'shrink-0 rounded-full px-4 py-1.5 font-medium transition-colors',
                   activeDate === d
                     ? 'bg-primary text-white'
                     : 'border border-border bg-surface text-text-secondary hover:border-accent',
                 )}
+                style={{ fontSize: 'var(--font-size-xs)', minHeight: 'var(--touch-min)' }}
               >
                 Day {i + 1} · {label}
               </button>
@@ -139,15 +140,16 @@ export function AttendeeProgram({
       )}
 
       {/* Hall filter */}
-      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+      <div className="flex gap-2 overflow-x-auto pb-1" style={{ marginTop: 'var(--space-xs)' }}>
         <button
           onClick={() => setHallFilter('all')}
           className={cn(
-            'shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors',
+            'shrink-0 rounded-full px-3 py-1 font-medium transition-colors',
             hallFilter === 'all'
               ? 'bg-primary/10 text-primary'
               : 'border border-border text-text-muted hover:border-accent',
           )}
+          style={{ fontSize: 'var(--font-size-xs)', minHeight: 'var(--touch-min)' }}
         >
           All Halls
         </button>
@@ -156,11 +158,12 @@ export function AttendeeProgram({
             key={name}
             onClick={() => setHallFilter(name)}
             className={cn(
-              'shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors',
+              'shrink-0 rounded-full px-3 py-1 font-medium transition-colors',
               hallFilter === name
                 ? 'bg-primary/10 text-primary'
                 : 'border border-border text-text-muted hover:border-accent',
             )}
+            style={{ fontSize: 'var(--font-size-xs)', minHeight: 'var(--touch-min)' }}
           >
             {name}
           </button>
@@ -170,29 +173,31 @@ export function AttendeeProgram({
       {/* Card View (< md) / Grid View (>= md) */}
       {daySessions.length === 0 ? (
         <div className="mt-12 text-center">
-          <p className="font-medium text-text-primary">No sessions for this day</p>
-          <p className="mt-1 text-sm text-text-secondary">
+          <p className="font-medium text-text-primary" style={{ fontSize: 'var(--font-size-base)' }}>No sessions for this day</p>
+          <p className="mt-1 text-text-secondary" style={{ fontSize: 'var(--font-size-sm)' }}>
             Check back later or try a different day.
           </p>
         </div>
       ) : (
         <>
           {/* Mobile: Card list */}
-          <div className="mt-4 space-y-4 md:hidden">
-            {Array.from(timeGroups.entries()).map(([timeKey, timeSessions]) => (
-              <div key={timeKey}>
-                <h3 className="mb-2 text-xs font-semibold text-text-muted">{timeKey}</h3>
-                <div className="space-y-2">
-                  {timeSessions.map((session) => (
-                    <SessionCard key={session.id} session={session} />
-                  ))}
+          <div className="md:hidden" style={{ marginTop: 'var(--space-sm)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+              {Array.from(timeGroups.entries()).map(([timeKey, timeSessions]) => (
+                <div key={timeKey}>
+                  <h3 style={{ marginBottom: 'var(--space-xs)', fontSize: 'var(--font-size-xs)' }} className="font-semibold text-text-muted">{timeKey}</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-xs)' }}>
+                    {timeSessions.map((session) => (
+                      <SessionCard key={session.id} session={session} />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
 
           {/* Desktop: Grid view */}
-          <div className="mt-4 hidden md:block">
+          <div className="hidden md:block" style={{ marginTop: 'var(--space-sm)' }}>
             <div className="overflow-x-auto">
               {/* Column headers */}
               <div className="flex border-b border-border pb-2">
@@ -200,7 +205,8 @@ export function AttendeeProgram({
                 {(hallFilter === 'all' ? hallNames : [hallFilter]).map((name) => (
                   <div
                     key={name}
-                    className="min-w-[200px] flex-1 px-2 text-center text-xs font-semibold text-text-primary"
+                    className="min-w-[200px] flex-1 px-2 text-center font-semibold text-text-primary"
+                    style={{ fontSize: 'var(--font-size-xs)' }}
                   >
                     {name}
                   </div>
@@ -258,8 +264,8 @@ function SessionCard({
       className={cn(
         'rounded-xl border border-border border-l-4 bg-surface',
         colors.border,
-        compact ? 'p-2' : 'p-3',
       )}
+      style={{ padding: compact ? 'var(--space-2xs)' : 'var(--space-xs)' }}
     >
       <div className="flex items-center justify-between">
         {session.hallName && (
@@ -270,7 +276,7 @@ function SessionCard({
         </span>
       </div>
 
-      <h4 className={cn('mt-1 font-medium text-text-primary', compact ? 'text-xs' : 'text-sm')}>
+      <h4 className={cn('mt-1 font-medium text-text-primary', compact ? 'text-xs' : '')} style={compact ? undefined : { fontSize: 'var(--font-size-sm)' }}>
         {session.title}
       </h4>
 
@@ -297,7 +303,7 @@ function SessionCard({
       {session.childSessions.length > 0 && !compact && (
         <div className="mt-2 space-y-1 border-t border-border/50 pt-2">
           {session.childSessions.map((child) => (
-            <div key={child.id} className="text-xs text-text-muted">
+            <div key={child.id} className="text-text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>
               <span className="font-medium text-text-secondary">{child.title}</span>
               {child.assignments.length > 0 && (
                 <span className="ml-1">

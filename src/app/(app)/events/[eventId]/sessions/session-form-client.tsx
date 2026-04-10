@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft, Save, Plus, Trash2, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRole } from '@/hooks/use-role';
+import { FormGrid } from '@/components/responsive/form-grid';
 import {
   createSession,
   updateSession,
@@ -263,7 +264,7 @@ export function SessionFormClient({
         className={cn('mt-6 space-y-5', isPending && 'pointer-events-none opacity-50')}
       >
         {/* Session Name */}
-        <div>
+        <div className="col-span-full">
           <label className="mb-1 block text-sm font-medium text-text-primary">
             Session Name <span className="text-error">*</span>
           </label>
@@ -274,12 +275,12 @@ export function SessionFormClient({
             placeholder="Enter session title"
             required
             disabled={isReadOnly}
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+            className="min-h-[44px] w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
           />
         </div>
 
         {/* Date + Time row */}
-        <div className="grid grid-cols-2 gap-3">
+        <FormGrid>
           <div>
             <label className="mb-1 block text-sm font-medium text-text-primary">
               Date <span className="text-error">*</span>
@@ -290,7 +291,7 @@ export function SessionFormClient({
               onChange={(e) => setSessionDate(e.target.value)}
               required
               disabled={isReadOnly}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+              className="min-h-[44px] w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
             />
           </div>
           <div>
@@ -304,7 +305,7 @@ export function SessionFormClient({
                 onChange={(e) => setStartTime(e.target.value)}
                 required
                 disabled={isReadOnly}
-                className="flex-1 rounded-lg border border-border bg-surface px-2 py-2.5 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                className="min-h-[44px] flex-1 rounded-lg border border-border bg-surface px-2 py-2.5 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
               />
               <span className="text-text-muted">-</span>
               <input
@@ -313,21 +314,21 @@ export function SessionFormClient({
                 onChange={(e) => setEndTime(e.target.value)}
                 required
                 disabled={isReadOnly}
-                className="flex-1 rounded-lg border border-border bg-surface px-2 py-2.5 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+                className="min-h-[44px] flex-1 rounded-lg border border-border bg-surface px-2 py-2.5 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
               />
             </div>
           </div>
-        </div>
+        </FormGrid>
 
         {/* Hall + Session Type row */}
-        <div className="grid grid-cols-2 gap-3">
+        <FormGrid>
           <div>
             <label className="mb-1 block text-sm font-medium text-text-primary">Hall</label>
             <select
               value={hallId}
               onChange={(e) => setHallId(e.target.value)}
               disabled={isReadOnly}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+              className="min-h-[44px] w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
             >
               <option value="">No hall</option>
               {halls.map((h) => (
@@ -345,7 +346,7 @@ export function SessionFormClient({
               value={sessionType}
               onChange={(e) => setSessionType(e.target.value)}
               disabled={isReadOnly}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+              className="min-h-[44px] w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
             >
               {SESSION_TYPES.map((t) => (
                 <option key={t} value={t}>
@@ -354,10 +355,10 @@ export function SessionFormClient({
               ))}
             </select>
           </div>
-        </div>
+        </FormGrid>
 
         {/* Topic / Description */}
-        <div>
+        <div className="col-span-full">
           <label className="mb-1 block text-sm font-medium text-text-primary">Topic / Description</label>
           <textarea
             value={description}
@@ -365,12 +366,12 @@ export function SessionFormClient({
             placeholder="Enter topic or description"
             rows={3}
             disabled={isReadOnly}
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+            className="min-h-[44px] w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
           />
         </div>
 
         {/* Track + CME Credits */}
-        <div className="grid grid-cols-2 gap-3">
+        <FormGrid>
           <div>
             <label className="mb-1 block text-sm font-medium text-text-primary">Track</label>
             <input
@@ -379,7 +380,7 @@ export function SessionFormClient({
               onChange={(e) => setTrack(e.target.value)}
               placeholder="e.g., Cardiology"
               disabled={isReadOnly}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+              className="min-h-[44px] w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
             />
           </div>
           <div>
@@ -392,10 +393,10 @@ export function SessionFormClient({
               onChange={(e) => setCmeCredits(e.target.value)}
               placeholder="0"
               disabled={isReadOnly}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
+              className="min-h-[44px] w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent disabled:opacity-50"
             />
           </div>
-        </div>
+        </FormGrid>
 
         {/* Parent session (for sub-sessions) */}
         <div>

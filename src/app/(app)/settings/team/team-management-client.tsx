@@ -12,6 +12,7 @@ import {
   getTeamMembers,
 } from '@/lib/actions/team';
 import { ROLES } from '@/lib/auth/roles';
+import { FormGrid } from '@/components/responsive/form-grid';
 
 const ROLE_OPTIONS = [
   { value: ROLES.SUPER_ADMIN, label: 'Super Admin' },
@@ -93,19 +94,20 @@ export function TeamManagementClient({ initialMembers, currentUserId }: TeamMana
   }
 
   return (
-    <div className="px-4 py-6">
+    <div style={{ padding: 'var(--space-md) var(--space-sm)' }}>
       {/* Header */}
-      <div className="mb-6 flex items-center gap-3">
+      <div className="flex items-center" style={{ marginBottom: 'var(--space-lg)', gap: 'var(--space-xs)' }}>
         <Link href="/more" className="rounded-lg p-1 transition-colors hover:bg-border/30">
           <ArrowLeft className="h-5 w-5 text-text-muted" />
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-text-primary">Team & Roles</h1>
-          <p className="text-sm text-text-muted">{members.length} member{members.length !== 1 ? 's' : ''}</p>
+          <h1 style={{ fontSize: 'var(--font-size-2xl)' }} className="font-bold text-text-primary">Team &amp; Roles</h1>
+          <p style={{ fontSize: 'var(--font-size-sm)' }} className="text-text-muted">{members.length} member{members.length !== 1 ? 's' : ''}</p>
         </div>
         <button
           onClick={() => { setShowInvite(!showInvite); clearMessages(); }}
-          className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent/90"
+          className="flex items-center gap-2 rounded-lg bg-accent font-medium text-white transition-colors hover:bg-accent/90"
+          style={{ padding: 'var(--space-xs) var(--space-sm)', fontSize: 'var(--font-size-sm)', minHeight: 'var(--touch-min)' }}
         >
           <UserPlus className="h-4 w-4" />
           Invite
@@ -114,32 +116,34 @@ export function TeamManagementClient({ initialMembers, currentUserId }: TeamMana
 
       {/* Feedback messages */}
       {error && (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-red-800" style={{ fontSize: 'var(--font-size-sm)' }}>
           {error}
         </div>
       )}
       {success && (
-        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-green-800" style={{ fontSize: 'var(--font-size-sm)' }}>
           {success}
         </div>
       )}
 
       {/* Invite form */}
       {showInvite && (
-        <div className="mb-6 rounded-xl border border-border bg-surface p-4">
-          <h2 className="mb-3 text-sm font-semibold text-text-primary">Invite new member</h2>
-          <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="rounded-xl border border-border bg-surface" style={{ marginBottom: 'var(--space-lg)', padding: 'var(--space-sm)' }}>
+          <h2 className="font-semibold text-text-primary" style={{ marginBottom: 'var(--space-xs)', fontSize: 'var(--font-size-sm)' }}>Invite new member</h2>
+          <FormGrid columns={1}>
             <input
               type="email"
               placeholder="Email address"
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
-              className="flex-1 rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              className="flex-1 rounded-lg border border-border bg-surface px-4 py-3 outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              style={{ fontSize: 'var(--font-size-sm)', minHeight: 'var(--touch-min)' }}
             />
             <select
               value={inviteRole}
               onChange={(e) => setInviteRole(e.target.value)}
-              className="rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              className="rounded-lg border border-border bg-surface px-4 py-3 outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              style={{ fontSize: 'var(--font-size-sm)', minHeight: 'var(--touch-min)' }}
             >
               {ROLE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -150,22 +154,24 @@ export function TeamManagementClient({ initialMembers, currentUserId }: TeamMana
             <button
               onClick={handleInvite}
               disabled={isPending || !inviteEmail}
-              className="rounded-lg bg-accent px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-50"
+              className="rounded-lg bg-accent font-medium text-white transition-colors hover:bg-accent/90 disabled:opacity-50"
+              style={{ padding: 'var(--space-xs) var(--space-lg)', fontSize: 'var(--font-size-sm)', minHeight: 'var(--touch-min)' }}
             >
               {isPending ? 'Sending...' : 'Send Invite'}
             </button>
-          </div>
+          </FormGrid>
         </div>
       )}
 
       {/* Members list */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col" style={{ gap: 'var(--space-xs)' }}>
         {members.map((member) => {
           const isCurrentUser = member.userId === currentUserId;
           return (
             <div
               key={member.userId}
-              className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3"
+              className="flex items-center rounded-xl border border-border bg-surface"
+              style={{ gap: 'var(--space-xs)', padding: 'var(--space-xs) var(--space-sm)' }}
             >
               {/* Avatar */}
               {member.imageUrl ? (
@@ -175,28 +181,28 @@ export function TeamManagementClient({ initialMembers, currentUserId }: TeamMana
                   className="h-10 w-10 rounded-full object-cover"
                 />
               ) : (
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-sm font-medium text-primary">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 font-medium text-primary" style={{ fontSize: 'var(--font-size-sm)' }}>
                   {(member.firstName?.[0] ?? member.email[0] ?? '?').toUpperCase()}
                 </div>
               )}
 
               {/* Info */}
               <div className="flex-1 min-w-0">
-                <p className="truncate text-sm font-medium text-text-primary">
+                <p className="truncate font-medium text-text-primary" style={{ fontSize: 'var(--font-size-sm)' }}>
                   {member.firstName || member.lastName
                     ? `${member.firstName ?? ''} ${member.lastName ?? ''}`.trim()
                     : member.email}
                   {isCurrentUser && (
-                    <span className="ml-2 text-xs text-text-muted">(you)</span>
+                    <span className="ml-2 text-text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>(you)</span>
                   )}
                 </p>
-                <p className="truncate text-xs text-text-muted">{member.email}</p>
+                <p className="truncate text-text-muted" style={{ fontSize: 'var(--font-size-xs)' }}>{member.email}</p>
               </div>
 
               {/* Role selector */}
               <div className="flex items-center gap-2">
                 {isCurrentUser ? (
-                  <span className="flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+                  <span className="flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 font-medium text-primary" style={{ fontSize: 'var(--font-size-xs)' }}>
                     <Shield className="h-3 w-3" />
                     {getRoleLabel(member.role)}
                   </span>
@@ -205,7 +211,8 @@ export function TeamManagementClient({ initialMembers, currentUserId }: TeamMana
                     value={member.role}
                     onChange={(e) => handleChangeRole(member.userId, e.target.value)}
                     disabled={isPending}
-                    className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs outline-none focus:border-accent focus:ring-1 focus:ring-accent disabled:opacity-50"
+                    className="rounded-lg border border-border bg-surface px-3 py-1.5 outline-none focus:border-accent focus:ring-1 focus:ring-accent disabled:opacity-50"
+                    style={{ fontSize: 'var(--font-size-xs)' }}
                   >
                     {ROLE_OPTIONS.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -223,13 +230,15 @@ export function TeamManagementClient({ initialMembers, currentUserId }: TeamMana
                         <button
                           onClick={() => handleRemove(member.userId)}
                           disabled={isPending}
-                          className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-50"
+                          className="rounded-lg bg-red-500 px-3 py-1.5 font-medium text-white transition-colors hover:bg-red-600 disabled:opacity-50"
+                          style={{ fontSize: 'var(--font-size-xs)' }}
                         >
                           Confirm
                         </button>
                         <button
                           onClick={() => setConfirmRemove(null)}
-                          className="rounded-lg border border-border px-3 py-1.5 text-xs text-text-muted transition-colors hover:bg-border/30"
+                          className="rounded-lg border border-border px-3 py-1.5 text-text-muted transition-colors hover:bg-border/30"
+                          style={{ fontSize: 'var(--font-size-xs)' }}
                         >
                           Cancel
                         </button>
@@ -239,6 +248,7 @@ export function TeamManagementClient({ initialMembers, currentUserId }: TeamMana
                         onClick={() => { setConfirmRemove(member.userId); clearMessages(); }}
                         className="rounded-lg p-1.5 text-text-muted transition-colors hover:bg-red-50 hover:text-red-500"
                         title="Remove member"
+                        style={{ minHeight: 'var(--touch-min)', minWidth: 'var(--touch-min)' }}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -252,7 +262,7 @@ export function TeamManagementClient({ initialMembers, currentUserId }: TeamMana
       </div>
 
       {members.length === 0 && (
-        <div className="mt-8 text-center text-sm text-text-muted">
+        <div className="mt-8 text-center text-text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>
           No team members yet. Invite someone to get started.
         </div>
       )}

@@ -12,6 +12,8 @@ import {
 import { cn } from '@/lib/utils';
 import { useRole } from '@/hooks/use-role';
 import { ROLES, TAB_ACCESS } from '@/lib/auth/roles';
+import { useResponsiveNav } from '@/hooks/use-responsive-nav';
+import { shouldShowTabBar, isResponsiveShellEnabled } from '@/components/app-shell';
 
 const tabs = [
   { key: 'HOME', label: 'Home', href: '/dashboard', icon: Home },
@@ -24,6 +26,11 @@ const tabs = [
 export function TabBar() {
   const pathname = usePathname();
   const { isLoaded, isSuperAdmin, isCoordinator, isOps, isReadOnly } = useRole();
+  const { navMode } = useResponsiveNav();
+
+  const enabled = isResponsiveShellEnabled();
+
+  if (!shouldShowTabBar(navMode, enabled)) return null;
 
   // Determine the user's role for tab filtering
   const userRole = isSuperAdmin
@@ -48,7 +55,7 @@ export function TabBar() {
   }
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-surface">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-surface safe-area-pb safe-area-pl safe-area-pr">
       <div className="mx-auto flex max-w-lg items-center justify-around px-2 py-1">
         {tabs.map((tab) => {
           if (!isVisible(tab.key)) return null;
@@ -61,7 +68,7 @@ export function TabBar() {
               key={tab.key}
               href={tab.href}
               className={cn(
-                'flex flex-1 flex-col items-center gap-0.5 rounded-lg px-2 py-2 text-xs transition-colors',
+                'flex min-h-[44px] flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                 active
                   ? 'bg-primary/10 text-primary font-medium'
                   : 'text-text-muted hover:text-text-secondary',

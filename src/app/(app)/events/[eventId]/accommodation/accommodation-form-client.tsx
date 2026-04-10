@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { createAccommodationRecord, updateAccommodationRecord } from '@/lib/actions/accommodation';
+import { FormGrid } from '@/components/responsive/form-grid';
 
 type PersonWithTravel = {
   personId: string;
@@ -101,53 +102,53 @@ export function AccommodationFormClient({
         </h1>
       </div>
 
-      <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-5">
-        {/* Person Picker - filtered to people WITH travel records */}
-        {!isEdit && (
-          <div>
-            <label htmlFor="personId" className="mb-1 block text-sm font-medium text-text-primary">
-              Person <span className="text-error">*</span>
-            </label>
-            <p className="mb-2 text-xs text-text-muted">
-              Only showing people with travel records for this event
-            </p>
-            <input
-              type="text"
-              placeholder="Search by name or email..."
-              value={personSearch}
-              onChange={(e) => setPersonSearch(e.target.value)}
-              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-            />
-            {filteredPeople.length > 0 && (
-              <div className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-surface shadow-lg">
-                {filteredPeople.map((p) => (
-                  <button
-                    key={p.personId}
-                    type="button"
-                    onClick={() => {
-                      const hidden = document.getElementById('personId') as HTMLInputElement;
-                      if (hidden) hidden.value = p.personId;
-                      setPersonSearch(p.personName);
-                    }}
-                    className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-border/30"
-                  >
-                    <span className="font-medium text-text-primary">{p.personName}</span>
-                    <span className="text-xs text-text-muted">{p.personEmail || p.personPhone}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            {personSearch.length >= 2 && filteredPeople.length === 0 && (
-              <p className="mt-1 text-xs text-text-muted">
-                No people found. Ensure travel records exist first.
+      <form onSubmit={handleSubmit} className="mt-6">
+        <FormGrid columns={2}>
+          {/* Person Picker - filtered to people WITH travel records */}
+          {!isEdit && (
+            <div className="col-span-full">
+              <label htmlFor="personId" className="mb-1 block text-sm font-medium text-text-primary">
+                Person <span className="text-error">*</span>
+              </label>
+              <p className="mb-2 text-xs text-text-muted">
+                Only showing people with travel records for this event
               </p>
-            )}
-            <input type="hidden" id="personId" name="personId" defaultValue="" required />
-          </div>
-        )}
+              <input
+                type="text"
+                placeholder="Search by name or email..."
+                value={personSearch}
+                onChange={(e) => setPersonSearch(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              />
+              {filteredPeople.length > 0 && (
+                <div className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-surface shadow-lg">
+                  {filteredPeople.map((p) => (
+                    <button
+                      key={p.personId}
+                      type="button"
+                      onClick={() => {
+                        const hidden = document.getElementById('personId') as HTMLInputElement;
+                        if (hidden) hidden.value = p.personId;
+                        setPersonSearch(p.personName);
+                      }}
+                      className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-border/30"
+                    >
+                      <span className="font-medium text-text-primary">{p.personName}</span>
+                      <span className="text-xs text-text-muted">{p.personEmail || p.personPhone}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {personSearch.length >= 2 && filteredPeople.length === 0 && (
+                <p className="mt-1 text-xs text-text-muted">
+                  No people found. Ensure travel records exist first.
+                </p>
+              )}
+              <input type="hidden" id="personId" name="personId" defaultValue="" required />
+            </div>
+          )}
 
-        {/* Hotel Name + City */}
-        <div className="grid grid-cols-2 gap-3">
+          {/* Hotel Name */}
           <div>
             <label htmlFor="hotelName" className="mb-1 block text-sm font-medium text-text-primary">
               Hotel Name <span className="text-error">*</span>
@@ -162,6 +163,8 @@ export function AccommodationFormClient({
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
           </div>
+
+          {/* Hotel City */}
           <div>
             <label htmlFor="hotelCity" className="mb-1 block text-sm font-medium text-text-primary">
               City
@@ -175,25 +178,53 @@ export function AccommodationFormClient({
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
           </div>
-        </div>
 
-        {/* Hotel Address */}
-        <div>
-          <label htmlFor="hotelAddress" className="mb-1 block text-sm font-medium text-text-primary">
-            Hotel Address
-          </label>
-          <input
-            id="hotelAddress"
-            name="hotelAddress"
-            type="text"
-            defaultValue={existing?.hotelAddress || ''}
-            placeholder="Apollo Bunder, Colaba"
-            className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-          />
-        </div>
+          {/* Hotel Address */}
+          <div className="col-span-full">
+            <label htmlFor="hotelAddress" className="mb-1 block text-sm font-medium text-text-primary">
+              Hotel Address
+            </label>
+            <input
+              id="hotelAddress"
+              name="hotelAddress"
+              type="text"
+              defaultValue={existing?.hotelAddress || ''}
+              placeholder="Apollo Bunder, Colaba"
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            />
+          </div>
 
-        {/* Room Type + Room Number */}
-        <div className="grid grid-cols-2 gap-3">
+          {/* Check-in Date */}
+          <div>
+            <label htmlFor="checkInDate" className="mb-1 block text-sm font-medium text-text-primary">
+              Check-in Date <span className="text-error">*</span>
+            </label>
+            <input
+              id="checkInDate"
+              name="checkInDate"
+              type="date"
+              required
+              defaultValue={formatDateInput(existing?.checkInDate ?? null)}
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            />
+          </div>
+
+          {/* Check-out Date */}
+          <div>
+            <label htmlFor="checkOutDate" className="mb-1 block text-sm font-medium text-text-primary">
+              Check-out Date <span className="text-error">*</span>
+            </label>
+            <input
+              id="checkOutDate"
+              name="checkOutDate"
+              type="date"
+              required
+              defaultValue={formatDateInput(existing?.checkOutDate ?? null)}
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            />
+          </div>
+
+          {/* Room Type */}
           <div>
             <label htmlFor="roomType" className="mb-1 block text-sm font-medium text-text-primary">
               Room Type
@@ -214,6 +245,8 @@ export function AccommodationFormClient({
               <option value="other">Other</option>
             </select>
           </div>
+
+          {/* Room Number */}
           <div>
             <label htmlFor="roomNumber" className="mb-1 block text-sm font-medium text-text-primary">
               Room Number
@@ -227,70 +260,38 @@ export function AccommodationFormClient({
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
           </div>
-        </div>
 
-        {/* Shared Room Group */}
-        <div>
-          <label htmlFor="sharedRoomGroup" className="mb-1 block text-sm font-medium text-text-primary">
-            Shared Room Group
-          </label>
-          <input
-            id="sharedRoomGroup"
-            name="sharedRoomGroup"
-            type="text"
-            defaultValue={existing?.sharedRoomGroup || ''}
-            placeholder="e.g. group-A (to link shared room occupants)"
-            className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-          />
-        </div>
-
-        {/* Check-in / Check-out */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label htmlFor="checkInDate" className="mb-1 block text-sm font-medium text-text-primary">
-              Check-in Date <span className="text-error">*</span>
+          {/* Shared Room Group */}
+          <div className="col-span-full">
+            <label htmlFor="sharedRoomGroup" className="mb-1 block text-sm font-medium text-text-primary">
+              Shared Room Group
             </label>
             <input
-              id="checkInDate"
-              name="checkInDate"
-              type="date"
-              required
-              defaultValue={formatDateInput(existing?.checkInDate ?? null)}
+              id="sharedRoomGroup"
+              name="sharedRoomGroup"
+              type="text"
+              defaultValue={existing?.sharedRoomGroup || ''}
+              placeholder="e.g. group-A (to link shared room occupants)"
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
           </div>
-          <div>
-            <label htmlFor="checkOutDate" className="mb-1 block text-sm font-medium text-text-primary">
-              Check-out Date <span className="text-error">*</span>
+
+          {/* Google Maps URL */}
+          <div className="col-span-full">
+            <label htmlFor="googleMapsUrl" className="mb-1 block text-sm font-medium text-text-primary">
+              Google Maps URL
             </label>
             <input
-              id="checkOutDate"
-              name="checkOutDate"
-              type="date"
-              required
-              defaultValue={formatDateInput(existing?.checkOutDate ?? null)}
+              id="googleMapsUrl"
+              name="googleMapsUrl"
+              type="url"
+              defaultValue={existing?.googleMapsUrl || ''}
+              placeholder="https://maps.google.com/..."
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
           </div>
-        </div>
 
-        {/* Google Maps URL */}
-        <div>
-          <label htmlFor="googleMapsUrl" className="mb-1 block text-sm font-medium text-text-primary">
-            Google Maps URL
-          </label>
-          <input
-            id="googleMapsUrl"
-            name="googleMapsUrl"
-            type="url"
-            defaultValue={existing?.googleMapsUrl || ''}
-            placeholder="https://maps.google.com/..."
-            className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-          />
-        </div>
-
-        {/* Booking Reference + Attachment */}
-        <div className="grid grid-cols-2 gap-3">
+          {/* Booking Reference */}
           <div>
             <label htmlFor="bookingReference" className="mb-1 block text-sm font-medium text-text-primary">
               Booking Reference
@@ -304,6 +305,8 @@ export function AccommodationFormClient({
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
           </div>
+
+          {/* Booking PDF URL */}
           <div>
             <label htmlFor="attachmentUrl" className="mb-1 block text-sm font-medium text-text-primary">
               Booking PDF URL
@@ -317,51 +320,51 @@ export function AccommodationFormClient({
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
           </div>
-        </div>
 
-        {/* Special Requests */}
-        <div>
-          <label htmlFor="specialRequests" className="mb-1 block text-sm font-medium text-text-primary">
-            Special Requests
-          </label>
-          <textarea
-            id="specialRequests"
-            name="specialRequests"
-            rows={2}
-            defaultValue={existing?.specialRequests || ''}
-            placeholder="Dietary needs, accessibility, etc."
-            className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-          />
-        </div>
+          {/* Special Requests - full width */}
+          <div className="col-span-full">
+            <label htmlFor="specialRequests" className="mb-1 block text-sm font-medium text-text-primary">
+              Special Requests
+            </label>
+            <textarea
+              id="specialRequests"
+              name="specialRequests"
+              rows={2}
+              defaultValue={existing?.specialRequests || ''}
+              placeholder="Dietary needs, accessibility, etc."
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            />
+          </div>
 
-        {/* Notes */}
-        <div>
-          <label htmlFor="notes" className="mb-1 block text-sm font-medium text-text-primary">
-            Notes
-          </label>
-          <textarea
-            id="notes"
-            name="notes"
-            rows={2}
-            defaultValue={existing?.notes || ''}
-            placeholder="Any additional details..."
-            className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
-          />
-        </div>
+          {/* Notes - full width */}
+          <div className="col-span-full">
+            <label htmlFor="notes" className="mb-1 block text-sm font-medium text-text-primary">
+              Notes
+            </label>
+            <textarea
+              id="notes"
+              name="notes"
+              rows={2}
+              defaultValue={existing?.notes || ''}
+              placeholder="Any additional details..."
+              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            />
+          </div>
 
-        {/* Error */}
-        {error && (
-          <div className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-        )}
+          {/* Error */}
+          {error && (
+            <div className="col-span-full rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+          )}
 
-        {/* Submit */}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-lg bg-primary px-4 py-3 text-sm font-medium text-white hover:bg-primary-light disabled:opacity-50"
-        >
-          {loading ? 'Saving...' : isEdit ? 'Update Accommodation' : 'Create Accommodation'}
-        </button>
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="col-span-full w-full rounded-lg bg-primary px-4 py-3 text-sm font-medium text-white hover:bg-primary-light disabled:opacity-50"
+          >
+            {loading ? 'Saving...' : isEdit ? 'Update Accommodation' : 'Create Accommodation'}
+          </button>
+        </FormGrid>
       </form>
     </div>
   );

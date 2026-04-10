@@ -86,4 +86,21 @@ describe('GenerationClient', () => {
     expect(html).toContain(`/events/${EVENT_ID}/certificates`);
     expect(html).toContain('Back to Certificates');
   });
+
+  // ── DRS-44: Responsive migration tests ────────────────────────
+
+  it('uses FormGrid for configuration form layout', () => {
+    const html = render();
+    expect(html).toContain('data-testid="form-grid"');
+  });
+
+  it('uses responsive header with flex-wrap for small screens', () => {
+    const html = render();
+    expect(html).toContain('flex-wrap');
+  });
+
+  it('applies minimum touch target size to radio buttons', () => {
+    const html = render();
+    expect(html).toContain('min-h-[44px]');
+  });
 });

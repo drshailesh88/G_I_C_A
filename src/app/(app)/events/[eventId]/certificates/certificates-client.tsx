@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { DetailView } from '@/components/responsive/detail-view';
 import {
   createCertificateTemplate,
   updateCertificateTemplate,
@@ -80,6 +81,7 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
   const [revokeTarget, setRevokeTarget] = useState<string | null>(null);
   const [revokeReason, setRevokeReason] = useState('');
   const [bulkZipType, setBulkZipType] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
 
   // Issued certificates filters & search
   const [searchQuery, setSearchQuery] = useState('');
@@ -183,9 +185,11 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
   });
 
   const activeTemplates = templates.filter(t => t.status === 'active');
+  const selectedTemplate = selectedTemplateId ? templates.find(t => t.id === selectedTemplateId) : null;
 
-  return (
-    <div className="space-y-6">
+  // ── List panel content ──────────────────────────────────────
+  const listPanel = (
+    <div className="space-y-6 p-0 md:pr-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Certificates</h1>
@@ -194,7 +198,7 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
             {issuedCertificates.filter(c => c.status === 'issued').length} issued
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 print:hidden">
           {activeTemplates.length > 0 && (
             <>
               <Link
@@ -227,7 +231,7 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-gray-200 print:hidden">
         {(['templates', 'issued'] as const).map((t) => (
           <button
             key={t}
@@ -252,7 +256,13 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
             </p>
           ) : (
             templates.map((t) => (
-              <div key={t.id} className="rounded-lg border border-gray-200 bg-white px-4 py-3">
+              <div
+                key={t.id}
+                className={`rounded-lg border border-gray-200 bg-white px-4 py-3 cursor-pointer hover:border-blue-300 ${
+                  selectedTemplateId === t.id ? 'ring-2 ring-blue-500' : ''
+                }`}
+                onClick={() => setSelectedTemplateId(t.id)}
+              >
                 <div className="flex items-center justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
@@ -269,10 +279,10 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
                     </p>
                     {t.notes && <p className="mt-1 text-xs text-gray-400 italic">{t.notes}</p>}
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 items-center gap-2 print:hidden">
                     {(t.status === 'draft' || t.status === 'active') && (
                       <button
-                        onClick={() => setEditingTemplate(t)}
+                        onClick={(e) => { e.stopPropagation(); setEditingTemplate(t); }}
                         className="rounded px-3 py-1 text-xs font-medium text-gray-700 bg-gray-50 hover:bg-gray-100"
                       >
                         Edit
@@ -280,7 +290,7 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
                     )}
                     {t.status === 'draft' && (
                       <button
-                        onClick={() => handleActivate(t.id)}
+                        onClick={(e) => { e.stopPropagation(); handleActivate(t.id); }}
                         disabled={pending}
                         className="rounded px-3 py-1 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 disabled:opacity-50"
                       >
@@ -289,7 +299,7 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
                     )}
                     {(t.status === 'draft' || t.status === 'active') && (
                       <button
-                        onClick={() => handleArchive(t.id)}
+                        onClick={(e) => { e.stopPropagation(); handleArchive(t.id); }}
                         disabled={pending}
                         className="rounded px-3 py-1 text-xs font-medium text-yellow-700 bg-yellow-50 hover:bg-yellow-100 disabled:opacity-50"
                       >
@@ -298,7 +308,7 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
                     )}
                     {t.status === 'active' && (
                       <button
-                        onClick={() => handleBulkZip(t.certificateType)}
+                        onClick={(e) => { e.stopPropagation(); handleBulkZip(t.certificateType); }}
                         disabled={pending || bulkZipType === t.certificateType}
                         className="rounded px-3 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 disabled:opacity-50"
                       >
@@ -317,7 +327,7 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
       {tab === 'issued' && (
         <div className="space-y-4">
           {/* Filters & Search Bar */}
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 print:hidden">
             <input
               type="text"
               value={searchQuery}
@@ -383,7 +393,7 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Issued</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Delivery</th>
-                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase print:hidden">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 bg-white">
@@ -421,7 +431,7 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
                           <span title="Downloads">{cert.downloadCount} dl</span>
                         </div>
                       </td>
-                      <td className="px-4 py-2 text-right">
+                      <td className="px-4 py-2 text-right print:hidden">
                         <div className="flex justify-end gap-2">
                           {/* Preview PDF */}
                           {cert.status === 'issued' && cert.storageKey && (
@@ -522,6 +532,50 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
           </div>
         </div>
       )}
+    </div>
+  );
+
+  // ── Detail panel content (selected template editor) ─────────
+  const detailPanel = selectedTemplate ? (
+    <div className="space-y-4 border-l border-gray-200 p-4" data-testid="certificate-detail">
+      <h2 className="text-lg font-semibold text-gray-900">{selectedTemplate.templateName}</h2>
+      <div className="space-y-2 text-sm text-gray-600">
+        <p>Type: {selectedTemplate.certificateType.replace(/_/g, ' ')}</p>
+        <p>Scope: {selectedTemplate.audienceScope}</p>
+        <p>Status: <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_BADGE[selectedTemplate.status] ?? 'bg-gray-100'}`}>{selectedTemplate.status}</span></p>
+        <p>Version: v{selectedTemplate.versionNo}</p>
+        {selectedTemplate.qrVerificationEnabled && <p>QR Verification: Enabled</p>}
+        {selectedTemplate.notes && <p className="italic text-gray-400">Notes: {selectedTemplate.notes}</p>}
+      </div>
+      <div className="flex gap-2 print:hidden">
+        {(selectedTemplate.status === 'draft' || selectedTemplate.status === 'active') && (
+          <button
+            onClick={() => setEditingTemplate(selectedTemplate)}
+            className="rounded-md bg-gray-100 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+          >
+            Edit Template
+          </button>
+        )}
+        {selectedTemplate.status === 'active' && (
+          <Link
+            href={`/events/${eventId}/certificates/editor/${selectedTemplate.id}`}
+            className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Open Editor
+          </Link>
+        )}
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <>
+      <DetailView
+        list={listPanel}
+        detail={detailPanel}
+        showDetail={!!selectedTemplateId}
+        onBack={() => setSelectedTemplateId(null)}
+      />
 
       {/* Create Template Modal */}
       {showCreate && (
@@ -551,7 +605,7 @@ export function CertificatesClient({ eventId, templates, issuedCertificates }: P
           onIssued={() => { setShowIssue(false); router.refresh(); }}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -868,7 +922,7 @@ function IssueCertificateModal({
 // ── Shared UI helpers ────────────────────────────────────────
 function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="safe-area-insets fixed inset-0 z-50 flex items-center justify-center bg-black/40 print:hidden" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
         <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
         <div className="mt-4 space-y-4">{children}</div>

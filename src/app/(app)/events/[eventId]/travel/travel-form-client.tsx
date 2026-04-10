@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { createTravelRecord, updateTravelRecord } from '@/lib/actions/travel';
 import { TRAVEL_DIRECTIONS, TRAVEL_MODES } from '@/lib/validations/travel';
+import { FormGrid } from '@/components/responsive/form-grid';
 
 type Person = {
   id: string;
@@ -125,9 +126,9 @@ export function TravelFormClient({
       </div>
 
       <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-5">
-        {/* Person Picker */}
+        {/* Person Picker — full width */}
         {!isEdit && (
-          <div>
+          <div className="col-span-full">
             <label htmlFor="personId" className="mb-1 block text-sm font-medium text-text-primary">
               Person <span className="text-error">*</span>
             </label>
@@ -161,8 +162,8 @@ export function TravelFormClient({
           </div>
         )}
 
-        {/* Direction + Mode */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Direction + Mode — side by side */}
+        <FormGrid>
           <div>
             <label htmlFor="direction" className="mb-1 block text-sm font-medium text-text-primary">
               Direction <span className="text-error">*</span>
@@ -197,10 +198,10 @@ export function TravelFormClient({
               ))}
             </select>
           </div>
-        </div>
+        </FormGrid>
 
-        {/* From / To Cities */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* From / To Cities — side by side */}
+        <FormGrid>
           <div>
             <label htmlFor="fromCity" className="mb-1 block text-sm font-medium text-text-primary">
               From City <span className="text-error">*</span>
@@ -229,10 +230,10 @@ export function TravelFormClient({
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
           </div>
-        </div>
+        </FormGrid>
 
-        {/* From / To Locations (optional) */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* From / To Locations — side by side */}
+        <FormGrid>
           <div>
             <label htmlFor="fromLocation" className="mb-1 block text-sm font-medium text-text-primary">
               From Location
@@ -259,10 +260,10 @@ export function TravelFormClient({
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
           </div>
-        </div>
+        </FormGrid>
 
-        {/* Departure / Arrival */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Departure / Arrival — side by side */}
+        <FormGrid>
           <div>
             <label htmlFor="departureAtUtc" className="mb-1 block text-sm font-medium text-text-primary">
               Departure
@@ -287,10 +288,10 @@ export function TravelFormClient({
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
           </div>
-        </div>
+        </FormGrid>
 
-        {/* Carrier + Service Number */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Carrier + Service Number — side by side */}
+        <FormGrid>
           <div>
             <label htmlFor="carrierName" className="mb-1 block text-sm font-medium text-text-primary">
               Carrier / Airline
@@ -317,10 +318,10 @@ export function TravelFormClient({
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
           </div>
-        </div>
+        </FormGrid>
 
-        {/* PNR + Terminal */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* PNR + Terminal — side by side */}
+        <FormGrid>
           <div>
             <label htmlFor="pnrOrBookingRef" className="mb-1 block text-sm font-medium text-text-primary">
               PNR / Booking Ref
@@ -347,9 +348,9 @@ export function TravelFormClient({
               className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
             />
           </div>
-        </div>
+        </FormGrid>
 
-        {/* Seat */}
+        {/* Seat — full width */}
         <div>
           <label htmlFor="seatOrCoach" className="mb-1 block text-sm font-medium text-text-primary">
             Seat / Coach
@@ -364,7 +365,7 @@ export function TravelFormClient({
           />
         </div>
 
-        {/* Attachment URL */}
+        {/* Attachment URL — full width */}
         <div>
           <label htmlFor="attachmentUrl" className="mb-1 block text-sm font-medium text-text-primary">
             Ticket Attachment URL
@@ -379,7 +380,7 @@ export function TravelFormClient({
           />
         </div>
 
-        {/* Notes */}
+        {/* Notes — full width */}
         <div>
           <label htmlFor="notes" className="mb-1 block text-sm font-medium text-text-primary">
             Notes

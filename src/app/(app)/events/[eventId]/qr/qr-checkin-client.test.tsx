@@ -162,4 +162,32 @@ describe('QrCheckInClient', () => {
   it('formats recent check-in timestamps explicitly in IST', () => {
     expect(componentSource).toContain("timeZone: 'Asia/Kolkata'");
   });
+
+  // ── Responsive design tests (DRS-42) ──
+
+  it('uses ResponsiveMetricGrid for stats instead of hardcoded grid-cols-3', () => {
+    // grid-cols-3 overflows at 375px — must use auto-reflow pattern
+    expect(componentSource).not.toContain('grid-cols-3');
+    expect(componentSource).toContain('ResponsiveMetricGrid');
+  });
+
+  it('renders stats inside ResponsiveMetricGrid with auto-fit reflow', () => {
+    const html = render({ totalRegistrations: 100, initialStats: sampleStats });
+    // The auto-fit grid pattern should be in the rendered output
+    expect(html).toContain('repeat(auto-fit');
+  });
+
+  it('wraps stats panel in a container query scope', () => {
+    const html = render();
+    // @container class enables container queries on the wrapper
+    expect(html).toMatch(/@container/);
+  });
+
+  it('has safe-area-pb on the fixed bottom bar', () => {
+    expect(componentSource).toContain('safe-area-pb');
+  });
+
+  it('imports ResponsiveMetricGrid from the responsive components', () => {
+    expect(componentSource).toContain("from '@/components/responsive/responsive-metric-grid'");
+  });
 });

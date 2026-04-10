@@ -78,7 +78,7 @@ export function ScanFeedback({ result, onDismiss }: ScanFeedbackProps) {
         {onDismiss && (
           <button
             onClick={onDismiss}
-            className={`text-sm ${config.textColor} opacity-60 hover:opacity-100`}
+            className={`inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-sm ${config.textColor} opacity-60 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent`}
             aria-label="Dismiss"
           >
             ✕

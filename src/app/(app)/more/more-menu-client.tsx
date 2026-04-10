@@ -14,6 +14,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useRole } from '@/hooks/use-role';
+import { useResponsiveNav } from '@/hooks/use-responsive-nav';
 
 type MenuItem = {
   label: string;
@@ -42,6 +43,10 @@ const MENU_ITEMS: MenuItem[] = [
 
 export function MoreMenuClient() {
   const { isLoaded, isSuperAdmin, isCoordinator, isOps, isReadOnly } = useRole();
+  const { navMode } = useResponsiveNav();
+
+  // On desktop, sidebar handles navigation — more menu is redundant
+  if (navMode === 'desktop') return null;
 
   const userRole = isSuperAdmin
     ? 'super_admin'
@@ -61,18 +66,18 @@ export function MoreMenuClient() {
   const sections = [...new Set(visibleItems.map((item) => item.section))];
 
   return (
-    <div className="px-4 py-6">
-      <h1 className="text-2xl font-bold text-text-primary">More</h1>
-      <p className="mt-1 text-sm text-text-muted">
+    <div style={{ padding: 'var(--space-md) var(--space-sm)' }}>
+      <h1 style={{ fontSize: 'var(--font-size-2xl)' }} className="font-bold text-text-primary">More</h1>
+      <p className="mt-1 text-text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>
         {isOps ? 'Logistics tools for your events' : 'Additional tools and settings'}
       </p>
 
       {sections.map((section) => (
-        <div key={section} className="mt-6">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
+        <div key={section} style={{ marginTop: 'var(--space-lg)' }}>
+          <h2 style={{ marginBottom: 'var(--space-sm)', fontSize: 'var(--font-size-xs)' }} className="font-semibold uppercase tracking-wider text-text-muted">
             {section}
           </h2>
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col" style={{ gap: 'var(--space-2xs)' }}>
             {visibleItems
               .filter((item) => item.section === section)
               .map((item) => {
@@ -81,14 +86,15 @@ export function MoreMenuClient() {
                   <Link
                     key={item.label}
                     href={item.href}
-                    className="flex items-center gap-3 rounded-xl px-3 py-3 transition-colors hover:bg-border/30"
+                    className="flex items-center gap-3 rounded-xl px-3 transition-colors hover:bg-border/30"
+                    style={{ padding: 'var(--space-xs)', minHeight: 'var(--touch-min)' }}
                   >
                     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10">
                       <Icon className="h-4.5 w-4.5 text-primary" />
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium text-text-primary">{item.label}</p>
-                      <p className="text-xs text-text-muted">{item.description}</p>
+                      <p style={{ fontSize: 'var(--font-size-sm)' }} className="font-medium text-text-primary">{item.label}</p>
+                      <p style={{ fontSize: 'var(--font-size-xs)' }} className="text-text-muted">{item.description}</p>
                     </div>
                     <ChevronRight className="h-4 w-4 text-text-muted" />
                   </Link>

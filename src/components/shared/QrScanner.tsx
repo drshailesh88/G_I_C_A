@@ -149,7 +149,7 @@ export function QrScanner({
           Sync failed: {lastSyncError}
           <button
             onClick={syncNow}
-            className="ml-2 underline hover:no-underline"
+            className="ml-2 min-h-[44px] rounded-md px-2 underline hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
           >
             Retry
           </button>

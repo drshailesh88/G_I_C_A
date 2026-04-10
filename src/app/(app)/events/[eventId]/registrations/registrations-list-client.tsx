@@ -7,6 +7,8 @@ import { ArrowLeft, Search, Filter, CheckCircle2, Clock, XCircle, AlertTriangle 
 import { cn } from '@/lib/utils';
 import { useRole } from '@/hooks/use-role';
 import { updateRegistrationStatus } from '@/lib/actions/registration';
+import { ResponsiveList, type Column } from '@/components/responsive/responsive-list';
+import { ResponsiveMetricGrid } from '@/components/responsive/responsive-metric-grid';
 
 type Registration = {
   id: string;
@@ -34,6 +36,108 @@ const STATUS_CONFIG: Record<string, { icon: React.ComponentType<{ className?: st
 };
 
 const STATUS_FILTERS = ['all', 'pending', 'confirmed', 'waitlisted', 'declined', 'cancelled'] as const;
+
+function StatusBadge({ status }: { status: string }) {
+  const config = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
+  const Icon = config.icon;
+  return (
+    <span className={cn('flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', config.bg, config.color)}>
+      <Icon className="h-3 w-3" />
+      {status}
+    </span>
+  );
+}
+
+// ── Column definitions (priority: high=mobile, medium=tablet, low=desktop) ──
+
+function getColumns(canWrite: boolean, onStatusChange: (id: string, status: string) => void): Column<Registration>[] {
+  const cols: Column<Registration>[] = [
+    {
+      key: 'name',
+      header: 'Name',
+      priority: 'high',
+      render: (reg) => (
+        <Link href={`/people/${reg.personId}`} className="font-medium text-text-primary hover:text-accent">
+          {reg.personName}
+        </Link>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      priority: 'high',
+      render: (reg) => <StatusBadge status={reg.status} />,
+    },
+    {
+      key: 'category',
+      header: 'Category',
+      priority: 'medium',
+      render: (reg) => (
+        <span className="text-text-secondary capitalize">{reg.category}</span>
+      ),
+    },
+    {
+      key: 'date',
+      header: 'Registered',
+      priority: 'medium',
+      render: (reg) => (
+        <span className="text-text-secondary">
+          {new Date(reg.registeredAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+        </span>
+      ),
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      priority: 'low',
+      render: (reg) => {
+        const actions = getActions(reg.status);
+        if (!canWrite || actions.length === 0) return <span className="text-text-muted">—</span>;
+        return (
+          <div className="flex gap-2">
+            {actions.map((action) => (
+              <button
+                key={action.status}
+                onClick={(e) => { e.stopPropagation(); onStatusChange(reg.id, action.status); }}
+                className={cn(
+                  'min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium',
+                  action.variant === 'success' && 'bg-success/10 text-success hover:bg-success/20',
+                  action.variant === 'error' && 'bg-error/10 text-error hover:bg-error/20',
+                  action.variant === 'warning' && 'bg-warning/10 text-warning hover:bg-warning/20',
+                )}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        );
+      },
+    },
+  ];
+  return cols;
+}
+
+function getActions(status: string): { label: string; status: string; variant: string }[] {
+  if (status === 'pending') {
+    return [
+      { label: 'Approve', status: 'confirmed', variant: 'success' },
+      { label: 'Decline', status: 'declined', variant: 'error' },
+      { label: 'Waitlist', status: 'waitlisted', variant: 'warning' },
+      { label: 'Cancel', status: 'cancelled', variant: 'error' },
+    ];
+  }
+  if (status === 'waitlisted') {
+    return [
+      { label: 'Approve', status: 'confirmed', variant: 'success' },
+      { label: 'Decline', status: 'declined', variant: 'error' },
+      { label: 'Cancel', status: 'cancelled', variant: 'error' },
+    ];
+  }
+  if (status === 'confirmed') {
+    return [{ label: 'Cancel', status: 'cancelled', variant: 'error' }];
+  }
+  return [];
+}
 
 export function RegistrationsListClient({
   eventId,
@@ -80,6 +184,18 @@ export function RegistrationsListClient({
     });
   }
 
+  const columns = getColumns(canWrite, handleStatusChange);
+
+  const emptyState = (
+    <div className="flex flex-col items-center py-12 text-center">
+      <Filter className="h-10 w-10 text-text-muted" />
+      <p className="mt-3 font-medium text-text-primary">No registrations found</p>
+      <p className="text-sm text-text-secondary">
+        {searchQuery ? 'Try a different search' : 'No registrations yet'}
+      </p>
+    </div>
+  );
+
   return (
     <div className="px-4 py-6">
       {/* Header */}
@@ -103,8 +219,8 @@ export function RegistrationsListClient({
         </div>
       )}
 
-      {/* Status summary */}
-      <div className="mt-4 grid grid-cols-3 gap-2">
+      {/* Status summary — auto-reflow via ResponsiveMetricGrid */}
+      <ResponsiveMetricGrid minCardWidth={120} gap="var(--space-xs)" className="mt-4">
         {(['confirmed', 'pending', 'waitlisted'] as const).map((s) => {
           const config = STATUS_CONFIG[s];
           const Icon = config.icon;
@@ -116,7 +232,7 @@ export function RegistrationsListClient({
             </div>
           );
         })}
-      </div>
+      </ResponsiveMetricGrid>
 
       {/* Search */}
       <div className="relative mt-4">
@@ -148,30 +264,28 @@ export function RegistrationsListClient({
         ))}
       </div>
 
-      {/* List */}
-      <div className={cn('mt-4 space-y-2 transition-opacity', isPending && 'opacity-50')}>
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center py-12 text-center">
-            <Filter className="h-10 w-10 text-text-muted" />
-            <p className="mt-3 font-medium text-text-primary">No registrations found</p>
-            <p className="text-sm text-text-secondary">
-              {searchQuery ? 'Try a different search' : 'No registrations yet'}
-            </p>
-          </div>
-        ) : (
-          filtered.map((reg) => (
+      {/* List — responsive: cards on mobile/tablet, table on desktop */}
+      <div className={cn('mt-4 transition-opacity foldable-left-pane', isPending && 'opacity-50')}>
+        <ResponsiveList
+          data={filtered}
+          columns={columns}
+          renderCard={(reg) => (
             <RegistrationCard
-              key={reg.id}
               registration={reg}
               canWrite={canWrite}
               onStatusChange={handleStatusChange}
             />
-          ))
-        )}
+          )}
+          keyExtractor={(reg) => reg.id}
+          emptyState={emptyState}
+          isLoading={false}
+        />
       </div>
     </div>
   );
 }
+
+// ── Registration Card (mobile/tablet view) ──
 
 function RegistrationCard({
   registration: reg,
@@ -182,27 +296,11 @@ function RegistrationCard({
   canWrite: boolean;
   onStatusChange: (id: string, status: string) => void;
 }) {
-  const config = STATUS_CONFIG[reg.status] || STATUS_CONFIG.pending;
-  const Icon = config.icon;
   const regDate = new Date(reg.registeredAt);
-
-  // Determine available actions based on current status
-  const actions: { label: string; status: string; variant: string }[] = [];
-  if (reg.status === 'pending') {
-    actions.push({ label: 'Approve', status: 'confirmed', variant: 'success' });
-    actions.push({ label: 'Decline', status: 'declined', variant: 'error' });
-    actions.push({ label: 'Waitlist', status: 'waitlisted', variant: 'warning' });
-    actions.push({ label: 'Cancel', status: 'cancelled', variant: 'error' });
-  } else if (reg.status === 'waitlisted') {
-    actions.push({ label: 'Approve', status: 'confirmed', variant: 'success' });
-    actions.push({ label: 'Decline', status: 'declined', variant: 'error' });
-    actions.push({ label: 'Cancel', status: 'cancelled', variant: 'error' });
-  } else if (reg.status === 'confirmed') {
-    actions.push({ label: 'Cancel', status: 'cancelled', variant: 'error' });
-  }
+  const actions = getActions(reg.status);
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+    <div className="min-h-[44px] rounded-xl border border-border bg-surface p-4">
       <div className="flex items-start justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -212,13 +310,11 @@ function RegistrationCard({
             >
               {reg.personName}
             </Link>
-            <span className={cn('flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium', config.bg, config.color)}>
-              <Icon className="h-3 w-3" />
-              {reg.status}
-            </span>
+            <StatusBadge status={reg.status} />
           </div>
           <p className="mt-0.5 text-xs text-text-muted">{reg.registrationNumber}</p>
           <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-text-muted">
+            {reg.category && <span className="capitalize">{reg.category}</span>}
             {reg.personEmail && <span>{reg.personEmail}</span>}
             {reg.personOrganization && <span>{reg.personOrganization}</span>}
           </div>
@@ -228,7 +324,6 @@ function RegistrationCard({
         </div>
       </div>
 
-      {/* Action buttons */}
       {canWrite && actions.length > 0 && (
         <div className="mt-3 flex gap-2">
           {actions.map((action) => (
@@ -236,7 +331,7 @@ function RegistrationCard({
               key={action.status}
               onClick={() => onStatusChange(reg.id, action.status)}
               className={cn(
-                'rounded-lg px-3 py-1.5 text-xs font-medium',
+                'min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium',
                 action.variant === 'success' && 'bg-success/10 text-success hover:bg-success/20',
                 action.variant === 'error' && 'bg-error/10 text-error hover:bg-error/20',
                 action.variant === 'warning' && 'bg-warning/10 text-warning hover:bg-warning/20',

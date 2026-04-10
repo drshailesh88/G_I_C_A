@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { updateCertificateTemplate } from '@/lib/actions/certificate';
+import { DetailView } from '@/components/responsive/detail-view';
 import type { Template as PdfmeTemplate } from '@pdfme/common';
 
 type Props = {
@@ -200,10 +201,23 @@ export function CertificateEditorClient({
 
   const isReadOnly = status === 'archived';
 
+  const fieldReferenceSidebar = allowedVariables.length > 0 ? (
+    <div className="p-3">
+      <h3 className="text-xs font-semibold text-gray-500 uppercase">Available Fields</h3>
+      <div className="mt-2 space-y-1">
+        {allowedVariables.map((v) => (
+          <code key={v} className="block rounded bg-gray-100 px-2 py-1 font-mono text-xs text-gray-700">
+            {`{${v}}`}
+          </code>
+        ))}
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div className="flex h-screen flex-col">
       {/* Header bar */}
-      <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 bg-white px-4 py-2">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.push(`/events/${eventId}/certificates`)}
@@ -227,21 +241,6 @@ export function CertificateEditorClient({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Dynamic field reference */}
-          {allowedVariables.length > 0 && (
-            <div className="hidden items-center gap-1 text-xs text-gray-400 lg:flex">
-              <span>Fields:</span>
-              {allowedVariables.slice(0, 5).map((v) => (
-                <code key={v} className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[10px]">
-                  {`{${v}}`}
-                </code>
-              ))}
-              {allowedVariables.length > 5 && (
-                <span>+{allowedVariables.length - 5} more</span>
-              )}
-            </div>
-          )}
-
           {error && (
             <span className="text-xs text-red-600">{error}</span>
           )}
@@ -283,11 +282,17 @@ export function CertificateEditorClient({
         </div>
       )}
 
-      {/* pdfme Designer container */}
-      <div
-        ref={containerRef}
-        className={`flex-1 ${!loaded ? 'hidden' : ''}`}
-        data-testid="pdfme-designer-container"
+      {/* pdfme Designer + field reference sidebar */}
+      <DetailView
+        main={
+          <div
+            ref={containerRef}
+            className={`h-full ${!loaded ? 'hidden' : ''}`}
+            data-testid="pdfme-designer-container"
+          />
+        }
+        sidebar={fieldReferenceSidebar}
+        sidebarPosition="right"
       />
     </div>
   );

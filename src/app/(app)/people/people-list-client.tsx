@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRole } from '@/hooks/use-role';
+import { ResponsiveList, type ColumnDef } from '@/components/responsive/responsive-list';
 
 type Person = {
   id: string;
@@ -39,6 +40,73 @@ const SAVED_VIEWS = [
   { key: 'vips', label: 'VIPs' },
   { key: 'recent', label: 'Recently Added' },
 ] as const;
+
+// ── Column definitions (priority: 1=mobile, 2=tablet, 3=desktop) ──
+
+const COLUMNS: ColumnDef<Person>[] = [
+  {
+    key: 'name',
+    header: 'Name',
+    priority: 1,
+    render: (p) => (
+      <Link href={`/people/${p.id}`} className="font-medium text-text-primary hover:text-accent">
+        {p.salutation ? `${p.salutation}. ` : ''}{p.fullName}
+        {p.designation && (
+          <span className="ml-2 text-xs text-text-secondary">{p.designation}</span>
+        )}
+      </Link>
+    ),
+  },
+  {
+    key: 'email',
+    header: 'Email',
+    priority: 2,
+    render: (p) => (
+      <span className="text-text-secondary">{p.email ?? '—'}</span>
+    ),
+  },
+  {
+    key: 'tags',
+    header: 'Tags',
+    priority: 2,
+    render: (p) => {
+      const tags = Array.isArray(p.tags)
+        ? (p.tags as unknown[]).filter((t): t is string => typeof t === 'string')
+        : [];
+      if (tags.length === 0) return <span className="text-text-muted">—</span>;
+      return (
+        <div className="flex flex-wrap gap-1">
+          {tags.map((tag) => (
+            <span
+              key={tag}
+              className="rounded-full bg-accent-light px-2 py-0.5 text-[10px] font-medium text-accent"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      );
+    },
+  },
+  {
+    key: 'phone',
+    header: 'Phone',
+    priority: 3,
+    render: (p) => (
+      <span className="text-text-secondary">{p.phoneE164 ?? '—'}</span>
+    ),
+  },
+  {
+    key: 'organization',
+    header: 'Organization',
+    priority: 3,
+    render: (p) => (
+      <span className="text-text-secondary">{p.organization ?? '—'}</span>
+    ),
+  },
+];
+
+// ── Main component ──────────────────────────────────────────
 
 export function PeopleListClient({
   people,
@@ -67,7 +135,6 @@ export function PeopleListClient({
       if (value) next.set(key, value);
       else next.delete(key);
     }
-    // Reset page when changing filters
     if (!params.page) next.delete('page');
     startTransition(() => {
       router.push(`/people?${next.toString()}`);
@@ -78,6 +145,20 @@ export function PeopleListClient({
     e.preventDefault();
     navigate({ q: searchValue || undefined });
   }
+
+  const emptyState = (
+    <div className="flex flex-col items-center justify-center py-16 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent-light">
+        <Search className="h-8 w-8 text-accent" />
+      </div>
+      <p className="mt-4 font-medium text-text-primary">No people found</p>
+      <p className="mt-1 text-sm text-text-secondary">
+        {currentQuery
+          ? 'Try adjusting your search or filters'
+          : 'Add your first person or import from CSV'}
+      </p>
+    </div>
+  );
 
   return (
     <div className="px-4 py-6">
@@ -141,28 +222,15 @@ export function PeopleListClient({
         ))}
       </div>
 
-      {/* Loading overlay */}
-      <div className={cn('mt-4 transition-opacity', isPending && 'opacity-50')}>
-        {/* People List */}
-        {people.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent-light">
-              <Search className="h-8 w-8 text-accent" />
-            </div>
-            <p className="mt-4 font-medium text-text-primary">No people found</p>
-            <p className="mt-1 text-sm text-text-secondary">
-              {currentQuery
-                ? 'Try adjusting your search or filters'
-                : 'Add your first person or import from CSV'}
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {people.map((person) => (
-              <PersonCard key={person.id} person={person} />
-            ))}
-          </div>
-        )}
+      {/* People list — responsive: cards on mobile/tablet, table on desktop */}
+      <div className={cn('mt-4 transition-opacity foldable-left-pane', isPending && 'opacity-50')}>
+        <ResponsiveList
+          data={people}
+          columns={COLUMNS}
+          renderCard={(person) => <PersonCard person={person} />}
+          emptyState={emptyState}
+          isLoading={false}
+        />
 
         {/* Pagination */}
         {totalPages > 1 && (
@@ -170,7 +238,7 @@ export function PeopleListClient({
             <button
               disabled={page <= 1}
               onClick={() => navigate({ page: String(page - 1) })}
-              className="flex items-center gap-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-secondary hover:bg-background disabled:opacity-40"
+              className="flex min-h-[44px] items-center gap-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-secondary hover:bg-background disabled:opacity-40"
             >
               <ChevronLeft className="h-4 w-4" />
               Previous
@@ -181,7 +249,7 @@ export function PeopleListClient({
             <button
               disabled={page >= totalPages}
               onClick={() => navigate({ page: String(page + 1) })}
-              className="flex items-center gap-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-secondary hover:bg-background disabled:opacity-40"
+              className="flex min-h-[44px] items-center gap-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-text-secondary hover:bg-background disabled:opacity-40"
             >
               Next
               <ChevronRight className="h-4 w-4" />
@@ -193,15 +261,21 @@ export function PeopleListClient({
   );
 }
 
+// ── Person Card (mobile/tablet view) ────────────────────────
+
 function PersonCard({ person }: { person: Person }) {
   const initials = person.fullName && person.fullName !== '[ANONYMIZED]'
     ? person.fullName.split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
     : '??';
 
+  const tags = Array.isArray(person.tags)
+    ? (person.tags as unknown[]).filter((t): t is string => typeof t === 'string')
+    : [];
+
   return (
     <Link
       href={`/people/${person.id}`}
-      className="flex items-start gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-accent"
+      className="flex min-h-[44px] items-start gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-accent"
     >
       {/* Avatar */}
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
@@ -248,9 +322,9 @@ function PersonCard({ person }: { person: Person }) {
         </div>
 
         {/* Tags */}
-        {Array.isArray(person.tags) && (person.tags as unknown[]).filter((t): t is string => typeof t === 'string').length > 0 && (
+        {tags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
-            {(person.tags as unknown[]).filter((t): t is string => typeof t === 'string').map((tag) => (
+            {tags.map((tag) => (
               <span
                 key={tag}
                 className="rounded-full bg-accent-light px-2 py-0.5 text-[10px] font-medium text-accent"

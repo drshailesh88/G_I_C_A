@@ -7,6 +7,7 @@ import { ArrowLeft, Send, Clock, CheckCircle2, XCircle, Eye, AlertTriangle } fro
 import { cn } from '@/lib/utils';
 import { useRole } from '@/hooks/use-role';
 import { createFacultyInvite } from '@/lib/actions/program';
+import { FormGrid } from '@/components/responsive/form-grid';
 
 type Invite = {
   id: string;
@@ -108,31 +109,37 @@ export function FacultyInviteClient({
         <form onSubmit={handleSendInvite} className="mt-4 rounded-xl border border-border bg-surface p-4">
           <h3 className="text-sm font-semibold text-text-primary">Send New Invitation</h3>
 
-          <div className="mt-3">
-            <label className="mb-1 block text-xs font-medium text-text-secondary">
-              Person ID <span className="text-error">*</span>
-            </label>
-            <input
-              type="text"
-              value={personId}
-              onChange={(e) => setPersonId(e.target.value)}
-              placeholder="Enter person UUID"
-              required
-              className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-            />
-            <p className="mt-1 text-[10px] text-text-muted">
-              Find the person ID from the People section. One invite per person per event.
-            </p>
-          </div>
+          <FormGrid columns={2} className="mt-3">
+            {/* Faculty select — full width */}
+            <div className="col-span-full">
+              <label className="mb-1 block text-xs font-medium text-text-secondary">
+                Person ID <span className="text-error">*</span>
+              </label>
+              <input
+                type="text"
+                value={personId}
+                onChange={(e) => setPersonId(e.target.value)}
+                placeholder="Enter person UUID"
+                required
+                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+              <p className="mt-1 text-[10px] text-text-muted">
+                Find the person ID from the People section. One invite per person per event.
+              </p>
+            </div>
 
-          <button
-            type="submit"
-            disabled={isPending || !personId.trim()}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-accent py-2.5 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
-          >
-            <Send className="h-4 w-4" />
-            Send Invitation Email
-          </button>
+            {/* Send button — full width */}
+            <div className="col-span-full">
+              <button
+                type="submit"
+                disabled={isPending || !personId.trim()}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent py-2.5 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
+              >
+                <Send className="h-4 w-4" />
+                Send Invitation Email
+              </button>
+            </div>
+          </FormGrid>
         </form>
       )}
 

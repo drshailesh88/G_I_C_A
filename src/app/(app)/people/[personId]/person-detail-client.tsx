@@ -102,12 +102,13 @@ export function PersonDetailClient({ person }: { person: Person }) {
   const updatedDate = new Date(person.updatedAt);
 
   return (
-    <div className="px-4 py-6">
+    <div style={{ padding: 'var(--space-md) var(--space-sm)' }}>
       {/* Back + Actions */}
       <div className="flex items-center justify-between">
         <Link
           href="/people"
-          className="flex items-center gap-1 text-sm text-text-secondary hover:text-text-primary"
+          className="flex items-center gap-1 text-text-secondary hover:text-text-primary"
+          style={{ fontSize: 'var(--font-size-sm)' }}
         >
           <ArrowLeft className="h-4 w-4" />
           People
@@ -116,7 +117,8 @@ export function PersonDetailClient({ person }: { person: Person }) {
           <div className="flex items-center gap-2">
             <Link
               href={`/people/${person.id}/edit`}
-              className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-primary hover:bg-background"
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 font-medium text-text-primary hover:bg-background"
+              style={{ fontSize: 'var(--font-size-sm)', minHeight: 'var(--touch-min)' }}
             >
               <Pencil className="h-3.5 w-3.5" />
               Edit
@@ -128,7 +130,7 @@ export function PersonDetailClient({ person }: { person: Person }) {
       {/* Error banner */}
       {error && (
         <div className="mt-4 rounded-lg border border-error/20 bg-error/5 p-3">
-          <p className="text-sm text-error">{error}</p>
+          <p style={{ fontSize: 'var(--font-size-sm)' }} className="text-error">{error}</p>
         </div>
       )}
 
@@ -138,12 +140,12 @@ export function PersonDetailClient({ person }: { person: Person }) {
           {initials}
         </div>
         <div className="min-w-0">
-          <h1 className="text-xl font-bold text-text-primary">
+          <h1 style={{ fontSize: 'var(--font-size-xl)' }} className="font-bold text-text-primary">
             {person.salutation ? `${person.salutation}. ` : ''}
             {person.fullName}
           </h1>
           {person.designation && (
-            <p className="text-sm text-text-secondary">{person.designation}</p>
+            <p style={{ fontSize: 'var(--font-size-sm)' }} className="text-text-secondary">{person.designation}</p>
           )}
           {isArchived && (
             <span className="mt-1 inline-block rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
@@ -153,10 +155,17 @@ export function PersonDetailClient({ person }: { person: Person }) {
         </div>
       </div>
 
-      {/* Contact Info */}
-      <div className="mt-6 space-y-3">
-        <h2 className="text-sm font-semibold text-text-primary">Contact</h2>
-        <div className="space-y-2">
+      {/* Contact Info — 2-col grid on desktop */}
+      <div style={{ marginTop: 'var(--space-lg)' }}>
+        <h2 style={{ fontSize: 'var(--font-size-sm)' }} className="font-semibold text-text-primary">Contact</h2>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))',
+            gap: 'var(--space-xs)',
+            marginTop: 'var(--space-xs)',
+          }}
+        >
           {person.email && (
             <InfoRow icon={Mail} label="Email" value={person.email} />
           )}
@@ -177,8 +186,8 @@ export function PersonDetailClient({ person }: { person: Person }) {
 
       {/* Tags */}
       {tags.length > 0 && (
-        <div className="mt-6">
-          <h2 className="text-sm font-semibold text-text-primary">Tags</h2>
+        <div style={{ marginTop: 'var(--space-lg)' }}>
+          <h2 style={{ fontSize: 'var(--font-size-sm)' }} className="font-semibold text-text-primary">Tags</h2>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {tags.map((tag) => (
               <span
@@ -193,10 +202,10 @@ export function PersonDetailClient({ person }: { person: Person }) {
       )}
 
       {/* Change History */}
-      <div className="mt-6">
-        <h2 className="text-sm font-semibold text-text-primary">Change History</h2>
-        <div className="mt-2 rounded-xl border border-border bg-surface p-4">
-          <div className="flex items-center gap-2 text-sm text-text-muted">
+      <div style={{ marginTop: 'var(--space-lg)' }}>
+        <h2 style={{ fontSize: 'var(--font-size-sm)' }} className="font-semibold text-text-primary">Change History</h2>
+        <div className="mt-2 rounded-xl border border-border bg-surface" style={{ padding: 'var(--space-sm)' }}>
+          <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>
             <Clock className="h-4 w-4" />
             <span>
               Created {createdDate.toLocaleDateString('en-IN', {
@@ -207,7 +216,7 @@ export function PersonDetailClient({ person }: { person: Person }) {
             </span>
           </div>
           {updatedDate.getTime() > createdDate.getTime() && (
-            <div className="mt-1 flex items-center gap-2 text-sm text-text-muted">
+            <div className="mt-1 flex items-center gap-2 text-text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>
               <Clock className="h-4 w-4" />
               <span>
                 Last updated {updatedDate.toLocaleDateString('en-IN', {
@@ -223,14 +232,15 @@ export function PersonDetailClient({ person }: { person: Person }) {
 
       {/* Danger Zone — only for users with write access */}
       {canWrite && (
-        <div className="mt-8 rounded-xl border border-error/20 bg-error/5 p-4">
-          <h2 className="text-sm font-semibold text-error">Danger Zone</h2>
+        <div className="mt-8 rounded-xl border border-error/20 bg-error/5" style={{ padding: 'var(--space-sm)' }}>
+          <h2 style={{ fontSize: 'var(--font-size-sm)' }} className="font-semibold text-error">Danger Zone</h2>
           <div className="mt-3 space-y-2">
             {isArchived ? (
               <button
                 onClick={handleRestore}
                 disabled={isPending}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary hover:bg-background disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 font-medium text-text-primary hover:bg-background disabled:opacity-50"
+                style={{ fontSize: 'var(--font-size-sm)', minHeight: 'var(--touch-min)' }}
               >
                 <RotateCcw className="h-4 w-4" />
                 Restore Person
@@ -238,7 +248,8 @@ export function PersonDetailClient({ person }: { person: Person }) {
             ) : !showArchiveConfirm ? (
               <button
                 onClick={() => setShowArchiveConfirm(true)}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-warning/50 bg-surface px-4 py-2.5 text-sm font-medium text-warning hover:bg-warning/5"
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-warning/50 bg-surface px-4 py-2.5 font-medium text-warning hover:bg-warning/5"
+                style={{ fontSize: 'var(--font-size-sm)', minHeight: 'var(--touch-min)' }}
               >
                 <Archive className="h-4 w-4" />
                 Archive Person
@@ -272,7 +283,8 @@ export function PersonDetailClient({ person }: { person: Person }) {
                 {!showAnonymizeConfirm ? (
                   <button
                     onClick={() => setShowAnonymizeConfirm(true)}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-error/50 bg-surface px-4 py-2.5 text-sm font-medium text-error hover:bg-error/5"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-error/50 bg-surface px-4 py-2.5 font-medium text-error hover:bg-error/5"
+                    style={{ fontSize: 'var(--font-size-sm)', minHeight: 'var(--touch-min)' }}
                   >
                     <ShieldAlert className="h-4 w-4" />
                     Anonymize Person
@@ -318,11 +330,11 @@ function InfoRow({
   value: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg bg-surface p-3">
+    <div className="flex items-center gap-3 rounded-lg bg-surface" style={{ padding: 'var(--space-xs)' }}>
       <Icon className="h-4 w-4 shrink-0 text-text-muted" />
       <div className="min-w-0">
-        <p className="text-xs text-text-muted">{label}</p>
-        <p className="truncate text-sm text-text-primary">{value}</p>
+        <p style={{ fontSize: 'var(--font-size-xs)' }} className="text-text-muted">{label}</p>
+        <p className="truncate text-text-primary" style={{ fontSize: 'var(--font-size-sm)' }}>{value}</p>
       </div>
     </div>
   );

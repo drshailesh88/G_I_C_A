@@ -40,6 +40,10 @@ export function useResponsiveNav() {
     if (typeof window === 'undefined') return 'mobile';
     return getNavMode(window.innerWidth);
   });
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  });
 
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -75,12 +79,24 @@ export function useResponsiveNav() {
     });
   }, [navMode]);
 
+  const closeSidebar = useCallback(() => {
+    setSidebarOpen(false);
+    if (navMode === 'desktop') {
+      try {
+        localStorage.setItem(SIDEBAR_STORAGE_KEY, 'false');
+      } catch {
+        // localStorage unavailable
+      }
+    }
+  }, [navMode]);
+
   // Listen to matchMedia changes (not resize events)
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     const desktopMql = window.matchMedia(MEDIA_QUERIES.DESKTOP);
     const tabletMql = window.matchMedia(MEDIA_QUERIES.TABLET);
+    const reducedMotionMql = window.matchMedia('(prefers-reduced-motion: reduce)');
 
     function update() {
       let mode: NavMode;
@@ -112,20 +128,29 @@ export function useResponsiveNav() {
       });
     }
 
+    function updateReducedMotion() {
+      setPrefersReducedMotion(reducedMotionMql.matches);
+    }
+
     desktopMql.addEventListener('change', update);
     tabletMql.addEventListener('change', update);
+    reducedMotionMql.addEventListener('change', updateReducedMotion);
 
     return () => {
       desktopMql.removeEventListener('change', update);
       tabletMql.removeEventListener('change', update);
+      reducedMotionMql.removeEventListener('change', updateReducedMotion);
     };
   }, []);
 
   return {
     navMode,
     sidebarOpen,
+    isSidebarOpen: sidebarOpen,
     setSidebarOpen,
     toggleSidebar,
+    closeSidebar,
+    prefersReducedMotion,
     isMobile: navMode === 'mobile',
     isTablet: navMode === 'tablet',
     isDesktop: navMode === 'desktop',

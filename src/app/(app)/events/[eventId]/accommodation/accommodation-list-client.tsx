@@ -161,7 +161,9 @@ export function AccommodationListClient({
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
             Active ({active.length})
           </h2>
-          <div className="flex flex-col gap-3">
+
+          {/* Mobile: Card view */}
+          <div className="flex flex-col gap-3 md:hidden">
             {active.map((record) => (
               <AccommodationCard
                 key={record.id}
@@ -176,6 +178,20 @@ export function AccommodationListClient({
               />
             ))}
           </div>
+
+          {/* Desktop: Data table */}
+          <div className="hidden md:block">
+            <AccommodationTable
+              records={active}
+              eventId={eventId}
+              flagsByRecord={flagsByRecord}
+              onCancel={handleCancel}
+              onReviewFlag={handleReviewFlag}
+              onResolveFlag={handleResolveFlag}
+              cancelling={cancelling}
+              reviewingFlag={reviewingFlag}
+            />
+          </div>
         </section>
       )}
 
@@ -185,7 +201,9 @@ export function AccommodationListClient({
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
             Cancelled ({cancelled.length})
           </h2>
-          <div className="flex flex-col gap-3">
+
+          {/* Mobile: Card view */}
+          <div className="flex flex-col gap-3 md:hidden">
             {cancelled.map((record) => (
               <AccommodationCard
                 key={record.id}
@@ -199,6 +217,20 @@ export function AccommodationListClient({
                 reviewingFlag={null}
               />
             ))}
+          </div>
+
+          {/* Desktop: Data table */}
+          <div className="hidden md:block">
+            <AccommodationTable
+              records={cancelled}
+              eventId={eventId}
+              flagsByRecord={new Map()}
+              onCancel={handleCancel}
+              onReviewFlag={handleReviewFlag}
+              onResolveFlag={handleResolveFlag}
+              cancelling={null}
+              reviewingFlag={null}
+            />
           </div>
         </section>
       )}
@@ -220,6 +252,149 @@ export function AccommodationListClient({
           </Link>
         </div>
       )}
+    </div>
+  );
+}
+
+function AccommodationTable({
+  records,
+  eventId,
+  flagsByRecord,
+  onCancel,
+  onReviewFlag,
+  onResolveFlag,
+  cancelling,
+  reviewingFlag,
+}: {
+  records: AccommodationRecord[];
+  eventId: string;
+  flagsByRecord: Map<string, RedFlag[]>;
+  onCancel: (id: string) => void;
+  onReviewFlag: (id: string) => void;
+  onResolveFlag: (id: string) => void;
+  cancelling: string | null;
+  reviewingFlag: string | null;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-xl border border-border">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-border bg-surface">
+            <th className="px-4 py-3 text-left text-xs font-semibold text-text-muted">Name</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-text-muted">Hotel</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-text-muted">Dates</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-text-muted">Room</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold text-text-muted">Status</th>
+            <th className="px-4 py-3 text-right text-xs font-semibold text-text-muted">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {records.map((record) => {
+            const style = STATUS_STYLES[record.recordStatus] || STATUS_STYLES.draft;
+            const isCancelled = record.recordStatus === 'cancelled';
+            const recordFlags = flagsByRecord.get(record.id) || [];
+
+            return (
+              <tr
+                key={record.id}
+                className={cn(
+                  'border-b border-border/50 last:border-b-0',
+                  isCancelled && 'opacity-60',
+                )}
+              >
+                <td className="px-4 py-3">
+                  <Link
+                    href={`/events/${eventId}/accommodation/${record.id}`}
+                    className="font-medium text-text-primary hover:text-primary"
+                  >
+                    {record.personName}
+                  </Link>
+                </td>
+                <td className="px-4 py-3 text-text-secondary">
+                  <span className="font-medium">{record.hotelName}</span>
+                  {record.hotelCity && (
+                    <span className="text-text-muted"> · {record.hotelCity}</span>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-text-muted">
+                  {format(new Date(record.checkInDate), 'MMM d')} –{' '}
+                  {format(new Date(record.checkOutDate), 'MMM d')}
+                </td>
+                <td className="px-4 py-3 text-text-muted">
+                  {record.roomType && <span>{record.roomType}</span>}
+                  {record.roomNumber && <span> · Room {record.roomNumber}</span>}
+                </td>
+                <td className="px-4 py-3">
+                  <span
+                    className={cn(
+                      'rounded-full border px-2 py-0.5 text-xs font-medium',
+                      style.color,
+                    )}
+                  >
+                    {style.label}
+                  </span>
+                  {recordFlags.length > 0 && (
+                    <div className="mt-1.5 space-y-1">
+                      {recordFlags.map((flag) => {
+                        const flagStyle =
+                          FLAG_STATUS_STYLES[flag.flagStatus] || FLAG_STATUS_STYLES.unreviewed;
+                        return (
+                          <div
+                            key={flag.id}
+                            className={cn(
+                              'flex items-center gap-1.5 rounded border px-2 py-1 text-xs',
+                              flagStyle.bgColor,
+                            )}
+                          >
+                            <AlertTriangle
+                              className={cn('h-3 w-3 flex-shrink-0', flagStyle.color)}
+                            />
+                            <span className={flagStyle.color}>{flag.flagDetail}</span>
+                            <div className="ml-auto flex gap-1">
+                              {flag.flagStatus === 'unreviewed' && (
+                                <button
+                                  onClick={() => onReviewFlag(flag.id)}
+                                  disabled={reviewingFlag === flag.id}
+                                  className="text-amber-700 hover:text-amber-900 disabled:opacity-50"
+                                  title="Mark Reviewed"
+                                >
+                                  <Eye className="h-3 w-3" />
+                                </button>
+                              )}
+                              {(flag.flagStatus === 'unreviewed' ||
+                                flag.flagStatus === 'reviewed') && (
+                                <button
+                                  onClick={() => onResolveFlag(flag.id)}
+                                  disabled={reviewingFlag === flag.id}
+                                  className="text-green-700 hover:text-green-900 disabled:opacity-50"
+                                  title="Resolve"
+                                >
+                                  <CheckCircle className="h-3 w-3" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {!isCancelled && (
+                    <button
+                      onClick={() => onCancel(record.id)}
+                      disabled={cancelling === record.id}
+                      className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
+                    >
+                      {cancelling === record.id ? 'Cancelling...' : 'Cancel'}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

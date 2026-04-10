@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft, Plus, Bus, Users, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { useResponsiveNav } from '@/hooks/use-responsive-nav';
 
 type TransportBatch = {
   id: string;
@@ -45,6 +46,7 @@ export function TransportPlanningClient({
   batches: TransportBatch[];
 }) {
   const router = useRouter();
+  const { isMobile } = useResponsiveNav();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
@@ -160,49 +162,113 @@ export function TransportPlanningClient({
         </form>
       )}
 
-      {/* Grouped Batch View */}
+      {/* Batch List — card view (mobile/tablet) or table view (desktop) */}
       {grouped.length > 0 ? (
-        <div className="mt-6 space-y-6">
-          {grouped.map((dateGroup) => (
-            <section key={dateGroup.date}>
-              <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
-                {dateGroup.date}
-              </h2>
-              <div className="space-y-3">
-                {dateGroup.batches.map((batch) => {
-                  const style = STATUS_STYLES[batch.batchStatus] || STATUS_STYLES.planned;
-                  return (
-                    <Link
-                      key={batch.id}
-                      href={`/events/${eventId}/transport/assign/${batch.id}`}
-                      className="flex items-center justify-between rounded-xl border border-border bg-surface p-4 transition-colors hover:border-accent/50"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <Bus className="h-4 w-4 text-text-muted" />
-                          <span className="text-sm font-medium text-text-primary">
-                            {batch.pickupHub} → {batch.dropHub}
-                          </span>
-                          <span className={cn('rounded-full border px-2 py-0.5 text-xs font-medium', style.color)}>
-                            {style.label}
-                          </span>
+        isMobile ? (
+          <div data-testid="transport-cards" className="mt-6 space-y-6">
+            {grouped.map((dateGroup) => (
+              <section key={dateGroup.date}>
+                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                  {dateGroup.date}
+                </h2>
+                <div className="space-y-3">
+                  {dateGroup.batches.map((batch) => {
+                    const style = STATUS_STYLES[batch.batchStatus] || STATUS_STYLES.planned;
+                    return (
+                      <Link
+                        key={batch.id}
+                        href={`/events/${eventId}/transport/assign/${batch.id}`}
+                        className="flex items-center justify-between rounded-xl border border-border bg-surface p-4 transition-colors hover:border-accent/50"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <Bus className="h-4 w-4 text-text-muted" />
+                            <span className="text-sm font-medium text-text-primary">
+                              {batch.pickupHub} → {batch.dropHub}
+                            </span>
+                            <span className={cn('rounded-full border px-2 py-0.5 text-xs font-medium', style.color)}>
+                              {style.label}
+                            </span>
+                          </div>
+                          <div className="mt-1.5 flex items-center gap-3 text-xs text-text-muted">
+                            <span>{MOVEMENT_LABELS[batch.movementType] || batch.movementType}</span>
+                            <span>
+                              {format(new Date(batch.timeWindowStart), 'HH:mm')} – {format(new Date(batch.timeWindowEnd), 'HH:mm')}
+                            </span>
+                            <span>{batch.sourceCity}</span>
+                          </div>
                         </div>
-                        <div className="mt-1.5 flex items-center gap-3 text-xs text-text-muted">
-                          <span>{MOVEMENT_LABELS[batch.movementType] || batch.movementType}</span>
-                          <span>
-                            {format(new Date(batch.timeWindowStart), 'HH:mm')} – {format(new Date(batch.timeWindowEnd), 'HH:mm')}
-                          </span>
-                          <span>{batch.sourceCity}</span>
-                        </div>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-text-muted" />
-                    </Link>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
-        </div>
+                        <ChevronRight className="h-4 w-4 text-text-muted" />
+                      </Link>
+                    );
+                  })}
+                </div>
+              </section>
+            ))}
+          </div>
+        ) : (
+          <div data-testid="transport-table" className="mt-6 space-y-6">
+            {grouped.map((dateGroup) => (
+              <section key={dateGroup.date}>
+                <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
+                  {dateGroup.date}
+                </h2>
+                <div className="overflow-x-auto rounded-xl border border-border">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-surface text-left text-xs font-medium text-text-muted">
+                        <th className="px-4 py-3">Route</th>
+                        <th className="px-4 py-3">Type</th>
+                        <th className="px-4 py-3">Time</th>
+                        <th className="px-4 py-3">City</th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3"><span className="sr-only">Action</span></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dateGroup.batches.map((batch) => {
+                        const style = STATUS_STYLES[batch.batchStatus] || STATUS_STYLES.planned;
+                        return (
+                          <tr key={batch.id} className="border-b border-border last:border-b-0 hover:bg-surface/50">
+                            <td className="px-4 py-3">
+                              <Link
+                                href={`/events/${eventId}/transport/assign/${batch.id}`}
+                                className="flex items-center gap-2 font-medium text-text-primary hover:text-accent"
+                              >
+                                <Bus className="h-4 w-4 text-text-muted" />
+                                {batch.pickupHub} → {batch.dropHub}
+                              </Link>
+                            </td>
+                            <td className="px-4 py-3 text-text-secondary">
+                              {MOVEMENT_LABELS[batch.movementType] || batch.movementType}
+                            </td>
+                            <td className="px-4 py-3 text-text-secondary">
+                              {format(new Date(batch.timeWindowStart), 'HH:mm')} – {format(new Date(batch.timeWindowEnd), 'HH:mm')}
+                            </td>
+                            <td className="px-4 py-3 text-text-secondary">{batch.sourceCity}</td>
+                            <td className="px-4 py-3">
+                              <span className={cn('rounded-full border px-2 py-0.5 text-xs font-medium', style.color)}>
+                                {style.label}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3">
+                              <Link
+                                href={`/events/${eventId}/transport/assign/${batch.id}`}
+                                className="text-text-muted hover:text-accent"
+                              >
+                                <ChevronRight className="h-4 w-4" />
+                              </Link>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            ))}
+          </div>
+        )
       ) : (
         <div className="mt-12 flex flex-col items-center gap-4 text-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent-light">

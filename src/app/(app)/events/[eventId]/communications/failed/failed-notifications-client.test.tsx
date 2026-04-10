@@ -42,3 +42,49 @@ describe('FailedNotificationsClient — adversarial source checks', () => {
     expect(handleResendBlock).toMatch(new RegExp(`\\b${resultVar}\\.status\\b`));
   });
 });
+
+describe('FailedNotificationsClient — responsive layout', () => {
+  it('imports ResponsiveList from the responsive components', () => {
+    expect(source).toContain("from '@/components/responsive/responsive-list'");
+    expect(source).toContain('ResponsiveList');
+  });
+
+  it('uses ResponsiveList component in JSX', () => {
+    expect(source).toMatch(/<ResponsiveList/);
+  });
+
+  it('defines a renderCard function for mobile card view', () => {
+    expect(source).toMatch(/renderCard/);
+  });
+
+  it('defines columns with priority levels', () => {
+    // Must have high priority columns (recipient + error for mobile)
+    expect(source).toMatch(/priority:\s*['"]high['"]/);
+    // Must have medium priority columns (channel + time for tablet)
+    expect(source).toMatch(/priority:\s*['"]medium['"]/);
+    // Must have low priority columns (retry action for desktop)
+    expect(source).toMatch(/priority:\s*['"]low['"]/);
+  });
+
+  it('card view shows recipient info', () => {
+    expect(source).toMatch(/recipientEmail|recipientPhoneE164/);
+  });
+
+  it('card view shows error info', () => {
+    expect(source).toMatch(/lastErrorCode/);
+  });
+
+  it('preserves channel filter functionality', () => {
+    expect(source).toMatch(/channelFilter/);
+    expect(source).toMatch(/setChannelFilter/);
+  });
+
+  it('preserves retry and resend actions', () => {
+    expect(source).toMatch(/handleRetry/);
+    expect(source).toMatch(/handleResend/);
+  });
+
+  it('preserves the action result toast', () => {
+    expect(source).toMatch(/actionResult/);
+  });
+});

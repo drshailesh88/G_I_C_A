@@ -106,7 +106,7 @@ export function FlagsDashboard({ eventId }: { eventId: string }) {
     <div className="px-4 py-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Link href={`/events/${eventId}`} className="rounded-lg p-1.5 hover:bg-border/50">
+        <Link href={`/events/${eventId}`} className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg p-1.5 hover:bg-border/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
           <ArrowLeft className="h-5 w-5 text-text-primary" />
         </Link>
         <div>
@@ -146,7 +146,7 @@ export function FlagsDashboard({ eventId }: { eventId: string }) {
                   <button
                     onClick={() => handleGlobalToggle(flag)}
                     disabled={isPending}
-                    className={`relative ml-4 inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50 ${
+                    className={`relative ml-4 inline-flex min-h-[44px] w-11 flex-shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 ${
                       enabled ? 'bg-primary' : 'bg-gray-200'
                     }`}
                     role="switch"
@@ -190,7 +190,7 @@ export function FlagsDashboard({ eventId }: { eventId: string }) {
                   <button
                     onClick={() => handleEventToggle(flag)}
                     disabled={isPending}
-                    className={`relative ml-4 inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-50 ${
+                    className={`relative ml-4 inline-flex min-h-[44px] w-11 flex-shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 ${
                       enabled ? 'bg-primary' : 'bg-gray-200'
                     }`}
                     role="switch"

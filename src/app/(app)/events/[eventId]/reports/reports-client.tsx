@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { EXPORT_TYPES, type ExportType } from '@/lib/exports/types';
 import { useRole } from '@/hooks/use-role';
+import { ResponsiveMetricGrid } from '@/components/responsive/responsive-metric-grid';
 
 const EXPORT_ICONS: Record<ExportType, string> = {
   'attendee-list': '👥',
@@ -88,20 +89,20 @@ export function ReportsClient({ eventId }: { eventId: string }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Reports & Exports</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className="text-xl sm:text-2xl font-bold">Reports & Exports</h1>
+        <p className="text-sm sm:text-base text-muted-foreground mt-1">
           Download event data as Excel spreadsheets
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ResponsiveMetricGrid minCardWidth={240}>
         {(Object.entries(EXPORT_TYPES) as [ExportType, { label: string; description: string }][]).map(
           ([type, meta]) => (
             <div
               key={type}
-              className="rounded-lg border bg-card p-6 shadow-sm"
+              className="rounded-lg border bg-card p-4 sm:p-6 shadow-sm"
             >
               <div className="flex items-start gap-3">
                 <span className="text-2xl" role="img" aria-label={meta.label}>
@@ -117,7 +118,7 @@ export function ReportsClient({ eventId }: { eventId: string }) {
               <button
                 onClick={() => handleDownload(type)}
                 disabled={downloading !== null || archiving}
-                className="mt-4 w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="mt-4 w-full min-h-[44px] rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {downloading === type ? 'Downloading...' : 'Download Excel'}
               </button>
@@ -125,7 +126,7 @@ export function ReportsClient({ eventId }: { eventId: string }) {
           ),
         )}
 
-        <div className="rounded-lg border bg-card p-6 shadow-sm border-dashed">
+        <div className="rounded-lg border bg-card p-4 sm:p-6 shadow-sm border-dashed">
           <div className="flex items-start gap-3">
             <span className="text-2xl" role="img" aria-label="Event Archive">
               📦
@@ -140,13 +141,13 @@ export function ReportsClient({ eventId }: { eventId: string }) {
           <button
             onClick={handleArchiveDownload}
             disabled={downloading !== null || archiving || generatingKit}
-            className="mt-4 w-full rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="mt-4 w-full min-h-[44px] rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {archiving ? 'Generating Archive...' : 'Download Archive ZIP'}
           </button>
         </div>
 
-        <div className="rounded-lg border bg-card p-6 shadow-sm border-dashed border-amber-300 dark:border-amber-700">
+        <div className="rounded-lg border bg-card p-4 sm:p-6 shadow-sm border-dashed border-amber-300 dark:border-amber-700">
           <div className="flex items-start gap-3">
             <span className="text-2xl" role="img" aria-label="Emergency Kit">
               🚨
@@ -161,13 +162,13 @@ export function ReportsClient({ eventId }: { eventId: string }) {
           <button
             onClick={handleEmergencyKit}
             disabled={isReadOnly || downloading !== null || archiving || generatingKit}
-            className="mt-4 w-full rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="mt-4 w-full min-h-[44px] rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
             title={isReadOnly ? 'Write access required to generate emergency kit' : undefined}
           >
             {generatingKit ? 'Generating Kit...' : 'Download Emergency Kit'}
           </button>
         </div>
-      </div>
+      </ResponsiveMetricGrid>
     </div>
   );
 }

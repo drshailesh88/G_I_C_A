@@ -7,6 +7,7 @@ import { ArrowLeft, Plus, Plane, Train, Car, Bus, AlertTriangle } from 'lucide-r
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { cancelTravelRecord } from '@/lib/actions/travel';
+import { ResponsiveList, type Column } from '@/components/responsive/responsive-list';
 
 type TravelRecord = {
   id: string;
@@ -23,6 +24,17 @@ type TravelRecord = {
   personName: string;
   personEmail: string | null;
   personPhone: string | null;
+  carrierName: string | null;
+  serviceNumber: string | null;
+  registrationId: string | null;
+  fromLocation: string | null;
+  toLocation: string | null;
+  terminalOrGate: string | null;
+  cancelledAt: Date | null;
+  notes: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  flagCount: number;
 };
 
 const STATUS_STYLES: Record<string, { label: string; color: string }> = {
@@ -46,6 +58,157 @@ const MODE_ICONS: Record<string, typeof Plane> = {
   car: Car,
   bus: Bus,
 };
+
+function formatDates(record: TravelRecord) {
+  const parts: string[] = [];
+  if (record.departureAtUtc) {
+    parts.push(`Dep: ${format(new Date(record.departureAtUtc), 'MMM d, HH:mm')}`);
+  }
+  if (record.arrivalAtUtc) {
+    parts.push(`Arr: ${format(new Date(record.arrivalAtUtc), 'MMM d, HH:mm')}`);
+  }
+  return parts.join(' · ');
+}
+
+const columns: Column<TravelRecord>[] = [
+  {
+    key: 'name',
+    header: 'Name',
+    priority: 'high',
+    render: (r) => {
+      const ModeIcon = MODE_ICONS[r.travelMode] || Plane;
+      return (
+        <div className="flex items-center gap-2">
+          <ModeIcon className="h-4 w-4 text-text-muted" />
+          <span className="font-medium text-text-primary">{r.personName}</span>
+        </div>
+      );
+    },
+  },
+  {
+    key: 'route',
+    header: 'Route',
+    priority: 'high',
+    render: (r) => (
+      <span className="text-sm text-text-secondary">
+        {r.fromCity} → {r.toCity}
+      </span>
+    ),
+  },
+  {
+    key: 'dates',
+    header: 'Dates',
+    priority: 'medium',
+    render: (r) => (
+      <span className="text-sm text-text-muted">{formatDates(r)}</span>
+    ),
+  },
+  {
+    key: 'flight',
+    header: 'Flight / PNR',
+    priority: 'medium',
+    render: (r) => (
+      <span className="text-sm text-text-muted">
+        {[r.serviceNumber, r.pnrOrBookingRef].filter(Boolean).join(' / ') || '—'}
+      </span>
+    ),
+  },
+  {
+    key: 'status',
+    header: 'Status',
+    priority: 'medium',
+    render: (r) => {
+      const style = STATUS_STYLES[r.recordStatus] || STATUS_STYLES.draft;
+      return (
+        <span className={cn('rounded-full border px-2 py-0.5 text-xs font-medium', style.color)}>
+          {style.label}
+        </span>
+      );
+    },
+  },
+  {
+    key: 'flags',
+    header: 'Flags',
+    priority: 'low',
+    render: (r) =>
+      r.flagCount > 0 ? (
+        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+          <AlertTriangle className="h-3 w-3" />
+          {r.flagCount}
+        </span>
+      ) : (
+        <span className="text-text-muted">—</span>
+      ),
+  },
+];
+
+function TravelCard({
+  record,
+  eventId,
+  onCancel,
+  cancelling,
+}: {
+  record: TravelRecord;
+  eventId: string;
+  onCancel: (id: string) => void;
+  cancelling: boolean;
+}) {
+  const style = STATUS_STYLES[record.recordStatus] || STATUS_STYLES.draft;
+  const ModeIcon = MODE_ICONS[record.travelMode] || Plane;
+  const isCancelled = record.recordStatus === 'cancelled';
+
+  return (
+    <div className={cn('rounded-xl border border-border bg-surface p-4', isCancelled && 'opacity-60')}>
+      <Link href={`/events/${eventId}/travel/${record.id}`} className="block">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2">
+            <ModeIcon className="h-4 w-4 text-text-muted" />
+            <span className="font-medium text-text-primary">{record.personName}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {record.flagCount > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+                <AlertTriangle className="h-3 w-3" />
+                {record.flagCount}
+              </span>
+            )}
+            <span className={cn('rounded-full border px-2 py-0.5 text-xs font-medium', style.color)}>
+              {style.label}
+            </span>
+          </div>
+        </div>
+        <div className="mt-2 flex items-center gap-1.5 text-sm text-text-secondary">
+          <span>{record.fromCity}</span>
+          <span className="text-text-muted">→</span>
+          <span>{record.toCity}</span>
+          <span className="ml-2 text-xs text-text-muted">
+            {DIRECTION_LABELS[record.direction] || record.direction}
+          </span>
+        </div>
+        <div className="mt-1.5 flex items-center gap-4 text-xs text-text-muted">
+          {record.departureAtUtc && (
+            <span>Dep: {format(new Date(record.departureAtUtc), 'MMM d, HH:mm')}</span>
+          )}
+          {record.arrivalAtUtc && (
+            <span>Arr: {format(new Date(record.arrivalAtUtc), 'MMM d, HH:mm')}</span>
+          )}
+          {record.pnrOrBookingRef && <span>PNR: {record.pnrOrBookingRef}</span>}
+        </div>
+      </Link>
+      {!isCancelled && (
+        <div className="mt-3 flex justify-end">
+          <button
+            onClick={() => onCancel(record.id)}
+            disabled={cancelling}
+            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
+          >
+            {cancelling ? 'Cancelling...' : 'Cancel'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function TravelListClient({
   eventId,
@@ -98,17 +261,20 @@ export function TravelListClient({
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
             Active ({active.length})
           </h2>
-          <div className="flex flex-col gap-3">
-            {active.map((record) => (
+          <ResponsiveList
+            data={active}
+            columns={columns}
+            keyExtractor={(r) => r.id}
+            renderCard={(record) => (
               <TravelCard
-                key={record.id}
                 record={record}
                 eventId={eventId}
                 onCancel={handleCancel}
                 cancelling={cancelling === record.id}
               />
-            ))}
-          </div>
+            )}
+            onRowClick={(record) => router.push(`/events/${eventId}/travel/${record.id}`)}
+          />
         </section>
       )}
 
@@ -118,17 +284,19 @@ export function TravelListClient({
           <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">
             Cancelled ({cancelled.length})
           </h2>
-          <div className="flex flex-col gap-3">
-            {cancelled.map((record) => (
+          <ResponsiveList
+            data={cancelled}
+            columns={columns}
+            keyExtractor={(r) => r.id}
+            renderCard={(record) => (
               <TravelCard
-                key={record.id}
                 record={record}
                 eventId={eventId}
                 onCancel={handleCancel}
                 cancelling={false}
               />
-            ))}
-          </div>
+            )}
+          />
         </section>
       )}
 
@@ -147,66 +315,6 @@ export function TravelListClient({
           >
             Add Travel Record
           </Link>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TravelCard({
-  record,
-  eventId,
-  onCancel,
-  cancelling,
-}: {
-  record: TravelRecord;
-  eventId: string;
-  onCancel: (id: string) => void;
-  cancelling: boolean;
-}) {
-  const style = STATUS_STYLES[record.recordStatus] || STATUS_STYLES.draft;
-  const ModeIcon = MODE_ICONS[record.travelMode] || Plane;
-  const isCancelled = record.recordStatus === 'cancelled';
-
-  return (
-    <div className={cn('rounded-xl border border-border bg-surface p-4', isCancelled && 'opacity-60')}>
-      <Link href={`/events/${eventId}/travel/${record.id}`} className="block">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            <ModeIcon className="h-4 w-4 text-text-muted" />
-            <span className="font-medium text-text-primary">{record.personName}</span>
-          </div>
-          <span className={cn('rounded-full border px-2 py-0.5 text-xs font-medium', style.color)}>
-            {style.label}
-          </span>
-        </div>
-        <div className="mt-2 flex items-center gap-1.5 text-sm text-text-secondary">
-          <span>{record.fromCity}</span>
-          <span className="text-text-muted">→</span>
-          <span>{record.toCity}</span>
-          <span className="ml-2 text-xs text-text-muted">
-            {DIRECTION_LABELS[record.direction] || record.direction}
-          </span>
-        </div>
-        <div className="mt-1.5 flex items-center gap-4 text-xs text-text-muted">
-          {record.departureAtUtc && (
-            <span>Dep: {format(new Date(record.departureAtUtc), 'MMM d, HH:mm')}</span>
-          )}
-          {record.arrivalAtUtc && (
-            <span>Arr: {format(new Date(record.arrivalAtUtc), 'MMM d, HH:mm')}</span>
-          )}
-          {record.pnrOrBookingRef && <span>PNR: {record.pnrOrBookingRef}</span>}
-        </div>
-      </Link>
-      {!isCancelled && (
-        <div className="mt-3 flex justify-end">
-          <button
-            onClick={() => onCancel(record.id)}
-            disabled={cancelling}
-            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
-          >
-            {cancelling ? 'Cancelling...' : 'Cancel'}
-          </button>
         </div>
       )}
     </div>

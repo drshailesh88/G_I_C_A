@@ -177,4 +177,22 @@ describe('CertificateEditorClient', () => {
     // Save button text should not appear (only "Preview PDF" button exists)
     expect(saveButtonMatch).toBeNull();
   });
+
+  // ── DRS-44: Responsive migration tests ────────────────────────
+
+  it('wraps canvas and sidebar in a DetailView layout', () => {
+    const html = render();
+    expect(html).toContain('data-testid="detail-view"');
+  });
+
+  it('renders field reference variables in the sidebar panel', () => {
+    const html = render();
+    // Variables should be in a sidebar that's hidden on mobile
+    expect(html).toContain('md:block');
+  });
+
+  it('uses responsive header with flex-wrap for small screens', () => {
+    const html = render();
+    expect(html).toContain('flex-wrap');
+  });
 });

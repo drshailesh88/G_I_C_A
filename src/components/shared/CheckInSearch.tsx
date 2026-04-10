@@ -74,13 +74,13 @@ export function CheckInSearch({ eventId, sessionId, onCheckInResult }: CheckInSe
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           placeholder="Search by name, email, phone, or registration number..."
-          className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="min-h-[44px] flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           aria-label="Search registrations for check-in"
         />
         <button
           onClick={handleSearch}
           disabled={searching || !query.trim()}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          className="min-h-[44px] rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50"
         >
           {searching ? 'Searching...' : 'Search'}
         </button>
@@ -116,7 +116,7 @@ export function CheckInSearch({ eventId, sessionId, onCheckInResult }: CheckInSe
                   <button
                     onClick={() => handleCheckIn(r.registrationId)}
                     disabled={checkingIn === r.registrationId}
-                    className="rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                    className="min-h-[44px] rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-500 disabled:opacity-50"
                   >
                     {checkingIn === r.registrationId ? 'Checking in...' : 'Check In'}
                   </button>

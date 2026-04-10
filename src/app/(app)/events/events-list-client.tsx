@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
+import { ResponsiveMetricGrid } from '@/components/responsive/responsive-metric-grid';
 
 type Event = {
   id: string;
@@ -29,13 +30,14 @@ export function EventsListClient({ events }: { events: Event[] }) {
   const past = events.filter((e) => new Date(e.endDate) < now || e.status === 'archived' || e.status === 'cancelled');
 
   return (
-    <div className="px-4 py-6">
+    <div style={{ padding: 'var(--space-md) var(--space-sm)' }}>
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-text-primary">Events</h1>
+        <h1 style={{ fontSize: 'var(--font-size-2xl)' }} className="font-bold text-text-primary">Events</h1>
         <Link
           href="/events/new"
-          className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-light"
+          className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 font-medium text-white hover:bg-primary-light"
+          style={{ fontSize: 'var(--font-size-sm)', minHeight: 'var(--touch-min)' }}
         >
           <Plus className="h-4 w-4" />
           New
@@ -44,25 +46,25 @@ export function EventsListClient({ events }: { events: Event[] }) {
 
       {/* Upcoming */}
       {upcoming.length > 0 && (
-        <section className="mt-6">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">Upcoming</h2>
-          <div className="flex flex-col gap-3">
+        <section style={{ marginTop: 'var(--space-lg)' }}>
+          <h2 style={{ marginBottom: 'var(--space-sm)', fontSize: 'var(--font-size-xs)' }} className="font-semibold uppercase tracking-wider text-text-muted">Upcoming</h2>
+          <ResponsiveMetricGrid minCardWidth={280} gap="var(--space-sm)">
             {upcoming.map((event) => (
               <EventCard key={event.id} event={event} />
             ))}
-          </div>
+          </ResponsiveMetricGrid>
         </section>
       )}
 
       {/* Past Events */}
       {past.length > 0 && (
-        <section className="mt-6">
-          <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">Past Events</h2>
-          <div className="flex flex-col gap-3">
+        <section style={{ marginTop: 'var(--space-lg)' }}>
+          <h2 style={{ marginBottom: 'var(--space-sm)', fontSize: 'var(--font-size-xs)' }} className="font-semibold uppercase tracking-wider text-text-muted">Past Events</h2>
+          <ResponsiveMetricGrid minCardWidth={280} gap="var(--space-sm)">
             {past.map((event) => (
               <EventCard key={event.id} event={event} />
             ))}
-          </div>
+          </ResponsiveMetricGrid>
         </section>
       )}
 
@@ -73,11 +75,12 @@ export function EventsListClient({ events }: { events: Event[] }) {
           </div>
           <div>
             <p className="font-semibold text-text-primary">No events yet</p>
-            <p className="text-sm text-text-secondary">Create your first event to get started</p>
+            <p style={{ fontSize: 'var(--font-size-sm)' }} className="text-text-secondary">Create your first event to get started</p>
           </div>
           <Link
             href="/events/new"
-            className="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-light"
+            className="rounded-lg bg-primary px-6 py-2.5 font-medium text-white hover:bg-primary-light"
+            style={{ fontSize: 'var(--font-size-sm)', minHeight: 'var(--touch-min)' }}
           >
             Create Event
           </Link>
@@ -97,18 +100,19 @@ function EventCard({ event }: { event: Event }) {
   return (
     <Link
       href={`/events/${event.id}`}
-      className="block rounded-xl border border-border bg-surface p-4 transition-colors hover:border-accent/50"
+      className="block rounded-xl border border-border bg-surface transition-colors hover:border-accent/50"
+      style={{ padding: 'var(--space-sm)' }}
     >
       <div className="flex items-start justify-between">
         <div className="flex items-center gap-2">
-          <span className={cn('rounded-full border px-2.5 py-0.5 text-xs font-medium', style.color)}>
+          <span className={cn('rounded-full border px-2.5 py-0.5 font-medium', style.color)} style={{ fontSize: 'var(--font-size-xs)' }}>
             {style.label}
           </span>
         </div>
-        <span className="text-xs text-text-muted">{dateRange}</span>
+        <span style={{ fontSize: 'var(--font-size-xs)' }} className="text-text-muted">{dateRange}</span>
       </div>
-      <h3 className="mt-2 font-semibold text-text-primary">{event.name}</h3>
-      {venue && <p className="mt-1 text-sm text-text-secondary">{venue}</p>}
+      <h3 className="mt-2 font-semibold text-text-primary" style={{ fontSize: 'var(--font-size-base)' }}>{event.name}</h3>
+      {venue && <p className="mt-1 text-text-secondary" style={{ fontSize: 'var(--font-size-sm)' }}>{venue}</p>}
     </Link>
   );
 }

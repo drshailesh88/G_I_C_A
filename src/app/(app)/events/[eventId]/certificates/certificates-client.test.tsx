@@ -23,6 +23,18 @@ vi.mock('@/lib/actions/certificate-bulk-zip', () => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
 }));
+vi.mock('@/components/responsive/detail-view', () => ({
+  DetailView: (props: any) => {
+    const { createElement: h } = require('react');
+    return h('div', { 'data-testid': 'detail-view', 'data-show-detail': String(props.showDetail) },
+      h('div', { 'data-testid': 'detail-view-list' }, props.list),
+      props.detail ? h('div', { 'data-testid': 'detail-view-detail' },
+        h('button', { 'data-testid': 'detail-view-back', onClick: props.onBack }, 'Back'),
+        props.detail,
+      ) : null,
+    );
+  },
+}));
 
 import { CertificatesClient } from './certificates-client';
 
@@ -232,5 +244,53 @@ describe('CertificatesClient — Issued Certificates View (7A-3)', () => {
     });
     expect(html).toContain('Bulk Generate');
     expect(html).toContain(`/events/${EVENT_ID}/certificates/generate`);
+  });
+});
+
+// ── DRS-28: Responsive layout — DetailView integration ─────────
+describe('CertificatesClient — Responsive DetailView (DRS-28)', () => {
+  it('wraps content in DetailView component', () => {
+    const html = render();
+    expect(html).toContain('data-testid="detail-view"');
+  });
+
+  it('renders template list inside DetailView list panel', () => {
+    const html = render({
+      templates: [makeTemplate()],
+    });
+    expect(html).toContain('data-testid="detail-view-list"');
+    // Template content should be within the list panel
+    expect(html).toContain('Delegate Attendance');
+  });
+
+  it('starts with showDetail=false (list visible)', () => {
+    const html = render();
+    expect(html).toContain('data-show-detail="false"');
+  });
+
+  it('renders header and tabs inside the list panel', () => {
+    const html = render();
+    // The list panel should contain tabs and header
+    const listMatch = html.match(/data-testid="detail-view-list"[^>]*>([\s\S]*)/);
+    expect(listMatch).toBeTruthy();
+    expect(html).toContain('Templates');
+    expect(html).toContain('Issued Certificates');
+  });
+});
+
+// ── DRS-28: Print CSS classes ──────────────────────────────────
+describe('CertificatesClient — Print CSS markers (DRS-28)', () => {
+  it('marks navigation chrome with print:hidden', () => {
+    const html = render();
+    // Tabs and header buttons should have print:hidden class
+    expect(html).toContain('print:hidden');
+  });
+
+  it('marks action buttons with print:hidden', () => {
+    const html = render({
+      templates: [makeTemplate({ status: 'active' })],
+    });
+    // New Template, Issue Certificate, Bulk Generate buttons should be hidden in print
+    expect(html).toContain('print:hidden');
   });
 });

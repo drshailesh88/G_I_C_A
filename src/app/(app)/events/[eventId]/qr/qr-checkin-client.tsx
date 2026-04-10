@@ -9,6 +9,7 @@ import { useOnlineStatus } from '@/lib/hooks/use-online-status';
 import { useOfflineSync } from '@/lib/hooks/use-offline-sync';
 import type { ScanLookupResult } from '@/lib/attendance/qr-utils';
 import type { AttendanceRecord, AttendanceStats } from '@/lib/actions/attendance';
+import { ResponsiveMetricGrid } from '@/components/responsive/responsive-metric-grid';
 
 type Props = {
   eventId: string;
@@ -188,7 +189,7 @@ export function QrCheckInClient({
           {/* Panel 3: Stats panel */}
           <div className="min-w-0 xl:w-56">
             <h2 className="mb-3 text-sm font-semibold text-gray-700">Statistics</h2>
-            <div className="grid grid-cols-3 gap-2 xl:grid-cols-1">
+            <ResponsiveMetricGrid minCardWidth={120} gap="0.5rem">
               <StatCard
                 label="Total"
                 value={totalRegistrations}
@@ -204,7 +205,7 @@ export function QrCheckInClient({
                 value={remaining < 0 ? 0 : remaining}
                 color="amber"
               />
-            </div>
+            </ResponsiveMetricGrid>
 
             {/* Method breakdown */}
             <div className="mt-3 space-y-1">
@@ -222,7 +223,7 @@ export function QrCheckInClient({
       </div>
 
       {/* Bottom bar: Manual Check-in toggle + offline badge */}
-      <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white px-4 py-3 safe-area-pb" data-testid="bottom-bar">
+      <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white px-4 py-3 safe-area-pb safe-area-pl safe-area-pr" data-testid="bottom-bar">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
           <button
             onClick={() => setShowManualSearch((prev) => !prev)}

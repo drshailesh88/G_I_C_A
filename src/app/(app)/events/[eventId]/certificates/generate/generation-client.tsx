@@ -9,6 +9,7 @@ import {
   type BulkGenerateQueuedResult,
   RECIPIENT_TYPES,
 } from '@/lib/actions/certificate-generation';
+import { FormGrid } from '@/components/responsive/form-grid';
 
 type TemplateInfo = {
   id: string;
@@ -99,7 +100,7 @@ export function GenerationClient({ eventId, activeTemplates }: Props) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Generate Certificates</h1>
           <p className="mt-1 text-sm text-gray-500">
@@ -125,37 +126,57 @@ export function GenerationClient({ eventId, activeTemplates }: Props) {
         <div className="rounded-lg border border-gray-200 bg-white p-6 space-y-5">
           <h2 className="text-lg font-semibold text-gray-900">Configuration</h2>
 
-          {/* Template selector */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Certificate Template
-            </label>
-            <select
-              value={templateId}
-              onChange={(e) => setTemplateId(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            >
-              {activeTemplates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.templateName} ({t.certificateType.replace(/_/g, ' ')}) v{t.versionNo}
-                </option>
-              ))}
-            </select>
-            {selectedTemplate && (
-              <p className="mt-1 text-xs text-gray-400">
-                Type: {selectedTemplate.certificateType.replace(/_/g, ' ')} | Scope: {selectedTemplate.audienceScope}
-              </p>
-            )}
-          </div>
+          <FormGrid columns={2}>
+            {/* Template selector */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Certificate Template
+              </label>
+              <select
+                value={templateId}
+                onChange={(e) => setTemplateId(e.target.value)}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              >
+                {activeTemplates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.templateName} ({t.certificateType.replace(/_/g, ' ')}) v{t.versionNo}
+                  </option>
+                ))}
+              </select>
+              {selectedTemplate && (
+                <p className="mt-1 text-xs text-gray-400">
+                  Type: {selectedTemplate.certificateType.replace(/_/g, ' ')} | Scope: {selectedTemplate.audienceScope}
+                </p>
+              )}
+            </div>
 
-          {/* Recipient selector */}
+            {/* Eligibility basis */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Eligibility Basis
+              </label>
+              <select
+                value={eligibilityBasis}
+                onChange={(e) => setEligibilityBasis(e.target.value)}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+              >
+                {Object.entries(ELIGIBILITY_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </FormGrid>
+
+          {/* Recipient selector — full width below the grid */}
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Recipients
             </label>
             <div className="mt-2 space-y-2">
               {RECIPIENT_TYPES.filter((t) => t !== 'custom').map((type) => (
-                <label key={type} className="flex items-center gap-3">
+                <label key={type} className="flex min-h-[44px] items-center gap-3">
                   <input
                     type="radio"
                     name="recipientType"
@@ -172,24 +193,6 @@ export function GenerationClient({ eventId, activeTemplates }: Props) {
             </div>
           </div>
 
-          {/* Eligibility basis */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Eligibility Basis
-            </label>
-            <select
-              value={eligibilityBasis}
-              onChange={(e) => setEligibilityBasis(e.target.value)}
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
-            >
-              {Object.entries(ELIGIBILITY_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <button
             onClick={handleLoadRecipients}
             disabled={!templateId || loadingRecipients}
@@ -204,7 +207,7 @@ export function GenerationClient({ eventId, activeTemplates }: Props) {
       {step === 'preview' && (
         <div className="space-y-4">
           <div className="rounded-lg border border-gray-200 bg-white p-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">
                   Preview — {recipients.length} Recipient{recipients.length !== 1 ? 's' : ''}
@@ -227,8 +230,10 @@ export function GenerationClient({ eventId, activeTemplates }: Props) {
               </p>
             ) : (
               <>
+                {/* Mobile: card view, Desktop: table view */}
                 <div className="mt-4 max-h-64 overflow-y-auto rounded border border-gray-100">
-                  <table className="min-w-full divide-y divide-gray-200">
+                  {/* Table view (hidden on mobile) */}
+                  <table className="hidden min-w-full divide-y divide-gray-200 sm:table">
                     <thead className="bg-gray-50 sticky top-0">
                       <tr>
                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
@@ -252,9 +257,21 @@ export function GenerationClient({ eventId, activeTemplates }: Props) {
                       ))}
                     </tbody>
                   </table>
+                  {/* Card view (visible on mobile only) */}
+                  <div className="divide-y divide-gray-100 sm:hidden">
+                    {recipients.map((r) => (
+                      <div key={r.id} className="px-4 py-3">
+                        <p className="text-sm font-medium text-gray-900">{r.fullName}</p>
+                        <p className="text-xs text-gray-500">{r.email ?? '—'}</p>
+                        {r.designation && (
+                          <p className="text-xs text-gray-400">{r.designation}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="mt-4 flex gap-3">
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row">
                   <button
                     onClick={handleGenerate}
                     disabled={pending}
@@ -302,7 +319,7 @@ export function GenerationClient({ eventId, activeTemplates }: Props) {
           </div>
 
           {/* Navigation */}
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <button
               onClick={() => {
                 setStep('configure');

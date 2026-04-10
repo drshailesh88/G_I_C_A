@@ -1,3 +1,4 @@
+import { AppShell } from '@/components/app-shell';
 import { TabBar } from '@/components/tab-bar';
 
 export default function AppLayout({
@@ -6,11 +7,11 @@ export default function AppLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-background pb-20">
-      <main className="mx-auto max-w-lg">
+    <>
+      <AppShell>
         {children}
-      </main>
+      </AppShell>
       <TabBar />
-    </div>
+    </>
   );
 }

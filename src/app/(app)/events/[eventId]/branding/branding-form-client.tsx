@@ -4,6 +4,8 @@ import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Upload, Trash2, Eye } from 'lucide-react';
 import Link from 'next/link';
+import { FormGrid } from '@/components/responsive/form-grid';
+import { ResponsiveImage } from '@/components/responsive/responsive-image';
 import {
   updateEventBranding,
   uploadBrandingImage,
@@ -164,7 +166,7 @@ export function BrandingFormClient({
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Left column: Form */}
         <div className="space-y-6">
-          {/* Logo */}
+          {/* Logo — full-width in FormGrid */}
           <section className="rounded-lg border bg-card p-6">
             <h2 className="text-lg font-semibold">Event Logo</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -173,11 +175,12 @@ export function BrandingFormClient({
             <div className="mt-4">
               {logoUrl ? (
                 <div className="flex items-center gap-4">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <ResponsiveImage
                     src={logoUrl}
                     alt="Event logo"
-                    className="h-16 w-16 rounded-lg border object-contain"
+                    context="thumbnail"
+                    aspectRatio="1/1"
+                    className="h-16 w-16 rounded-lg border"
                   />
                   {canWrite && (
                     <button
@@ -211,7 +214,7 @@ export function BrandingFormClient({
             </div>
           </section>
 
-          {/* Header Image */}
+          {/* Header Image — full-width in FormGrid */}
           <section className="rounded-lg border bg-card p-6">
             <h2 className="text-lg font-semibold">Header Image</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -220,11 +223,12 @@ export function BrandingFormClient({
             <div className="mt-4">
               {headerImageUrl ? (
                 <div className="space-y-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <ResponsiveImage
                     src={headerImageUrl}
                     alt="Header image"
-                    className="w-full max-w-md rounded-lg border object-contain"
+                    context="full-width"
+                    aspectRatio="3/1"
+                    className="w-full rounded-lg border"
                   />
                   {canWrite && (
                     <button
@@ -258,57 +262,59 @@ export function BrandingFormClient({
             </div>
           </section>
 
-          {/* Colors */}
+          {/* Colors — side-by-side via FormGrid */}
           <section className="rounded-lg border bg-card p-6">
             <h2 className="text-lg font-semibold">Brand Colors</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Used in emails, certificates, and the public event page.
             </p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium">Primary Color</label>
-                <div className="mt-1 flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={primaryColor}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    disabled={!canWrite}
-                    className="h-10 w-10 cursor-pointer rounded border"
-                  />
-                  <input
-                    type="text"
-                    value={primaryColor}
-                    onChange={(e) => setPrimaryColor(e.target.value)}
-                    disabled={!canWrite}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
-                    placeholder="#1E40AF"
-                  />
+            <div className="mt-4">
+              <FormGrid columns={2}>
+                <div>
+                  <label className="block text-sm font-medium">Primary Color</label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
+                      disabled={!canWrite}
+                      className="h-10 w-10 cursor-pointer rounded border"
+                    />
+                    <input
+                      type="text"
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
+                      disabled={!canWrite}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
+                      placeholder="#1E40AF"
+                    />
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Secondary Color</label>
-                <div className="mt-1 flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={secondaryColor}
-                    onChange={(e) => setSecondaryColor(e.target.value)}
-                    disabled={!canWrite}
-                    className="h-10 w-10 cursor-pointer rounded border"
-                  />
-                  <input
-                    type="text"
-                    value={secondaryColor}
-                    onChange={(e) => setSecondaryColor(e.target.value)}
-                    disabled={!canWrite}
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
-                    placeholder="#9333EA"
-                  />
+                <div>
+                  <label className="block text-sm font-medium">Secondary Color</label>
+                  <div className="mt-1 flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={secondaryColor}
+                      onChange={(e) => setSecondaryColor(e.target.value)}
+                      disabled={!canWrite}
+                      className="h-10 w-10 cursor-pointer rounded border"
+                    />
+                    <input
+                      type="text"
+                      value={secondaryColor}
+                      onChange={(e) => setSecondaryColor(e.target.value)}
+                      disabled={!canWrite}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
+                      placeholder="#9333EA"
+                    />
+                  </div>
                 </div>
-              </div>
+              </FormGrid>
             </div>
           </section>
 
-          {/* Communication Settings */}
+          {/* Communication Settings — full-width fields */}
           <section className="rounded-lg border bg-card p-6">
             <h2 className="text-lg font-semibold">Communication Branding</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -368,8 +374,13 @@ export function BrandingFormClient({
                 >
                   <div className="flex items-center gap-3">
                     {logoUrl && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={logoUrl} alt="Logo" className="h-10 w-10 rounded bg-white object-contain p-1" />
+                      <ResponsiveImage
+                        src={logoUrl}
+                        alt="Logo"
+                        context="thumbnail"
+                        aspectRatio="1/1"
+                        className="h-10 w-10 rounded bg-white p-1"
+                      />
                     )}
                     <span className="text-lg font-bold text-white">
                       {emailSenderName || eventName}
@@ -377,8 +388,13 @@ export function BrandingFormClient({
                   </div>
                 </div>
                 {headerImageUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={headerImageUrl} alt="Header" className="w-full object-cover" />
+                  <ResponsiveImage
+                    src={headerImageUrl}
+                    alt="Header"
+                    context="full-width"
+                    aspectRatio="3/1"
+                    className="aspect-[3/1] max-h-48 w-full"
+                  />
                 )}
                 <div className="p-4">
                   <p className="text-sm text-muted-foreground">

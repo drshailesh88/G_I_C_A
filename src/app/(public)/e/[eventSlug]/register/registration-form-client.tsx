@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { registerForEvent } from '@/lib/actions/registration';
+import { FormGrid } from '@/components/responsive/form-grid';
 
 export function RegistrationFormClient({
   eventId,
@@ -92,50 +93,60 @@ export function RegistrationFormClient({
       )}
 
       {/* Form */}
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-        <FormField
-          name="fullName"
-          label="Full Name"
-          required
-          error={fieldErrors.fullName}
-          placeholder="Dr. Rajesh Kumar"
-        />
-        <FormField
-          name="email"
-          label="Email"
-          type="email"
-          required
-          error={fieldErrors.email}
-          placeholder="rajesh@hospital.org"
-        />
-        <FormField
-          name="phone"
-          label="Mobile Number"
-          type="tel"
-          required
-          error={fieldErrors.phone}
-          placeholder="+91 98765 43210"
-        />
-        <FormField
-          name="designation"
-          label="Designation"
-          error={fieldErrors.designation}
-          placeholder="Senior Consultant"
-        />
-        <FormField
-          name="specialty"
-          label="Specialty"
-          error={fieldErrors.specialty}
-          placeholder="Gastroenterology"
-        />
-        <FormField
-          name="organization"
-          label="Organization / Hospital"
-          error={fieldErrors.organization}
-          placeholder="AIIMS Delhi"
-        />
+      <form onSubmit={handleSubmit} className="mt-6">
+        <FormGrid columns={2}>
+          {/* Side-by-side on desktop: fullName + email */}
+          <FormField
+            name="fullName"
+            label="Full Name"
+            required
+            error={fieldErrors.fullName}
+            placeholder="Dr. Rajesh Kumar"
+          />
+          <FormField
+            name="email"
+            label="Email"
+            type="email"
+            required
+            error={fieldErrors.email}
+            placeholder="rajesh@hospital.org"
+          />
 
-        <div className="grid grid-cols-2 gap-3">
+          {/* Side-by-side on desktop: phone + designation */}
+          <FormField
+            name="phone"
+            label="Mobile Number"
+            type="tel"
+            required
+            error={fieldErrors.phone}
+            placeholder="+91 98765 43210"
+          />
+          <FormField
+            name="designation"
+            label="Designation"
+            error={fieldErrors.designation}
+            placeholder="Senior Consultant"
+          />
+
+          {/* Full-width fields */}
+          <div className="col-span-full">
+            <FormField
+              name="specialty"
+              label="Specialty"
+              error={fieldErrors.specialty}
+              placeholder="Gastroenterology"
+            />
+          </div>
+          <div className="col-span-full">
+            <FormField
+              name="organization"
+              label="Organization / Hospital"
+              error={fieldErrors.organization}
+              placeholder="AIIMS Delhi"
+            />
+          </div>
+
+          {/* Side-by-side on desktop: city + age */}
           <FormField
             name="city"
             label="City"
@@ -149,7 +160,7 @@ export function RegistrationFormClient({
             error={fieldErrors.age}
             placeholder="35"
           />
-        </div>
+        </FormGrid>
 
         <button
           type="submit"
