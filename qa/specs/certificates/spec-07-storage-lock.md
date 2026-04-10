@@ -3,6 +3,12 @@
 Module: certificates
 Area: R2 Storage, Redis Lock
 
+STATUS: COMPLETE
+TESTED: 11/11
+PASS: 11 (vitest unit tests)
+FAIL: 0
+BLOCKED: 0
+
 ## Checkpoints
 
 ### CP-82: Storage key format includes eventId for isolation

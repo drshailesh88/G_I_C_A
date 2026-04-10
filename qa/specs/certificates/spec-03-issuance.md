@@ -3,6 +3,12 @@
 Module: certificates
 Area: Single Certificate Lifecycle
 
+STATUS: COMPLETE
+TESTED: 15/15
+PASS: 15 (vitest unit tests)
+FAIL: 0
+BLOCKED: 0
+
 ## Checkpoints
 
 ### CP-28: Issue certificate to person with active template

@@ -1,7 +1,7 @@
 {"module":"certificates","spec":"spec-01-template-management","checkpoints":17,"passing":17,"status":"PASS"}
 {"module":"certificates","spec":"spec-02-certificate-types","checkpoints":10,"passing":10,"status":"PASS"}
 {"module":"certificates","spec":"spec-03-issuance","checkpoints":15,"passing":15,"status":"PASS"}
-{"module":"certificates","spec":"spec-04-download-verify","checkpoints":11,"passing":11,"status":"PASS"}
+{"module":"certificates","spec":"spec-04-download-verify","checkpoints":11,"passing":11,"status":"PASS","e2e_tested":6,"e2e_pass":6,"attempts":1}
 {"module":"certificates","spec":"spec-05-bulk-generation","checkpoints":14,"passing":14,"status":"PASS"}
 {"module":"certificates","spec":"spec-06-bulk-zip","checkpoints":14,"passing":14,"status":"PASS"}
 {"module":"certificates","spec":"spec-07-storage-lock","checkpoints":11,"passing":11,"status":"PASS"}

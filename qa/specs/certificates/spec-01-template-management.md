@@ -3,6 +3,12 @@
 Module: certificates
 Area: Template CRUD & State Machine
 
+STATUS: COMPLETE
+TESTED: 17/17
+PASS: 17 (vitest unit tests)
+FAIL: 0
+BLOCKED: 0
+
 ## Checkpoints
 
 ### CP-01: Create template with valid input

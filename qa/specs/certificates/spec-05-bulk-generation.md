@@ -3,6 +3,12 @@
 Module: certificates
 Area: Recipient Queries, Async Generation, Notifications
 
+STATUS: COMPLETE
+TESTED: 14/14
+PASS: 14 (vitest unit tests)
+FAIL: 0
+BLOCKED: 0
+
 ## Checkpoints
 
 ### CP-54: Get eligible recipients — all_delegates

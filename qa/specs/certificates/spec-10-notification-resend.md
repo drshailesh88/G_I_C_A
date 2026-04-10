@@ -3,6 +3,12 @@
 Module: certificates
 Area: Resend Flow, Idempotency
 
+STATUS: COMPLETE
+TESTED: 5/5
+PASS: 5 (vitest unit tests)
+FAIL: 0
+BLOCKED: 0
+
 ## Checkpoints
 
 ### CP-121: Resend email notification for issued certificate

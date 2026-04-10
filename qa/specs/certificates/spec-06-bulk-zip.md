@@ -3,6 +3,12 @@
 Module: certificates
 Area: ZIP Archive, Distributed Lock, Size Limits
 
+STATUS: COMPLETE
+TESTED: 14/14
+PASS: 14 (vitest unit tests)
+FAIL: 0
+BLOCKED: 0
+
 ## Checkpoints
 
 ### CP-68: Bulk ZIP creates archive of issued certificates

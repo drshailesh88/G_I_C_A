@@ -3,6 +3,12 @@
 Module: certificates
 Area: Event Archive, Emergency Kit, Pre-Event Backup
 
+STATUS: COMPLETE
+TESTED: 6/6
+PASS: 6 (vitest unit tests)
+FAIL: 0
+BLOCKED: 0
+
 ## Checkpoints
 
 ### CP-126: Event archive includes certificate PDFs

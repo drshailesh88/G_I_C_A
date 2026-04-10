@@ -3,6 +3,12 @@
 Module: certificates
 Area: Download URLs, Verification Flow
 
+STATUS: COMPLETE
+TESTED: 11/11
+PASS: 11 (3 via Playwright E2E, 8 via vitest unit tests)
+FAIL: 0
+BLOCKED: 0
+
 ## Checkpoints
 
 ### CP-43: Download URL generated for issued certificate

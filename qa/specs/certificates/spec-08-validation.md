@@ -3,6 +3,12 @@
 Module: certificates
 Area: Input Validation
 
+STATUS: COMPLETE
+TESTED: 8/8
+PASS: 8 (vitest unit tests)
+FAIL: 0
+BLOCKED: 0
+
 ## Checkpoints
 
 ### CP-93: createCertificateTemplateSchema — valid input passes
