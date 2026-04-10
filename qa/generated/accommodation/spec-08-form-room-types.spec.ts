@@ -4,41 +4,31 @@
  * Tests CP-76: Form room type select options match schema ROOM_TYPES enum.
  *
  * Prerequisites:
- * - Authenticated Clerk session
- * - Dev server running on APP_PORT
+ * - Clerk auth via global-setup (storageState loaded automatically)
+ * - Test event exists in database
  */
 import { test, expect } from '@playwright/test';
 
-const BASE = process.env.APP_PORT ? `http://localhost:${process.env.APP_PORT}` : 'http://localhost:4000';
+const TEST_EVENT_ID = process.env.E2E_TEST_EVENT_ID || '';
 
 test.describe('Accommodation Form — Room Types', () => {
-  // TODO: Set up Clerk test user auth via storageState
-  // test.use({ storageState: 'e2e/auth/clerk-session.json' });
-
-  const TEST_EVENT_ID = process.env.TEST_EVENT_ID || 'PLACEHOLDER';
+  test.skip(!TEST_EVENT_ID, 'E2E_TEST_EVENT_ID not set');
 
   // CP-76: Form room types match schema room types
   test('CP-76: form room type options include all 7 schema types', async ({ page }) => {
-    await page.goto(`${BASE}/events/${TEST_EVENT_ID}/accommodation/new`, {
-      waitUntil: 'networkidle',
-    });
+    await page.goto(`/events/${TEST_EVENT_ID}/accommodation/new`);
+    await page.waitForLoadState('networkidle');
 
-    // Find the room type select or radio group
+    // Find the room type select
     const roomTypeSelect = page.getByLabel(/room type/i);
-    const isVisible = await roomTypeSelect.isVisible().catch(() => false);
+    await expect(roomTypeSelect).toBeVisible({ timeout: 5000 });
 
-    if (!isVisible) {
-      test.skip(true, 'Room type field not visible (may require auth)');
-      return;
-    }
-
-    // Check for all 7 room types
-    const expectedTypes = ['single', 'double', 'twin', 'triple', 'suite', 'dormitory', 'other'];
-
-    // If it's a select, check option values
-    const options = await page.locator('select[name*="room"] option, [role="option"]').allTextContents();
+    // Get all option texts
+    const options = await roomTypeSelect.locator('option').allTextContents();
     const normalizedOptions = options.map(o => o.toLowerCase().trim());
 
+    // Must include all 7 room types from the schema
+    const expectedTypes = ['single', 'double', 'twin', 'triple', 'suite', 'dormitory', 'other'];
     for (const type of expectedTypes) {
       expect(normalizedOptions).toContain(type);
     }
