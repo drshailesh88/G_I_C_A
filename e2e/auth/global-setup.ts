@@ -36,10 +36,20 @@ setup('authenticate and save state', async ({ page }) => {
   await clerk.loaded({ page });
 
   // Use emailAddress shortcut — signs in via Backend API, no UI interaction needed.
-  await clerk.signIn({
-    page,
-    emailAddress: process.env.E2E_CLERK_USER_USERNAME!,
-  });
+  try {
+    await clerk.signIn({
+      page,
+      emailAddress: process.env.E2E_CLERK_USER_USERNAME!,
+    });
+  } catch (error) {
+    // Clerk's backend helper can finish the sign-in and trigger a redirect
+    // quickly enough to destroy the current execution context. In that case,
+    // verify the session with the protected page navigation below instead of
+    // failing the setup run on a successful sign-in.
+    if (!(error instanceof Error) || !error.message.includes('Execution context was destroyed')) {
+      throw error;
+    }
+  }
 
   // After sign-in, verify against the event index instead of the dashboard.
   // The dashboard currently triggers unsupported transaction code paths in the

@@ -1,0 +1,21 @@
+# HUMAN-AUTHORED — the agent MUST NOT modify this file
+# Each criterion defines what the app should do, not how it's implemented
+#
+# Check types:
+#   visible:     element exists and is visible
+#   not-visible: element should NOT be visible
+#   text:        element contains specific text
+#   screenshot:  pixel-level comparison against committed baseline
+#   a11y:        axe-core WCAG check (no violations allowed)
+#   count:       number of matching elements (min/max)
+#   url:         current URL matches pattern
+
+- id: AC-001
+  title: "Login page renders"
+  page: /login
+  checks:
+    - type: visible
+      selector: '[data-testid="login-form"]'
+    - type: a11y
+    - type: screenshot
+      name: login-page.png
