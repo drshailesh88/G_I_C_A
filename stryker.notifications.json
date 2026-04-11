@@ -1,0 +1,30 @@
+{
+  "testRunner": "vitest",
+  "vitest": { "configFile": "vitest.config.ts" },
+  "mutate": [
+    "src/lib/notifications/send.ts",
+    "src/lib/notifications/email.ts",
+    "src/lib/notifications/whatsapp.ts",
+    "src/lib/notifications/circuit-breaker.ts",
+    "src/lib/notifications/idempotency.ts",
+    "src/lib/notifications/template-renderer.ts",
+    "src/lib/notifications/template-queries.ts",
+    "src/lib/notifications/template-utils.ts",
+    "src/lib/notifications/trigger-queries.ts",
+    "src/lib/notifications/log-queries.ts",
+    "src/lib/notifications/delivery-event-queries.ts",
+    "src/lib/notifications/system-templates.ts",
+    "src/lib/notifications/webhook-auth.ts",
+    "src/lib/notifications/webhook-dlq.ts",
+    "src/lib/notifications/webhook-ingest.ts",
+    "src/lib/notifications/webhook-parsers.ts",
+    "src/lib/notifications/seed-system-templates.ts",
+    "src/lib/notifications/timeout.ts",
+    "src/lib/validations/notification-template.ts",
+    "src/lib/actions/notifications.ts"
+  ],
+  "reporters": ["json", "clear-text", "progress"],
+  "jsonReporter": { "fileName": "reports/mutation/mutation.json" },
+  "thresholds": { "high": 90, "low": 70, "break": 50 },
+  "timeoutMS": 30000
+}
