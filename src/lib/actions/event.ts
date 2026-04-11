@@ -105,8 +105,15 @@ export async function createEvent(formData: FormData) {
 }
 
 export async function getEvents() {
-  const { userId, isSuperAdmin } = await getEventListContext();
+  const { userId, role, isSuperAdmin } = await getEventListContext();
   if (!userId) throw new Error('Unauthorized');
+
+  // Keep event discovery consistent with assertEventAccess: if the session has
+  // no recognized Clerk role, the user should not see event links that will
+  // immediately dead-end on module pages.
+  if (!role) {
+    return [];
+  }
 
   // REQ 10: Super Admin sees all events; others see only assigned events
   if (isSuperAdmin) {

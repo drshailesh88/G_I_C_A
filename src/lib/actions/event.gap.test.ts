@@ -230,6 +230,17 @@ describe('getEvents — gap tests', () => {
     await getEvents();
     expect(orderBy).toHaveBeenCalled();
   });
+
+  it('users without a recognized role do not query assigned events', async () => {
+    mockGetEventListContext.mockResolvedValue({
+      userId: 'user-1',
+      role: null,
+      isSuperAdmin: false,
+    });
+
+    await expect(getEvents()).resolves.toEqual([]);
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
 });
 
 describe('getEventBySlug — gap tests', () => {

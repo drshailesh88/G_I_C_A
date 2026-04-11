@@ -208,6 +208,18 @@ describe('event actions — REQ 9/10/11 access control tests', () => {
     await expect(getEvents()).rejects.toThrow('Unauthorized');
   });
 
+  it('getEvents returns an empty list for users without a recognized role', async () => {
+    mockGetEventListContext.mockResolvedValue({
+      userId: 'user-without-role',
+      role: null,
+      isSuperAdmin: false,
+    });
+
+    const result = await getEvents();
+    expect(result).toEqual([]);
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
   // REQ 9: getEvent uses assertEventAccess
   it('getEvent calls assertEventAccess before querying', async () => {
     const eventId = '44444444-4444-4444-4444-444444444444';

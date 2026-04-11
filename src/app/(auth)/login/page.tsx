@@ -37,8 +37,7 @@ export default function LoginPage() {
             footerAction: 'hidden',
           },
         }}
-        routing="path"
-        path="/login"
+        routing="hash"
         fallbackRedirectUrl="/dashboard"
         signUpUrl="/login"
       />

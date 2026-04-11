@@ -23,15 +23,17 @@ setup('authenticate and save state', async ({ page }) => {
   // Clear any previous auth state
   await page.context().clearCookies();
 
-  // Navigate to login page where Clerk JS loads
-  await page.goto('/login');
-  await page.waitForLoadState('networkidle');
+  // Navigate to login page and sync on Clerk's UI rather than network idle.
+  // The Clerk page keeps background work alive long enough for `networkidle`
+  // to hang in dev, which prevents auth state from ever being refreshed.
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
 
   // Wait for Clerk to be ready (the SignIn component renders)
   await page.waitForSelector('[data-clerk-component]', { timeout: 15000 }).catch(() => {
     // Fallback: wait for the email input
     return page.waitForSelector('input[name="identifier"], input[type="email"]', { timeout: 10000 });
   });
+  await clerk.loaded({ page });
 
   // Use emailAddress shortcut — signs in via Backend API, no UI interaction needed.
   await clerk.signIn({
@@ -40,7 +42,7 @@ setup('authenticate and save state', async ({ page }) => {
   });
 
   // After sign-in, navigate to a protected page to verify
-  await page.goto('/dashboard');
+  await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
   await page.waitForURL('**/dashboard**', { timeout: 15000 });
 
   // Save authenticated session for reuse in all tests
