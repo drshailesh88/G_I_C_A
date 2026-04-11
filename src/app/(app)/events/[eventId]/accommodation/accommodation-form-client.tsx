@@ -52,6 +52,7 @@ export function AccommodationFormClient({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [personSearch, setPersonSearch] = useState('');
+  const [selectedPersonId, setSelectedPersonId] = useState(existing?.personId ?? '');
 
   const isEdit = !!existing;
   const filteredPeople = personSearch.length >= 2
@@ -117,18 +118,20 @@ export function AccommodationFormClient({
                 type="text"
                 placeholder="Search by name or email..."
                 value={personSearch}
-                onChange={(e) => setPersonSearch(e.target.value)}
+                onChange={(e) => {
+                  setPersonSearch(e.target.value);
+                  setSelectedPersonId('');
+                }}
                 className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
               />
-              {filteredPeople.length > 0 && (
+              {filteredPeople.length > 0 && !selectedPersonId && (
                 <div className="mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-surface shadow-lg">
                   {filteredPeople.map((p) => (
                     <button
                       key={p.personId}
                       type="button"
                       onClick={() => {
-                        const hidden = document.getElementById('personId') as HTMLInputElement;
-                        if (hidden) hidden.value = p.personId;
+                        setSelectedPersonId(p.personId);
                         setPersonSearch(p.personName);
                       }}
                       className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm hover:bg-border/30"
@@ -144,7 +147,7 @@ export function AccommodationFormClient({
                   No people found. Ensure travel records exist first.
                 </p>
               )}
-              <input type="hidden" id="personId" name="personId" defaultValue="" required />
+              <input type="hidden" id="personId" name="personId" value={selectedPersonId} required readOnly />
             </div>
           )}
 
