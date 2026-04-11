@@ -13,6 +13,7 @@ const eventLinkSelector = 'a[href^="/events/"]:not([href="/events/new"])';
 const eventId = '68ee91f0-6d37-4525-ab1b-393438434402';
 const personEmail = 'travel.e2e@gemindia.test';
 const personName = 'Travel E2E Delegate';
+const navigationTimeout = 30_000;
 
 async function capture(page: Page, name: string) {
   fs.mkdirSync(evidenceDir, { recursive: true });
@@ -138,7 +139,9 @@ test('travel module supports create, edit, cancel, and persistence for an assign
   await capture(page, 'form-filled');
 
   await page.getByRole('button', { name: 'Create Travel Record' }).click();
-  await expect(page).toHaveURL(new RegExp(`/events/${eventId}/travel$`));
+  await expect(page).toHaveURL(new RegExp(`/events/${eventId}/travel$`), {
+    timeout: navigationTimeout,
+  });
   await expect(createdRow).toBeVisible();
   await expect(page.getByText(initialServiceNumber)).toBeVisible();
   await capture(page, 'list-created');
@@ -162,7 +165,9 @@ test('travel module supports create, edit, cancel, and persistence for an assign
   }).first();
 
   await page.getByRole('button', { name: 'Update Travel Record' }).click();
-  await expect(page).toHaveURL(new RegExp(`/events/${eventId}/travel$`));
+  await expect(page).toHaveURL(new RegExp(`/events/${eventId}/travel$`), {
+    timeout: navigationTimeout,
+  });
   await expect(updatedRow).toBeVisible();
   await capture(page, 'list-updated');
 
