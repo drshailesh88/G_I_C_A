@@ -38,15 +38,29 @@ import {
   archiveCertificateTemplate,
   listCertificateTemplates,
   getCertificateTemplate,
+  searchCertificateRecipients,
 } from './certificate';
 
 // ── Chain helpers ─────────────────────────────────────────────
 function chainedSelect(rows: unknown[]) {
   const chain = {
     from: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue(rows),
     orderBy: vi.fn().mockResolvedValue(rows),
+  };
+  mockDb.select.mockReturnValue(chain);
+  return chain;
+}
+
+function chainedRecipientSelect(rows: unknown[]) {
+  const chain = {
+    from: vi.fn().mockReturnThis(),
+    innerJoin: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    orderBy: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockResolvedValue(rows),
   };
   mockDb.select.mockReturnValue(chain);
   return chain;
@@ -116,6 +130,27 @@ describe('listCertificateTemplates', () => {
     chainedSelect([]);
     const result = await listCertificateTemplates(EVENT_ID);
     expect(result).toEqual([]);
+  });
+});
+
+describe('searchCertificateRecipients', () => {
+  it('returns event-linked people only', async () => {
+    const recipients = [{
+      id: 'person-1',
+      fullName: 'Dr. Event Linked',
+      email: 'linked@example.com',
+      designation: 'Faculty',
+    }];
+    chainedRecipientSelect(recipients);
+
+    const result = await searchCertificateRecipients(EVENT_ID, { query: 'Event', limit: 10 });
+
+    expect(result).toEqual(recipients);
+    expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_ID);
+  });
+
+  it('rejects an empty search query', async () => {
+    await expect(searchCertificateRecipients(EVENT_ID, { query: '' })).rejects.toThrow();
   });
 });
 

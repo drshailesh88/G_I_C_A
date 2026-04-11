@@ -8,15 +8,13 @@ vi.mock('@/lib/actions/certificate', () => ({
   updateCertificateTemplate: vi.fn(),
   activateCertificateTemplate: vi.fn(),
   archiveCertificateTemplate: vi.fn(),
+  searchCertificateRecipients: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('@/lib/actions/certificate-issuance', () => ({
   issueCertificate: vi.fn(),
   revokeCertificate: vi.fn(),
   getCertificateDownloadUrl: vi.fn(),
   resendCertificateNotification: vi.fn(),
-}));
-vi.mock('@/lib/actions/person', () => ({
-  searchPeople: vi.fn().mockResolvedValue({ rows: [], total: 0 }),
 }));
 vi.mock('@/lib/actions/certificate-bulk-zip', () => ({
   bulkZipDownload: vi.fn(),

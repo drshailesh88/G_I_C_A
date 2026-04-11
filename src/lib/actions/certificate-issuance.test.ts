@@ -176,7 +176,7 @@ describe('issueCertificate', () => {
   });
 
   it('retries on certificate_number collision and succeeds on second attempt', async () => {
-    let txCallCount = 0;
+    let insertCallCount = 0;
     const collisionError = Object.assign(
       new Error('duplicate key value violates unique constraint "issued_certificates_certificate_number_unique"'),
       { code: '23505' },
@@ -189,13 +189,13 @@ describe('issueCertificate', () => {
       [{ id: PERSON_ID }],
       // Outer: template
       [mockTemplate],
-      // TX attempt 1: existing certs (FOR UPDATE)
+      // Attempt 1: existing certs
       [],
-      // TX attempt 1: cert numbers
+      // Attempt 1: cert numbers
       [{ certificateNumber: 'GEM2026-ATT-00001' }],
-      // TX attempt 2: existing certs (FOR UPDATE)
+      // Attempt 2: existing certs
       [],
-      // TX attempt 2: cert numbers
+      // Attempt 2: cert numbers
       [{ certificateNumber: 'GEM2026-ATT-00001' }],
     ];
 
@@ -213,22 +213,19 @@ describe('issueCertificate', () => {
       return chain;
     });
 
-    mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
-      txCallCount++;
-      if (txCallCount === 1) {
-        mockDb.insert.mockReturnValue({
-          values: vi.fn().mockReturnThis(),
-          returning: vi.fn().mockRejectedValue(collisionError),
-        });
-      } else {
-        chainedInsert([{ ...mockIssuedCert, certificateNumber: 'GEM2026-ATT-00002' }]);
-      }
-      return callback(mockDb);
+    mockDb.insert.mockImplementation(() => {
+      insertCallCount++;
+      return {
+        values: vi.fn().mockReturnThis(),
+        returning: insertCallCount === 1
+          ? vi.fn().mockRejectedValue(collisionError)
+          : vi.fn().mockResolvedValue([{ ...mockIssuedCert, certificateNumber: 'GEM2026-ATT-00002' }]),
+      };
     });
 
     const result = await issueCertificate(EVENT_ID, validIssueInput);
     expect(result).toBeDefined();
-    expect(txCallCount).toBe(2);
+    expect(insertCallCount).toBe(2);
   });
 
   it('gives up after 3 collision retries', async () => {
@@ -260,13 +257,10 @@ describe('issueCertificate', () => {
       return chain;
     });
 
-    mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
-      mockDb.insert.mockReturnValue({
-        values: vi.fn().mockReturnThis(),
-        returning: vi.fn().mockRejectedValue(collisionError),
-      });
-      return callback(mockDb);
-    });
+    mockDb.insert.mockImplementation(() => ({
+      values: vi.fn().mockReturnThis(),
+      returning: vi.fn().mockRejectedValue(collisionError),
+    }));
 
     await expect(issueCertificate(EVENT_ID, validIssueInput)).rejects.toThrow('certificate_number');
   });
@@ -288,7 +282,7 @@ describe('issueCertificate', () => {
   });
 
   it('does not retry on non-certificate_number unique violations', async () => {
-    let txCallCount = 0;
+    let insertCallCount = 0;
     const otherUniqueError = Object.assign(
       new Error('duplicate key value violates unique constraint "uq_issued_cert_one_current"'),
       { code: '23505' },
@@ -314,17 +308,16 @@ describe('issueCertificate', () => {
       return chain;
     });
 
-    mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
-      txCallCount++;
-      mockDb.insert.mockReturnValue({
+    mockDb.insert.mockImplementation(() => {
+      insertCallCount++;
+      return {
         values: vi.fn().mockReturnThis(),
         returning: vi.fn().mockRejectedValue(otherUniqueError),
-      });
-      return callback(mockDb);
+      };
     });
 
     await expect(issueCertificate(EVENT_ID, validIssueInput)).rejects.toThrow();
-    expect(txCallCount).toBe(1);
+    expect(insertCallCount).toBe(1);
   });
 });
 

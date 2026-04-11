@@ -13,6 +13,7 @@ import {
   updateCertificateTemplate,
   activateCertificateTemplate,
   archiveCertificateTemplate,
+  searchCertificateRecipients,
 } from '@/lib/actions/certificate';
 import {
   issueCertificate,
@@ -21,7 +22,6 @@ import {
   resendCertificateNotification,
 } from '@/lib/actions/certificate-issuance';
 import { bulkZipDownload } from '@/lib/actions/certificate-bulk-zip';
-import { searchPeople } from '@/lib/actions/person';
 import { CERTIFICATE_TYPES, AUDIENCE_SCOPES, ELIGIBILITY_BASIS_TYPES } from '@/lib/validations/certificate';
 
 type Template = {
@@ -937,10 +937,10 @@ function IssueCertificateModal({
     if (!personQuery.trim()) return;
     setSearching(true);
     try {
-      const result = await searchPeople({ query: personQuery.trim(), page: 1, limit: 10, view: 'all' });
-      setPersonResults(result.people?.map((r: any) => ({
+      const result = await searchCertificateRecipients(eventId, { query: personQuery.trim(), limit: 10 });
+      setPersonResults(result.map((r) => ({
         id: r.id, fullName: r.fullName, email: r.email, designation: r.designation,
-      })) ?? []);
+      })));
     } catch {
       setPersonResults([]);
     } finally {

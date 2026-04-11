@@ -57,91 +57,98 @@ export async function issueCertificate(eventId: string, input: unknown) {
 
   for (let attempt = 0; attempt < MAX_CERT_NUMBER_RETRIES; attempt++) {
     try {
-      const issued = await db.transaction(async (tx) => {
-        // Check for existing current certificate (one-current-valid)
-        // FOR UPDATE locks matching rows to prevent concurrent issuance races
-        const existingCerts = await tx
-          .select()
-          .from(issuedCertificates)
+      // Neon HTTP does not support interactive Drizzle transactions. Keep every
+      // statement event-scoped, and let certificate number/current-cert unique
+      // indexes reject races so the retry loop can recover.
+      const existingCerts = await db
+        .select()
+        .from(issuedCertificates)
+        .where(
+          withEventScope(
+            issuedCertificates.eventId,
+            eventId,
+            and(
+              eq(issuedCertificates.personId, validated.personId),
+              eq(issuedCertificates.certificateType, validated.certificateType),
+            )!,
+          ),
+        );
+
+      const currentCert = findCurrentCertificate(
+        existingCerts as IssuedCertificateRecord[],
+        validated.personId,
+        eventId,
+        validated.certificateType,
+      );
+
+      const chain = buildSupersessionChain(currentCert);
+
+      const existingNumbers = await db
+        .select({ certificateNumber: issuedCertificates.certificateNumber })
+        .from(issuedCertificates)
+        .where(eq(issuedCertificates.eventId, eventId));
+
+      const config = getCertificateTypeConfig(validated.certificateType);
+      const numbers = existingNumbers.map(r => r.certificateNumber);
+      const sequence = getNextSequence(numbers, config.certificateNumberPrefix);
+      const certificateNumber = generateCertificateNumber(validated.certificateType, sequence);
+
+      const certId = crypto.randomUUID();
+      const storageKey = buildCertificateStorageKey(eventId, validated.certificateType, certId);
+
+      if (currentCert && chain.oldCertUpdate) {
+        await db
+          .update(issuedCertificates)
+          .set({
+            status: 'superseded',
+            updatedAt: new Date(),
+          })
           .where(
             withEventScope(
               issuedCertificates.eventId,
               eventId,
-              and(
-                eq(issuedCertificates.personId, validated.personId),
-                eq(issuedCertificates.certificateType, validated.certificateType),
-              )!,
+              eq(issuedCertificates.id, currentCert.id),
             ),
-          )
-          .for('update');
+          );
+      }
 
-        const currentCert = findCurrentCertificate(
-          existingCerts as IssuedCertificateRecord[],
-          validated.personId,
+      const [issued] = await db
+        .insert(issuedCertificates)
+        .values({
+          id: certId,
           eventId,
-          validated.certificateType,
-        );
+          personId: validated.personId,
+          templateId: validated.templateId,
+          templateVersionNo: template.versionNo,
+          certificateType: validated.certificateType,
+          eligibilityBasisType: validated.eligibilityBasisType,
+          eligibilityBasisId: validated.eligibilityBasisId || null,
+          certificateNumber,
+          storageKey,
+          fileName: `${certificateNumber}.pdf`,
+          renderedVariablesJson: validated.renderedVariablesJson,
+          brandingSnapshotJson: template.brandingSnapshotJson,
+          templateSnapshotJson: template.templateJson,
+          supersedesId: chain.newCertLink?.supersedesId || null,
+          issuedBy: userId,
+        })
+        .returning();
 
-        const chain = buildSupersessionChain(currentCert);
-
-        // Get next certificate number
-        const existingNumbers = await tx
-          .select({ certificateNumber: issuedCertificates.certificateNumber })
-          .from(issuedCertificates)
-          .where(eq(issuedCertificates.eventId, eventId));
-
-        const config = getCertificateTypeConfig(validated.certificateType);
-        const numbers = existingNumbers.map(r => r.certificateNumber);
-        const sequence = getNextSequence(numbers, config.certificateNumberPrefix);
-        const certificateNumber = generateCertificateNumber(validated.certificateType, sequence);
-
-        // Build storage key (PDF will be uploaded separately)
-        const certId = crypto.randomUUID();
-        const storageKey = buildCertificateStorageKey(eventId, validated.certificateType, certId);
-
-        // Create the new issued certificate
-        const [newCert] = await tx
-          .insert(issuedCertificates)
-          .values({
-            id: certId,
-            eventId,
-            personId: validated.personId,
-            templateId: validated.templateId,
-            templateVersionNo: template.versionNo,
-            certificateType: validated.certificateType,
-            eligibilityBasisType: validated.eligibilityBasisType,
-            eligibilityBasisId: validated.eligibilityBasisId || null,
-            certificateNumber,
-            storageKey,
-            fileName: `${certificateNumber}.pdf`,
-            renderedVariablesJson: validated.renderedVariablesJson,
-            brandingSnapshotJson: template.brandingSnapshotJson,
-            templateSnapshotJson: template.templateJson,
-            supersedesId: chain.newCertLink?.supersedesId || null,
-            issuedBy: userId,
+      if (currentCert && chain.oldCertUpdate) {
+        await db
+          .update(issuedCertificates)
+          .set({
+            supersededById: issued.id,
+            updatedAt: new Date(),
           })
-          .returning();
-
-        // If superseding, update the old certificate
-        if (currentCert && chain.oldCertUpdate) {
-          await tx
-            .update(issuedCertificates)
-            .set({
-              status: 'superseded',
-              supersededById: newCert.id,
-              updatedAt: new Date(),
-            })
-            .where(
-              withEventScope(
-                issuedCertificates.eventId,
-                eventId,
-                eq(issuedCertificates.id, currentCert.id),
-              ),
-            );
-        }
-
-        return newCert;
-      });
+          .where(
+            withEventScope(
+              issuedCertificates.eventId,
+              eventId,
+              eq(issuedCertificates.id, currentCert.id),
+            ),
+          );
+      }
 
       revalidatePath(`/events/${eventId}/certificates`);
       return issued;

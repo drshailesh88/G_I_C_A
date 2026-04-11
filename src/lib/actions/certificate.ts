@@ -1,9 +1,10 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { certificateTemplates, issuedCertificates } from '@/lib/db/schema';
-import { eq, and, desc, ne, sql } from 'drizzle-orm';
+import { certificateTemplates, eventPeople, people } from '@/lib/db/schema';
+import { eq, and, desc, ne, sql, ilike, or, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
 import {
@@ -15,6 +16,11 @@ import {
   type TemplateStatus,
 } from '@/lib/validations/certificate';
 
+const recipientSearchSchema = z.object({
+  query: z.string().trim().min(1, 'Search query is required').max(200),
+  limit: z.number().int().min(1).max(20).default(10),
+});
+
 // ── List certificate templates ───────────────────────────────
 export async function listCertificateTemplates(eventId: string) {
   await assertEventAccess(eventId);
@@ -24,6 +30,38 @@ export async function listCertificateTemplates(eventId: string) {
     .from(certificateTemplates)
     .where(eq(certificateTemplates.eventId, eventId))
     .orderBy(desc(certificateTemplates.updatedAt));
+}
+
+// ── Search certificate recipients within one event ─────────────
+export async function searchCertificateRecipients(eventId: string, input: unknown) {
+  await assertEventAccess(eventId);
+  const { query, limit } = recipientSearchSchema.parse(input);
+  const escaped = query.replace(/%/g, '\\%').replace(/_/g, '\\_');
+
+  return db
+    .select({
+      id: people.id,
+      fullName: people.fullName,
+      email: people.email,
+      designation: people.designation,
+    })
+    .from(eventPeople)
+    .innerJoin(people, eq(eventPeople.personId, people.id))
+    .where(
+      and(
+        eq(eventPeople.eventId, eventId),
+        isNull(people.archivedAt),
+        isNull(people.anonymizedAt),
+        or(
+          ilike(people.fullName, `%${escaped}%`),
+          ilike(people.email, `%${escaped}%`),
+          ilike(people.organization, `%${escaped}%`),
+          eq(people.phoneE164, query),
+        )!,
+      ),
+    )
+    .orderBy(people.fullName)
+    .limit(limit);
 }
 
 // ── Get single certificate template ──────────────────────────
@@ -143,39 +181,35 @@ export async function activateCertificateTemplate(eventId: string, input: unknow
     throw new Error(`Cannot activate a template with status "${template.status}"`);
   }
 
-  // Wrap in transaction to prevent partial state (archived old but failed to activate new)
-  const activated = await db.transaction(async (tx) => {
-    // Archive any existing active template of the same type
-    await tx
-      .update(certificateTemplates)
-      .set({
-        status: 'archived',
-        archivedAt: new Date(),
-        updatedBy: userId,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(certificateTemplates.eventId, eventId),
-          eq(certificateTemplates.certificateType, template.certificateType),
-          eq(certificateTemplates.status, 'active'),
-          ne(certificateTemplates.id, templateId),
-        ),
-      );
+  // Neon HTTP does not support interactive Drizzle transactions. Keep both
+  // writes event-scoped and rely on the partial unique index for one active
+  // template per event/type.
+  await db
+    .update(certificateTemplates)
+    .set({
+      status: 'archived',
+      archivedAt: new Date(),
+      updatedBy: userId,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(certificateTemplates.eventId, eventId),
+        eq(certificateTemplates.certificateType, template.certificateType),
+        eq(certificateTemplates.status, 'active'),
+        ne(certificateTemplates.id, templateId),
+      ),
+    );
 
-    // Activate this template
-    const [result] = await tx
-      .update(certificateTemplates)
-      .set({
-        status: 'active',
-        updatedBy: userId,
-        updatedAt: new Date(),
-      })
-      .where(withEventScope(certificateTemplates.eventId, eventId, eq(certificateTemplates.id, templateId)))
-      .returning();
-
-    return result;
-  });
+  const [activated] = await db
+    .update(certificateTemplates)
+    .set({
+      status: 'active',
+      updatedBy: userId,
+      updatedAt: new Date(),
+    })
+    .where(withEventScope(certificateTemplates.eventId, eventId, eq(certificateTemplates.id, templateId)))
+    .returning();
 
   revalidatePath(`/events/${eventId}/certificates`);
   return activated;
