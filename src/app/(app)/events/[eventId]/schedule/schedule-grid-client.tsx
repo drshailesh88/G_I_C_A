@@ -51,6 +51,10 @@ export function getHourHeight(mode: NavMode): number {
   return 80;
 }
 
+function formatAssignmentLabel(assignment: ScheduleSession['assignments'][number]): string {
+  return assignment.personName ?? assignment.role.replace('_', '-');
+}
+
 export function ScheduleGridClient({
   eventId,
   sessions,
@@ -344,7 +348,7 @@ export function ScheduleGridClient({
                           {session.assignments.length > 0 && (
                             <p className="mt-0.5 truncate text-xs text-text-muted">
                               {session.assignments
-                                .map((a) => a.role.replace('_', '-'))
+                                .map((a) => formatAssignmentLabel(a))
                                 .join(', ')}
                             </p>
                           )}
@@ -460,7 +464,7 @@ export function ScheduleGridClient({
                     </p>
                     {session.assignments.length > 0 && (
                       <p className="mt-0.5 truncate text-[9px] text-text-muted">
-                        {session.assignments.map((a) => a.role.replace('_', '-')).join(', ')}
+                        {session.assignments.map((a) => formatAssignmentLabel(a)).join(', ')}
                       </p>
                     )}
                   </Link>
@@ -580,7 +584,7 @@ export function ScheduleGridClient({
                         {session.assignments.length > 0 && (
                           <p className="mt-0.5 truncate text-[9px] text-text-muted">
                             {session.assignments
-                              .map((a) => a.role.replace('_', '-'))
+                              .map((a) => formatAssignmentLabel(a))
                               .join(', ')}
                           </p>
                         )}

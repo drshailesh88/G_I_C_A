@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Save, Plus, Trash2, Users } from 'lucide-react';
@@ -95,6 +95,7 @@ export function SessionFormClient({
   session,
   roleRequirements = [],
   assignments = [],
+  canWriteOverride,
 }: {
   eventId: string;
   halls: Hall[];
@@ -103,10 +104,13 @@ export function SessionFormClient({
   session?: Session;
   roleRequirements?: RoleRequirement[];
   assignments?: Assignment[];
+  canWriteOverride?: boolean;
 }) {
   const router = useRouter();
   const { canWrite } = useRole();
+  const effectiveCanWrite = canWriteOverride ?? canWrite;
   const [isPending, startTransition] = useTransition();
+  const [isHydrated, setIsHydrated] = useState(false);
   const [error, setError] = useState('');
 
   // Form fields
@@ -128,7 +132,11 @@ export function SessionFormClient({
   const [newReqRole, setNewReqRole] = useState('');
   const [newReqCount, setNewReqCount] = useState('1');
 
-  const isReadOnly = !canWrite;
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  const isReadOnly = !isHydrated || !effectiveCanWrite;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -241,7 +249,7 @@ export function SessionFormClient({
           <button
             type="submit"
             form="session-form"
-            disabled={isPending}
+            disabled={!isHydrated || isPending}
             className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
@@ -469,9 +477,10 @@ export function SessionFormClient({
                     {req.requiredCount} required
                   </span>
                 </div>
-                {canWrite && (
+                {effectiveCanWrite && (
                   <button
                     onClick={() => handleDeleteRoleReq(req.id)}
+                    disabled={!isHydrated || isPending}
                     className="rounded p-1 text-text-muted hover:bg-error/10 hover:text-error"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -481,7 +490,7 @@ export function SessionFormClient({
             ))}
 
             {/* Add new role requirement */}
-            {canWrite && availableRoles.length > 0 && (
+            {effectiveCanWrite && availableRoles.length > 0 && (
               <div className="flex items-center gap-2">
                 <select
                   value={newReqRole}
@@ -505,7 +514,7 @@ export function SessionFormClient({
                 />
                 <button
                   onClick={handleAddRoleRequirement}
-                  disabled={!newReqRole || isPending}
+                  disabled={!isHydrated || !newReqRole || isPending}
                   className="flex items-center gap-1 rounded-lg bg-accent/10 px-3 py-2 text-sm font-medium text-accent hover:bg-accent/20 disabled:opacity-50"
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -550,11 +559,11 @@ export function SessionFormClient({
       )}
 
       {/* Delete button (edit mode) */}
-      {mode === 'edit' && canWrite && (
+      {mode === 'edit' && effectiveCanWrite && (
         <div className="mt-8 border-t border-border pt-6">
           <button
             onClick={handleDelete}
-            disabled={isPending}
+            disabled={!isHydrated || isPending}
             className="w-full rounded-lg border border-error/30 px-4 py-2.5 text-sm font-medium text-error hover:bg-error/5 disabled:opacity-50"
           >
             Delete Session

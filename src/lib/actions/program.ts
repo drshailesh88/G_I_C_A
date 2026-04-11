@@ -10,6 +10,7 @@ import {
   facultyInvites,
   programVersions,
   eventPeople,
+  people,
 } from '@/lib/db/schema';
 import { eq, and, or, sql, desc, asc, ne, lt, gt, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
@@ -1007,6 +1008,7 @@ export type ScheduleSession = {
   assignments: Array<{
     id: string;
     personId: string;
+    personName: string | null;
     role: string;
     presentationTitle: string | null;
     sortOrder: number;
@@ -1031,7 +1033,19 @@ export async function getScheduleData(eventId: string): Promise<{
       .orderBy(asc(sessions.sessionDate), asc(sessions.startAtUtc), asc(sessions.sortOrder)),
     db.select().from(halls).where(eq(halls.eventId, eventId))
       .orderBy(asc(halls.sortOrder), asc(halls.name)),
-    db.select().from(sessionAssignments).where(eq(sessionAssignments.eventId, eventId))
+    db
+      .select({
+        id: sessionAssignments.id,
+        sessionId: sessionAssignments.sessionId,
+        personId: sessionAssignments.personId,
+        personName: people.fullName,
+        role: sessionAssignments.role,
+        presentationTitle: sessionAssignments.presentationTitle,
+        sortOrder: sessionAssignments.sortOrder,
+      })
+      .from(sessionAssignments)
+      .innerJoin(people, eq(sessionAssignments.personId, people.id))
+      .where(eq(sessionAssignments.eventId, eventId))
       .orderBy(asc(sessionAssignments.sortOrder)),
     db.select().from(sessionRoleRequirements)
       .innerJoin(sessions, eq(sessionRoleRequirements.sessionId, sessions.id))
@@ -1078,6 +1092,7 @@ export async function getScheduleData(eventId: string): Promise<{
     assignments: (assignmentsBySession.get(s.id) ?? []).map(a => ({
       id: a.id,
       personId: a.personId,
+      personName: a.personName,
       role: a.role,
       presentationTitle: a.presentationTitle,
       sortOrder: a.sortOrder,

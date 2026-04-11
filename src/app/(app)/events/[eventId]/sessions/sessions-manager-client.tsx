@@ -68,19 +68,29 @@ function formatDate(date: Date | null): string {
   });
 }
 
+function formatAssignmentName(assignment: ScheduleSession['assignments'][number]): string {
+  const personName = assignment.personName ?? assignment.personId.slice(0, 8);
+  return assignment.presentationTitle
+    ? `${personName} - ${assignment.presentationTitle}`
+    : personName;
+}
+
 export function SessionsManagerClient({
   eventId,
   sessions,
   halls,
   conflicts,
+  canWriteOverride,
 }: {
   eventId: string;
   sessions: ScheduleSession[];
   halls: Hall[];
   conflicts: ConflictWarning[];
+  canWriteOverride?: boolean;
 }) {
   const router = useRouter();
   const { canWrite } = useRole();
+  const effectiveCanWrite = canWriteOverride ?? canWrite;
   const { isMobile } = useResponsiveNav();
   const [isPending, startTransition] = useTransition();
   const [searchQuery, setSearchQuery] = useState('');
@@ -187,7 +197,7 @@ export function SessionsManagerClient({
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {canWrite && (
+          {effectiveCanWrite && (
             <>
               <button
                 onClick={() => setShowHallManager(!showHallManager)}
@@ -295,7 +305,7 @@ export function SessionsManagerClient({
                         <th className="pb-2 font-medium">Time</th>
                         <th className="pb-2 font-medium">Type</th>
                         <th className="pb-2 font-medium">Status</th>
-                        {canWrite && <th className="pb-2 font-medium sr-only">Actions</th>}
+                        {effectiveCanWrite && <th className="pb-2 font-medium sr-only">Actions</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -333,7 +343,7 @@ export function SessionsManagerClient({
                             <td className="py-2 pr-3 text-xs capitalize text-text-muted">
                               {session.status}
                             </td>
-                            {canWrite && (
+                            {effectiveCanWrite && (
                               <td className="py-2">
                                 <button
                                   onClick={(e) => {
@@ -362,7 +372,7 @@ export function SessionsManagerClient({
                         eventId={eventId}
                         conflicts={conflictsBySession.get(session.id) ?? []}
                         hallMap={hallMap}
-                        canWrite={canWrite}
+                        canWrite={effectiveCanWrite}
                         isExpanded={expandedSessions.has(session.id)}
                         onToggleExpand={() => toggleExpand(session.id)}
                         onDelete={() => handleDelete(session.id)}
@@ -453,7 +463,7 @@ function SessionDetailPanel({
           <div className="mt-1 space-y-1">
             {session.assignments.map((a) => (
               <div key={a.id} className="text-sm text-text-muted">
-                {a.role.replace('_', ' ')}: {a.presentationTitle || 'Assigned'}
+                {a.role.replace('_', ' ')}: {formatAssignmentName(a)}
               </div>
             ))}
           </div>
@@ -595,7 +605,7 @@ function SessionCard({
             <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-text-muted">
               {session.assignments.map((a) => (
                 <span key={a.id}>
-                  {a.role.replace('_', '-')}: {a.presentationTitle || 'Assigned'}
+                  {a.role.replace('_', '-')}: {formatAssignmentName(a)}
                 </span>
               ))}
             </div>

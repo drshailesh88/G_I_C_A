@@ -7,6 +7,8 @@ import {
   getSessionRoleRequirements,
   getSessionAssignments,
 } from '@/lib/actions/program';
+import { assertEventAccess } from '@/lib/auth/event-access';
+import { ROLES } from '@/lib/auth/roles';
 import { SessionFormClient } from '../session-form-client';
 
 type Params = Promise<{ eventId: string; sessionId: string }>;
@@ -22,6 +24,7 @@ export default async function EditSessionPage({
   const { eventId, sessionId } = await params;
 
   try {
+    const { role } = await assertEventAccess(eventId);
     const [session, halls, existingSessions, roleRequirements, assignments] =
       await Promise.all([
         getSession(eventId, sessionId),
@@ -30,6 +33,10 @@ export default async function EditSessionPage({
         getSessionRoleRequirements(eventId, sessionId),
         getSessionAssignments(eventId, sessionId),
       ]);
+    const canWrite =
+      role === ROLES.SUPER_ADMIN ||
+      role === ROLES.EVENT_COORDINATOR ||
+      role === ROLES.OPS;
 
     // Only pass parent-eligible sessions (those without a parent, excluding current session)
     const parentEligible = existingSessions.filter(
@@ -45,6 +52,7 @@ export default async function EditSessionPage({
         session={session}
         roleRequirements={roleRequirements.map((r) => r.session_role_requirements)}
         assignments={assignments}
+        canWriteOverride={canWrite}
       />
     );
   } catch {
