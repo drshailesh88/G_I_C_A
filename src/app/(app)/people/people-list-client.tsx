@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -17,6 +17,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useRole } from '@/hooks/use-role';
 import { ResponsiveList, type ColumnDef } from '@/components/responsive/responsive-list';
+import { createPerson } from '@/lib/actions/person';
 
 type Person = {
   id: string;
@@ -125,9 +126,18 @@ export function PeopleListClient({
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { canWrite } = useRole();
+  const { isLoaded, isReadOnly } = useRole();
+  const canWrite = isLoaded && !isReadOnly;
   const [isPending, startTransition] = useTransition();
   const [searchValue, setSearchValue] = useState(currentQuery);
+  const [isCreating, setIsCreating] = useState(false);
+  const [addError, setAddError] = useState('');
+  const [isAddModalOpen, setIsAddModalOpen] = useState(searchParams.get('modal') === 'add');
+  const showAddModal = isAddModalOpen || searchParams.get('modal') === 'add';
+
+  useEffect(() => {
+    setIsAddModalOpen(searchParams.get('modal') === 'add');
+  }, [searchParams]);
 
   function navigate(params: Record<string, string | undefined>) {
     const next = new URLSearchParams(searchParams.toString());
@@ -144,6 +154,59 @@ export function PeopleListClient({
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     navigate({ q: searchValue || undefined });
+  }
+
+  function closeAddModal() {
+    setIsAddModalOpen(false);
+    navigate({ modal: undefined });
+    setAddError('');
+  }
+
+  function openAddModal() {
+    setIsAddModalOpen(true);
+    navigate({ modal: 'add' });
+  }
+
+  async function handleCreatePerson(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setIsCreating(true);
+    setAddError('');
+
+    const form = new FormData(e.currentTarget);
+    const fullName = String(form.get('fullName') || '').trim();
+    const tags = String(form.get('tags') || '')
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+
+    try {
+      const result = await createPerson({
+        fullName,
+        email: String(form.get('email') || '').trim(),
+        phone: String(form.get('phone') || '').trim(),
+        designation: String(form.get('designation') || '').trim(),
+        specialty: String(form.get('specialty') || '').trim(),
+        organization: String(form.get('organization') || '').trim(),
+        city: String(form.get('city') || '').trim(),
+        tags,
+      });
+
+      if (result.duplicate) {
+        setAddError(result.message);
+        return;
+      }
+
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete('modal');
+      next.set('q', fullName);
+      next.delete('page');
+      router.push(`/people?${next.toString()}`);
+      router.refresh();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'Failed to create person');
+    } finally {
+      setIsCreating(false);
+    }
   }
 
   const emptyState = (
@@ -180,7 +243,7 @@ export function PeopleListClient({
               Import
             </Link>
             <button
-              onClick={() => navigate({ modal: 'add' })}
+              onClick={openAddModal}
               className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary-light"
             >
               <Plus className="h-4 w-4" />
@@ -257,6 +320,143 @@ export function PeopleListClient({
           </div>
         )}
       </div>
+
+      {showAddModal && canWrite && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+          <div className="w-full max-w-lg rounded-lg border border-border bg-background p-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-text-primary">Add Person</h2>
+              <button
+                type="button"
+                onClick={closeAddModal}
+                className="rounded-lg px-2 py-1 text-sm text-text-secondary hover:bg-surface"
+              >
+                Close
+              </button>
+            </div>
+
+            <form onSubmit={handleCreatePerson} className="mt-4 space-y-3">
+              <div>
+                <label htmlFor="fullName" className="mb-1 block text-sm font-medium text-text-primary">
+                  Full Name <span className="text-error">*</span>
+                </label>
+                <input
+                  id="fullName"
+                  name="fullName"
+                  required
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="email" className="mb-1 block text-sm font-medium text-text-primary">
+                    Email
+                  </label>
+                  <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="phone" className="mb-1 block text-sm font-medium text-text-primary">
+                    Phone
+                  </label>
+                  <input
+                    id="phone"
+                    name="phone"
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="designation" className="mb-1 block text-sm font-medium text-text-primary">
+                    Designation
+                  </label>
+                  <input
+                    id="designation"
+                    name="designation"
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="specialty" className="mb-1 block text-sm font-medium text-text-primary">
+                    Specialty
+                  </label>
+                  <input
+                    id="specialty"
+                    name="specialty"
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label htmlFor="organization" className="mb-1 block text-sm font-medium text-text-primary">
+                    Organization
+                  </label>
+                  <input
+                    id="organization"
+                    name="organization"
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="city" className="mb-1 block text-sm font-medium text-text-primary">
+                    City
+                  </label>
+                  <input
+                    id="city"
+                    name="city"
+                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="tags" className="mb-1 block text-sm font-medium text-text-primary">
+                  Tags
+                </label>
+                <input
+                  id="tags"
+                  name="tags"
+                  placeholder="faculty, VIP"
+                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
+                />
+              </div>
+
+              {addError && (
+                <div className="rounded-lg border border-error/20 bg-error/5 px-3 py-2 text-sm text-error">
+                  {addError}
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={closeAddModal}
+                  disabled={isCreating}
+                  className="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium text-text-secondary hover:bg-surface disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreating}
+                  className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-light disabled:opacity-50"
+                >
+                  {isCreating ? 'Creating...' : 'Create Person'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

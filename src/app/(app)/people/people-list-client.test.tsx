@@ -5,12 +5,16 @@ import { renderToStaticMarkup } from 'react-dom/server';
 // ── Mocks ──
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('@/hooks/use-role', () => ({
-  useRole: () => ({ canWrite: true }),
+  useRole: () => ({ isLoaded: true, isReadOnly: false }),
+}));
+
+vi.mock('@/lib/actions/person', () => ({
+  createPerson: vi.fn(),
 }));
 
 import { PeopleListClient } from './people-list-client';

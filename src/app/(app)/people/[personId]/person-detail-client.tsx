@@ -39,7 +39,8 @@ type Person = {
 
 export function PersonDetailClient({ person }: { person: Person }) {
   const router = useRouter();
-  const { isSuperAdmin, canWrite } = useRole();
+  const { isLoaded, isSuperAdmin, isReadOnly } = useRole();
+  const canWrite = isLoaded && !isReadOnly;
   const [isPending, startTransition] = useTransition();
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showAnonymizeConfirm, setShowAnonymizeConfirm] = useState(false);
