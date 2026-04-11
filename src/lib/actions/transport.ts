@@ -12,6 +12,7 @@ import { eq, and, desc, ne } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { ZodError, type ZodType } from 'zod';
 import {
   createBatchSchema,
   updateBatchSchema,
@@ -30,13 +31,24 @@ import {
   type PassengerStatus,
 } from '@/lib/validations/transport';
 
+function parseTransportInput<T>(schema: ZodType<T>, input: unknown): T {
+  try {
+    return schema.parse(input);
+  } catch (error) {
+    if (error instanceof ZodError) {
+      throw new Error(error.issues[0]?.message ?? 'Invalid transport input');
+    }
+    throw error;
+  }
+}
+
 // ══════════════════════════════════════════════════════════════
 // BATCHES
 // ══════════════════════════════════════════════════════════════
 
 export async function createTransportBatch(eventId: string, input: unknown) {
   const { userId } = await assertEventAccess(eventId, { requireWrite: true });
-  const validated = createBatchSchema.parse(input);
+  const validated = parseTransportInput(createBatchSchema, input);
 
   const [batch] = await db
     .insert(transportBatches)
@@ -65,7 +77,7 @@ export async function createTransportBatch(eventId: string, input: unknown) {
 
 export async function updateTransportBatch(eventId: string, input: unknown) {
   const { userId } = await assertEventAccess(eventId, { requireWrite: true });
-  const validated = updateBatchSchema.parse(input);
+  const validated = parseTransportInput(updateBatchSchema, input);
   const { batchId, ...fields } = validated;
 
   const [existing] = await db
@@ -106,7 +118,7 @@ export async function updateTransportBatch(eventId: string, input: unknown) {
 
 export async function updateBatchStatus(eventId: string, batchId: string, newStatus: BatchStatus) {
   const { userId } = await assertEventAccess(eventId, { requireWrite: true });
-  batchIdSchema.parse(batchId);
+  parseTransportInput(batchIdSchema, batchId);
 
   const [existing] = await db
     .select()
@@ -145,7 +157,7 @@ export async function getEventTransportBatches(eventId: string) {
 
 export async function getTransportBatch(eventId: string, batchId: string) {
   await assertEventAccess(eventId);
-  batchIdSchema.parse(batchId);
+  parseTransportInput(batchIdSchema, batchId);
 
   const [batch] = await db
     .select()
@@ -163,7 +175,7 @@ export async function getTransportBatch(eventId: string, batchId: string) {
 
 export async function createVehicleAssignment(eventId: string, input: unknown) {
   const { userId } = await assertEventAccess(eventId, { requireWrite: true });
-  const validated = createVehicleSchema.parse(input);
+  const validated = parseTransportInput(createVehicleSchema, input);
 
   // Verify batch exists and belongs to this event
   const [batch] = await db
@@ -202,7 +214,7 @@ export async function createVehicleAssignment(eventId: string, input: unknown) {
 
 export async function updateVehicleStatus(eventId: string, vehicleAssignmentId: string, newStatus: VehicleStatus) {
   const { userId } = await assertEventAccess(eventId, { requireWrite: true });
-  vehicleIdSchema.parse(vehicleAssignmentId);
+  parseTransportInput(vehicleIdSchema, vehicleAssignmentId);
 
   const [existing] = await db
     .select()
@@ -246,7 +258,7 @@ export async function getBatchVehicles(eventId: string, batchId: string) {
 
 export async function assignPassenger(eventId: string, input: unknown) {
   const { userId } = await assertEventAccess(eventId, { requireWrite: true });
-  const validated = assignPassengerSchema.parse(input);
+  const validated = parseTransportInput(assignPassengerSchema, input);
 
   // Verify batch exists
   const [batch] = await db
@@ -277,7 +289,7 @@ export async function assignPassenger(eventId: string, input: unknown) {
 
 export async function movePassenger(eventId: string, input: unknown) {
   const { userId } = await assertEventAccess(eventId, { requireWrite: true });
-  const validated = movePassengerSchema.parse(input);
+  const validated = parseTransportInput(movePassengerSchema, input);
 
   const [existing] = await db
     .select()
@@ -315,7 +327,7 @@ export async function movePassenger(eventId: string, input: unknown) {
 
 export async function updatePassengerStatus(eventId: string, passengerAssignmentId: string, newStatus: PassengerStatus) {
   const { userId } = await assertEventAccess(eventId, { requireWrite: true });
-  passengerIdSchema.parse(passengerAssignmentId);
+  parseTransportInput(passengerIdSchema, passengerAssignmentId);
 
   const [existing] = await db
     .select()
