@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { ROLES } from '@/lib/auth/roles';
 import { getEventBranding, getBrandingImageUrls } from '@/lib/actions/branding';
 import { getEvent } from '@/lib/actions/event';
 import { BrandingFormClient } from './branding-form-client';
@@ -13,8 +14,9 @@ export default async function BrandingPage({
 }) {
   const { eventId } = await params;
 
+  let role: string | null = null;
   try {
-    await assertEventAccess(eventId);
+    ({ role } = await assertEventAccess(eventId));
   } catch {
     redirect('/login');
   }
@@ -24,6 +26,10 @@ export default async function BrandingPage({
     getBrandingImageUrls(eventId),
     getEvent(eventId),
   ]);
+  const canWrite =
+    role === ROLES.SUPER_ADMIN ||
+    role === ROLES.EVENT_COORDINATOR ||
+    role === ROLES.OPS;
 
   return (
     <BrandingFormClient
@@ -31,6 +37,7 @@ export default async function BrandingPage({
       eventName={event.name}
       initialBranding={branding}
       initialImageUrls={imageUrls}
+      canWriteOverride={canWrite}
     />
   );
 }

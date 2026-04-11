@@ -16,6 +16,16 @@ import {
   type EventBranding,
 } from '@/lib/validations/branding';
 
+const e2eBrandingImages = new Map<string, { data: Buffer; contentType: string }>();
+
+function useE2EBrandingStorage() {
+  return process.env.E2E_USE_STUB_STORAGE === '1';
+}
+
+function toDataUrl(file: { data: Buffer; contentType: string }) {
+  return `data:${file.contentType};base64,${file.data.toString('base64')}`;
+}
+
 /**
  * Get the branding configuration for an event.
  * Returns defaults merged with stored values.
@@ -112,6 +122,13 @@ export async function uploadBrandingImage(
   const buffer = Buffer.from(await file.arrayBuffer());
   const storageKey = buildBrandingStorageKey(eventId, imageType, file.name);
 
+  if (useE2EBrandingStorage()) {
+    e2eBrandingImages.set(storageKey, { data: buffer, contentType: file.type });
+    const fieldKey = imageType === 'logo' ? 'logoStorageKey' : 'headerImageStorageKey';
+    await updateEventBranding(eventId, { [fieldKey]: storageKey });
+    return { storageKey, signedUrl: toDataUrl({ data: buffer, contentType: file.type }) };
+  }
+
   // Dynamic import to allow test mocking
   const { createR2Provider } = await import('@/lib/certificates/storage');
   const storage = createR2Provider();
@@ -141,9 +158,13 @@ export async function deleteBrandingImage(
   const storageKey = branding[fieldKey];
 
   if (storageKey) {
-    const { createR2Provider } = await import('@/lib/certificates/storage');
-    const storage = createR2Provider();
-    await storage.delete(storageKey);
+    if (useE2EBrandingStorage()) {
+      e2eBrandingImages.delete(storageKey);
+    } else {
+      const { createR2Provider } = await import('@/lib/certificates/storage');
+      const storage = createR2Provider();
+      await storage.delete(storageKey);
+    }
   }
 
   await updateEventBranding(eventId, { [fieldKey]: '' });
@@ -163,15 +184,25 @@ export async function getBrandingImageUrls(eventId: string): Promise<{
   let headerImageUrl: string | null = null;
 
   if (branding.logoStorageKey) {
-    const { createR2Provider } = await import('@/lib/certificates/storage');
-    const storage = createR2Provider();
-    logoUrl = await storage.getSignedUrl(branding.logoStorageKey, 3600);
+    if (useE2EBrandingStorage()) {
+      const file = e2eBrandingImages.get(branding.logoStorageKey);
+      logoUrl = file ? toDataUrl(file) : null;
+    } else {
+      const { createR2Provider } = await import('@/lib/certificates/storage');
+      const storage = createR2Provider();
+      logoUrl = await storage.getSignedUrl(branding.logoStorageKey, 3600);
+    }
   }
 
   if (branding.headerImageStorageKey) {
-    const { createR2Provider } = await import('@/lib/certificates/storage');
-    const storage = createR2Provider();
-    headerImageUrl = await storage.getSignedUrl(branding.headerImageStorageKey, 3600);
+    if (useE2EBrandingStorage()) {
+      const file = e2eBrandingImages.get(branding.headerImageStorageKey);
+      headerImageUrl = file ? toDataUrl(file) : null;
+    } else {
+      const { createR2Provider } = await import('@/lib/certificates/storage');
+      const storage = createR2Provider();
+      headerImageUrl = await storage.getSignedUrl(branding.headerImageStorageKey, 3600);
+    }
   }
 
   return { logoUrl, headerImageUrl };

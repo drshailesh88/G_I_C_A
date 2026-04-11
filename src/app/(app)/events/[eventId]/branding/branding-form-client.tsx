@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Upload, Trash2, Eye } from 'lucide-react';
 import Link from 'next/link';
@@ -23,6 +23,7 @@ interface BrandingFormClientProps {
     logoUrl: string | null;
     headerImageUrl: string | null;
   };
+  canWriteOverride?: boolean;
 }
 
 export function BrandingFormClient({
@@ -30,10 +31,13 @@ export function BrandingFormClient({
   eventName,
   initialBranding,
   initialImageUrls,
+  canWriteOverride,
 }: BrandingFormClientProps) {
   const router = useRouter();
   const { canWrite } = useRole();
+  const effectiveCanWrite = canWriteOverride ?? canWrite;
   const [isPending, startTransition] = useTransition();
+  const [isHydrated, setIsHydrated] = useState(false);
 
   // Form state
   const [primaryColor, setPrimaryColor] = useState(initialBranding.primaryColor || '#1E40AF');
@@ -52,7 +56,12 @@ export function BrandingFormClient({
   const [uploading, setUploading] = useState<'logo' | 'header' | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
   function handleSave() {
+    if (!isHydrated || !effectiveCanWrite) return;
     setError(null);
     setSuccess(false);
 
@@ -75,6 +84,8 @@ export function BrandingFormClient({
   }
 
   async function handleImageUpload(imageType: 'logo' | 'header', file: File) {
+    if (!isHydrated || !effectiveCanWrite) return;
+
     // Client-side validation
     if (!BRANDING_IMAGE_MIME_TYPES.includes(file.type as (typeof BRANDING_IMAGE_MIME_TYPES)[number])) {
       setError(`Invalid file type. Allowed: PNG, JPEG, WebP, SVG`);
@@ -105,6 +116,8 @@ export function BrandingFormClient({
   }
 
   async function handleImageDelete(imageType: 'logo' | 'header') {
+    if (!isHydrated || !effectiveCanWrite) return;
+
     setError(null);
     try {
       await deleteBrandingImage(eventId, imageType);
@@ -139,10 +152,10 @@ export function BrandingFormClient({
             <Eye className="h-4 w-4" />
             {showPreview ? 'Hide Preview' : 'Preview'}
           </button>
-          {canWrite && (
+          {effectiveCanWrite && (
             <button
               onClick={handleSave}
-              disabled={isPending}
+              disabled={!isHydrated || isPending}
               className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {isPending ? 'Saving...' : 'Save Changes'}
@@ -182,7 +195,7 @@ export function BrandingFormClient({
                     aspectRatio="1/1"
                     className="h-16 w-16 rounded-lg border"
                   />
-                  {canWrite && (
+                  {effectiveCanWrite && (
                     <button
                       onClick={() => handleImageDelete('logo')}
                       className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700"
@@ -193,7 +206,7 @@ export function BrandingFormClient({
                   )}
                 </div>
               ) : (
-                <label className={`flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 hover:bg-border/20 ${!canWrite ? 'pointer-events-none opacity-50' : ''}`}>
+                <label className={`flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 hover:bg-border/20 ${(!isHydrated || !effectiveCanWrite) ? 'pointer-events-none opacity-50' : ''}`}>
                   <Upload className="h-6 w-6 text-muted-foreground" />
                   <span className="text-sm text-muted-foreground">
                     {uploading === 'logo' ? 'Uploading...' : 'Click to upload logo'}
@@ -202,7 +215,7 @@ export function BrandingFormClient({
                     type="file"
                     accept={BRANDING_IMAGE_MIME_TYPES.join(',')}
                     className="hidden"
-                    disabled={!canWrite || uploading !== null}
+                    disabled={!isHydrated || !effectiveCanWrite || uploading !== null}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) handleImageUpload('logo', file);
@@ -230,7 +243,7 @@ export function BrandingFormClient({
                     aspectRatio="3/1"
                     className="w-full rounded-lg border"
                   />
-                  {canWrite && (
+                  {effectiveCanWrite && (
                     <button
                       onClick={() => handleImageDelete('header')}
                       className="flex items-center gap-1 text-sm text-red-600 hover:text-red-700"
@@ -241,7 +254,7 @@ export function BrandingFormClient({
                   )}
                 </div>
               ) : (
-                <label className={`flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 hover:bg-border/20 ${!canWrite ? 'pointer-events-none opacity-50' : ''}`}>
+                <label className={`flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed p-6 hover:bg-border/20 ${(!isHydrated || !effectiveCanWrite) ? 'pointer-events-none opacity-50' : ''}`}>
                   <Upload className="h-6 w-6 text-muted-foreground" />
                   <span className="text-sm text-muted-foreground">
                     {uploading === 'header' ? 'Uploading...' : 'Click to upload header image'}
@@ -250,7 +263,7 @@ export function BrandingFormClient({
                     type="file"
                     accept={BRANDING_IMAGE_MIME_TYPES.join(',')}
                     className="hidden"
-                    disabled={!canWrite || uploading !== null}
+                    disabled={!isHydrated || !effectiveCanWrite || uploading !== null}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) handleImageUpload('header', file);
@@ -277,14 +290,14 @@ export function BrandingFormClient({
                       type="color"
                       value={primaryColor}
                       onChange={(e) => setPrimaryColor(e.target.value)}
-                      disabled={!canWrite}
+                      disabled={!isHydrated || !effectiveCanWrite}
                       className="h-10 w-10 cursor-pointer rounded border"
                     />
                     <input
                       type="text"
                       value={primaryColor}
                       onChange={(e) => setPrimaryColor(e.target.value)}
-                      disabled={!canWrite}
+                      disabled={!isHydrated || !effectiveCanWrite}
                       className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
                       placeholder="#1E40AF"
                     />
@@ -297,14 +310,14 @@ export function BrandingFormClient({
                       type="color"
                       value={secondaryColor}
                       onChange={(e) => setSecondaryColor(e.target.value)}
-                      disabled={!canWrite}
+                      disabled={!isHydrated || !effectiveCanWrite}
                       className="h-10 w-10 cursor-pointer rounded border"
                     />
                     <input
                       type="text"
                       value={secondaryColor}
                       onChange={(e) => setSecondaryColor(e.target.value)}
-                      disabled={!canWrite}
+                      disabled={!isHydrated || !effectiveCanWrite}
                       className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
                       placeholder="#9333EA"
                     />
@@ -327,7 +340,7 @@ export function BrandingFormClient({
                   type="text"
                   value={emailSenderName}
                   onChange={(e) => setEmailSenderName(e.target.value)}
-                  disabled={!canWrite}
+                  disabled={!isHydrated || !effectiveCanWrite}
                   className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
                   placeholder="e.g., GEM India 2026"
                   maxLength={100}
@@ -338,7 +351,7 @@ export function BrandingFormClient({
                 <textarea
                   value={emailFooterText}
                   onChange={(e) => setEmailFooterText(e.target.value)}
-                  disabled={!canWrite}
+                  disabled={!isHydrated || !effectiveCanWrite}
                   className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
                   placeholder="e.g., Organized by GEM India Foundation..."
                   rows={3}
@@ -351,7 +364,7 @@ export function BrandingFormClient({
                   type="text"
                   value={whatsappPrefix}
                   onChange={(e) => setWhatsappPrefix(e.target.value)}
-                  disabled={!canWrite}
+                  disabled={!isHydrated || !effectiveCanWrite}
                   className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm disabled:opacity-50"
                   placeholder="e.g., [GEM India 2026]"
                   maxLength={200}
