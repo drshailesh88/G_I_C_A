@@ -1,0 +1,11 @@
+{
+  "testRunner": "vitest",
+  "vitest": { "configFile": "vitest.config.ts" },
+  "mutate": [
+    "src/lib/actions/person.ts",
+    "src/lib/validations/person.ts"
+  ],
+  "reporters": ["json", "clear-text", "progress"],
+  "thresholds": { "high": 90, "low": 70, "break": 50 },
+  "timeoutMS": 30000
+}

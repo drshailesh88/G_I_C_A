@@ -1,0 +1,14 @@
+{
+  "testRunner": "vitest",
+  "vitest": { "configFile": "vitest.config.ts" },
+  "mutate": [
+    "src/lib/actions/certificate.ts",
+    "src/lib/actions/certificate-issuance.ts",
+    "src/lib/actions/certificate-generation.ts",
+    "src/lib/actions/certificate-bulk-zip.ts",
+    "src/lib/validations/certificate.ts"
+  ],
+  "reporters": ["json", "clear-text", "progress"],
+  "thresholds": { "high": 90, "low": 70, "break": 50 },
+  "timeoutMS": 30000
+}

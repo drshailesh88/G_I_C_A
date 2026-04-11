@@ -1,0 +1,12 @@
+{
+  "testRunner": "vitest",
+  "vitest": { "configFile": "vitest.config.ts" },
+  "mutate": [
+    "src/lib/actions/accommodation.ts",
+    "src/lib/validations/accommodation.ts",
+    "src/lib/cascade/handlers/accommodation-cascade.ts"
+  ],
+  "reporters": ["json", "clear-text", "progress"],
+  "thresholds": { "high": 90, "low": 70, "break": 50 },
+  "timeoutMS": 30000
+}
