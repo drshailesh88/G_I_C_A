@@ -96,19 +96,36 @@ describe('checkEventAccess', () => {
     expect(result.authorized).toBe(false);
   });
 
-  // Codex Bug #1: users with no recognized Clerk role should be denied even with assignment
-  it('denies assigned users who have no recognized Clerk role', async () => {
+  it('falls back to event coordinator for assigned owners without a Clerk role', async () => {
     mockAuth.mockResolvedValue({
-      userId: 'user-without-role',
+      userId: 'owner-without-role',
       has: () => false,
     });
     mockAssignmentQuery([
-      { id: 'a3', eventId: 'event-1', authUserId: 'user-without-role', isActive: true },
+      {
+        assignmentType: 'owner',
+      },
     ]);
 
     const result = await checkEventAccess('event-1');
-    expect(result.authorized).toBe(false);
-    expect(result.role).toBeNull();
+    expect(result.authorized).toBe(true);
+    expect(result.role).toBe('org:event_coordinator');
+  });
+
+  it('falls back to read-only for assigned collaborators without a Clerk role', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'collaborator-without-role',
+      has: () => false,
+    });
+    mockAssignmentQuery([
+      {
+        assignmentType: 'collaborator',
+      },
+    ]);
+
+    const result = await checkEventAccess('event-1');
+    expect(result.authorized).toBe(true);
+    expect(result.role).toBe('org:read_only');
   });
 });
 
@@ -159,6 +176,28 @@ describe('assertEventAccess', () => {
     const result = await assertEventAccess('event-1', { requireWrite: true });
     expect(result.userId).toBe('coord-1');
   });
+
+  it('allows assigned owners without Clerk roles to write via fallback role', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'owner-without-role',
+      has: () => false,
+    });
+    mockAssignmentQuery([{ assignmentType: 'owner' }]);
+
+    const result = await assertEventAccess('event-1', { requireWrite: true });
+    expect(result.userId).toBe('owner-without-role');
+    expect(result.role).toBe('org:event_coordinator');
+  });
+
+  it('blocks assigned collaborators without Clerk roles from writes', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'collaborator-without-role',
+      has: () => false,
+    });
+    mockAssignmentQuery([{ assignmentType: 'collaborator' }]);
+
+    await expect(assertEventAccess('event-1', { requireWrite: true })).rejects.toThrow(/read-only|forbidden/i);
+  });
 });
 
 describe('getEventListContext', () => {
@@ -182,6 +221,18 @@ describe('getEventListContext', () => {
       userId: 'coord-1',
       has: ({ role }: { role: string }) => role === 'org:event_coordinator',
     });
+
+    const ctx = await getEventListContext();
+    expect(ctx.isSuperAdmin).toBe(false);
+    expect(ctx.role).toBe('org:event_coordinator');
+  });
+
+  it('falls back to assigned owner role for event lists without Clerk org roles', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'owner-without-role',
+      has: () => false,
+    });
+    mockAssignmentQuery([{ assignmentType: 'owner' }]);
 
     const ctx = await getEventListContext();
     expect(ctx.isSuperAdmin).toBe(false);

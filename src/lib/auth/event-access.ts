@@ -12,6 +12,12 @@ export type EventAccessResult = {
   role: string | null;
 };
 
+function mapAssignmentTypeToRole(assignmentType: string | null | undefined): string | null {
+  if (assignmentType === 'owner') return ROLES.EVENT_COORDINATOR;
+  if (assignmentType === 'collaborator') return ROLES.READ_ONLY;
+  return null;
+}
+
 /**
  * Resolve the current user's Clerk org role from the auth session.
  * Returns the first matching role from the Clerk org membership.
@@ -48,25 +54,22 @@ async function resolveClerkRole(): Promise<{
  * Other roles: must have an active row in event_user_assignments.
  */
 export async function checkEventAccess(eventId: string): Promise<EventAccessResult> {
-  const { userId, role, isSuperAdmin } = await resolveClerkRole();
+  const { userId, role: clerkRole, isSuperAdmin } = await resolveClerkRole();
 
   if (!userId) {
     return { authorized: false, userId: '', role: null };
   }
 
-  // No recognized Clerk role → deny access regardless of assignment
-  if (!role) {
-    return { authorized: false, userId, role: null };
-  }
-
   // Super Admin bypasses event-level assignment check
   if (isSuperAdmin) {
-    return { authorized: true, userId, role };
+    return { authorized: true, userId, role: clerkRole };
   }
 
-  // All other roles: check event_user_assignments
+  // Fall back to per-event assignments when Clerk org roles are unavailable.
   const [assignment] = await db
-    .select()
+    .select({
+      assignmentType: eventUserAssignments.assignmentType,
+    })
     .from(eventUserAssignments)
     .where(
       and(
@@ -78,7 +81,12 @@ export async function checkEventAccess(eventId: string): Promise<EventAccessResu
     .limit(1);
 
   if (!assignment) {
-    return { authorized: false, userId, role };
+    return { authorized: false, userId, role: clerkRole };
+  }
+
+  const role = clerkRole ?? mapAssignmentTypeToRole(assignment.assignmentType);
+  if (!role) {
+    return { authorized: false, userId, role: null };
   }
 
   return { authorized: true, userId, role };
@@ -117,5 +125,26 @@ export async function getEventListContext(): Promise<{
   role: string | null;
   isSuperAdmin: boolean;
 }> {
-  return resolveClerkRole();
+  const resolved = await resolveClerkRole();
+  if (!resolved.userId || resolved.role || resolved.isSuperAdmin) {
+    return resolved;
+  }
+
+  const [assignment] = await db
+    .select({
+      assignmentType: eventUserAssignments.assignmentType,
+    })
+    .from(eventUserAssignments)
+    .where(
+      and(
+        eq(eventUserAssignments.authUserId, resolved.userId),
+        eq(eventUserAssignments.isActive, true),
+      ),
+    )
+    .limit(1);
+
+  return {
+    ...resolved,
+    role: mapAssignmentTypeToRole(assignment?.assignmentType),
+  };
 }

@@ -70,77 +70,106 @@ function formatDates(record: TravelRecord) {
   return parts.join(' · ');
 }
 
-const columns: Column<TravelRecord>[] = [
-  {
-    key: 'name',
-    header: 'Name',
-    priority: 'high',
-    render: (r) => {
-      const ModeIcon = MODE_ICONS[r.travelMode] || Plane;
-      return (
-        <div className="flex items-center gap-2">
-          <ModeIcon className="h-4 w-4 text-text-muted" />
-          <span className="font-medium text-text-primary">{r.personName}</span>
-        </div>
-      );
+function buildColumns({
+  onCancel,
+  cancellingId,
+}: {
+  onCancel: (id: string) => void;
+  cancellingId: string | null;
+}): Column<TravelRecord>[] {
+  return [
+    {
+      key: 'name',
+      header: 'Name',
+      priority: 'high',
+      render: (r) => {
+        const ModeIcon = MODE_ICONS[r.travelMode] || Plane;
+        return (
+          <div className="flex items-center gap-2">
+            <ModeIcon className="h-4 w-4 text-text-muted" />
+            <span className="font-medium text-text-primary">{r.personName}</span>
+          </div>
+        );
+      },
     },
-  },
-  {
-    key: 'route',
-    header: 'Route',
-    priority: 'high',
-    render: (r) => (
-      <span className="text-sm text-text-secondary">
-        {r.fromCity} → {r.toCity}
-      </span>
-    ),
-  },
-  {
-    key: 'dates',
-    header: 'Dates',
-    priority: 'medium',
-    render: (r) => (
-      <span className="text-sm text-text-muted">{formatDates(r)}</span>
-    ),
-  },
-  {
-    key: 'flight',
-    header: 'Flight / PNR',
-    priority: 'medium',
-    render: (r) => (
-      <span className="text-sm text-text-muted">
-        {[r.serviceNumber, r.pnrOrBookingRef].filter(Boolean).join(' / ') || '—'}
-      </span>
-    ),
-  },
-  {
-    key: 'status',
-    header: 'Status',
-    priority: 'medium',
-    render: (r) => {
-      const style = STATUS_STYLES[r.recordStatus] || STATUS_STYLES.draft;
-      return (
-        <span className={cn('rounded-full border px-2 py-0.5 text-xs font-medium', style.color)}>
-          {style.label}
+    {
+      key: 'route',
+      header: 'Route',
+      priority: 'high',
+      render: (r) => (
+        <span className="text-sm text-text-secondary">
+          {r.fromCity} → {r.toCity}
         </span>
-      );
-    },
-  },
-  {
-    key: 'flags',
-    header: 'Flags',
-    priority: 'low',
-    render: (r) =>
-      r.flagCount > 0 ? (
-        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
-          <AlertTriangle className="h-3 w-3" />
-          {r.flagCount}
-        </span>
-      ) : (
-        <span className="text-text-muted">—</span>
       ),
-  },
-];
+    },
+    {
+      key: 'dates',
+      header: 'Dates',
+      priority: 'medium',
+      render: (r) => (
+        <span className="text-sm text-text-muted">{formatDates(r)}</span>
+      ),
+    },
+    {
+      key: 'flight',
+      header: 'Flight / PNR',
+      priority: 'medium',
+      render: (r) => (
+        <span className="text-sm text-text-muted">
+          {[r.serviceNumber, r.pnrOrBookingRef].filter(Boolean).join(' / ') || '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      priority: 'medium',
+      render: (r) => {
+        const style = STATUS_STYLES[r.recordStatus] || STATUS_STYLES.draft;
+        return (
+          <span className={cn('rounded-full border px-2 py-0.5 text-xs font-medium', style.color)}>
+            {style.label}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'actions',
+      header: 'Actions',
+      priority: 'medium',
+      render: (r) =>
+        r.recordStatus === 'cancelled' ? (
+          <span className="text-text-muted">—</span>
+        ) : (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onCancel(r.id);
+            }}
+            disabled={cancellingId === r.id}
+            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
+          >
+            {cancellingId === r.id ? 'Cancelling...' : 'Cancel'}
+          </button>
+        ),
+    },
+    {
+      key: 'flags',
+      header: 'Flags',
+      priority: 'low',
+      render: (r) =>
+        r.flagCount > 0 ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+            <AlertTriangle className="h-3 w-3" />
+            {r.flagCount}
+          </span>
+        ) : (
+          <span className="text-text-muted">—</span>
+        ),
+    },
+  ];
+}
 
 function TravelCard({
   record,
@@ -216,9 +245,10 @@ export function TravelListClient({
 }: {
   eventId: string;
   records: TravelRecord[];
-}) {
+  }) {
   const router = useRouter();
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const columns = buildColumns({ onCancel: handleCancel, cancellingId: cancelling });
 
   const active = records.filter((r) => r.recordStatus !== 'cancelled');
   const cancelled = records.filter((r) => r.recordStatus === 'cancelled');

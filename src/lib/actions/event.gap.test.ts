@@ -231,15 +231,20 @@ describe('getEvents — gap tests', () => {
     expect(orderBy).toHaveBeenCalled();
   });
 
-  it('users without a recognized role do not query assigned events', async () => {
+  it('users with fallback assignment roles still query assigned events', async () => {
     mockGetEventListContext.mockResolvedValue({
       userId: 'user-1',
-      role: null,
+      role: 'org:read_only',
       isSuperAdmin: false,
     });
 
-    await expect(getEvents()).resolves.toEqual([]);
-    expect(mockDb.select).not.toHaveBeenCalled();
+    const orderBy = vi.fn().mockResolvedValue([{ id: 'evt-1', name: 'Fallback Event' }]);
+    const innerJoin = vi.fn(() => ({ orderBy }));
+    const from = vi.fn(() => ({ innerJoin }));
+    mockDb.select.mockReturnValue({ from });
+
+    await expect(getEvents()).resolves.toEqual([{ id: 'evt-1', name: 'Fallback Event' }]);
+    expect(innerJoin).toHaveBeenCalled();
   });
 });
 

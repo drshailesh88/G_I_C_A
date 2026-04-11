@@ -208,16 +208,22 @@ describe('event actions — REQ 9/10/11 access control tests', () => {
     await expect(getEvents()).rejects.toThrow('Unauthorized');
   });
 
-  it('getEvents returns an empty list for users without a recognized role', async () => {
+  it('getEvents still loads assigned events for users without a recognized Clerk role', async () => {
     mockGetEventListContext.mockResolvedValue({
       userId: 'user-without-role',
-      role: null,
+      role: 'org:event_coordinator',
       isSuperAdmin: false,
     });
 
+    const assignedEvents = [{ id: 'e-fallback', name: 'Assigned Event' }];
+    const orderBy = vi.fn().mockResolvedValue(assignedEvents);
+    const innerJoin = vi.fn(() => ({ orderBy }));
+    const from = vi.fn(() => ({ innerJoin }));
+    mockDb.select.mockReturnValue({ from });
+
     const result = await getEvents();
-    expect(result).toEqual([]);
-    expect(mockDb.select).not.toHaveBeenCalled();
+    expect(result).toEqual(assignedEvents);
+    expect(innerJoin).toHaveBeenCalled();
   });
 
   // REQ 9: getEvent uses assertEventAccess

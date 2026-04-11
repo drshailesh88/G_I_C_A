@@ -53,6 +53,18 @@ describe('checkEventAccess — gap tests', () => {
     expect(result.role).toBe('org:read_only');
   });
 
+  it('owner assignment authorizes users even when Clerk returns no org role', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'owner-1',
+      has: () => false,
+    });
+    mockAssignmentQuery([{ assignmentType: 'owner' }]);
+
+    const result = await checkEventAccess('event-1');
+    expect(result.authorized).toBe(true);
+    expect(result.role).toBe('org:event_coordinator');
+  });
+
   it('super admin does not query event_user_assignments', async () => {
     mockAuth.mockResolvedValue({
       userId: 'admin-1',
@@ -88,5 +100,15 @@ describe('assertEventAccess — gap tests', () => {
 
     const result = await assertEventAccess('event-1', { requireWrite: true });
     expect(result.userId).toBe('admin-1');
+  });
+
+  it('collaborator fallback role is denied for write operations', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'collaborator-1',
+      has: () => false,
+    });
+    mockAssignmentQuery([{ assignmentType: 'collaborator' }]);
+
+    await expect(assertEventAccess('event-1', { requireWrite: true })).rejects.toThrow(/read-only|forbidden/i);
   });
 });

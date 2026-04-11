@@ -41,9 +41,11 @@ setup('authenticate and save state', async ({ page }) => {
     emailAddress: process.env.E2E_CLERK_USER_USERNAME!,
   });
 
-  // After sign-in, navigate to a protected page to verify
-  await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
-  await page.waitForURL('**/dashboard**', { timeout: 15000 });
+  // After sign-in, verify against the event index instead of the dashboard.
+  // The dashboard currently triggers unsupported transaction code paths in the
+  // neon-http driver and is not needed to persist an authenticated session.
+  await page.goto('/events', { waitUntil: 'domcontentloaded' });
+  await page.waitForURL('**/events**', { timeout: 15000 });
 
   // Save authenticated session for reuse in all tests
   await page.context().storageState({ path: STORAGE_STATE });
