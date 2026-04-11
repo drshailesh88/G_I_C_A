@@ -25,11 +25,15 @@ set -euo pipefail
 
 # ── Config ────────────────────────────────────────────────────
 LINEAR_TEAM="${LINEAR_TEAM:-DRS}"
+LINEAR_WORKSPACE="${LINEAR_WORKSPACE:-}"
 NOTIFY_WEBHOOK="${NOTIFY_WEBHOOK:-}"
 MAX_ISSUES="${MAX_ISSUES:-999}"
 DRY_RUN="${DRY_RUN:-false}"
+CLAUDE_TIMEOUT_SECONDS="${CLAUDE_TIMEOUT_SECONDS:-1800}"
+CLAIM_ASSIGNEE="${CLAIM_ASSIGNEE:-self}"
 SCORES_FILE=".planning/ralph-qa-scores.jsonl"
 STATUS_FILE=".planning/ralph-qa-status.json"
+LOCK_DIR="${TMPDIR:-/tmp}/ralph-qa-gate.lock"
 
 # ── Colors ────────────────────────────────────────────────────
 GREEN='\033[0;32m'
@@ -56,6 +60,150 @@ notify() {
 log() { echo -e "${GREEN}[ralph]${NC} $1"; }
 warn() { echo -e "${YELLOW}[ralph]${NC} $1"; }
 fail() { echo -e "${RED}[ralph]${NC} $1"; }
+
+# ── Linear wrapper ────────────────────────────────────────────
+linear_cmd() {
+  if [ -n "$LINEAR_WORKSPACE" ]; then
+    command linear --workspace "$LINEAR_WORKSPACE" "$@"
+  else
+    command linear "$@"
+  fi
+}
+
+# ── Locking / cleanup ────────────────────────────────────────
+cleanup() {
+  rm -rf "$LOCK_DIR"
+}
+
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  fail "Another Ralph QA Gate run appears to be active: $LOCK_DIR"
+  exit 1
+fi
+
+trap cleanup EXIT INT TERM
+
+# ── Git preflight ────────────────────────────────────────────
+if [ -n "$(git status --porcelain -- src/ 2>/dev/null)" ]; then
+  warn "Working tree has uncommitted changes in src/. Stashing..."
+  git stash push -m "ralph-qa-gate-preflight-$(date +%s)" -- src/ || true
+fi
+
+# ── Portable timeout ─────────────────────────────────────────
+run_with_timeout() {
+  local seconds="$1"
+  shift
+
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$seconds" "$@"
+  elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$seconds" "$@"
+  else
+    perl -e 'alarm shift; exec @ARGV' "$seconds" "$@"
+  fi
+}
+
+# ── Helpers ──────────────────────────────────────────────────
+file_mtime() {
+  if stat -f %m "$1" >/dev/null 2>&1; then
+    stat -f %m "$1"
+  else
+    stat -c %Y "$1"
+  fi
+}
+
+add_issue_comment() {
+  local issue_id="$1" body="$2"
+  linear_cmd issue comment add "$issue_id" --body "$body" >/dev/null 2>&1 || true
+}
+
+set_issue_state() {
+  local issue_id="$1" state="$2"
+  shift 2
+  linear_cmd issue update "$issue_id" --state "$state" "$@" >/dev/null 2>&1 || true
+}
+
+fetch_next_issue() {
+  local stdout_file stderr_file parsed
+  stdout_file="$(mktemp)"
+  stderr_file="$(mktemp)"
+
+  if ! linear_cmd issue query \
+    --team "$LINEAR_TEAM" \
+    --label qa-gate \
+    --state unstarted \
+    --sort priority \
+    --limit 1 \
+    --json \
+    --no-pager >"$stdout_file" 2>"$stderr_file"; then
+    fail "Failed to query Linear issues: $(tr '\n' ' ' < "$stderr_file" | xargs)"
+    rm -f "$stdout_file" "$stderr_file"
+    return 1
+  fi
+
+  if [ -s "$stderr_file" ]; then
+    warn "Linear query warnings: $(tr '\n' ' ' < "$stderr_file" | xargs)"
+  fi
+
+  parsed="$(node - "$stdout_file" <<'NODE'
+const fs = require("fs");
+const raw = fs.readFileSync(process.argv[2], "utf8").trim();
+
+if (!raw) {
+  process.exit(0);
+}
+
+const data = JSON.parse(raw);
+
+function findIssues(value) {
+  if (Array.isArray(value)) {
+    if (value.every((item) => item && typeof item === "object" && ("title" in item || "identifier" in item || "state" in item))) {
+      return value;
+    }
+    for (const item of value) {
+      const found = findIssues(item);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  if (value && typeof value === "object") {
+    for (const nested of Object.values(value)) {
+      const found = findIssues(nested);
+      if (found) return found;
+    }
+  }
+
+  return null;
+}
+
+const issues = findIssues(data) || [];
+const issue = issues[0];
+
+if (!issue) {
+  process.exit(0);
+}
+
+const identifier = issue.identifier || issue.id || "";
+const title = issue.title || "";
+
+if (!identifier || !title) {
+  process.exit(1);
+}
+
+process.stdout.write(`${identifier}|${title}`);
+NODE
+)"
+
+  local parse_exit=$?
+  rm -f "$stdout_file" "$stderr_file"
+
+  if [ "$parse_exit" -ne 0 ]; then
+    fail "Failed to parse Linear issue query JSON"
+    return 1
+  fi
+
+  printf '%s' "$parsed"
+}
 
 # ── Score tracking ────────────────────────────────────────────
 record_score() {
@@ -131,9 +279,7 @@ while [ "$ISSUES_TOTAL" -lt "$MAX_ISSUES" ]; do
   # ── Fetch next unstarted qa-gate issue ─────────────────────
   log "Fetching next unstarted qa-gate issue..."
 
-  ISSUE_LINE=$(linear issue list --team "$LINEAR_TEAM" --sort priority --state unstarted 2>/dev/null \
-    | grep -i "qa-gate" \
-    | head -1)
+  ISSUE_LINE="$(fetch_next_issue)" || exit 1
 
   if [ -z "$ISSUE_LINE" ]; then
     log "No more unstarted qa-gate issues. Loop complete."
@@ -141,10 +287,8 @@ while [ "$ISSUES_TOTAL" -lt "$MAX_ISSUES" ]; do
   fi
 
   # Parse issue ID and title
-  ISSUE_ID=$(echo "$ISSUE_LINE" | awk '{print $1}')
-  ISSUE_TITLE=$(echo "$ISSUE_LINE" | awk '{for(i=2;i<=NF;i++) printf "%s ", $i; print ""}' | sed 's/ *$//')
-  # Remove label text from title
-  ISSUE_TITLE=$(echo "$ISSUE_TITLE" | sed 's/qa-gate.*$//' | sed 's/tdd.*$//' | xargs)
+  ISSUE_ID="${ISSUE_LINE%%|*}"
+  ISSUE_TITLE="${ISSUE_LINE#*|}"
 
   PARSED=$(parse_issue "$ISSUE_TITLE")
   COMMAND="${PARSED%%|*}"
@@ -158,13 +302,17 @@ while [ "$ISSUES_TOTAL" -lt "$MAX_ISSUES" ]; do
   log "────────────────────────────────────────────"
 
   # ── Mark In Progress ───────────────────────────────────────
-  linear issue update "$ISSUE_ID" --state "In Progress" 2>/dev/null || true
+  if [ "$CLAIM_ASSIGNEE" = "self" ]; then
+    set_issue_state "$ISSUE_ID" started --assignee self
+  else
+    set_issue_state "$ISSUE_ID" started
+  fi
   update_status "$ISSUE_ID" "$MODULE" "in-progress"
   notify "Starting: $ISSUE_ID — /$COMMAND $MODULE"
 
   if [ "$DRY_RUN" = "true" ]; then
     warn "DRY RUN — skipping Claude execution"
-    linear issue update "$ISSUE_ID" --state "Done" 2>/dev/null || true
+    set_issue_state "$ISSUE_ID" completed
     ISSUES_DONE=$((ISSUES_DONE + 1))
     continue
   fi
@@ -183,63 +331,81 @@ IMPORTANT:
 - If mutation score is below 90% after 3 rounds, report equivalent mutations and stop."
 
   log "Launching Claude Code session..."
+  ISSUE_RUN_STARTED_AT="$(date +%s)"
+  LOG_FILE="/tmp/ralph-qa-${ISSUE_ID}.log"
+  rm -f "$LOG_FILE"
 
-  # Run claude with timeout (30 min per issue)
-  if timeout 1800 claude -p "$CLAUDE_PROMPT" --allowedTools "Edit,Write,Bash,Read,Glob,Grep,Agent" 2>&1 | tee "/tmp/ralph-qa-${ISSUE_ID}.log"; then
+  # Run claude with timeout
+  if run_with_timeout "$CLAUDE_TIMEOUT_SECONDS" \
+    claude -p "$CLAUDE_PROMPT" --allowedTools "Edit,Write,Bash,Read,Glob,Grep,Agent" 2>&1 | tee "$LOG_FILE"; then
     CLAUDE_EXIT=0
   else
     CLAUDE_EXIT=$?
   fi
 
+  CLAUDE_TIMED_OUT="false"
+  if [ "$CLAUDE_EXIT" -eq 124 ] || [ "$CLAUDE_EXIT" -eq 142 ]; then
+    CLAUDE_TIMED_OUT="true"
+    warn "Claude session timed out after ${CLAUDE_TIMEOUT_SECONDS}s"
+  fi
+
   # ── Verify gate ────────────────────────────────────────────
   if [ "$COMMAND" = "mutation-gate" ]; then
-    # Check if Stryker config was created and run
-    CONFIG="stryker.${MODULE}.json"
-    if [ -f "$CONFIG" ]; then
+    # Check that Stryker produced a fresh report for this issue run.
+    REPORT="reports/mutation/mutation.json"
+    if [ -f "$REPORT" ] && [ "$(file_mtime "$REPORT")" -ge "$ISSUE_RUN_STARTED_AT" ]; then
       SCORE=$(get_mutation_score "$MODULE")
       log "Mutation score for $MODULE: ${SCORE}%"
       record_score "$ISSUE_ID" "$MODULE" "$SCORE" "measured"
 
       if (( $(echo "$SCORE >= 90" | bc -l 2>/dev/null || echo 0) )); then
         log "✅ GATE PASSED — $MODULE at ${SCORE}%"
-        linear issue update "$ISSUE_ID" --state "Done" 2>/dev/null || true
-        linear issue comment "$ISSUE_ID" "✅ mutation-gate: $MODULE — ${SCORE}% (target: 90%)" 2>/dev/null || true
+        set_issue_state "$ISSUE_ID" completed
+        add_issue_comment "$ISSUE_ID" "✅ mutation-gate: $MODULE — ${SCORE}% (target: 90%)"
         update_status "$ISSUE_ID" "$MODULE" "done"
         notify "✅ $ISSUE_ID done — $MODULE at ${SCORE}%"
         ISSUES_DONE=$((ISSUES_DONE + 1))
         record_score "$ISSUE_ID" "$MODULE" "$SCORE" "passed"
       else
         warn "⚠️ GATE FAILED — $MODULE at ${SCORE}% (need 90%)"
-        linear issue update "$ISSUE_ID" --state "unstarted" 2>/dev/null || true
-        linear issue comment "$ISSUE_ID" "⚠️ mutation-gate: $MODULE — ${SCORE}% (need 90%). Needs another round." 2>/dev/null || true
+        set_issue_state "$ISSUE_ID" unstarted
+        add_issue_comment "$ISSUE_ID" "⚠️ mutation-gate: $MODULE — ${SCORE}% (need 90%). Needs another round."
         update_status "$ISSUE_ID" "$MODULE" "needs-retry"
         notify "⚠️ $ISSUE_ID needs retry — $MODULE at ${SCORE}%"
         ISSUES_BLOCKED=$((ISSUES_BLOCKED + 1))
         record_score "$ISSUE_ID" "$MODULE" "$SCORE" "below-threshold"
       fi
     else
-      fail "No Stryker config found for $MODULE"
-      linear issue update "$ISSUE_ID" --state "unstarted" 2>/dev/null || true
-      linear issue comment "$ISSUE_ID" "❌ No stryker.${MODULE}.json created. Claude may have failed." 2>/dev/null || true
+      fail "No fresh Stryker report found for $MODULE"
+      set_issue_state "$ISSUE_ID" unstarted
+      if [ "$CLAUDE_TIMED_OUT" = "true" ]; then
+        add_issue_comment "$ISSUE_ID" "❌ mutation-gate: $MODULE timed out after ${CLAUDE_TIMEOUT_SECONDS}s before producing a fresh Stryker report."
+      else
+        add_issue_comment "$ISSUE_ID" "❌ mutation-gate: $MODULE did not produce a fresh reports/mutation/mutation.json file. Claude may have failed."
+      fi
       ISSUES_BLOCKED=$((ISSUES_BLOCKED + 1))
     fi
   elif [ "$COMMAND" = "contract-pack" ]; then
     # For contract-pack, check if test files were created
     if [ "$CLAUDE_EXIT" -eq 0 ]; then
       log "✅ contract-pack: $MODULE completed"
-      linear issue update "$ISSUE_ID" --state "Done" 2>/dev/null || true
-      linear issue comment "$ISSUE_ID" "✅ contract-pack: $MODULE — E2E infrastructure/criteria created" 2>/dev/null || true
+      set_issue_state "$ISSUE_ID" completed
+      add_issue_comment "$ISSUE_ID" "✅ contract-pack: $MODULE — E2E infrastructure/criteria created"
       update_status "$ISSUE_ID" "$MODULE" "done"
       notify "✅ $ISSUE_ID done — contract-pack: $MODULE"
       ISSUES_DONE=$((ISSUES_DONE + 1))
     else
       warn "contract-pack: $MODULE may have issues (exit $CLAUDE_EXIT)"
-      linear issue update "$ISSUE_ID" --state "unstarted" 2>/dev/null || true
+      set_issue_state "$ISSUE_ID" unstarted
+      if [ "$CLAUDE_TIMED_OUT" = "true" ]; then
+        add_issue_comment "$ISSUE_ID" "❌ contract-pack: $MODULE timed out after ${CLAUDE_TIMEOUT_SECONDS}s."
+      fi
       ISSUES_BLOCKED=$((ISSUES_BLOCKED + 1))
     fi
   else
     fail "Unknown command: $COMMAND"
-    linear issue update "$ISSUE_ID" --state "unstarted" 2>/dev/null || true
+    set_issue_state "$ISSUE_ID" unstarted
+    add_issue_comment "$ISSUE_ID" "❌ Unsupported qa-gate command in title: $ISSUE_TITLE"
     ISSUES_BLOCKED=$((ISSUES_BLOCKED + 1))
   fi
 
