@@ -130,6 +130,7 @@ describe('CP-27: registrationIdSchema rejects non-UUID', () => {
 describe('CP-28: updateRegistrationStatusSchema rejects non-UUID registrationId', () => {
   it('fails for non-UUID registrationId', () => {
     const result = updateRegistrationStatusSchema.safeParse({
+      eventId: '550e8400-e29b-41d4-a716-446655440099',
       registrationId: 'abc',
       newStatus: 'confirmed',
     });

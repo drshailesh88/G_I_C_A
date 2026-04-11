@@ -38,6 +38,8 @@ vi.mock('@/lib/auth/event-access', () => ({
 
 import { registerForEvent, updateRegistrationStatus, getEventRegistrations } from './registration';
 
+const EVENT_UUID = '550e8400-e29b-41d4-a716-446655440099';
+
 // Chain helpers
 function chainedSelect(rows: unknown[]) {
   const chain = {
@@ -192,13 +194,14 @@ describe('updateRegistrationStatus', () => {
   });
 
   it('transitions pending → confirmed', async () => {
-    const reg = { id: 'reg-1', eventId: 'event-1', status: 'pending' };
+    const reg = { id: 'reg-1', eventId: EVENT_UUID, status: 'pending' };
     chainedSelect([reg]);
 
     const updated = { ...reg, status: 'confirmed' };
     chainedUpdate([updated]);
 
     const result = await updateRegistrationStatus({
+      eventId: EVENT_UUID,
       registrationId: '550e8400-e29b-41d4-a716-446655440000',
       newStatus: 'confirmed',
     });
@@ -207,11 +210,12 @@ describe('updateRegistrationStatus', () => {
   });
 
   it('blocks invalid transition (declined → confirmed)', async () => {
-    const reg = { id: '550e8400-e29b-41d4-a716-446655440001', eventId: 'event-1', status: 'declined' };
+    const reg = { id: '550e8400-e29b-41d4-a716-446655440001', eventId: EVENT_UUID, status: 'declined' };
     chainedSelect([reg]);
 
     await expect(
       updateRegistrationStatus({
+        eventId: EVENT_UUID,
         registrationId: '550e8400-e29b-41d4-a716-446655440001',
         newStatus: 'confirmed',
       }),
@@ -223,6 +227,7 @@ describe('updateRegistrationStatus', () => {
 
     await expect(
       updateRegistrationStatus({
+        eventId: EVENT_UUID,
         registrationId: '550e8400-e29b-41d4-a716-446655440002',
         newStatus: 'confirmed',
       }),
@@ -234,6 +239,7 @@ describe('updateRegistrationStatus', () => {
 
     await expect(
       updateRegistrationStatus({
+        eventId: EVENT_UUID,
         registrationId: '550e8400-e29b-41d4-a716-446655440000',
         newStatus: 'confirmed',
       }),

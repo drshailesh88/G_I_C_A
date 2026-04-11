@@ -1,12 +1,10 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Search, Filter, CheckCircle2, Clock, XCircle, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRole } from '@/hooks/use-role';
-import { updateRegistrationStatus } from '@/lib/actions/registration';
 import { ResponsiveList, type Column } from '@/components/responsive/responsive-list';
 import { ResponsiveMetricGrid } from '@/components/responsive/responsive-metric-grid';
 
@@ -50,7 +48,9 @@ function StatusBadge({ status }: { status: string }) {
 
 // ── Column definitions (priority: high=mobile, medium=tablet, low=desktop) ──
 
-function getColumns(canWrite: boolean, onStatusChange: (id: string, status: string) => void): Column<Registration>[] {
+function getColumns(
+  canWrite: boolean,
+): Column<Registration>[] {
   const cols: Column<Registration>[] = [
     {
       key: 'name',
@@ -89,25 +89,31 @@ function getColumns(canWrite: boolean, onStatusChange: (id: string, status: stri
     {
       key: 'actions',
       header: 'Actions',
-      priority: 'low',
+      priority: 'medium',
       render: (reg) => {
         const actions = getActions(reg.status);
         if (!canWrite || actions.length === 0) return <span className="text-text-muted">—</span>;
         return (
           <div className="flex gap-2">
             {actions.map((action) => (
-              <button
+              <form
                 key={action.status}
-                onClick={(e) => { e.stopPropagation(); onStatusChange(reg.id, action.status); }}
-                className={cn(
-                  'min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium',
-                  action.variant === 'success' && 'bg-success/10 text-success hover:bg-success/20',
-                  action.variant === 'error' && 'bg-error/10 text-error hover:bg-error/20',
-                  action.variant === 'warning' && 'bg-warning/10 text-warning hover:bg-warning/20',
-                )}
+                action={`/events/${reg.eventId}/registrations/${reg.id}/status`}
+                method="post"
               >
-                {action.label}
-              </button>
+                <input type="hidden" name="newStatus" value={action.status} />
+                <button
+                  type="submit"
+                  className={cn(
+                    'min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium',
+                    action.variant === 'success' && 'bg-success/10 text-success hover:bg-success/20',
+                    action.variant === 'error' && 'bg-error/10 text-error hover:bg-error/20',
+                    action.variant === 'warning' && 'bg-warning/10 text-warning hover:bg-warning/20',
+                  )}
+                >
+                  {action.label}
+                </button>
+              </form>
             ))}
           </div>
         );
@@ -142,16 +148,16 @@ function getActions(status: string): { label: string; status: string; variant: s
 export function RegistrationsListClient({
   eventId,
   registrations,
+  canWriteOverride,
 }: {
   eventId: string;
   registrations: Registration[];
+  canWriteOverride?: boolean;
 }) {
-  const router = useRouter();
   const { canWrite } = useRole();
-  const [isPending, startTransition] = useTransition();
+  const effectiveCanWrite = canWriteOverride ?? canWrite;
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const [error, setError] = useState('');
 
   const filtered = registrations.filter((r) => {
     if (statusFilter !== 'all' && r.status !== statusFilter) return false;
@@ -172,19 +178,7 @@ export function RegistrationsListClient({
     return acc;
   }, {});
 
-  async function handleStatusChange(registrationId: string, newStatus: string) {
-    setError('');
-    startTransition(async () => {
-      try {
-        await updateRegistrationStatus({ registrationId, newStatus });
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to update status');
-      }
-    });
-  }
-
-  const columns = getColumns(canWrite, handleStatusChange);
+  const columns = getColumns(effectiveCanWrite);
 
   const emptyState = (
     <div className="flex flex-col items-center py-12 text-center">
@@ -211,13 +205,6 @@ export function RegistrationsListClient({
           <p className="text-sm text-text-secondary">{registrations.length} total</p>
         </div>
       </div>
-
-      {/* Error */}
-      {error && (
-        <div className="mt-4 rounded-lg border border-error/20 bg-error/5 p-3">
-          <p className="text-sm text-error">{error}</p>
-        </div>
-      )}
 
       {/* Status summary — auto-reflow via ResponsiveMetricGrid */}
       <ResponsiveMetricGrid minCardWidth={120} gap="var(--space-xs)" className="mt-4">
@@ -265,15 +252,14 @@ export function RegistrationsListClient({
       </div>
 
       {/* List — responsive: cards on mobile/tablet, table on desktop */}
-      <div className={cn('mt-4 transition-opacity foldable-left-pane', isPending && 'opacity-50')}>
+      <div className="mt-4 foldable-left-pane">
         <ResponsiveList
           data={filtered}
           columns={columns}
           renderCard={(reg) => (
             <RegistrationCard
               registration={reg}
-              canWrite={canWrite}
-              onStatusChange={handleStatusChange}
+              canWrite={effectiveCanWrite}
             />
           )}
           keyExtractor={(reg) => reg.id}
@@ -290,11 +276,9 @@ export function RegistrationsListClient({
 function RegistrationCard({
   registration: reg,
   canWrite,
-  onStatusChange,
 }: {
   registration: Registration;
   canWrite: boolean;
-  onStatusChange: (id: string, status: string) => void;
 }) {
   const regDate = new Date(reg.registeredAt);
   const actions = getActions(reg.status);
@@ -327,18 +311,24 @@ function RegistrationCard({
       {canWrite && actions.length > 0 && (
         <div className="mt-3 flex gap-2">
           {actions.map((action) => (
-            <button
+            <form
               key={action.status}
-              onClick={() => onStatusChange(reg.id, action.status)}
-              className={cn(
-                'min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium',
-                action.variant === 'success' && 'bg-success/10 text-success hover:bg-success/20',
-                action.variant === 'error' && 'bg-error/10 text-error hover:bg-error/20',
-                action.variant === 'warning' && 'bg-warning/10 text-warning hover:bg-warning/20',
-              )}
+              action={`/events/${reg.eventId}/registrations/${reg.id}/status`}
+              method="post"
             >
-              {action.label}
-            </button>
+              <input type="hidden" name="newStatus" value={action.status} />
+              <button
+                type="submit"
+                className={cn(
+                  'min-h-[44px] rounded-lg px-3 py-1.5 text-xs font-medium',
+                  action.variant === 'success' && 'bg-success/10 text-success hover:bg-success/20',
+                  action.variant === 'error' && 'bg-error/10 text-error hover:bg-error/20',
+                  action.variant === 'warning' && 'bg-warning/10 text-warning hover:bg-warning/20',
+                )}
+              >
+                {action.label}
+              </button>
+            </form>
           ))}
         </div>
       )}

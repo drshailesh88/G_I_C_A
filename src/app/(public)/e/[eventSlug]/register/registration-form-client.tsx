@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
@@ -17,9 +17,14 @@ export function RegistrationFormClient({
   eventName: string;
 }) {
   const router = useRouter();
+  const [isHydrated, setIsHydrated] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -164,7 +169,7 @@ export function RegistrationFormClient({
 
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={!isHydrated || isSubmitting}
           className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-base font-semibold text-white hover:bg-primary-light disabled:opacity-50"
         >
           {isSubmitting ? (

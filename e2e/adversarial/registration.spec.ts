@@ -166,8 +166,8 @@ test('registration module supports public signup, admin search, approve, and can
 
   await page.goto(`/events/${eventId}/registrations`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Registrations' })).toBeVisible();
-  await expect(page.getByText(attendeeName).first()).toBeVisible();
-  await expect(page.getByText('pending').first()).toBeVisible();
+  const registrationRow = page.getByRole('row', { name: new RegExp(`${attendeeName}.*pending.*delegate`, 'i') });
+  await expect(registrationRow).toBeVisible();
   await capture(page, 'admin-list');
 
   await page.getByPlaceholder('Search name, reg number, email...').fill('no matching registration');
@@ -175,15 +175,20 @@ test('registration module supports public signup, admin search, approve, and can
   await capture(page, 'admin-search-empty');
 
   await page.getByPlaceholder('Search name, reg number, email...').fill(attendeeName);
-  await expect(page.getByText(attendeeName).first()).toBeVisible();
+  await expect(registrationRow).toBeVisible();
   await capture(page, 'admin-search-match');
 
-  await page.getByRole('button', { name: 'Approve' }).first().click();
-  await expect(page.getByText('confirmed').first()).toBeVisible({ timeout: navigationTimeout });
+  await registrationRow.getByRole('button', { name: 'Approve' }).click();
+  const confirmedRow = page.getByRole('row', { name: new RegExp(`${attendeeName}.*confirmed.*delegate`, 'i') });
+  await expect(confirmedRow).toBeVisible({
+    timeout: navigationTimeout,
+  });
   await capture(page, 'admin-approved');
 
-  await page.getByRole('button', { name: 'Cancel' }).first().click();
-  await expect(page.getByText('cancelled').first()).toBeVisible({ timeout: navigationTimeout });
+  await confirmedRow.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByRole('row', { name: new RegExp(`${attendeeName}.*cancelled.*delegate`, 'i') })).toBeVisible({
+    timeout: navigationTimeout,
+  });
   await capture(page, 'admin-cancelled');
 });
 

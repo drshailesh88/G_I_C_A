@@ -38,6 +38,7 @@ vi.mock('@/lib/auth/event-access', () => ({
 import { updateRegistrationStatus } from '@/lib/actions/registration';
 
 const REG_UUID = '550e8400-e29b-41d4-a716-446655440000';
+const EVENT_UUID = '550e8400-e29b-41d4-a716-446655440099';
 
 function chainedSelect(rows: unknown[]) {
   const chain: Record<string, ReturnType<typeof vi.fn>> = {};
@@ -69,12 +70,13 @@ beforeEach(() => {
 // ── CP-10: cancelledAt timestamp set on cancel ──────────────
 describe('CP-10: cancelledAt set when transitioning to cancelled', () => {
   it('includes cancelledAt in update data for pending → cancelled', async () => {
-    const reg = { id: REG_UUID, eventId: 'event-1', status: 'pending' };
+    const reg = { id: REG_UUID, eventId: EVENT_UUID, status: 'pending' };
     chainedSelect([reg]);
 
     const updateChain = chainedUpdate([{ ...reg, status: 'cancelled' }]);
 
     await updateRegistrationStatus({
+      eventId: EVENT_UUID,
       registrationId: REG_UUID,
       newStatus: 'cancelled',
     });
@@ -89,11 +91,12 @@ describe('CP-10: cancelledAt set when transitioning to cancelled', () => {
 // ── CP-11: waitlisted → confirmed ───────────────────────────
 describe('CP-11: waitlisted → confirmed allowed', () => {
   it('transitions successfully', async () => {
-    const reg = { id: REG_UUID, eventId: 'event-1', status: 'waitlisted' };
+    const reg = { id: REG_UUID, eventId: EVENT_UUID, status: 'waitlisted' };
     chainedSelect([reg]);
     chainedUpdate([{ ...reg, status: 'confirmed' }]);
 
     const result = await updateRegistrationStatus({
+      eventId: EVENT_UUID,
       registrationId: REG_UUID,
       newStatus: 'confirmed',
     });
@@ -105,11 +108,12 @@ describe('CP-11: waitlisted → confirmed allowed', () => {
 // ── CP-12: waitlisted → declined ────────────────────────────
 describe('CP-12: waitlisted → declined allowed', () => {
   it('transitions successfully', async () => {
-    const reg = { id: REG_UUID, eventId: 'event-1', status: 'waitlisted' };
+    const reg = { id: REG_UUID, eventId: EVENT_UUID, status: 'waitlisted' };
     chainedSelect([reg]);
     chainedUpdate([{ ...reg, status: 'declined' }]);
 
     const result = await updateRegistrationStatus({
+      eventId: EVENT_UUID,
       registrationId: REG_UUID,
       newStatus: 'declined',
     });
@@ -121,12 +125,13 @@ describe('CP-12: waitlisted → declined allowed', () => {
 // ── CP-13: waitlisted → cancelled ───────────────────────────
 describe('CP-13: waitlisted → cancelled allowed', () => {
   it('transitions and sets cancelledAt', async () => {
-    const reg = { id: REG_UUID, eventId: 'event-1', status: 'waitlisted' };
+    const reg = { id: REG_UUID, eventId: EVENT_UUID, status: 'waitlisted' };
     chainedSelect([reg]);
 
     const updateChain = chainedUpdate([{ ...reg, status: 'cancelled' }]);
 
     await updateRegistrationStatus({
+      eventId: EVENT_UUID,
       registrationId: REG_UUID,
       newStatus: 'cancelled',
     });
@@ -140,11 +145,12 @@ describe('CP-13: waitlisted → cancelled allowed', () => {
 // ── CP-14: pending → declined ───────────────────────────────
 describe('CP-14: pending → declined allowed', () => {
   it('transitions successfully', async () => {
-    const reg = { id: REG_UUID, eventId: 'event-1', status: 'pending' };
+    const reg = { id: REG_UUID, eventId: EVENT_UUID, status: 'pending' };
     chainedSelect([reg]);
     chainedUpdate([{ ...reg, status: 'declined' }]);
 
     const result = await updateRegistrationStatus({
+      eventId: EVENT_UUID,
       registrationId: REG_UUID,
       newStatus: 'declined',
     });
@@ -156,12 +162,13 @@ describe('CP-14: pending → declined allowed', () => {
 // ── CP-15: pending → cancelled (with cancelledAt) ───────────
 describe('CP-15: pending → cancelled allowed with cancelledAt', () => {
   it('transitions and sets cancelledAt', async () => {
-    const reg = { id: REG_UUID, eventId: 'event-1', status: 'pending' };
+    const reg = { id: REG_UUID, eventId: EVENT_UUID, status: 'pending' };
     chainedSelect([reg]);
 
     const updateChain = chainedUpdate([{ ...reg, status: 'cancelled' }]);
 
     await updateRegistrationStatus({
+      eventId: EVENT_UUID,
       registrationId: REG_UUID,
       newStatus: 'cancelled',
     });
@@ -174,11 +181,12 @@ describe('CP-15: pending → cancelled allowed with cancelledAt', () => {
 // ── CP-16: pending → waitlisted ─────────────────────────────
 describe('CP-16: pending → waitlisted allowed', () => {
   it('transitions successfully', async () => {
-    const reg = { id: REG_UUID, eventId: 'event-1', status: 'pending' };
+    const reg = { id: REG_UUID, eventId: EVENT_UUID, status: 'pending' };
     chainedSelect([reg]);
     chainedUpdate([{ ...reg, status: 'waitlisted' }]);
 
     const result = await updateRegistrationStatus({
+      eventId: EVENT_UUID,
       registrationId: REG_UUID,
       newStatus: 'waitlisted',
     });
@@ -190,11 +198,12 @@ describe('CP-16: pending → waitlisted allowed', () => {
 // ── CP-17: confirmed → confirmed blocked ────────────────────
 describe('CP-17: confirmed → confirmed blocked', () => {
   it('throws Cannot transition', async () => {
-    const reg = { id: REG_UUID, eventId: 'event-1', status: 'confirmed' };
+    const reg = { id: REG_UUID, eventId: EVENT_UUID, status: 'confirmed' };
     chainedSelect([reg]);
 
     await expect(
       updateRegistrationStatus({
+        eventId: EVENT_UUID,
         registrationId: REG_UUID,
         newStatus: 'confirmed',
       }),
@@ -205,15 +214,16 @@ describe('CP-17: confirmed → confirmed blocked', () => {
 // ── CP-18: assertEventAccess called with requireWrite ───────
 describe('CP-18: assertEventAccess enforces write permission', () => {
   it('calls assertEventAccess with requireWrite: true', async () => {
-    const reg = { id: REG_UUID, eventId: 'event-1', status: 'pending' };
+    const reg = { id: REG_UUID, eventId: EVENT_UUID, status: 'pending' };
     chainedSelect([reg]);
     chainedUpdate([{ ...reg, status: 'confirmed' }]);
 
     await updateRegistrationStatus({
+      eventId: EVENT_UUID,
       registrationId: REG_UUID,
       newStatus: 'confirmed',
     });
 
-    expect(mockAssertEventAccess).toHaveBeenCalledWith('event-1', { requireWrite: true });
+    expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_UUID, { requireWrite: true });
   });
 });

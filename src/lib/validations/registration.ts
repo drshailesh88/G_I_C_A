@@ -32,6 +32,7 @@ export const publicRegistrationSchema = z.object({
 
 // ── Admin registration management schema ───────────────────────
 export const updateRegistrationStatusSchema = z.object({
+  eventId: z.string().uuid('Invalid event ID'),
   registrationId: z.string().uuid('Invalid registration ID'),
   newStatus: z.enum(REGISTRATION_STATUSES),
 });

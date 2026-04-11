@@ -81,6 +81,7 @@ describe('publicRegistrationSchema', () => {
 describe('updateRegistrationStatusSchema', () => {
   it('accepts valid status update', () => {
     const result = updateRegistrationStatusSchema.safeParse({
+      eventId: '550e8400-e29b-41d4-a716-446655440099',
       registrationId: '550e8400-e29b-41d4-a716-446655440000',
       newStatus: 'confirmed',
     });
@@ -89,6 +90,7 @@ describe('updateRegistrationStatusSchema', () => {
 
   it('rejects invalid status', () => {
     const result = updateRegistrationStatusSchema.safeParse({
+      eventId: '550e8400-e29b-41d4-a716-446655440099',
       registrationId: '550e8400-e29b-41d4-a716-446655440000',
       newStatus: 'invalid',
     });

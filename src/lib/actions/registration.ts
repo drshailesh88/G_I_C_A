@@ -183,18 +183,18 @@ export async function updateRegistrationStatus(input: unknown) {
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
-  const { registrationId, newStatus } = updateRegistrationStatusSchema.parse(input);
+  const { eventId, registrationId, newStatus } = updateRegistrationStatusSchema.parse(input);
 
   const [registration] = await db
     .select()
     .from(eventRegistrations)
-    .where(eq(eventRegistrations.id, registrationId))
+    .where(withEventScope(eventRegistrations.eventId, eventId, eq(eventRegistrations.id, registrationId)))
     .limit(1);
 
   if (!registration) throw new Error('Registration not found');
 
   // Enforce per-event access control with write permission
-  await assertEventAccess(registration.eventId, { requireWrite: true });
+  await assertEventAccess(eventId, { requireWrite: true });
 
   const currentStatus = registration.status as RegistrationStatus;
   const allowed = REGISTRATION_TRANSITIONS[currentStatus];
@@ -218,10 +218,10 @@ export async function updateRegistrationStatus(input: unknown) {
   const [updated] = await db
     .update(eventRegistrations)
     .set(updateData)
-    .where(eq(eventRegistrations.id, registrationId))
+    .where(withEventScope(eventRegistrations.eventId, eventId, eq(eventRegistrations.id, registrationId)))
     .returning();
 
-  revalidatePath(`/events/${registration.eventId}/registrations`);
+  revalidatePath(`/events/${eventId}/registrations`);
   return updated;
 }
 
