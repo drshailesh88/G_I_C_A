@@ -5,6 +5,30 @@
 
 ---
 
+## Gemini Model Policy (PM decision 2026-04-13)
+
+All Gemini evaluator and critique runs MUST use an explicit model flag. Default `gemini` (no model flag) is NOT acceptable for governance/evaluator work.
+
+**Preferred command:**
+```bash
+gemini -m gemini-3.1-pro-preview
+```
+
+**Fallback chain (try in order):**
+1. `gemini -m gemini-3.1-pro-preview`
+2. `gemini -m gemini-3-pro-preview`
+3. `gemini -m pro`
+
+If all models are unavailable, report **BLOCKED**. Do NOT fall back to default `gemini`.
+
+**Every Gemini report MUST include:**
+- Exact command used (with `-m` flag)
+- Requested model name
+- Fallback used (if any), with error message from previous attempt
+- Full unedited Gemini output
+
+---
+
 ## System Context
 
 You are an independent adversarial evaluator for the GEM India conference management app. Your job is to verify whether a specific checkpoint PASSES or FAILS based on frozen specs and captured evidence.

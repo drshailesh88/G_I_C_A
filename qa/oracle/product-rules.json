@@ -1,0 +1,195 @@
+{
+  "_meta": {
+    "description": "Machine-readable product rules for GEM India QA oracle. Derived from authoritative sources, NOT from implementation code.",
+    "sources": [
+      "AGENTS.md — Critical Rules section",
+      "CLAUDE.md — Critical Rules and Architecture sections",
+      "research-hub/DESIGN_DECISIONS.md — Locked decisions",
+      "research-hub/BACKEND_ARCHITECTURE_MAP.md — Infrastructure rules",
+      "research-hub/PROJECT_HANDOFF.md — Tech stack and design tokens",
+      "qa/TEST_ORACLE.md — Oracle hierarchy and product rules"
+    ],
+    "status": "DRAFT",
+    "created": "2026-04-13",
+    "frozen_by": null
+  },
+  "invariants": [
+    {
+      "id": "INV-001",
+      "name": "event_id_filtering",
+      "rule": "Every database query MUST filter by eventId. No cross-event data leakage is permitted.",
+      "source": "AGENTS.md: 'Never skip eventId filtering in any database query. Every query must scope to the active event.'",
+      "applies_to": "all_modules",
+      "negative_test": "A query without eventId filter MUST return an error or empty result, never data from another event.",
+      "severity": "critical"
+    },
+    {
+      "id": "INV-002",
+      "name": "zod_input_validation",
+      "rule": "Every API route MUST validate input with Zod before processing.",
+      "source": "AGENTS.md: 'Every API route validates input with Zod before processing.'",
+      "applies_to": "all_api_routes",
+      "negative_test": "An API request with malformed/missing required fields MUST be rejected with a validation error before any database operation.",
+      "severity": "critical"
+    },
+    {
+      "id": "INV-003",
+      "name": "audit_trail",
+      "rule": "Every mutation to travel, accommodation, or transport MUST write to the audit log. Audit log is append-only.",
+      "source": "AGENTS.md: 'Every mutation to travel/accommodation/transport writes to the audit log.'",
+      "applies_to": ["travel", "accommodation", "transport"],
+      "negative_test": "A mutation to travel/accommodation/transport that does NOT produce an audit log entry is a critical failure.",
+      "severity": "critical"
+    },
+    {
+      "id": "INV-004",
+      "name": "notification_idempotency",
+      "rule": "Every notification send MUST check the idempotency key in Redis before sending. Duplicate sends MUST NOT dispatch a second notification.",
+      "source": "AGENTS.md: 'Every notification send checks the idempotency key in Redis before sending.'",
+      "applies_to": ["communications", "cascade_handlers"],
+      "negative_test": "Sending the same notification twice with the same idempotency key MUST result in exactly one delivery.",
+      "severity": "critical",
+      "note": "Exact response behavior for duplicate send attempts is module-specific. NEEDS_HUMAN_DECISION for whether duplicate returns success-with-noop or explicit duplicate-rejection."
+    },
+    {
+      "id": "INV-005",
+      "name": "phone_e164_normalization",
+      "rule": "Phone numbers MUST be normalized to E.164 format on input using libphonenumber-js.",
+      "source": "AGENTS.md: 'Phone numbers are normalized to E.164 on input using libphonenumber-js.'",
+      "applies_to": ["registration", "people", "communications"],
+      "negative_test": "A phone number stored without E.164 normalization is a failure. Invalid phone numbers MUST be rejected.",
+      "severity": "high",
+      "note": "Default region for normalization (IN vs none) NEEDS_HUMAN_DECISION if not specified per-form."
+    },
+    {
+      "id": "INV-006",
+      "name": "timestamp_utc_ist",
+      "rule": "Timestamps MUST be stored in UTC. Timestamps MUST be displayed in IST (Asia/Kolkata) using date-fns-tz.",
+      "source": "AGENTS.md: 'Timestamps stored in UTC, displayed in IST using date-fns-tz.'",
+      "applies_to": "all_modules",
+      "negative_test": "A timestamp stored in non-UTC format, or displayed in non-IST timezone, is a failure.",
+      "severity": "high"
+    },
+    {
+      "id": "INV-007",
+      "name": "file_upload_limit",
+      "rule": "File upload maximum size is 20MB.",
+      "source": "AGENTS.md: 'File upload max: 20MB.'",
+      "applies_to": ["certificates", "branding", "people"],
+      "negative_test": "A file larger than 20MB MUST be rejected before upload completes.",
+      "severity": "medium"
+    },
+    {
+      "id": "INV-008",
+      "name": "role_enforcement",
+      "rule": "Permissions checked with has() from @clerk/nextjs. UI elements hidden for roles without access. Write buttons disabled (not hidden) for Read-only role.",
+      "source": "AGENTS.md: Roles table + 'Hide UI elements the role cannot access. Disable (don't hide) write buttons for Read-only.'",
+      "applies_to": "all_modules",
+      "negative_test": "A role accessing a route or action it should not have access to is a critical failure. Read-only seeing enabled write buttons is a failure.",
+      "severity": "critical"
+    },
+    {
+      "id": "INV-009",
+      "name": "notification_routing",
+      "rule": "All notifications MUST go through lib/notifications/. Never call Resend or Evolution API directly from a page or API route.",
+      "source": "AGENTS.md: 'All notifications go through lib/notifications/. Never call Resend or Evolution API directly.'",
+      "applies_to": "all_modules",
+      "negative_test": "A direct call to Resend or Evolution API from outside lib/notifications/ is a critical architectural violation.",
+      "severity": "critical"
+    },
+    {
+      "id": "INV-010",
+      "name": "cascade_events",
+      "rule": "When travel/accommodation/session data changes, an Inngest event MUST be emitted. Never manually trigger downstream updates.",
+      "source": "AGENTS.md: Cascade System section",
+      "applies_to": ["travel", "accommodation", "program"],
+      "cascade_definitions": {
+        "conference/travel.updated": "flag accommodation + recalculate transport + notify delegate",
+        "conference/session.updated": "notify affected faculty with revised responsibilities",
+        "conference/registration.created": "send confirmation + assign QR"
+      },
+      "negative_test": "A travel/accommodation/session mutation that does NOT emit the corresponding Inngest event is a failure.",
+      "severity": "critical"
+    },
+    {
+      "id": "INV-011",
+      "name": "red_flag_lifecycle",
+      "rule": "Red flags follow a 3-state lifecycle: unreviewed (red) -> reviewed (yellow) -> resolved (cleared). Flag records store flag_type, flag_detail, flag_status, flag_created_at, reviewed_by, resolved_by.",
+      "source": "AGENTS.md: Red Flags Table section; research-hub/DESIGN_DECISIONS.md: UX Decision 2",
+      "applies_to": ["travel", "accommodation", "transport"],
+      "negative_test": "A flag that skips states (e.g., unreviewed directly to resolved) or lacks required fields is a failure.",
+      "severity": "high"
+    },
+    {
+      "id": "INV-012",
+      "name": "no_secrets_in_code",
+      "rule": "Never hardcode API keys, tokens, secrets, or credentials. Use environment variables.",
+      "source": "AGENTS.md: 'NEVER hardcode API keys, tokens, secrets, or credentials.'",
+      "applies_to": "all_modules",
+      "negative_test": "Any hardcoded secret, API key, or credential in source code is a critical security failure.",
+      "severity": "critical"
+    }
+  ],
+  "locked_design_decisions": [
+    {
+      "id": "DD-001",
+      "decision": "WhatsApp via Evolution API Docker sidecar",
+      "source": "research-hub/DESIGN_DECISIONS.md: Tech Decision — WhatsApp",
+      "locked": "2026-04-06"
+    },
+    {
+      "id": "DD-002",
+      "decision": "Background jobs via Inngest event-driven",
+      "source": "research-hub/DESIGN_DECISIONS.md: Tech Decision — Background Jobs",
+      "locked": "2026-04-06"
+    },
+    {
+      "id": "DD-003",
+      "decision": "Platform scaffold from ixartz/SaaS-Boilerplate",
+      "source": "research-hub/DESIGN_DECISIONS.md: Tech Decision — Platform Scaffold",
+      "locked": "2026-04-06"
+    },
+    {
+      "id": "DD-004",
+      "decision": "Dashboard home: event selector -> metrics -> quick actions",
+      "source": "research-hub/DESIGN_DECISIONS.md: UX Decision 1",
+      "locked": "2026-04-06"
+    },
+    {
+      "id": "DD-005",
+      "decision": "Red-flag cascade: 3-state lifecycle with badge showing WHAT changed and WHEN changed",
+      "source": "research-hub/DESIGN_DECISIONS.md: UX Decision 2",
+      "locked": "2026-04-06"
+    },
+    {
+      "id": "DD-006",
+      "decision": "Scientific Program: attendee auto-switches card list (<768px) to grid (>=768px); admin always grid with horizontal scroll",
+      "source": "research-hub/DESIGN_DECISIONS.md: UX Decision 3",
+      "locked": "2026-04-06"
+    }
+  ],
+  "tech_stack": {
+    "framework": "Next.js 16",
+    "auth": "Clerk",
+    "database": "Neon (Postgres)",
+    "orm": "Drizzle ORM",
+    "ui": "shadcn/ui + Tailwind CSS",
+    "language": "TypeScript strict mode",
+    "routing": "App Router",
+    "source": "research-hub/PROJECT_HANDOFF.md: Tech stack section"
+  },
+  "design_tokens": {
+    "colors": {
+      "primary": "#00325B",
+      "accent": "#00B9F5",
+      "flag_red": "red (unreviewed)",
+      "flag_yellow": "yellow (reviewed)",
+      "flag_green": "green (resolved)"
+    },
+    "fonts": {
+      "body": "Inter",
+      "mono": "Geist Mono"
+    },
+    "source": "research-hub/PROJECT_HANDOFF.md: Design tokens section"
+  }
+}

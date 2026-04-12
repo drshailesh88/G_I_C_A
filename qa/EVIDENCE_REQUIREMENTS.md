@@ -94,6 +94,23 @@ For GEM India invariants, negative tests must prove the guard works:
 
 ---
 
+## Server-Side Bypass Evidence (PM decision 2026-04-13, Gemini 3.1 Pro critique)
+
+For role enforcement (INV-008) and validation (INV-002) checkpoints, UI-only evidence is **insufficient**. Evaluators MUST also capture server-side bypass evidence:
+
+| Checkpoint Type | Bypass Method | Required Evidence |
+|----------------|---------------|-------------------|
+| Role enforcement (hidden UI) | Direct API/server-action call with unauthorized session token | Server returns 403 or authorization failure |
+| Role enforcement (disabled button) | Direct API/server-action call with restricted session token | Server returns 403 or authorization failure |
+| Input validation (Zod) | Direct API/server-action call with invalid payload (bypassing client-side UI) | Server returns 400 with Zod validation errors |
+| XSS/SQLi defense | Submit `<script>alert(1)</script>` or `' OR '1'='1` via form or direct API | Rejected by validation or stored as inert text; no execution |
+
+**Why**: A disabled button or hidden link prevents the UI from firing the API call, which means no network trace of server-side rejection is captured. Without bypass evidence, a broken backend that accepts unauthorized requests would still appear to "pass" because no request was ever made.
+
+**Method**: Use browser console `fetch()`, `curl`, or equivalent to directly invoke the server action/API endpoint with the appropriate session cookie/token.
+
+---
+
 ## What Does NOT Count as Evidence
 
 - Agent prose saying "it works"

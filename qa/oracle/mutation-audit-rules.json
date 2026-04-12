@@ -1,0 +1,74 @@
+{
+  "_meta": {
+    "description": "Mutation audit trail rules for travel, accommodation, and transport modules.",
+    "sources": [
+      "AGENTS.md — 'Every mutation to travel/accommodation/transport writes to the audit log'",
+      "research-hub/BACKEND_ARCHITECTURE_MAP.md — Audit log (Bemi)",
+      "research-hub/DESIGN_DECISIONS.md — Red-flag cascade system"
+    ],
+    "status": "DRAFT",
+    "created": "2026-04-13",
+    "frozen_by": null
+  },
+  "core_rule": {
+    "statement": "Every mutation (create, update, delete) to travel, accommodation, or transport data MUST produce an audit log entry. The audit log is append-only.",
+    "source": "AGENTS.md: 'Every mutation to travel/accommodation/transport writes to the audit log.'"
+  },
+  "audit_provider": {
+    "name": "Bemi",
+    "source": "research-hub/BACKEND_ARCHITECTURE_MAP.md — Audit log (Bemi)"
+  },
+  "modules_requiring_audit": ["travel", "accommodation", "transport"],
+  "rules": [
+    {
+      "id": "MA-001",
+      "rule": "CREATE operations on travel/accommodation/transport records MUST write an audit entry",
+      "severity": "critical"
+    },
+    {
+      "id": "MA-002",
+      "rule": "UPDATE operations on travel/accommodation/transport records MUST write an audit entry capturing before/after state",
+      "severity": "critical"
+    },
+    {
+      "id": "MA-003",
+      "rule": "DELETE operations on travel/accommodation/transport records MUST write an audit entry",
+      "severity": "critical"
+    },
+    {
+      "id": "MA-004",
+      "rule": "Audit log entries MUST be append-only. No audit entry may be modified or deleted.",
+      "severity": "critical"
+    },
+    {
+      "id": "MA-005",
+      "rule": "Audit log entries MUST include: timestamp (UTC), user/actor, action type, affected record ID, eventId, and change details",
+      "severity": "high",
+      "note": "Exact schema fields NEEDS_HUMAN_DECISION if Bemi handles this automatically vs manual logging."
+    }
+  ],
+  "red_flag_integration": {
+    "description": "Mutations to travel/accommodation/transport may trigger red flag creation or state changes.",
+    "flag_lifecycle": ["unreviewed (red)", "reviewed (yellow)", "resolved (cleared)"],
+    "flag_fields": ["flag_type", "flag_detail", "flag_status", "flag_created_at", "reviewed_by", "resolved_by"],
+    "source": "AGENTS.md — Red Flags Table; research-hub/DESIGN_DECISIONS.md — UX Decision 2"
+  },
+  "cascade_integration": {
+    "description": "Travel mutations MUST emit conference/travel.updated Inngest event, which triggers downstream flag accommodation + recalculate transport + notify delegate.",
+    "source": "AGENTS.md — Cascade System"
+  },
+  "negative_tests": [
+    {
+      "id": "MA-NEG-001",
+      "description": "Update a travel record and verify an audit entry exists — missing entry is critical failure"
+    },
+    {
+      "id": "MA-NEG-002",
+      "description": "Attempt to delete or modify an existing audit entry — MUST be rejected"
+    },
+    {
+      "id": "MA-NEG-003",
+      "description": "Create accommodation record and verify red flag lifecycle fields are populated if applicable"
+    }
+  ]
+}

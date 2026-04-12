@@ -1,0 +1,45 @@
+{
+  "_meta": {
+    "description": "Ralph loop state tracker for GEM India QA. Tracks the packet queue, current execution state, and iteration stats.",
+    "created": "2026-04-13",
+    "last_updated": "2026-04-13",
+    "phase": "0B",
+    "pilot_module": "events"
+  },
+  "current_packet_id": null,
+  "iteration_count": 0,
+  "queue": [
+    { "packet_id": "EVT-LIST-001", "module": "events", "status": "READY", "attempt_count": 0, "max_attempts": 2 },
+    { "packet_id": "EVT-LIST-003", "module": "events", "status": "READY", "attempt_count": 0, "max_attempts": 2 },
+    { "packet_id": "EVT-CREATE-001", "module": "events", "status": "READY", "attempt_count": 0, "max_attempts": 2 },
+    { "packet_id": "EVT-CREATE-002", "module": "events", "status": "READY", "attempt_count": 0, "max_attempts": 2 },
+    { "packet_id": "EVT-CREATE-006", "module": "events", "status": "READY", "attempt_count": 0, "max_attempts": 2 },
+    { "packet_id": "EVT-WS-001", "module": "events", "status": "READY", "attempt_count": 0, "max_attempts": 2 },
+    { "packet_id": "EVT-WS-003", "module": "events", "status": "READY", "attempt_count": 0, "max_attempts": 2 },
+    { "packet_id": "EVT-WS-006", "module": "events", "status": "READY", "attempt_count": 0, "max_attempts": 2 }
+  ],
+  "stats": {
+    "total_packets": 8,
+    "draft": 0,
+    "ready": 8,
+    "running": 0,
+    "passed": 0,
+    "failed": 0,
+    "blocked": 0,
+    "stuck": 0,
+    "spec_bug": 0,
+    "needs_human_decision": 0
+  },
+  "timestamps": {
+    "created": "2026-04-13T00:00:00Z",
+    "last_iteration_start": null,
+    "last_iteration_end": null
+  },
+  "guard_rails": {
+    "max_attempts_per_packet": 2,
+    "max_total_iterations": 60,
+    "agent_browser_timeout_seconds": 60,
+    "test_timeout_seconds": 120,
+    "iteration_timeout_seconds": 600
+  }
+}

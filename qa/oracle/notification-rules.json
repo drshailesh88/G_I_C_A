@@ -1,0 +1,96 @@
+{
+  "_meta": {
+    "description": "Notification service rules: routing, idempotency, and channel abstraction for GEM India.",
+    "sources": [
+      "AGENTS.md — Notification Service Pattern section",
+      "AGENTS.md — 'Every notification send checks the idempotency key in Redis before sending'",
+      "research-hub/BACKEND_ARCHITECTURE_MAP.md — Notification log schema, resilience infrastructure",
+      "research-hub/DEFERRED_TICKETS.md — H1-H7 hardening items"
+    ],
+    "status": "DRAFT",
+    "created": "2026-04-13",
+    "frozen_by": null
+  },
+  "routing_rule": {
+    "statement": "All notifications MUST go through lib/notifications/. Never call Resend or Evolution API directly from a page or API route.",
+    "service_path": "lib/notifications/",
+    "structure": {
+      "send.ts": "Unified send(channel, template, recipient, variables)",
+      "email.ts": "Resend adapter",
+      "whatsapp.ts": "Evolution API adapter (swap to WABA later)",
+      "templates/": "Template registry mapping template IDs to channels"
+    },
+    "source": "AGENTS.md — Notification Service Pattern"
+  },
+  "idempotency_rule": {
+    "statement": "Every notification send MUST check the idempotency key in Redis before sending. Duplicate sends MUST NOT dispatch a second notification.",
+    "mechanism": "Upstash Redis idempotency key check",
+    "source": "AGENTS.md — 'Every notification send checks the idempotency key in Redis before sending'; research-hub/BACKEND_ARCHITECTURE_MAP.md — Resilience infrastructure"
+  },
+  "channels": [
+    {
+      "id": "email",
+      "provider": "Resend",
+      "adapter": "lib/notifications/email.ts"
+    },
+    {
+      "id": "whatsapp",
+      "provider": "Evolution API (Docker sidecar)",
+      "adapter": "lib/notifications/whatsapp.ts",
+      "future_swap": "WABA (WhatsApp Business API)",
+      "source": "research-hub/DESIGN_DECISIONS.md — Tech Decision: WhatsApp"
+    }
+  ],
+  "cascade_triggers": [
+    {
+      "event": "conference/travel.updated",
+      "notification": "notify delegate",
+      "source": "AGENTS.md — Cascade System"
+    },
+    {
+      "event": "conference/session.updated",
+      "notification": "notify affected faculty with revised responsibilities",
+      "source": "AGENTS.md — Cascade System"
+    },
+    {
+      "event": "conference/registration.created",
+      "notification": "send confirmation",
+      "source": "AGENTS.md — Cascade System"
+    }
+  ],
+  "hardening_status": {
+    "fixed": [
+      { "id": "H1", "issue": "No webhook signature verification", "fix": "Svix HMAC + Bearer token", "date": "2026-04-08" },
+      { "id": "H2", "issue": "Webhook errors swallowed, no DLQ", "fix": "Redis DLQ 7-day TTL", "date": "2026-04-08" },
+      { "id": "H3", "issue": "Forward-only status uses stale read", "fix": "DB CASE CAS in WHERE", "date": "2026-04-08" },
+      { "id": "H4", "issue": "providerMessageId not unique-constrained", "fix": "unique(provider, message_id)", "date": "2026-04-08" }
+    ],
+    "open": [
+      { "id": "H5", "issue": "Adapters don't pass attachments", "severity": "HIGH", "phase": 5, "fix_needed": "R2 signed URL flow" },
+      { "id": "H6", "issue": "Provider calls inline, no timeout/circuit breaker", "severity": "HIGH", "phase": 6, "fix_needed": "Inngest background or AbortController" },
+      { "id": "H7", "issue": "handleDomainEvent only logs, doesn't send", "severity": "MEDIUM", "phase": 6, "fix_needed": "Wire to sendNotification()" }
+    ],
+    "source": "research-hub/DEFERRED_TICKETS.md — Pre-Production Hardening section"
+  },
+  "negative_tests": [
+    {
+      "id": "NR-NEG-001",
+      "description": "Send same notification twice with same idempotency key — second call MUST NOT dispatch"
+    },
+    {
+      "id": "NR-NEG-002",
+      "description": "Call Resend/Evolution API directly from a page component — code review MUST flag as violation"
+    },
+    {
+      "id": "NR-NEG-003",
+      "description": "Trigger cascade event and verify notification is routed through lib/notifications/"
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "NR-Q-001",
+      "question": "What is the exact response behavior when a duplicate notification send is attempted? Success-with-noop or explicit duplicate-rejection?",
+      "status": "NEEDS_HUMAN_DECISION"
+    }
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "_meta": {
+    "description": "Public-facing user journeys that do NOT require Clerk authentication. These are distinct from admin/dashboard flows.",
+    "sources": [
+      "research-hub/PROJECT_HANDOFF.md — Public flows in navigation graph",
+      "AGENTS.md — Module Boundaries: src/app/(public)/",
+      "research-hub/BACKEND_ARCHITECTURE_MAP.md — Registration cascade"
+    ],
+    "status": "DRAFT",
+    "created": "2026-04-13",
+    "frozen_by": null
+  },
+  "journeys": [
+    {
+      "id": "PUJ-001",
+      "name": "Conference Registration",
+      "description": "A delegate visits the landing page and registers for a conference via the public registration form.",
+      "screens": ["M25 Landing Page", "M07 Registration Form"],
+      "steps": [
+        { "step": 1, "action": "Visit landing page (M25)", "expected": "Landing page loads with event info and Register CTA" },
+        { "step": 2, "action": "Click Register / navigate to M07", "expected": "Registration form loads with all required fields" },
+        { "step": 3, "action": "Fill form with valid data", "expected": "Form accepts input, phone normalized to E.164" },
+        { "step": 4, "action": "Submit registration", "expected": "Registration created, confirmation shown" }
+      ],
+      "cascade_triggered": "conference/registration.created -> send confirmation + assign QR",
+      "invariants_checked": ["INV-001 (eventId)", "INV-002 (Zod validation)", "INV-005 (E.164 phone)"],
+      "deferred_items": ["D7: Terms & Privacy page linked from M07 — not yet designed"],
+      "roles": ["unauthenticated"],
+      "source": "research-hub/PROJECT_HANDOFF.md — Public flows"
+    },
+    {
+      "id": "PUJ-002",
+      "name": "Faculty Session Confirmation",
+      "description": "A faculty member receives a notification and confirms or declines their session assignment.",
+      "screens": ["M55 Faculty Confirm"],
+      "steps": [
+        { "step": 1, "action": "Open faculty confirmation link (from email/WhatsApp)", "expected": "M55 loads with session details and Confirm/Decline buttons" },
+        { "step": 2, "action": "Review session assignment details", "expected": "Session name, date, time (IST), role/responsibilities displayed" },
+        { "step": 3, "action": "Click Confirm or Decline", "expected": "Confirmation state updated, acknowledgement shown" }
+      ],
+      "invariants_checked": ["INV-001 (eventId)", "INV-006 (timestamps in IST)"],
+      "roles": ["unauthenticated"],
+      "note": "Faculty confirm page is accessed via a tokenized link, not Clerk auth. Exact token mechanism NEEDS_HUMAN_DECISION if not documented.",
+      "source": "research-hub/PROJECT_HANDOFF.md — Public flows"
+    },
+    {
+      "id": "PUJ-003",
+      "name": "Landing Page Browse",
+      "description": "A visitor browses the conference landing page for information without registering.",
+      "screens": ["M25 Landing Page"],
+      "steps": [
+        { "step": 1, "action": "Visit landing page (M25)", "expected": "Page loads with event information" },
+        { "step": 2, "action": "Browse content", "expected": "Event details, speakers, schedule visible" }
+      ],
+      "invariants_checked": ["INV-001 (eventId scoping — shows only the target event's data)"],
+      "roles": ["unauthenticated"],
+      "deferred_items": ["D5: Speaker Profile expandable card — not yet designed"],
+      "source": "research-hub/PROJECT_HANDOFF.md — M25 Landing Page"
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "PUJ-Q-001",
+      "question": "How is the faculty confirmation link tokenized? JWT, one-time token, signed URL?",
+      "status": "NEEDS_HUMAN_DECISION"
+    },
+    {
+      "id": "PUJ-Q-002",
+      "question": "Does the public registration form support multiple events or is it scoped to one event via URL?",
+      "status": "NEEDS_HUMAN_DECISION"
+    },
+    {
+      "id": "PUJ-Q-003",
+      "question": "What happens after successful registration? Redirect to confirmation page, or inline success message?",
+      "status": "NEEDS_HUMAN_DECISION"
+    }
+  ]
+}

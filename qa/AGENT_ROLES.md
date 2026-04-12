@@ -71,6 +71,21 @@ See `qa/templates/CLAUDE_FIXER_PROMPT.md`
 
 ## Gemini CLI (Adversarial Evaluator)
 
+### Model Policy (PM decision 2026-04-13)
+
+All Gemini evaluator and critique runs MUST use an explicit model flag:
+
+```bash
+# Preferred
+gemini -m gemini-3.1-pro-preview
+
+# Fallback chain (try in order if preferred is unavailable)
+gemini -m gemini-3-pro-preview
+gemini -m pro
+```
+
+If all models are unavailable, report **BLOCKED**. Do NOT fall back to default `gemini` (no model flag). Every Gemini report MUST include the exact command used, requested model, any fallback with error messages, and full output.
+
 ### Responsibilities
 - Runs against live app via agent-browser or test commands
 - Tries to break the PASS claim with edge cases

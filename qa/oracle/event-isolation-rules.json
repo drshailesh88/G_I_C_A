@@ -1,0 +1,87 @@
+{
+  "_meta": {
+    "description": "Event isolation (eventId scoping) rules for GEM India. Every database query must filter by eventId to prevent cross-event data leakage.",
+    "sources": [
+      "AGENTS.md — 'Never skip eventId filtering in any database query'",
+      "CLAUDE.md — 'Every database query filters by eventId (per-event data isolation)'",
+      "qa/TEST_ORACLE.md — Product Rules: Data Isolation"
+    ],
+    "status": "DRAFT",
+    "created": "2026-04-13",
+    "frozen_by": null
+  },
+  "core_rule": {
+    "statement": "Every database query MUST include an eventId filter. No query may return or mutate data from a different event than the active one.",
+    "source": "AGENTS.md: 'NEVER skip eventId filtering in any database query. Every query must scope to the active event.'"
+  },
+  "scoping_mechanism": {
+    "description": "The active eventId is determined by the event workspace context. All dashboard modules operate within the scope of the currently selected event.",
+    "workspace_screen": "M21 Event Workspace",
+    "source": "research-hub/PROJECT_HANDOFF.md — Navigation graph: Event workspace hub (M21)"
+  },
+  "rules": [
+    {
+      "id": "EI-001",
+      "rule": "SELECT queries MUST include WHERE eventId = :activeEventId",
+      "applies_to": "all_modules",
+      "severity": "critical"
+    },
+    {
+      "id": "EI-002",
+      "rule": "INSERT statements MUST set eventId to the active event",
+      "applies_to": "all_modules",
+      "severity": "critical"
+    },
+    {
+      "id": "EI-003",
+      "rule": "UPDATE statements MUST include WHERE eventId = :activeEventId",
+      "applies_to": "all_modules",
+      "severity": "critical"
+    },
+    {
+      "id": "EI-004",
+      "rule": "DELETE statements MUST include WHERE eventId = :activeEventId",
+      "applies_to": "all_modules",
+      "severity": "critical"
+    },
+    {
+      "id": "EI-005",
+      "rule": "API routes MUST extract eventId from the authenticated session/context and pass it to all database operations",
+      "applies_to": "all_api_routes",
+      "severity": "critical"
+    },
+    {
+      "id": "EI-006",
+      "rule": "Switching events in the workspace MUST reload all data for the new eventId. Stale data from a previous event MUST NOT be visible.",
+      "applies_to": "events",
+      "severity": "critical"
+    },
+    {
+      "id": "EI-007",
+      "rule": "Cascade handlers (Inngest) MUST include eventId in the event payload and use it for all downstream queries",
+      "applies_to": ["cascade_handlers"],
+      "severity": "critical"
+    }
+  ],
+  "negative_tests": [
+    {
+      "id": "EI-NEG-001",
+      "description": "Query people list without eventId filter — MUST return error or empty, never data from another event",
+      "type": "cross_event_leakage"
+    },
+    {
+      "id": "EI-NEG-002",
+      "description": "Create a record with eventId A, switch to event B, verify the record is NOT visible",
+      "type": "cross_event_visibility"
+    },
+    {
+      "id": "EI-NEG-003",
+      "description": "Attempt to update a record belonging to event A while in event B context — MUST fail",
+      "type": "cross_event_mutation"
+    }
+  ],
+  "exceptions": {
+    "description": "The events list page (M02) itself shows all events the user has access to, not scoped to a single eventId. This is the entry point BEFORE an event is selected.",
+    "source": "research-hub/PROJECT_HANDOFF.md — Navigation graph: Events List is top-level, before workspace entry"
+  }
+}

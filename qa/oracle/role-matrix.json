@@ -1,0 +1,163 @@
+{
+  "_meta": {
+    "description": "Role-based access control matrix for GEM India. Defines which roles can access which modules and what actions they can perform.",
+    "sources": [
+      "AGENTS.md — Roles (Clerk) table (HIGHEST PRIORITY for role definitions)",
+      "CLAUDE.md — Roles (Clerk) table",
+      "research-hub/PROJECT_HANDOFF.md — 4 roles with visibility matrix",
+      "PM decision 2026-04-13 — Ops event context, Read-only create form behavior"
+    ],
+    "status": "DRAFT",
+    "created": "2026-04-13",
+    "amended": "2026-04-13",
+    "amendment_reason": "Role-matrix.json violated higher-priority oracle (AGENTS.md). Event Coordinator was granted People, QR, Reports, Branding, Settings access not in AGENTS.md. Ops was granted Reports access not in AGENTS.md. Read-only was denied Settings visibility contrary to 'all visible' rule.",
+    "frozen_by": null
+  },
+  "roles": [
+    {
+      "id": "super_admin",
+      "key": "org:super_admin",
+      "name": "Super Admin",
+      "description": "Full access to everything",
+      "source": "AGENTS.md: 'Super Admin | org:super_admin | Everything'"
+    },
+    {
+      "id": "event_coordinator",
+      "key": "org:event_coordinator",
+      "name": "Event Coordinator",
+      "description": "Events, Program, Registration, Communications, Certificates ONLY",
+      "source": "AGENTS.md: 'Event Coordinator | org:event_coordinator | Events, Program, Registration, Comms, Certs'"
+    },
+    {
+      "id": "ops",
+      "key": "org:ops",
+      "name": "Ops",
+      "description": "Travel, Accommodation, Transport ONLY",
+      "source": "AGENTS.md: 'Ops | org:ops | Travel, Accommodation, Transport only'"
+    },
+    {
+      "id": "read_only",
+      "key": "org:read_only",
+      "name": "Read-only",
+      "description": "All modules visible, all write actions disabled",
+      "source": "AGENTS.md: 'Read-only | org:read_only | All visible, all write actions disabled'"
+    }
+  ],
+  "access_matrix": {
+    "events": {
+      "super_admin": { "read": true, "write": true, "delete": true },
+      "event_coordinator": { "read": true, "write": true, "delete": true },
+      "ops": { "read": false, "write": false, "delete": false, "note": "Ops CANNOT access Events CRUD. Source: AGENTS.md + Phase 0 amendment + PM decision 2026-04-13." },
+      "read_only": { "read": true, "write": false, "delete": false }
+    },
+    "program": {
+      "super_admin": { "read": true, "write": true, "delete": true },
+      "event_coordinator": { "read": true, "write": true, "delete": true },
+      "ops": { "read": false, "write": false, "delete": false },
+      "read_only": { "read": true, "write": false, "delete": false }
+    },
+    "registration": {
+      "super_admin": { "read": true, "write": true, "delete": true },
+      "event_coordinator": { "read": true, "write": true, "delete": true },
+      "ops": { "read": false, "write": false, "delete": false },
+      "read_only": { "read": true, "write": false, "delete": false }
+    },
+    "people": {
+      "super_admin": { "read": true, "write": true, "delete": true },
+      "event_coordinator": { "read": false, "write": false, "delete": false, "note": "NEEDS_HUMAN_DECISION: AGENTS.md lists Event Coordinator access as 'Events, Program, Registration, Comms, Certs' — People is NOT listed. Denied until explicitly granted." },
+      "ops": { "read": false, "write": false, "delete": false },
+      "read_only": { "read": true, "write": false, "delete": false }
+    },
+    "travel": {
+      "super_admin": { "read": true, "write": true, "delete": true },
+      "event_coordinator": { "read": false, "write": false, "delete": false },
+      "ops": { "read": true, "write": true, "delete": true },
+      "read_only": { "read": true, "write": false, "delete": false }
+    },
+    "accommodation": {
+      "super_admin": { "read": true, "write": true, "delete": true },
+      "event_coordinator": { "read": false, "write": false, "delete": false },
+      "ops": { "read": true, "write": true, "delete": true },
+      "read_only": { "read": true, "write": false, "delete": false }
+    },
+    "transport": {
+      "super_admin": { "read": true, "write": true, "delete": true },
+      "event_coordinator": { "read": false, "write": false, "delete": false },
+      "ops": { "read": true, "write": true, "delete": true },
+      "read_only": { "read": true, "write": false, "delete": false }
+    },
+    "communications": {
+      "super_admin": { "read": true, "write": true, "delete": true },
+      "event_coordinator": { "read": true, "write": true, "delete": true },
+      "ops": { "read": false, "write": false, "delete": false },
+      "read_only": { "read": true, "write": false, "delete": false }
+    },
+    "certificates": {
+      "super_admin": { "read": true, "write": true, "delete": true },
+      "event_coordinator": { "read": true, "write": true, "delete": true },
+      "ops": { "read": false, "write": false, "delete": false },
+      "read_only": { "read": true, "write": false, "delete": false }
+    },
+    "qr": {
+      "super_admin": { "read": true, "write": true, "delete": true },
+      "event_coordinator": { "read": false, "write": false, "delete": false, "note": "NEEDS_HUMAN_DECISION: AGENTS.md does not list QR under Event Coordinator access. Denied until explicitly granted." },
+      "ops": { "read": false, "write": false, "delete": false },
+      "read_only": { "read": true, "write": false, "delete": false }
+    },
+    "reports": {
+      "super_admin": { "read": true, "write": true, "delete": true },
+      "event_coordinator": { "read": false, "write": false, "delete": false, "note": "NEEDS_HUMAN_DECISION: AGENTS.md does not list Reports under Event Coordinator access. Denied until explicitly granted." },
+      "ops": { "read": false, "write": false, "delete": false, "note": "NEEDS_HUMAN_DECISION: AGENTS.md says Ops = 'Travel, Accommodation, Transport only'. Reports not listed. Denied until explicitly granted." },
+      "read_only": { "read": true, "write": false, "delete": false }
+    },
+    "branding": {
+      "super_admin": { "read": true, "write": true, "delete": true },
+      "event_coordinator": { "read": false, "write": false, "delete": false, "note": "NEEDS_HUMAN_DECISION: AGENTS.md does not list Branding under Event Coordinator access. Denied until explicitly granted." },
+      "ops": { "read": false, "write": false, "delete": false },
+      "read_only": { "read": true, "write": false, "delete": false }
+    },
+    "settings": {
+      "super_admin": { "read": true, "write": true, "delete": true },
+      "event_coordinator": { "read": false, "write": false, "delete": false, "note": "NEEDS_HUMAN_DECISION: AGENTS.md does not list Settings under Event Coordinator access. Denied until explicitly granted." },
+      "ops": { "read": false, "write": false, "delete": false },
+      "read_only": { "read": true, "write": false, "delete": false, "note": "AGENTS.md says 'All visible, all write actions disabled'. Settings is visible/readable. No higher-priority source denies it." }
+    }
+  },
+  "event_context": {
+    "description": "Active event context is a dashboard shell concern separate from Events CRUD. All authenticated roles may use the active event context so that event-scoped modules can function.",
+    "source": "PM decision 2026-04-13",
+    "rules": [
+      {
+        "id": "EC-001",
+        "rule": "Active event context (knowing which event is selected) is available to all authenticated roles.",
+        "note": "This does NOT grant Events CRUD (create/edit/delete events)."
+      },
+      {
+        "id": "EC-002",
+        "rule": "Ops may use active event context ONLY to reach Travel, Accommodation, and Transport.",
+        "note": "Ops must not access Events list management, event creation, event editing, or event deletion."
+      },
+      {
+        "id": "EC-003",
+        "rule": "The event workspace shell (M21) may be accessible to Ops with only Travel, Accommodation, Transport module links visible. All Events CRUD links/actions remain hidden for Ops.",
+        "note": "This is PM decision Option B from 2026-04-13."
+      },
+      {
+        "id": "EC-004",
+        "rule": "Read-only role sees the full event workspace shell with all module navigation links visible, but all write actions are disabled.",
+        "note": "Per AGENTS.md: 'All visible, all write actions disabled.'"
+      }
+    ]
+  },
+  "ui_rules": {
+    "hidden_for_no_access": "UI elements for modules a role cannot access MUST be hidden entirely.",
+    "disabled_for_read_only": "Write buttons MUST be disabled (not hidden) for Read-only role.",
+    "read_only_create_forms": "For direct create routes, prefer rendering the form in read-only/disabled mode with a clear notice. Server-side mutation attempts MUST be blocked regardless of UI state.",
+    "source": "AGENTS.md: 'Hide UI elements the role cannot access. Disable (don't hide) write buttons for Read-only.' + PM decision 2026-04-13."
+  },
+  "auth_mechanism": {
+    "provider": "Clerk",
+    "check_function": "has() from @clerk/nextjs",
+    "source": "AGENTS.md: 'Check permissions with has() from @clerk/nextjs.'"
+  }
+}

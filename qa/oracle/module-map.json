@@ -1,0 +1,185 @@
+{
+  "_meta": {
+    "description": "Module directory map, routes, wireframe screens, and testing priority for GEM India.",
+    "sources": [
+      "AGENTS.md — Module Boundaries section",
+      "research-hub/PROJECT_HANDOFF.md — 48 wireframe screens, navigation graph, build order",
+      "qa/MODULE_PRIORITIES.md — Priority ranking"
+    ],
+    "status": "DRAFT",
+    "created": "2026-04-13",
+    "frozen_by": null
+  },
+  "modules": [
+    {
+      "id": "auth",
+      "name": "Auth / Dashboard Shell",
+      "directory": "src/app/(auth)/",
+      "screens": ["M16 Login", "M17 Forgot Password", "M18 Reset Password"],
+      "priority": 1,
+      "risk": "critical",
+      "phase": 1,
+      "depends_on": []
+    },
+    {
+      "id": "events",
+      "name": "Events / Workspace",
+      "directory": "src/app/(dashboard)/events/",
+      "screens": ["M02 Events List", "M14 Create Event", "M21 Event Workspace"],
+      "priority": 2,
+      "risk": "critical",
+      "phase": 2,
+      "depends_on": ["auth"],
+      "pilot_module": true,
+      "pilot_rationale": "Hub role, eventId scoping source, role diversity, CRUD coverage, moderate complexity, no external service dependency"
+    },
+    {
+      "id": "registration",
+      "name": "Registration",
+      "directory": "src/app/(dashboard)/registration/",
+      "screens": ["M29 Admin Registration List"],
+      "public_screens": ["M07 Registration Form"],
+      "priority": 3,
+      "risk": "critical",
+      "phase": 2,
+      "depends_on": ["events"]
+    },
+    {
+      "id": "people",
+      "name": "People / Import / Merge",
+      "directory": "src/app/(dashboard)/people/",
+      "screens": ["M03 People List", "M09 Import", "M32 Merge"],
+      "priority": 4,
+      "risk": "high",
+      "phase": 2,
+      "depends_on": ["events"],
+      "deferred_items": ["D3: Add Person form (slide-up sheet)"]
+    },
+    {
+      "id": "travel",
+      "name": "Travel",
+      "directory": "src/app/(dashboard)/travel/",
+      "screens": ["M35 Travel Records", "M06 Travel Details"],
+      "priority": 5,
+      "risk": "high",
+      "phase": 3,
+      "depends_on": ["people"],
+      "invariants_required": ["INV-003", "INV-010", "INV-011"]
+    },
+    {
+      "id": "accommodation",
+      "name": "Accommodation",
+      "directory": "src/app/(dashboard)/accommodation/",
+      "screens": ["M05 Accommodation List", "M36 Accommodation Details"],
+      "priority": 6,
+      "risk": "high",
+      "phase": 3,
+      "depends_on": ["people", "travel"],
+      "invariants_required": ["INV-003", "INV-010", "INV-011"]
+    },
+    {
+      "id": "transport",
+      "name": "Transport",
+      "directory": "src/app/(dashboard)/transport/",
+      "screens": ["M10 Arrival Planning", "M38 Vehicle Kanban"],
+      "priority": 7,
+      "risk": "high",
+      "phase": 3,
+      "depends_on": ["travel"],
+      "invariants_required": ["INV-003", "INV-010", "INV-011"]
+    },
+    {
+      "id": "program",
+      "name": "Scientific Program",
+      "directory": "src/app/(dashboard)/program/",
+      "screens": ["M22 Sessions List", "M23 Session Detail", "M30 Schedule Grid"],
+      "priority": 8,
+      "risk": "high",
+      "phase": 2,
+      "depends_on": ["events", "people"],
+      "deferred_items": ["D1: Preview Revised Emails", "D2: Conflict Fix action"]
+    },
+    {
+      "id": "communications",
+      "name": "Communications",
+      "directory": "src/app/(dashboard)/communications/",
+      "screens": ["M13 Templates", "M39 Automation Triggers", "M53 Notification Log"],
+      "priority": 9,
+      "risk": "high",
+      "phase": 4,
+      "depends_on": ["people", "registration"],
+      "invariants_required": ["INV-004", "INV-009"]
+    },
+    {
+      "id": "certificates",
+      "name": "Certificates",
+      "directory": "src/app/(dashboard)/certificates/",
+      "screens": ["M12 Certificate List", "M56 Certificate Editor", "M61 Issue Certificates"],
+      "priority": 10,
+      "risk": "medium",
+      "phase": 5,
+      "depends_on": ["registration", "program"],
+      "deferred_items": ["D6: View All Issued Certificates list"]
+    },
+    {
+      "id": "qr",
+      "name": "QR & Attendance",
+      "directory": "src/app/(dashboard)/qr/",
+      "screens": ["M11 QR Scanner", "M44-M46 Attendance Views", "M58 Attendance Report"],
+      "priority": 11,
+      "risk": "medium",
+      "phase": 5,
+      "depends_on": ["registration"]
+    },
+    {
+      "id": "reports",
+      "name": "Reports",
+      "directory": "src/app/(dashboard)/reports/",
+      "screens": ["M47 Exports"],
+      "priority": 12,
+      "risk": "low",
+      "phase": 6,
+      "depends_on": ["events", "people", "registration"]
+    },
+    {
+      "id": "branding",
+      "name": "Branding",
+      "directory": "src/app/(dashboard)/branding/",
+      "screens": ["M15 Letterheads"],
+      "priority": 13,
+      "risk": "low",
+      "phase": 6,
+      "depends_on": ["events"]
+    },
+    {
+      "id": "settings",
+      "name": "Settings / Team & Roles",
+      "directory": "src/app/(dashboard)/settings/",
+      "screens": ["M19 Team & Roles"],
+      "priority": 14,
+      "risk": "medium",
+      "phase": 6,
+      "depends_on": ["auth"],
+      "deferred_items": ["D4: Invite Member modal"]
+    },
+    {
+      "id": "public",
+      "name": "Public Pages",
+      "directory": "src/app/(public)/",
+      "screens": ["M25 Landing Page", "M07 Registration Form", "M55 Faculty Confirm"],
+      "priority": 3,
+      "risk": "high",
+      "phase": 2,
+      "depends_on": ["events"],
+      "deferred_items": ["D5: Speaker Profile view", "D7: Terms & Privacy page"]
+    }
+  ],
+  "build_phases": [
+    { "phase": 1, "name": "Foundation", "modules": ["auth"] },
+    { "phase": 2, "name": "Core Data", "modules": ["events", "registration", "people", "program", "public"] },
+    { "phase": 3, "name": "Operations", "modules": ["travel", "accommodation", "transport"] },
+    { "phase": 4, "name": "Communications", "modules": ["communications"] },
+    { "phase": 5, "name": "Certificates & QR", "modules": ["certificates", "qr"] },
+    { "phase": 6, "name": "Polish", "modules": ["reports", "branding", "settings"] }
+  ]
+}

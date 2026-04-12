@@ -1,0 +1,119 @@
+{
+  "_meta": {
+    "description": "Navigation graph for GEM India app. Defines screen-to-screen transitions, tab bar structure, and entry points.",
+    "sources": [
+      "research-hub/PROJECT_HANDOFF.md — Navigation graph section, 48 wireframe screens inventory",
+      "research-hub/DESIGN_DECISIONS.md — UX Decision 1 (dashboard layout)"
+    ],
+    "status": "DRAFT",
+    "created": "2026-04-13",
+    "frozen_by": null
+  },
+  "entry_points": {
+    "unauthenticated": {
+      "landing": "M25 Landing Page",
+      "registration": "M07 Registration Form",
+      "faculty_confirm": "M55 Faculty Confirm",
+      "login": "M16 Login",
+      "forgot_password": "M17 Forgot Password",
+      "reset_password": "M18 Reset Password"
+    },
+    "authenticated": {
+      "default": "M02 Events List",
+      "note": "After login, user lands on Events List. Selecting an event enters M21 Event Workspace."
+    }
+  },
+  "tab_bar": {
+    "description": "Main navigation tabs visible in the dashboard shell",
+    "source": "research-hub/PROJECT_HANDOFF.md — Tab bar structure",
+    "tabs": [
+      { "label": "Events", "screen": "M02", "route": "/events" },
+      { "label": "People", "screen": "M03", "route": "/people" },
+      { "label": "More", "description": "Expanded menu for additional modules" }
+    ]
+  },
+  "event_workspace_hub": {
+    "screen": "M21",
+    "description": "Central hub after selecting an event. All module screens are accessed from here.",
+    "source": "research-hub/PROJECT_HANDOFF.md — Event workspace hub (M21)",
+    "accessible_modules": [
+      { "module": "program", "screens": ["M22", "M23", "M30"] },
+      { "module": "registration", "screens": ["M29"] },
+      { "module": "travel", "screens": ["M35", "M06"] },
+      { "module": "accommodation", "screens": ["M05", "M36"] },
+      { "module": "transport", "screens": ["M10", "M38"] },
+      { "module": "communications", "screens": ["M13", "M39", "M53"] },
+      { "module": "certificates", "screens": ["M12", "M56", "M61"] },
+      { "module": "qr", "screens": ["M11", "M44", "M45", "M46", "M58"] },
+      { "module": "reports", "screens": ["M47"] },
+      { "module": "branding", "screens": ["M15"] },
+      { "module": "settings", "screens": ["M19"] }
+    ]
+  },
+  "flows": {
+    "auth_flow": {
+      "M16_login": { "success": "M02", "forgot_password": "M17" },
+      "M17_forgot_password": { "submit": "M18" },
+      "M18_reset_password": { "success": "M16" }
+    },
+    "create_event_flow": {
+      "M02_events_list": { "create_button": "M14" },
+      "M14_create_event": { "success": "M21", "cancel": "M02" }
+    },
+    "event_workspace_flow": {
+      "M02_events_list": { "select_event": "M21" },
+      "M21_workspace": { "back": "M02" }
+    },
+    "public_flows": {
+      "M25_landing": { "register": "M07" },
+      "M07_registration": { "success": "confirmation_page", "note": "Triggers conference/registration.created cascade" },
+      "M55_faculty_confirm": { "confirm": "confirmation_state", "decline": "decline_state" }
+    }
+  },
+  "screens_inventory": [
+    { "id": "M02", "name": "Events List", "module": "events", "type": "dashboard" },
+    { "id": "M03", "name": "People List", "module": "people", "type": "dashboard" },
+    { "id": "M05", "name": "Accommodation List", "module": "accommodation", "type": "dashboard" },
+    { "id": "M06", "name": "Travel Details", "module": "travel", "type": "dashboard" },
+    { "id": "M07", "name": "Registration Form", "module": "public", "type": "public" },
+    { "id": "M09", "name": "Import", "module": "people", "type": "dashboard" },
+    { "id": "M10", "name": "Arrival Planning", "module": "transport", "type": "dashboard" },
+    { "id": "M11", "name": "QR Scanner", "module": "qr", "type": "dashboard" },
+    { "id": "M12", "name": "Certificate List", "module": "certificates", "type": "dashboard" },
+    { "id": "M13", "name": "Templates", "module": "communications", "type": "dashboard" },
+    { "id": "M14", "name": "Create Event", "module": "events", "type": "dashboard" },
+    { "id": "M15", "name": "Letterheads", "module": "branding", "type": "dashboard" },
+    { "id": "M16", "name": "Login", "module": "auth", "type": "auth" },
+    { "id": "M17", "name": "Forgot Password", "module": "auth", "type": "auth" },
+    { "id": "M18", "name": "Reset Password", "module": "auth", "type": "auth" },
+    { "id": "M19", "name": "Team & Roles", "module": "settings", "type": "dashboard" },
+    { "id": "M21", "name": "Event Workspace", "module": "events", "type": "dashboard" },
+    { "id": "M22", "name": "Sessions List", "module": "program", "type": "dashboard" },
+    { "id": "M23", "name": "Session Detail", "module": "program", "type": "dashboard" },
+    { "id": "M25", "name": "Landing Page", "module": "public", "type": "public" },
+    { "id": "M29", "name": "Admin Registration List", "module": "registration", "type": "dashboard" },
+    { "id": "M30", "name": "Schedule Grid", "module": "program", "type": "dashboard" },
+    { "id": "M32", "name": "Merge", "module": "people", "type": "dashboard" },
+    { "id": "M35", "name": "Travel Records", "module": "travel", "type": "dashboard" },
+    { "id": "M36", "name": "Accommodation Details", "module": "accommodation", "type": "dashboard" },
+    { "id": "M38", "name": "Vehicle Kanban", "module": "transport", "type": "dashboard" },
+    { "id": "M39", "name": "Automation Triggers", "module": "communications", "type": "dashboard" },
+    { "id": "M47", "name": "Exports", "module": "reports", "type": "dashboard" },
+    { "id": "M53", "name": "Notification Log", "module": "communications", "type": "dashboard" },
+    { "id": "M55", "name": "Faculty Confirm", "module": "public", "type": "public" },
+    { "id": "M56", "name": "Certificate Editor", "module": "certificates", "type": "dashboard" },
+    { "id": "M58", "name": "Attendance Report", "module": "qr", "type": "dashboard" },
+    { "id": "M61", "name": "Issue Certificates", "module": "certificates", "type": "dashboard" }
+  ],
+  "deferred_screens": [
+    { "id": "D1", "description": "Preview Revised Emails modal on M52", "parent_module": "program" },
+    { "id": "D2", "description": "Conflict Fix from M30 to M23", "parent_module": "program" },
+    { "id": "D3", "description": "Add Person slide-up sheet from M03", "parent_module": "people" },
+    { "id": "D4", "description": "Invite Member bottom sheet on M19", "parent_module": "settings" },
+    { "id": "D5", "description": "Speaker Profile expandable card from M25", "parent_module": "public" },
+    { "id": "D6", "description": "View All Issued Certificates list from M61", "parent_module": "certificates" },
+    { "id": "D7", "description": "Terms & Privacy page linked from M07", "parent_module": "public" },
+    { "id": "D8", "description": "Notification drawer from M01 bell icon", "parent_module": "dashboard" },
+    { "id": "D9", "description": "Profile/account sheet from M01 avatar", "parent_module": "dashboard" }
+  ]
+}
