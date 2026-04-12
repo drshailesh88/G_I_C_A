@@ -18,7 +18,7 @@
 | Role | Super Admin (`org:super_admin`) |
 | Type | Validation / Edge Case |
 
-## Spec (DRAFT — NOT FROZEN until Codex PM approves)
+## Frozen Spec
 
 ### Preconditions
 - Dev server running on port 4000

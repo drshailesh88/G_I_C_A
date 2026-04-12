@@ -18,7 +18,7 @@
 | Role | Ops (`org:ops`), Read-only (`org:read_only`) |
 | Type | Role Enforcement / Negative Test |
 
-## Spec (DRAFT — NOT FROZEN until Codex PM approves)
+## Frozen Spec
 
 ### Preconditions
 - Dev server running on port 4000
