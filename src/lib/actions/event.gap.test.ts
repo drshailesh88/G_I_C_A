@@ -86,14 +86,36 @@ describe('createEvent — gap tests', () => {
     await expect(createEvent(buildFormData())).rejects.toThrow('Unauthorized');
   });
 
-  it('rejects empty name', async () => {
-    await expect(createEvent(buildFormData({ name: '' }))).rejects.toBeInstanceOf(ZodError);
+  it('returns structured validation error for empty name (no db.insert called)', async () => {
+    const result = await createEvent(buildFormData({ name: '' }));
+    expect(result).toMatchObject({ ok: false, status: 400 });
+    if (!result.ok) {
+      expect(result.fieldErrors.name).toBeDefined();
+      expect(result.fieldErrors.name.length).toBeGreaterThan(0);
+    }
+    expect(mockDb.insert).not.toHaveBeenCalled();
   });
 
-  it('rejects endDate before startDate', async () => {
-    await expect(
-      createEvent(buildFormData({ startDate: '2026-06-01', endDate: '2026-05-01' })),
-    ).rejects.toBeInstanceOf(ZodError);
+  it('returns structured validation error for endDate before startDate (no db.insert called)', async () => {
+    const result = await createEvent(buildFormData({ startDate: '2026-06-01', endDate: '2026-05-01' }));
+    expect(result).toMatchObject({ ok: false, status: 400 });
+    if (!result.ok) {
+      expect(result.fieldErrors.endDate).toBeDefined();
+      expect(result.fieldErrors.endDate.length).toBeGreaterThan(0);
+    }
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('returns structured validation error for all empty required fields', async () => {
+    const result = await createEvent(buildFormData({ name: '', startDate: '', endDate: '', venueName: '' }));
+    expect(result).toMatchObject({ ok: false, status: 400 });
+    if (!result.ok) {
+      expect(result.fieldErrors.name).toBeDefined();
+      expect(result.fieldErrors.startDate).toBeDefined();
+      expect(result.fieldErrors.endDate).toBeDefined();
+      expect(result.fieldErrors.venueName).toBeDefined();
+    }
+    expect(mockDb.insert).not.toHaveBeenCalled();
   });
 
   it('creates event with status draft', async () => {
@@ -127,7 +149,7 @@ describe('createEvent — gap tests', () => {
     mockDb.select.mockReturnValue({ from: orgFrom });
 
     const result = await createEvent(buildFormData());
-    expect(result).toEqual({ id: 'new-event-id' });
+    expect(result).toEqual({ ok: true, id: 'new-event-id' });
 
     // Verify status was draft
     expect(insertCalls[0]).toMatchObject({ status: 'draft' });

@@ -42,15 +42,28 @@ function safeJsonParse(value: string, fieldPath: string): unknown {
   }
 }
 
-export async function createEvent(formData: FormData) {
+export type CreateEventResult =
+  | { ok: true; id: string }
+  | { ok: false; status: 400; fieldErrors: Record<string, string[]>; formErrors: string[] };
+
+export async function createEvent(formData: FormData): Promise<CreateEventResult> {
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
   // Parse JSON safely BEFORE Zod validation (Bug fix #4)
-  const moduleTogglesRaw = safeJsonParse(
-    (formData.get('moduleToggles') as string) || '{}',
-    'moduleToggles',
-  );
+  let moduleTogglesRaw: unknown;
+  try {
+    moduleTogglesRaw = safeJsonParse(
+      (formData.get('moduleToggles') as string) || '{}',
+      'moduleToggles',
+    );
+  } catch (err) {
+    if (err instanceof ZodError) {
+      const flat = err.flatten();
+      return { ok: false, status: 400, fieldErrors: flat.fieldErrors as Record<string, string[]>, formErrors: flat.formErrors };
+    }
+    throw err;
+  }
 
   const raw = {
     name: formData.get('name') as string,
@@ -65,7 +78,13 @@ export async function createEvent(formData: FormData) {
     moduleToggles: moduleTogglesRaw,
   };
 
-  const validated = createEventSchema.parse(raw);
+  const parsed = createEventSchema.safeParse(raw);
+  if (!parsed.success) {
+    const flat = parsed.error.flatten();
+    return { ok: false, status: 400, fieldErrors: flat.fieldErrors as Record<string, string[]>, formErrors: flat.formErrors };
+  }
+
+  const validated = parsed.data;
   const orgId = await getOrCreateDefaultOrg();
   const slug = slugify(validated.name) + '-' + Date.now().toString(36);
 
@@ -101,7 +120,7 @@ export async function createEvent(formData: FormData) {
   revalidatePath('/events');
   revalidatePath('/dashboard');
 
-  return { id: event.id };
+  return { ok: true, id: event.id };
 }
 
 export async function getEvents() {

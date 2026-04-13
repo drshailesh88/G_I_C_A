@@ -21,6 +21,7 @@ export function CreateEventForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [modules, setModules] = useState<Record<string, boolean>>(
     Object.fromEntries(MODULE_KEYS.map((k) => [k, true])),
   );
@@ -29,6 +30,7 @@ export function CreateEventForm() {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setFieldErrors({});
 
     const form = e.currentTarget;
     const formData = new FormData(form);
@@ -36,6 +38,14 @@ export function CreateEventForm() {
 
     try {
       const result = await createEvent(formData);
+      if (!result.ok) {
+        setFieldErrors(result.fieldErrors);
+        if (result.formErrors.length > 0) {
+          setError(result.formErrors.join('. '));
+        }
+        setLoading(false);
+        return;
+      }
       router.push(`/events/${result.id}`);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to create event';
@@ -72,8 +82,11 @@ export function CreateEventForm() {
             type="text"
             required
             placeholder="GEM India Summit 2026"
-            className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            className={`w-full rounded-lg border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent ${fieldErrors.name ? 'border-error' : 'border-border'}`}
           />
+          {fieldErrors.name && (
+            <p className="mt-1 text-xs text-error">{fieldErrors.name[0]}</p>
+          )}
         </div>
 
         {/* Dates */}
@@ -87,8 +100,11 @@ export function CreateEventForm() {
               name="startDate"
               type="date"
               required
-              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              className={`w-full rounded-lg border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent ${fieldErrors.startDate ? 'border-error' : 'border-border'}`}
             />
+            {fieldErrors.startDate && (
+              <p className="mt-1 text-xs text-error">{fieldErrors.startDate[0]}</p>
+            )}
           </div>
           <div>
             <label htmlFor="endDate" className="mb-1 block text-sm font-medium text-text-primary">
@@ -99,8 +115,11 @@ export function CreateEventForm() {
               name="endDate"
               type="date"
               required
-              className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+              className={`w-full rounded-lg border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent ${fieldErrors.endDate ? 'border-error' : 'border-border'}`}
             />
+            {fieldErrors.endDate && (
+              <p className="mt-1 text-xs text-error">{fieldErrors.endDate[0]}</p>
+            )}
           </div>
         </div>
 
@@ -115,8 +134,11 @@ export function CreateEventForm() {
             type="text"
             required
             placeholder="Pragati Maidan, New Delhi"
-            className="w-full rounded-lg border border-border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+            className={`w-full rounded-lg border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent ${fieldErrors.venueName ? 'border-error' : 'border-border'}`}
           />
+          {fieldErrors.venueName && (
+            <p className="mt-1 text-xs text-error">{fieldErrors.venueName[0]}</p>
+          )}
         </div>
 
         {/* Description */}

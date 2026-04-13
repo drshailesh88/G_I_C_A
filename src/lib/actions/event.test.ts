@@ -78,10 +78,15 @@ describe('event actions — existing adversarial tests', () => {
     mockGetEventListContext.mockResolvedValue({ userId: 'user-1', role: 'org:super_admin', isSuperAdmin: true });
   });
 
-  it('createEvent should reject malformed moduleToggles with Zod before parsing', async () => {
+  it('createEvent should return structured validation error for malformed moduleToggles', async () => {
     const formData = buildFormData({ moduleToggles: '{' });
 
-    await expect(createEvent(formData)).rejects.toBeInstanceOf(ZodError);
+    const result = await createEvent(formData);
+    expect(result).toMatchObject({ ok: false, status: 400 });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.fieldErrors).toBeDefined();
+    }
   });
 
   it('getEvent should reject invalid event ids with Zod before querying', async () => {
