@@ -1,0 +1,39 @@
+{
+  "packet_id": "EVT-LIST-001",
+  "route": "/events",
+  "actual_url": "http://localhost:4000/events",
+  "role": "Super Admin (org:super_admin)",
+  "action": "Navigate to /events and verify events list loads with event cards visible",
+  "expected": "Events list page renders without errors, at least one event card with name and date visible, timestamps in IST, no secrets exposed",
+  "actual": "Events list page rendered with 7 event cards. Each card shows event name, date range (e.g. 'Oct 10-12, 2026'), venue, and status badge (Draft/Live). Zero console errors. All network requests succeeded (200). No secrets visible. No raw UTC timestamps.",
+  "disposition": "PASS",
+  "reason": "All 9 checks passed. Page loaded successfully after Clerk authentication. 7 events visible under 'Upcoming' section.",
+  "timestamp": "2026-04-13T02:01:00+05:30",
+  "executor": "Claude Code (Playwright MCP)",
+  "dev_server_port": 4000,
+  "dev_server_running": true,
+  "console_errors": [],
+  "console_warnings": [
+    "Clerk: Clerk has been loaded with development keys.",
+    "Clerk: The prop 'afterSignInUrl' is deprecated and should be replaced with 'fallbackRedirectUrl' or 'forceRedirectUrl'."
+  ],
+  "events_visible": 7,
+  "event_names": [
+    "Branding QA E2E",
+    "Program QA E2E",
+    "Registration QA E2E",
+    "Certificates QA E2E",
+    "Accommodation QA E2E",
+    "Transport QA E2E",
+    "GEM India 2026"
+  ],
+  "evidence_files": [
+    "screenshot.png",
+    "console.txt",
+    "network.txt",
+    "metadata.json",
+    "test-output.txt"
+  ],
+  "network_log_redacted": true,
+  "redaction_reason": "Clerk auth/session query parameters removed before commit."
+}

@@ -1,0 +1,6 @@
+Total messages: 4 (Errors: 0, Warnings: 2)
+
+[INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:4000/_next/static/chunks/node_modules_next_dist_0nzbwyu._.js:1074
+[LOG] [HMR] connected @ http://localhost:4000/_next/static/chunks/node_modules_next_dist_0nzbwyu._.js:1074
+[WARNING] Clerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview @ http://localhost:4000/_next/static/chunks/node_modules_next_dist_0nzbwyu._.js:1074
+[WARNING] Clerk: The prop "afterSignInUrl" is deprecated and should be replaced with the new "fallbackRedirectUrl" or "forceRedirectUrl" props instead. Learn more: https://clerk.com/docs/guides/custom-redirects#redirect-url-props @ http://localhost:4000/_next/static/chunks/node_modules_next_dist_0nzbwyu._.js:1074

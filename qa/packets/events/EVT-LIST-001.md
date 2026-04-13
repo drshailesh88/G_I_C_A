@@ -5,7 +5,7 @@
 | PACKET_ID | EVT-LIST-001 |
 | MODULE | events |
 | DATE | 2026-04-13 |
-| STATUS | READY |
+| STATUS | PASS |
 
 ## Checkpoint
 
@@ -57,16 +57,16 @@
 - `qa/oracle/product-rules.json` — INV-006, INV-008
 
 ## Evidence Required
-- [ ] Screenshot of events list with at least one event visible
-- [ ] Console output (no errors)
-- [ ] Network check (API calls succeed, no 4xx/5xx)
-- [ ] `metadata.json` with route, role, action, expected, actual, disposition
+- [x] Screenshot of events list with at least one event visible
+- [x] Console output (no errors)
+- [x] Network check (API calls succeed, no 4xx/5xx)
+- [x] `metadata.json` with route, role, action, expected, actual, disposition
 
 ## Disposition
-- Result: _pending_
-- Set by: _pending Codex PM review_
-- Timestamp: —
-- Reason: —
+- Result: PASS
+- Set by: Codex PM
+- Timestamp: 2026-04-13
+- Reason: Claude evidence plus Gemini 3.1 Pro evaluator PASS/HIGH; /dashboard net::ERR_ABORTED accepted as auth/navigation abort, not /events route failure.
 
 ## Fix Attempts
 _None yet_
@@ -81,3 +81,4 @@ _None yet_
 | 2026-04-13 | Claude Code | Created DRAFT packet | — |
 | 2026-04-13 | Claude Code | Amendment: Gemini 3.1 Pro critique — replaced "reasonable load time" with 5-second threshold; added future packet notes | — |
 | 2026-04-13 | Codex PM | Frozen after Gemini 3.1 Pro re-critique returned FREEZE_READY | Re-critique command: `cat /tmp/gemini-recritique-prompt.md \| gemini -m gemini-3.1-pro-preview` |
+| 2026-04-13 | Codex PM | Final disposition after Gemini 3.1 Pro evaluation | PASS |

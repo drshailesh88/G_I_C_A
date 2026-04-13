@@ -1,0 +1,27 @@
+checkpoint_id: EVT-LIST-001
+exact_command_used: "cat /tmp/gemini-evt-list-001-eval.md | gemini -m gemini-3.1-pro-preview"
+requested_model: "gemini-3.1-pro-preview"
+fallback_used: false
+disposition: "PASS"
+confidence: "HIGH"
+evidence_review:
+  screenshot: "PASS — Screenshot clearly shows the 'Events' page loaded with 7 event cards visible, displaying names, dates, and venues in a clean UI."
+  console: "PASS — Console log contains 0 errors. The only entries are warnings from Clerk (dev keys, deprecated prop) which are expected in local development and not application errors."
+  network: "PASS — The /events route loaded successfully. The net::ERR_ABORTED on /dashboard is a client-side navigation abort, typical during Next.js/Clerk auth redirect flows, and is not a 4xx/5xx server error."
+  metadata: "PASS — Metadata accurately reflects the state of the screenshot and other evidence files."
+  test_output: "PASS — Test output log systematically details the successful verification of all preconditions and steps."
+checks:
+  events_route_loaded: "PASS"
+  event_visible: "PASS"
+  event_name_and_date_visible: "PASS"
+  content_within_5_seconds: "PASS"
+  no_spinner_remaining: "PASS"
+  no_console_errors: "PASS"
+  no_network_4xx_5xx: "PASS"
+  no_visible_secrets: "PASS"
+  no_raw_utc_timestamp: "PASS"
+network_abort_assessment: |
+  The `net::ERR_ABORTED` on `GET http://localhost:4000/dashboard` is acceptable. This error typically occurs when the browser cancels an in-flight request because a new navigation has started. Given that the user was authenticating via Clerk, it's highly likely the auth middleware initiated a redirect, causing the browser to abort the initial request. Since it's not a server-side failure (like a 500) or a client error (like a 404), and the target `/events` route successfully loaded, this does not constitute a failure for the EVT-LIST-001 test case.
+findings: |
+  All evidence aligns with the expected behavior for EVT-LIST-001. The /events page loads successfully and displays event cards correctly. Dates are formatted in a user-friendly manner (e.g., "Oct 10-12, 2026") rather than raw UTC strings. The console is free of application errors, showing only expected third-party development warnings. The network abort on /dashboard is a harmless side-effect of the auth redirect flow. The screenshot confirms the UI is fully functional and matches the test's requirements. No hardcoded secrets are visible.
+final_recommendation: "PASS"

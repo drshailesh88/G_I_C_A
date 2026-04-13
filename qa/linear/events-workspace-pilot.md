@@ -28,10 +28,13 @@ Expected evidence:
 - Network check (no 4xx/5xx)
 - metadata.json
 
-Attempt count: 0/2
+Attempt count: 1/2
 Failures: —
 Fix commits: —
-Disposition: READY
+Disposition: PASS
+Evidence: qa/evidence/events/EVT-LIST-001/attempt-1/
+Evaluator model: gemini-3.1-pro-preview
+Fallback used: false
 ```
 
 ---
@@ -58,10 +61,12 @@ Expected evidence:
 - Network trace (workspace API includes correct eventId)
 - metadata.json
 
-Attempt count: 0/2
+Attempt count: 1/2
 Failures: —
 Fix commits: —
-Disposition: READY
+Disposition: BLOCKED_AUTH_HARNESS
+Evidence: qa/evidence/events/EVT-LIST-003/attempt-1/
+Note: No Gemini product evaluation was run because packet preconditions were not met.
 ```
 
 ---
@@ -272,8 +277,8 @@ PM DECISIONS APPLIED:
 
 | Packet ID | Type | Role(s) | Status | PM Decisions Applied |
 |-----------|------|---------|--------|---------------------|
-| EVT-LIST-001 | Happy Path | Super Admin | READY | Gemini critique: 5s threshold |
-| EVT-LIST-003 | Navigation | Super Admin | READY | Gemini critique: 5s timeout |
+| EVT-LIST-001 | Happy Path | Super Admin | PASS | Gemini critique: 5s threshold |
+| EVT-LIST-003 | Navigation | Super Admin | BLOCKED_AUTH_HARNESS | Gemini critique: 5s timeout |
 | EVT-CREATE-001 | Happy Path | Super Admin | READY | — |
 | EVT-CREATE-002 | Validation | Super Admin | READY | Required fields + date validation + server-side bypass + XSS/SQLi |
 | EVT-CREATE-006 | Role Enforcement | Ops, Read-only | READY | Ops access + Read-only form behavior + server-side bypass |

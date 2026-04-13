@@ -1,0 +1,4 @@
+[GET] http://localhost:4000/dashboard => [FAILED] net::ERR_ABORTED
+[POST] https://apparent-glider-6.clerk.accounts.dev/v1/environment?__clerk_api_version=2025-11-10&_clerk_js_version=5.125.7&_method=PATCH&__clerk_db_jwt=[REDACTED] => [200] 
+[GET] https://apparent-glider-6.clerk.accounts.dev/v1/client?__clerk_api_version=2025-11-10&_clerk_js_version=5.125.7&__clerk_db_jwt=[REDACTED] => [200] 
+[POST] http://localhost:4000/events => [200] OK
