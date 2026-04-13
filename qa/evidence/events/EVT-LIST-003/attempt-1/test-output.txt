@@ -1,0 +1,32 @@
+EVT-LIST-003 Execution Attempt 1
+=================================
+Tool: agent-browser v0.25.3
+Session: gemindia-evt-list-003
+Timestamp: 2026-04-13T01:04:00Z
+
+Precondition Check:
+  - Dev server on port 4000: PASS (node PID 97016 listening, curl returns HTTP 307)
+  - Super Admin auth in agent-browser: FAIL (no Clerk session)
+  - At least one event exists: UNKNOWN (cannot reach /events without auth)
+  - Events list loaded: FAIL (redirected to /login)
+
+Execution Steps:
+  1. agent-browser --session gemindia-evt-list-003 close --all -> "No active sessions"
+  2. agent-browser --session gemindia-evt-list-003 network requests --clear -> OK
+  3. agent-browser --session gemindia-evt-list-003 open http://localhost:4000/events -> ERR_CONNECTION_REFUSED
+  4. agent-browser --session gemindia-evt-list-003 open http://127.0.0.1:4000/events -> Redirected to /login
+  5. agent-browser --session gemindia-evt-list-003 snapshot -i --urls -> Shows "GEM India" heading only
+  6. Screenshot captured: login-page.png -> "Contact your admin for access"
+
+Root Cause:
+  agent-browser launches a fresh Chrome profile with no Clerk session cookies.
+  Clerk middleware detects unauthenticated request, initiates handshake loop
+  (reason: dev-browser-missing), and after multiple failed handshakes redirects
+  to /login. The login page shows "Contact your admin for access" — organization-
+  only mode with no public sign-in form.
+
+  The network trace shows 4+ Clerk handshake redirect cycles before final redirect
+  to /login, confirming the session is completely absent.
+
+Result: BLOCKED
+Reason: agent-browser Super Admin auth/session unavailable

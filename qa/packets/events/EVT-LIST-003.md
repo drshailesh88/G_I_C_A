@@ -5,7 +5,7 @@
 | PACKET_ID | EVT-LIST-003 |
 | MODULE | events |
 | DATE | 2026-04-13 |
-| STATUS | READY |
+| STATUS | BLOCKED |
 
 ## Checkpoint
 
@@ -64,10 +64,10 @@
 - [ ] `metadata.json` with route, role, action, expected, actual, disposition
 
 ## Disposition
-- Result: _pending_
-- Set by: _pending Codex PM review_
-- Timestamp: —
-- Reason: —
+- Result: BLOCKED
+- Set by: Codex PM
+- Timestamp: 2026-04-13
+- Reason: agent-browser has no Clerk Super Admin session; /events redirects to /login; packet preconditions not met.
 
 ## Fix Attempts
 _None yet_
@@ -82,3 +82,4 @@ _None yet_
 | 2026-04-13 | Claude Code | Created DRAFT packet | — |
 | 2026-04-13 | Claude Code | Amendment: Gemini 3.1 Pro critique — replaced "no infinite spinner" with 5-second explicit timeout | — |
 | 2026-04-13 | Codex PM | Frozen after Gemini 3.1 Pro re-critique returned FREEZE_READY | Re-critique command: `cat /tmp/gemini-recritique-prompt.md \| gemini -m gemini-3.1-pro-preview` |
+| 2026-04-13 | Codex PM | Attempt 1 blocked before product execution due agent-browser auth/session unavailable | BLOCKED_AUTH_HARNESS |

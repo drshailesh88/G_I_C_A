@@ -1,0 +1,32 @@
+{
+  "checkpoint_id": "EVT-LIST-003",
+  "module": "events",
+  "route": "/events -> /events/[id]",
+  "role": "org:super_admin",
+  "action": "Click event in list to navigate to Event Workspace (M21)",
+  "expected": "Events list loads, click navigates to /events/[eventId], workspace shows selected event data",
+  "actual": "BLOCKED — agent-browser has no authenticated Clerk session. Navigation to /events triggers Clerk handshake loop (dev-browser-missing) and redirects to /login. Login page shows 'Contact your admin for access' with no sign-in form available to agent-browser.",
+  "timestamp": "2026-04-13T01:05:00Z",
+  "agent": "claude-code",
+  "evidence_files": [
+    "events-list-before-click.png",
+    "login-page.png",
+    "console.txt",
+    "network.txt",
+    "test-output.txt"
+  ],
+  "large_artifacts": {
+    "events-list-before-click.png": {
+      "path": "qa/evidence/events/EVT-LIST-003/attempt-1/events-list-before-click.png",
+      "captured_at": "2026-04-13T01:04:38Z"
+    },
+    "login-page.png": {
+      "path": "qa/evidence/events/EVT-LIST-003/attempt-1/login-page.png",
+      "captured_at": "2026-04-13T01:04:38Z"
+    }
+  },
+  "disposition": "BLOCKED",
+  "blocked_reason": "agent-browser Super Admin auth/session unavailable. Clerk dev-browser handshake fails repeatedly (no session cookies in agent-browser Chrome profile). Login page shows 'Contact your admin for access' — no interactive sign-in form available for agent automation.",
+  "network_log_redacted": true,
+  "redaction_reason": "Clerk auth/session query parameters removed before commit."
+}
