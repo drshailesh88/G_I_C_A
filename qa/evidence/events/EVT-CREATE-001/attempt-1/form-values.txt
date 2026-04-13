@@ -1,0 +1,58 @@
+# EVT-CREATE-001 — DOM Field Value Verification
+# Method: agent-browser eval (JavaScript DOM inspection)
+# Date: 2026-04-13
+# Route: /events/new
+# Role: Super Admin
+
+## Field-by-Field Results
+
+### Event Name
+- Element: <INPUT type="text" name="name" required>
+- Value: "" (empty string)
+- Placeholder: "GEM India Summit 2026"
+- Required: true
+- Verdict: EMPTY — placeholder is example text, not an actual value
+
+### Start Date
+- Element: <INPUT type="date" name="startDate" required>
+- Value: "" (empty string)
+- Placeholder: "" (none — native date input)
+- Required: true
+- Verdict: EMPTY — no date preselected
+
+### End Date
+- Element: <INPUT type="date" name="endDate" required>
+- Value: "" (empty string)
+- Placeholder: "" (none — native date input)
+- Required: true
+- Verdict: EMPTY — no date preselected
+
+### Venue
+- Element: <INPUT type="text" name="venueName" required>
+- Value: "" (empty string)
+- Placeholder: "Pragati Maidan, New Delhi"
+- Required: true
+- Verdict: EMPTY — placeholder is example text, not an actual value
+
+### Description
+- Element: <TEXTAREA name="description">
+- Value: "" (empty string)
+- Placeholder: "Enter event description..."
+- Required: false
+- Verdict: EMPTY — placeholder is instructional text, not an actual value
+
+## Summary
+
+| Field       | Tag      | Name        | Value | Placeholder                    | Required | Stale? |
+|-------------|----------|-------------|-------|--------------------------------|----------|--------|
+| Event Name  | INPUT    | name        | ""    | "GEM India Summit 2026"        | yes      | NO     |
+| Start Date  | INPUT    | startDate   | ""    | (none)                         | yes      | NO     |
+| End Date    | INPUT    | endDate     | ""    | (none)                         | yes      | NO     |
+| Venue       | INPUT    | venueName   | ""    | "Pragati Maidan, New Delhi"    | yes      | NO     |
+| Description | TEXTAREA | description | ""    | "Enter event description..."   | no       | NO     |
+
+## Conclusion
+- field_values_verified_empty: true
+- placeholder_text_not_actual_values: true
+- All 5 fields have empty string values. Placeholders contain example/instructional text only.
+- No stale event data from any existing event is prefilled.

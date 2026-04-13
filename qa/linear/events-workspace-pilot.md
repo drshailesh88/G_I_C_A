@@ -98,10 +98,15 @@ Expected evidence:
 - Network check (no failed API calls on load)
 - metadata.json
 
-Attempt count: 0/2
+Attempt count: 1/2
 Failures: —
 Fix commits: —
-Disposition: READY
+Disposition: PASS (verified)
+Evidence: qa/evidence/events/EVT-CREATE-001/attempt-1/
+Evaluator model: gemini-3.1-pro-preview
+Fallback used: false
+Network evidence: sanitized (Clerk tokens redacted); Gemini accepted redaction as sufficient.
+Supplemental evidence: form-values.txt proved placeholders were not actual field values (DOM .value inspection).
 ```
 
 ---
@@ -285,7 +290,7 @@ PM DECISIONS APPLIED:
 |-----------|------|---------|--------|---------------------|
 | EVT-LIST-001 | Happy Path | Super Admin | PASS | Gemini critique: 5s threshold |
 | EVT-LIST-003 | Navigation | Super Admin | PASS | Gemini critique: 5s timeout |
-| EVT-CREATE-001 | Happy Path | Super Admin | READY | — |
+| EVT-CREATE-001 | Happy Path | Super Admin | PASS | Gemini 3.1 Pro: PASS/HIGH; labels/visibility/redaction accepted |
 | EVT-CREATE-002 | Validation | Super Admin | READY | Required fields + date validation + server-side bypass + XSS/SQLi |
 | EVT-CREATE-006 | Role Enforcement | Ops, Read-only | READY | Ops access + Read-only form behavior + server-side bypass |
 | EVT-WS-001 | Happy Path | Super Admin | READY | — |

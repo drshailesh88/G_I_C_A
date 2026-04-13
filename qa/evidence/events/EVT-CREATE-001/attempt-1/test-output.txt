@@ -1,0 +1,91 @@
+# EVT-CREATE-001 Test Execution Output
+# Agent: Claude Code (executor/evidence collector)
+# Date: 2026-04-13
+# Profile: Super Admin (persistent browser profile)
+
+## Step 1: Dev server check
+- Port 4000: RUNNING (HTTP 307 redirect to Clerk auth on unauthenticated root)
+
+## Step 2: Navigate to /events
+- URL: http://localhost:4000/events
+- Auth: Super Admin session active (profile-based)
+- Result: Events list loaded successfully
+- Events visible: 7 events (Branding QA E2E, Program QA E2E, Registration QA E2E, Certificates QA E2E, Accommodation QA E2E, Transport QA E2E, GEM India 2026)
+
+## Step 3: Screenshot events list
+- File: events-list-before-create.png
+- Status: Captured
+
+## Step 4: Click Create CTA
+- Button label: "New" (link element)
+- Ref: @e2
+- Result: Navigated to /events/new
+
+## Step 5: Create Event form inspection
+- Heading: "Create Event" (h1)
+- Fields observed:
+  - Event Name (textbox, required, value: "")
+  - Start Date (spinbutton group: Day/Month/Year, values: 0/0/0)
+  - End Date (spinbutton group: Day/Month/Year, values: 0/0/0)
+  - Venue (textbox, required, value: "")
+  - Description (textbox, value: "")
+  - Modules ON/OFF toggles (7 buttons)
+- All fields empty/default: YES
+- No stale event data prefilled: CONFIRMED
+- Submit button: "Save" (button @e15)
+- Cancel button: "Cancel" (link @e14, href=/events)
+
+## Step 6: Screenshot create form
+- File: create-event-form.png
+- Status: Captured
+
+## Step 7: Click Cancel
+- First click did not navigate (element below viewport fold)
+- After scroll down 500px, click succeeded
+- Result URL: http://localhost:4000/events
+- Events list visible again
+
+## Step 8: Screenshot after cancel
+- File: after-cancel-back-to-events.png
+- Status: Captured
+
+## Step 9: Console check
+- Errors: NONE
+- Warnings: Clerk dev keys warning (expected in dev), deprecated prop warning (informational)
+- No stack traces, secrets, or debug dumps
+
+## Step 10: Network check
+- 4xx errors: 1 (favicon.ico 404 — non-functional, expected)
+- 5xx errors: 0
+- All functional API calls: 200
+- No failed requests on form load or cancel navigation
+
+## Supplemental Evidence (requested by PM)
+
+### Full-page screenshot
+- File: create-event-form-full.png
+- Method: agent-browser screenshot --full
+- Status: Captured (shows entire form including bottom modules, Save, and Cancel)
+
+### DOM field value verification
+- Method: agent-browser eval (JavaScript DOM inspection of .value and .placeholder)
+- File: form-values.txt
+
+| Field       | Tag      | name attr   | .value | .placeholder                 | required |
+|-------------|----------|-------------|--------|------------------------------|----------|
+| Event Name  | INPUT    | name        | ""     | "GEM India Summit 2026"      | yes      |
+| Start Date  | INPUT    | startDate   | ""     | (none — native date input)   | yes      |
+| End Date    | INPUT    | endDate     | ""     | (none — native date input)   | yes      |
+| Venue       | INPUT    | venueName   | ""     | "Pragati Maidan, New Delhi"  | yes      |
+| Description | TEXTAREA | description | ""     | "Enter event description..." | no       |
+
+- field_values_verified_empty: true
+- placeholder_text_not_actual_values: true
+- All .value properties are empty strings. Placeholders contain example/instructional text only.
+- No stale event data from any existing event is prefilled in any field.
+
+### Secret scan
+- Command: rg -n [redaction-pattern-list] qa/evidence/events/EVT-CREATE-001/attempt-1
+- Result: No matches — evidence directory is clean.
+
+## Overall: All checks PASS

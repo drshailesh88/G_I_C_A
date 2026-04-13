@@ -1,0 +1,42 @@
+{
+  "checkpoint_id": "EVT-CREATE-001",
+  "module": "events",
+  "route": "/events/new",
+  "role": "org:super_admin",
+  "action": "Navigate to Create Event form, verify fields, click Cancel",
+  "expected": "Create Event form renders with event name, dates, venue, description fields; all empty; Cancel returns to /events; no errors",
+  "actual": "PASS — Form rendered correctly with all required fields empty (verified via DOM inspection). Cancel navigated back to /events. No console errors. No 5xx network errors.",
+  "timestamp": "2026-04-13T00:00:00Z",
+  "agent": "claude-code",
+  "evidence_files": [
+    "events-list-before-create.png",
+    "create-event-form.png",
+    "create-event-form-full.png",
+    "after-cancel-back-to-events.png",
+    "console.txt",
+    "network.txt",
+    "test-output.txt",
+    "form-values.txt"
+  ],
+  "large_artifacts": {
+    "events-list-before-create.png": {
+      "path": "qa/evidence/events/EVT-CREATE-001/attempt-1/events-list-before-create.png",
+      "captured_at": "2026-04-13T00:00:00Z"
+    },
+    "create-event-form.png": {
+      "path": "qa/evidence/events/EVT-CREATE-001/attempt-1/create-event-form.png",
+      "captured_at": "2026-04-13T00:00:00Z"
+    },
+    "create-event-form-full.png": {
+      "path": "qa/evidence/events/EVT-CREATE-001/attempt-1/create-event-form-full.png",
+      "captured_at": "2026-04-13T00:00:00Z"
+    },
+    "after-cancel-back-to-events.png": {
+      "path": "qa/evidence/events/EVT-CREATE-001/attempt-1/after-cancel-back-to-events.png",
+      "captured_at": "2026-04-13T00:00:00Z"
+    }
+  },
+  "field_values_verified_empty": true,
+  "placeholder_text_not_actual_values": true,
+  "disposition": "PASS"
+}

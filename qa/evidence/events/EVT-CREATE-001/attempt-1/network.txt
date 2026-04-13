@@ -1,0 +1,37 @@
+# Network requests captured during EVT-CREATE-001 execution
+# Captured: 2026-04-13
+# Auth/session values redacted per QA sanitization policy
+
+## Page Load: /events
+GET http://localhost:4000/events (Document) 200
+
+## Static Assets (all 200)
+GET http://localhost:4000/_next/static/chunks/src_app_globals_0p2ml0n.css (Stylesheet) 200
+GET http://localhost:4000/_next/static/chunks/[turbopack]_browser_dev_hmr-client_hmr-client_ts_*.js (Script) 200
+GET http://localhost:4000/_next/static/chunks/node_modules_*.js (Script) 200 [multiple]
+GET http://localhost:4000/_next/static/chunks/src_app_(app)_events_page_tsx_*.js (Script) 200
+
+## Clerk Auth (values redacted)
+POST https://apparent-glider-6.clerk.accounts.dev/v1/environment?__clerk_db_jwt=[REDACTED] (Fetch) 200
+GET https://apparent-glider-6.clerk.accounts.dev/v1/client?__clerk_db_jwt=[REDACTED] (Fetch) 200
+GET https://apparent-glider-6.clerk.accounts.dev/npm/@clerk/clerk-js@5.125.7/dist/clerk.browser.js (Script) 200
+GET https://apparent-glider-6.clerk.accounts.dev/npm/@clerk/clerk-js@5.125.7/dist/framework_clerk.browser_*.js (Script) 200
+GET https://apparent-glider-6.clerk.accounts.dev/npm/@clerk/clerk-js@5.125.7/dist/vendors_clerk.browser_*.js (Script) 200
+GET https://apparent-glider-6.clerk.accounts.dev/npm/@clerk/clerk-js@5.125.7/dist/ui-common_clerk.browser_*.js (Script) 200
+
+## RSC Navigation: /events/new
+POST http://localhost:4000/events (Fetch) 200
+GET http://localhost:4000/events/new?_rsc=oi7u0 (Fetch) 200
+GET http://localhost:4000/_next/static/chunks/src_app_(app)_events_new_page_tsx_*.js (Script) 200
+
+## Fonts
+GET http://localhost:4000/__nextjs_font/geist-latin.woff2 (Font) 200
+
+## Other
+GET http://localhost:4000/favicon.ico (Other) 404 [expected - no favicon configured]
+
+## Summary
+- Total 4xx: 1 (favicon.ico only - not a functional error)
+- Total 5xx: 0
+- All functional requests: 200
+- No failed API calls on form load or cancel flow
