@@ -26,15 +26,39 @@ export function CreateEventForm() {
     Object.fromEntries(MODULE_KEYS.map((k) => [k, true])),
   );
 
+  function validateRequired(formData: FormData): Record<string, string[]> {
+    const errors: Record<string, string[]> = {};
+    if (!formData.get('name')?.toString().trim()) {
+      errors.name = ['Event name is required'];
+    }
+    if (!formData.get('startDate')?.toString().trim()) {
+      errors.startDate = ['Start date is required'];
+    }
+    if (!formData.get('endDate')?.toString().trim()) {
+      errors.endDate = ['End date is required'];
+    }
+    if (!formData.get('venueName')?.toString().trim()) {
+      errors.venueName = ['Venue is required'];
+    }
+    return errors;
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true);
     setError('');
     setFieldErrors({});
 
     const form = e.currentTarget;
     const formData = new FormData(form);
     formData.set('moduleToggles', JSON.stringify(modules));
+
+    const clientErrors = validateRequired(formData);
+    if (Object.keys(clientErrors).length > 0) {
+      setFieldErrors(clientErrors);
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const result = await createEvent(formData);
@@ -70,7 +94,7 @@ export function CreateEventForm() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-5">
+      <form onSubmit={handleSubmit} noValidate className="mt-6 flex flex-col gap-5">
         {/* Event Name */}
         <div>
           <label htmlFor="name" className="mb-1 block text-sm font-medium text-text-primary">
@@ -80,7 +104,6 @@ export function CreateEventForm() {
             id="name"
             name="name"
             type="text"
-            required
             placeholder="GEM India Summit 2026"
             className={`w-full rounded-lg border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent ${fieldErrors.name ? 'border-error' : 'border-border'}`}
           />
@@ -99,7 +122,6 @@ export function CreateEventForm() {
               id="startDate"
               name="startDate"
               type="date"
-              required
               className={`w-full rounded-lg border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent ${fieldErrors.startDate ? 'border-error' : 'border-border'}`}
             />
             {fieldErrors.startDate && (
@@ -114,7 +136,6 @@ export function CreateEventForm() {
               id="endDate"
               name="endDate"
               type="date"
-              required
               className={`w-full rounded-lg border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent ${fieldErrors.endDate ? 'border-error' : 'border-border'}`}
             />
             {fieldErrors.endDate && (
@@ -132,7 +153,6 @@ export function CreateEventForm() {
             id="venueName"
             name="venueName"
             type="text"
-            required
             placeholder="Pragati Maidan, New Delhi"
             className={`w-full rounded-lg border bg-surface px-4 py-3 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent ${fieldErrors.venueName ? 'border-error' : 'border-border'}`}
           />
