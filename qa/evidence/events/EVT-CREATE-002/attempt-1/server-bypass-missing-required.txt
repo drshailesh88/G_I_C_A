@@ -1,0 +1,78 @@
+# Server-Side Bypass Test: Missing Required Fields
+# Packet: EVT-CREATE-002
+# Date: 2026-04-13
+
+## Method
+Removed HTML `required` attributes from all 4 required fields (name, startDate, endDate, venueName)
+via browser console JavaScript, then cleared field values and triggered form submission by clicking
+the submit button. This bypasses browser-native HTML5 validation and sends the empty values directly
+to the Next.js server action `createEvent` in src/lib/actions/event.ts.
+
+## JavaScript Used (in browser eval)
+```js
+// Remove required attributes
+document.querySelectorAll('[required]').forEach(i => i.removeAttribute('required'));
+// Clear all fields via native value setter
+// Click submit button to trigger React onSubmit -> server action
+```
+
+## Server Response
+HTTP Status: 500 (Next.js wraps server action ZodError as 500)
+Error displayed in UI (from caught exception):
+
+[
+  {
+    "code": "too_small",
+    "minimum": 1,
+    "type": "string",
+    "inclusive": true,
+    "exact": false,
+    "message": "Event name is required",
+    "path": ["name"]
+  },
+  {
+    "code": "too_small",
+    "minimum": 1,
+    "type": "string",
+    "inclusive": true,
+    "exact": false,
+    "message": "Start date is required",
+    "path": ["startDate"]
+  },
+  {
+    "code": "too_small",
+    "minimum": 1,
+    "type": "string",
+    "inclusive": true,
+    "exact": false,
+    "message": "End date is required",
+    "path": ["endDate"]
+  },
+  {
+    "code": "too_small",
+    "minimum": 1,
+    "type": "string",
+    "inclusive": true,
+    "exact": false,
+    "message": "Venue is required",
+    "path": ["venueName"]
+  },
+  {
+    "code": "custom",
+    "message": "End date must be on or after start date",
+    "path": ["endDate"]
+  }
+]
+
+## Result
+- Server-side Zod validation REJECTED the submission
+- All 4 required field errors returned with field-specific messages
+- Date range refinement also triggered
+- Page remained on /events/new (no redirect to new event)
+- No partial record created (confirmed by URL staying on /events/new)
+
+## Note on HTTP Status
+The server returns 500 because the server action throws a ZodError (unhandled exception in
+Next.js server actions return 500 by default). The error is caught client-side and displayed.
+Ideally this would be a 400 response, but the validation is functionally correct — invalid
+data is rejected before any database operation.

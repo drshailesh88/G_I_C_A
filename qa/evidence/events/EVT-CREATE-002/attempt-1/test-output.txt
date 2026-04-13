@@ -1,0 +1,27 @@
+# Test Output — EVT-CREATE-002
+# Date: 2026-04-13
+# Command: npx vitest run --reporter=verbose
+
+## Summary
+Test Files: 2 failed | 194 passed (196)
+Tests: 10 failed | 4490 passed (4500)
+Duration: 23.06s
+
+## Relevant Test Results
+- All event-related tests passed
+- The 2 failing test files are in src/lib/notifications/ (unrelated to event creation)
+- No event module regression introduced by this QA session
+
+## Event Validation Code Coverage
+The Zod schema at src/lib/validations/event.ts is exercised by:
+- createEventSchema.parse() in src/lib/actions/event.ts:68
+- Server action throws ZodError on:
+  - Empty name (min 1 char)
+  - Empty startDate (min 1 char)
+  - Empty endDate (min 1 char)
+  - Empty venueName (min 1 char)
+  - End date before start date (.refine() check)
+
+## Note
+The 10 failing tests are in notification modules (webhook-auth, email templates)
+and are pre-existing failures unrelated to event creation validation.

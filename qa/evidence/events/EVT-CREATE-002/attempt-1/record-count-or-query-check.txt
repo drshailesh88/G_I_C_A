@@ -1,0 +1,32 @@
+# Record Persistence Check — EVT-CREATE-002
+# Date: 2026-04-13
+
+## Method
+Verified no invalid/partial/orphaned records were created by:
+
+1. URL check: After every invalid submission, the page remained at /events/new
+   (successful creation redirects to /events/{id} via router.push in the form component).
+   No redirect occurred on any invalid submission.
+
+2. Network check: Server action calls returned HTTP 500 (ZodError thrown before DB insert).
+   The Zod validation at src/lib/actions/event.ts:68 (`createEventSchema.parse(raw)`) runs
+   BEFORE the database insert at line 72-91. If parse() throws, the insert never executes.
+
+3. Code path analysis: The createEvent server action is structured as:
+   - Line 46-47: Auth check
+   - Line 50-53: JSON parse moduleToggles
+   - Line 68: createEventSchema.parse(raw) — THROWS on invalid data
+   - Lines 72-91: db.insert(events) — ONLY reached if parse succeeds
+   No try/catch wraps the insert, so a ZodError at line 68 exits the function immediately.
+
+4. XSS/SQLi payloads were combined with invalid date range, so the Zod refine check
+   rejected the submission before any database operation could occur.
+
+## Limitation
+Cannot directly query the database from the browser to confirm zero new records.
+However, the code path analysis and HTTP 500 responses confirm the database insert
+is never reached when Zod validation fails. The architectural guarantee is that
+`createEventSchema.parse()` is a blocking call before `db.insert()`.
+
+## Conclusion
+No partial, orphaned, or invalid records were created during this test session.

@@ -5,7 +5,7 @@
 | PACKET_ID | EVT-CREATE-002 |
 | MODULE | events |
 | DATE | 2026-04-13 |
-| STATUS | READY |
+| STATUS | FAIL |
 | AMENDED | 2026-04-13 — PM decisions applied: required fields frozen, date validation resolved |
 
 ## Checkpoint
@@ -93,13 +93,17 @@ Optional fields (not required for creation): description, address/city/map URL, 
 - [ ] `metadata.json` with route, role, action, expected, actual, disposition
 
 ## Disposition
-- Result: _pending_
-- Set by: _pending Codex PM review_
-- Timestamp: —
-- Reason: —
+- Result: FAIL
+- Set by: Codex PM
+- Timestamp: 2026-04-13
+- Reason: Attempt 1 proves server-side Zod rejects invalid data before persistence, but server action returns HTTP 500 instead of required 400/validation response; UI renders raw Zod JSON rather than clear field-specific validation messages; empty/partial screenshots do not show all required validation errors visible.
 
 ## Fix Attempts
-_None yet_
+### Attempt 1
+- Executor: Claude Code
+- Result: FAIL
+- Evidence: qa/evidence/events/EVT-CREATE-002/attempt-1/
+- Findings: Server-side Zod validation correctly rejects invalid data before DB insert. However: (1) server action returns HTTP 500 instead of 400; (2) UI renders raw Zod error JSON instead of field-specific validation messages; (3) empty/partial form submissions rely on HTML5 required attributes showing one error at a time via browser tooltip, not all 4 field errors simultaneously.
 
 ## Linear Issue
 - Issue ID: _to be created_
@@ -112,3 +116,4 @@ _None yet_
 | 2026-04-13 | Claude Code | Amendment: required fields frozen, date validation resolved per PM decisions | — |
 | 2026-04-13 | Claude Code | Amendment: Gemini 3.1 Pro critique — added server-side bypass check, XSS/SQLi payload tests, strengthened evidence requirements | — |
 | 2026-04-13 | Codex PM | Frozen after Gemini 3.1 Pro re-critique returned FREEZE_READY | Re-critique command: `cat /tmp/gemini-recritique-prompt.md \| gemini -m gemini-3.1-pro-preview` |
+| 2026-04-13 | Codex PM | Attempt 1 failed validation UX/server response requirements | FAIL |

@@ -136,10 +136,17 @@ Expected evidence:
 - Network check (no API call on invalid, AND 400 with Zod errors on bypass)
 - metadata.json
 
-Attempt count: 0/2
-Failures: —
+Attempt count: 1/2
+Failures: 1
 Fix commits: —
-Disposition: READY
+Disposition: FAIL
+Evidence: qa/evidence/events/EVT-CREATE-002/attempt-1/
+
+FAILURE SUMMARY:
+1. Server-side invalid submissions return 500 instead of 400/validation response.
+2. Raw Zod JSON is shown to user.
+3. Empty/partial validation evidence does not show all field-specific errors visible.
+4. No invalid records appear to be persisted, so validation guard exists but response/UX is wrong.
 
 PM DECISIONS APPLIED:
 - Required fields: event name, start date, end date, venue name
@@ -291,7 +298,7 @@ PM DECISIONS APPLIED:
 | EVT-LIST-001 | Happy Path | Super Admin | PASS | Gemini critique: 5s threshold |
 | EVT-LIST-003 | Navigation | Super Admin | PASS | Gemini critique: 5s timeout |
 | EVT-CREATE-001 | Happy Path | Super Admin | PASS | Gemini 3.1 Pro: PASS/HIGH; labels/visibility/redaction accepted |
-| EVT-CREATE-002 | Validation | Super Admin | READY | Required fields + date validation + server-side bypass + XSS/SQLi |
+| EVT-CREATE-002 | Validation | Super Admin | FAIL | Required fields + date validation + server-side bypass + XSS/SQLi |
 | EVT-CREATE-006 | Role Enforcement | Ops, Read-only | READY | Ops access + Read-only form behavior + server-side bypass |
 | EVT-WS-001 | Happy Path | Super Admin | READY | — |
 | EVT-WS-003 | Invariant (eventId) | Super Admin | READY | Gemini critique: precise eventId wording |

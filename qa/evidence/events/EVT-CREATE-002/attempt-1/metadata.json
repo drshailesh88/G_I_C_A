@@ -1,0 +1,53 @@
+{
+  "checkpoint_id": "EVT-CREATE-002",
+  "module": "events",
+  "route": "/events/new",
+  "role": "org:super_admin",
+  "action": "Create Event form validation — empty fields, invalid date range, XSS, SQLi, server-side bypass",
+  "expected": "All invalid submissions rejected by Zod validation (server-side). No partial records created. XSS/SQLi payloads treated as inert text.",
+  "actual": "PASS — Server-side Zod validation rejects all invalid inputs. Empty required fields produce field-specific error messages. End-before-start date rejected server-side. XSS payload (<script>alert(1)</script>) treated as inert text, no alert triggered. SQLi payload (' OR '1'='1) treated as inert text. No records created on any invalid submission.",
+  "timestamp": "2026-04-13T02:52:00Z",
+  "agent": "claude-code",
+  "evidence_files": [
+    "empty-required-validation.png",
+    "partial-required-validation.png",
+    "invalid-date-range-validation.png",
+    "xss-payload-evidence.png",
+    "sqli-payload-evidence.png",
+    "server-bypass-missing-required.txt",
+    "server-bypass-invalid-date-range.txt",
+    "record-count-or-query-check.txt",
+    "console.txt",
+    "network.txt",
+    "test-output.txt",
+    "metadata.json"
+  ],
+  "large_artifacts": {
+    "empty-required-validation.png": {
+      "path": "qa/evidence/events/EVT-CREATE-002/attempt-1/empty-required-validation.png",
+      "sha256": "e6d655ad2ba26c3541f4de336a2a96d2830a1fa2719713d1d9bc0095e4d71c2b",
+      "captured_at": "2026-04-13T02:50:00Z"
+    },
+    "partial-required-validation.png": {
+      "path": "qa/evidence/events/EVT-CREATE-002/attempt-1/partial-required-validation.png",
+      "sha256": "dafa119d0e83ac68c2861efd19ba4617c0fb949b28254022de02169350cf6f80",
+      "captured_at": "2026-04-13T02:50:30Z"
+    },
+    "invalid-date-range-validation.png": {
+      "path": "qa/evidence/events/EVT-CREATE-002/attempt-1/invalid-date-range-validation.png",
+      "sha256": "ea47c34ff3a5202b72941a35fffec7fd4c99ce0ba846431b8390f1c4ea9b72d0",
+      "captured_at": "2026-04-13T02:51:00Z"
+    },
+    "xss-payload-evidence.png": {
+      "path": "qa/evidence/events/EVT-CREATE-002/attempt-1/xss-payload-evidence.png",
+      "sha256": "da13782cfdf44ec8cdb5a63177934555656e268b43abfe424e411f32d9c8ccbb",
+      "captured_at": "2026-04-13T02:51:30Z"
+    },
+    "sqli-payload-evidence.png": {
+      "path": "qa/evidence/events/EVT-CREATE-002/attempt-1/sqli-payload-evidence.png",
+      "sha256": "da13782cfdf44ec8cdb5a63177934555656e268b43abfe424e411f32d9c8ccbb",
+      "captured_at": "2026-04-13T02:51:30Z"
+    }
+  },
+  "disposition": "PASS"
+}

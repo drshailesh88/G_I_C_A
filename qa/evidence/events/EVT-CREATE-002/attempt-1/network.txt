@@ -1,0 +1,99 @@
+[883142F45FADAB550AFB92F25610FB2A] GET http://localhost:4000/events/new (Document)
+[883142F45FADAB550AFB92F25610FB2A] GET http://localhost:4000/events/new?__clerk_handshake=[REDACTED_JWT] (Document)
+[883142F45FADAB550AFB92F25610FB2A] GET http://localhost:4000/events/new (Document)
+[883142F45FADAB550AFB92F25610FB2A] GET http://localhost:4000/events/new?__clerk_handshake=[REDACTED_JWT] (Document)
+[883142F45FADAB550AFB92F25610FB2A] GET http://localhost:4000/events/new (Document)
+[883142F45FADAB550AFB92F25610FB2A] GET http://localhost:4000/events/new?__clerk_handshake=[REDACTED_JWT] (Document)
+[883142F45FADAB550AFB92F25610FB2A] GET http://localhost:4000/events/new (Document)
+[883142F45FADAB550AFB92F25610FB2A] GET http://localhost:4000/login?redirect_url=http%3A%2F%2Flocalhost%3A4000%2Fevents%2Fnew (Document)
+[883142F45FADAB550AFB92F25610FB2A] GET http://localhost:4000/login?__clerk_handshake=[REDACTED_JWT]&redirect_url=http%3A%2F%2Flocalhost%3A4000%2Fevents%2Fnew (Document)
+[883142F45FADAB550AFB92F25610FB2A] GET http://localhost:4000/login?redirect_url=http%3A%2F%2Flocalhost%3A4000%2Fevents%2Fnew (Document)
+[883142F45FADAB550AFB92F25610FB2A] GET http://localhost:4000/login?__clerk_handshake=[REDACTED_JWT]&redirect_url=http%3A%2F%2Flocalhost%3A4000%2Fevents%2Fnew (Document)
+[883142F45FADAB550AFB92F25610FB2A] GET http://localhost:4000/login?redirect_url=http%3A%2F%2Flocalhost%3A4000%2Fevents%2Fnew (Document)
+[883142F45FADAB550AFB92F25610FB2A] GET http://localhost:4000/login?__clerk_handshake=[REDACTED_JWT]&redirect_url=http%3A%2F%2Flocalhost%3A4000%2Fevents%2Fnew (Document)
+[883142F45FADAB550AFB92F25610FB2A] GET http://localhost:4000/login?redirect_url=http%3A%2F%2Flocalhost%3A4000%2Fevents%2Fnew (Document) 200
+[17071.2] GET http://localhost:4000/_next/static/chunks/src_app_globals_0p2ml0n.css (Stylesheet) 200
+[17071.3] GET http://localhost:4000/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0pyq27g._.js (Script) 200
+[17071.4] GET http://localhost:4000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js (Script) 200
+[17071.5] GET http://localhost:4000/_next/static/chunks/node_modules_next_dist_compiled_next-devtools_index_0553esy.js (Script) 200
+[17071.6] GET http://localhost:4000/_next/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_0p3wegg._.js (Script) 200
+[17071.7] GET http://localhost:4000/_next/static/chunks/node_modules_next_dist_compiled_03z8m4g._.js (Script) 200
+[17071.8] GET http://localhost:4000/_next/static/chunks/node_modules_next_dist_shared_lib_12au7sk._.js (Script) 200
+[17071.9] GET http://localhost:4000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js (Script) 200
+[17071.10] GET http://localhost:4000/_next/static/chunks/node_modules_next_dist_0nzbwyu._.js (Script) 200
+[17071.11] GET http://localhost:4000/_next/static/chunks/node_modules_next_router_0r7w7aj.js (Script) 200
+[17071.12] GET http://localhost:4000/_next/static/chunks/node_modules_%40sentry_core_build_esm_0b998jq._.js (Script) 200
+[17071.13] GET http://localhost:4000/_next/static/chunks/node_modules_%40sentry_browser_build_npm_esm_dev_0aure1t._.js (Script) 200
+[17071.14] GET http://localhost:4000/_next/static/chunks/node_modules_%40sentry-internal_browser-utils_build_esm_0ji9y8g._.js (Script) 200
+[17071.15] GET http://localhost:4000/_next/static/chunks/node_modules_0bww7vh._.js (Script) 200
+[17071.16] GET http://localhost:4000/_next/static/chunks/_03pz43w._.js (Script) 200
+[17071.17] GET http://localhost:4000/_next/static/chunks/_0rqeker._.js (Script) 200
+[17071.18] GET http://localhost:4000/_next/static/chunks/turbopack-_09zt5g-._.js (Script) 200
+[17071.19] GET http://localhost:4000/_next/static/chunks/node_modules_%40clerk_nextjs_dist_esm_app-router_0_1.0fz._.js (Script) 200
+[17071.20] GET http://localhost:4000/_next/static/chunks/node_modules_083j-87._.js (Script) 200
+[17071.21] GET http://localhost:4000/_next/static/chunks/src_app_layout_tsx_0b5ufm2._.js (Script) 200
+[17071.22] GET http://localhost:4000/_next/static/chunks/_0~m4fcu._.js (Script) 200
+[17071.23] GET http://localhost:4000/_next/static/chunks/src_app_global-error_tsx_02eow5h._.js (Script) 200
+[17071.50] GET http://localhost:4000/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0yjw1oe._.js (Script) 200
+[17071.51] GET http://localhost:4000/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0lw9-t6._.js (Script) 200
+[17071.57] POST http://localhost:4000/login?redirect_url=http%3A%2F%2Flocalhost%3A4000%2Fevents%2Fnew (Fetch) 200
+[A4473E26D65E759C4A7A68D004A811C1] GET blob:http://localhost:4000/1f1732b9-a515-4103-bacb-9d15073a1469 (Script)
+[17071.60] GET http://localhost:4000/favicon.ico (Other) 404
+[A3C068F9DD4B3B0D201B5A6546099397] GET blob:http://localhost:4000/40bc3864-574c-43f9-a87f-af992d7d34ff (Script)
+[17071.68] GET http://localhost:4000/dashboard?_rsc=yz0bd (Fetch) 200
+[17071.70] GET http://localhost:4000/_next/static/chunks/node_modules_0-u0t2z._.js (Script) 200
+[17071.71] GET http://localhost:4000/_next/static/chunks/src_04sxluh._.js (Script) 200
+[17071.72] GET http://localhost:4000/_next/static/chunks/src_app_(app)_layout_tsx_02eow5h._.js (Script) 200
+[17071.55] GET http://localhost:4000/__nextjs_font/geist-latin.woff2 (Font) 200
+[17071.73] GET http://localhost:4000/_next/static/chunks/_0uditi_._.js (Script) 200
+[17071.74] GET http://localhost:4000/_next/static/chunks/src_app_(app)_dashboard_page_tsx_0kpjqmj._.js (Script) 200
+[17071.75] GET http://localhost:4000/_next/static/chunks/node_modules_0-u0t2z._.js (Script) 304
+[17071.76] GET http://localhost:4000/_next/static/chunks/src_04sxluh._.js (Script) 304
+[17071.77] GET http://localhost:4000/_next/static/chunks/src_app_(app)_layout_tsx_02eow5h._.js (Script) 304
+[17071.78] GET http://localhost:4000/_next/static/chunks/_0uditi_._.js (Script) 304
+[17071.79] GET http://localhost:4000/_next/static/chunks/src_app_(app)_dashboard_page_tsx_0kpjqmj._.js (Script) 304
+[17071.81] POST http://localhost:4000/dashboard (Fetch) 500
+[17071.83] POST http://localhost:4000/dashboard (Fetch) 500
+[17071.84] POST http://localhost:4000/dashboard (Fetch) 500
+[17071.85] POST http://localhost:4000/dashboard (Fetch) 500
+[7522A02A6493ACB97C4F039D697AB8BF] GET http://localhost:4000/events/new (Document) 200
+[17071.87] GET http://localhost:4000/_next/static/chunks/src_app_globals_0p2ml0n.css (Stylesheet) 200
+[17071.89] GET http://localhost:4000/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0pyq27g._.js (Script) 200
+[17071.90] GET http://localhost:4000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js (Script) 200
+[17071.91] GET http://localhost:4000/_next/static/chunks/node_modules_next_dist_compiled_next-devtools_index_0553esy.js (Script) 200
+[17071.92] GET http://localhost:4000/_next/static/chunks/node_modules_next_dist_compiled_react-server-dom-turbopack_0p3wegg._.js (Script) 200
+[17071.93] GET http://localhost:4000/_next/static/chunks/node_modules_next_dist_compiled_03z8m4g._.js (Script) 200
+[17071.94] GET http://localhost:4000/_next/static/chunks/node_modules_next_dist_shared_lib_12au7sk._.js (Script) 200
+[17071.95] GET http://localhost:4000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js (Script) 200
+[17071.96] GET http://localhost:4000/_next/static/chunks/node_modules_next_dist_0nzbwyu._.js (Script) 200
+[17071.97] GET http://localhost:4000/_next/static/chunks/node_modules_next_router_0r7w7aj.js (Script) 200
+[17071.98] GET http://localhost:4000/_next/static/chunks/node_modules_%40sentry_core_build_esm_0b998jq._.js (Script) 200
+[17071.99] GET http://localhost:4000/_next/static/chunks/node_modules_%40sentry_browser_build_npm_esm_dev_0aure1t._.js (Script) 200
+[17071.100] GET http://localhost:4000/_next/static/chunks/node_modules_%40sentry-internal_browser-utils_build_esm_0ji9y8g._.js (Script) 200
+[17071.101] GET http://localhost:4000/_next/static/chunks/node_modules_0bww7vh._.js (Script) 200
+[17071.102] GET http://localhost:4000/_next/static/chunks/_03pz43w._.js (Script) 200
+[17071.103] GET http://localhost:4000/_next/static/chunks/_0rqeker._.js (Script) 200
+[17071.104] GET http://localhost:4000/_next/static/chunks/turbopack-_09zt5g-._.js (Script) 200
+[17071.105] GET http://localhost:4000/_next/static/chunks/node_modules_%40clerk_nextjs_dist_esm_app-router_0_1.0fz._.js (Script) 200
+[17071.106] GET http://localhost:4000/_next/static/chunks/node_modules_083j-87._.js (Script) 200
+[17071.107] GET http://localhost:4000/_next/static/chunks/src_app_layout_tsx_0b5ufm2._.js (Script) 200
+[17071.108] GET http://localhost:4000/_next/static/chunks/node_modules_0-u0t2z._.js (Script) 200
+[17071.109] GET http://localhost:4000/_next/static/chunks/src_04sxluh._.js (Script) 200
+[17071.110] GET http://localhost:4000/_next/static/chunks/src_app_(app)_layout_tsx_02eow5h._.js (Script) 200
+[17071.111] GET http://localhost:4000/_next/static/chunks/_0~m4fcu._.js (Script) 200
+[17071.112] GET http://localhost:4000/_next/static/chunks/src_app_global-error_tsx_02eow5h._.js (Script) 200
+[17071.114] GET http://localhost:4000/_next/static/chunks/node_modules_0hi1mgm._.js (Script) 200
+[17071.115] GET http://localhost:4000/_next/static/chunks/src_0cuwtk9._.js (Script) 200
+[17071.116] GET http://localhost:4000/_next/static/chunks/src_app_(app)_events_new_page_tsx_0kpjqmj._.js (Script) 200
+[17071.149] GET http://localhost:4000/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0yjw1oe._.js (Script) 200
+[17071.150] GET http://localhost:4000/_next/static/chunks/%5Bturbopack%5D_browser_dev_hmr-client_hmr-client_ts_0lw9-t6._.js (Script) 200
+[17071.154] GET http://localhost:4000/__nextjs_font/geist-latin.woff2 (Font) 200
+[17071.156] POST http://localhost:4000/events/new (Fetch) 200
+[AA8779ACB15219EC50B1BB75506718ED] GET blob:http://localhost:4000/603cb2ef-7330-4e7e-a4ee-274ac95df87b (Script)
+[A64F168FA379D04116839307F7893C34] GET blob:http://localhost:4000/5a076d36-9bce-458b-b011-5217f32c40ab (Script)
+[17071.167] POST http://localhost:4000/events/new (Fetch) 500
+[17071.170] POST http://localhost:4000/events/new (Fetch) 500
+[17071.172] POST http://localhost:4000/events/new (Fetch) 404
+[17071.173] POST http://localhost:4000/events/new (Fetch) 500
+[17071.175] POST http://localhost:4000/events/new (Fetch) 500
+[17071.177] POST http://localhost:4000/events/new (Fetch) 500
