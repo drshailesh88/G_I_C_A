@@ -1,0 +1,75 @@
+EVT-LIST-003 Execution Attempt 2
+=================================
+Tool: agent-browser v0.25.3
+Profile: /tmp/gemindia-agent-browser-super-admin-profile
+Timestamp: 2026-04-13T01:25:00Z
+
+Precondition Check:
+  - Dev server on port 4000: PASS (node PID 77412 listening)
+  - Super Admin auth in agent-browser: PASS (profile with Clerk session)
+  - At least one event exists: PASS (7 events visible)
+  - Events list loaded: PASS (URL = /events, heading "Events", 7 event cards)
+
+Selected Event:
+  - Name: GEM India 2026
+  - Visible date: May 9-11, 2026
+  - Status badge: Draft
+  - Venue: Surya Hotel NFC New Delhi
+  - Locator: ref=e10 (link element)
+  - Target URL: /events/68ee91f0-6d37-4525-ab1b-393438434402
+
+Execution Steps:
+  1. agent-browser open http://localhost:4000/events -> OK (authenticated, /events loaded)
+  2. Snapshot confirms: heading "Events", 7 event cards under "UPCOMING", "New" button visible
+  3. Screenshot: events-list-before-click.png
+  4. agent-browser click e10 ("GEM India 2026") -> OK
+  5. Wait 2 seconds for navigation
+  6. get url -> http://localhost:4000/events/68ee91f0-6d37-4525-ab1b-393438434402
+
+Workspace Verification:
+  - URL contains valid event UUID: PASS (68ee91f0-6d37-4525-ab1b-393438434402)
+  - Workspace heading: "GEM India 2026" — matches clicked event: PASS
+  - Module navigation sections visible:
+    - PROGRAM & CONTENT: Sessions, Schedule Grid, Event Fields, Changes
+    - PEOPLE & REGISTRATION: Registrations, Invite Faculty
+    - COMMUNICATIONS: Templates, Triggers
+    - LOGISTICS: Travel, Accommodation, Transport
+    - CERTIFICATES & QR: Certificates, QR Check-in
+    - ADMIN: Feature Flags
+  - All module links scoped to same eventId: PASS
+  - Super Admin actions visible: Publish, Cancel Event buttons: PASS
+  - No spinner/loading state persisting: PASS (full content rendered in ~2s)
+  - No different event data visible: PASS
+  - No stack traces, secrets, or debug dumps: PASS
+  - Screenshot: workspace-after-navigation.png
+
+Console Check:
+  - Console errors: 0
+  - Console warnings: Clerk deprecation warnings only (not app errors)
+
+Network Check:
+  - 4xx responses: 0
+  - 5xx responses: 0
+  - Workspace navigation requests all returned 200
+
+Back Navigation:
+  - agent-browser back -> http://localhost:4000/events
+  - Snapshot confirms: heading "Events", 7 event cards visible, same as before click
+  - Screenshot: workspace-after-back.png
+
+Check Summary:
+  events_list_loaded_before_click:        PASS
+  event_click_triggers_navigation:        PASS
+  route_contains_valid_event_identifier:  PASS
+  workspace_loaded_within_5_seconds:      PASS (~2s)
+  workspace_title_matches_clicked_event:  PASS
+  no_different_event_data_visible:        PASS
+  no_spinner_remaining:                   PASS
+  no_console_errors:                      PASS
+  no_network_4xx_5xx:                     PASS
+  no_stack_trace_secret_or_debug_dump:    PASS
+  browser_back_returns_to_events_list:    PASS
+
+Network log sanitized: yes (Clerk JWTs, session IDs, dev-browser tokens redacted)
+
+Result: PASS (provisional — pending Codex PM review)

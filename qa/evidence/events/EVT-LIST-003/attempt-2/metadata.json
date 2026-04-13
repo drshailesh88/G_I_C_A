@@ -1,0 +1,37 @@
+{
+  "checkpoint_id": "EVT-LIST-003",
+  "module": "events",
+  "route": "/events -> /events/68ee91f0-6d37-4525-ab1b-393438434402",
+  "role": "org:super_admin",
+  "action": "Click 'GEM India 2026' event card in events list, navigate to Event Workspace (M21)",
+  "expected": "Browser navigates to /events/[eventId], workspace loads with selected event data, back returns to /events",
+  "actual": "PASS — Click navigated to /events/68ee91f0-6d37-4525-ab1b-393438434402. Workspace loaded within ~2 seconds. Title 'GEM India 2026' matches clicked event. Full module navigation visible (Program, People, Communications, Logistics, Certificates, Admin). No console errors. No 4xx/5xx. No spinner persisting. Back navigation returned to /events with full list.",
+  "timestamp": "2026-04-13T01:25:00Z",
+  "agent": "claude-code (agent-browser v0.25.3)",
+  "evidence_files": [
+    "events-list-before-click.png",
+    "workspace-after-navigation.png",
+    "workspace-after-back.png",
+    "console.txt",
+    "network.txt",
+    "metadata.json",
+    "test-output.txt"
+  ],
+  "large_artifacts": {
+    "events-list-before-click.png": {
+      "path": "qa/evidence/events/EVT-LIST-003/attempt-2/events-list-before-click.png",
+      "captured_at": "2026-04-13T01:25:00Z"
+    },
+    "workspace-after-navigation.png": {
+      "path": "qa/evidence/events/EVT-LIST-003/attempt-2/workspace-after-navigation.png",
+      "captured_at": "2026-04-13T01:25:00Z"
+    },
+    "workspace-after-back.png": {
+      "path": "qa/evidence/events/EVT-LIST-003/attempt-2/workspace-after-back.png",
+      "captured_at": "2026-04-13T01:25:00Z"
+    }
+  },
+  "disposition": "PASS",
+  "network_log_redacted": true,
+  "redaction_reason": "Clerk auth/session query parameters removed before commit."
+}

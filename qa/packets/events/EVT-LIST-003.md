@@ -5,7 +5,7 @@
 | PACKET_ID | EVT-LIST-003 |
 | MODULE | events |
 | DATE | 2026-04-13 |
-| STATUS | BLOCKED |
+| STATUS | PASS |
 
 ## Checkpoint
 
@@ -57,17 +57,17 @@
 - `qa/oracle/role-matrix.json` — events.super_admin.read = true
 
 ## Evidence Required
-- [ ] Screenshot of events list before click
-- [ ] Screenshot of event workspace after navigation
-- [ ] Console output (no errors during transition)
-- [ ] Network check (workspace API calls include correct eventId)
-- [ ] `metadata.json` with route, role, action, expected, actual, disposition
+- [x] Screenshot of events list before click
+- [x] Screenshot of event workspace after navigation
+- [x] Console output (no errors during transition)
+- [x] Network check (workspace API calls include correct eventId)
+- [x] `metadata.json` with route, role, action, expected, actual, disposition
 
 ## Disposition
-- Result: BLOCKED
+- Result: PASS
 - Set by: Codex PM
 - Timestamp: 2026-04-13
-- Reason: agent-browser has no Clerk Super Admin session; /events redirects to /login; packet preconditions not met.
+- Reason: Attempt 2 executed with authenticated agent-browser Super Admin profile; clicked GEM India 2026 from /events; navigated to /events/68ee91f0-6d37-4525-ab1b-393438434402; workspace title matched selected event; back navigation returned to events list; Gemini 3.1 Pro evaluator returned PASS/HIGH; sanitized network evidence accepted.
 
 ## Fix Attempts
 _None yet_
@@ -83,3 +83,4 @@ _None yet_
 | 2026-04-13 | Claude Code | Amendment: Gemini 3.1 Pro critique — replaced "no infinite spinner" with 5-second explicit timeout | — |
 | 2026-04-13 | Codex PM | Frozen after Gemini 3.1 Pro re-critique returned FREEZE_READY | Re-critique command: `cat /tmp/gemini-recritique-prompt.md \| gemini -m gemini-3.1-pro-preview` |
 | 2026-04-13 | Codex PM | Attempt 1 blocked before product execution due agent-browser auth/session unavailable | BLOCKED_AUTH_HARNESS |
+| 2026-04-13 | Codex PM | Final disposition after attempt 2 agent-browser evidence and Gemini 3.1 Pro evaluation | PASS |

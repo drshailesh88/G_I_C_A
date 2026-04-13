@@ -7,10 +7,10 @@
     "pilot_module": "events"
   },
   "current_packet_id": null,
-  "iteration_count": 2,
+  "iteration_count": 3,
   "queue": [
     { "packet_id": "EVT-LIST-001", "module": "events", "status": "PASS", "attempt_count": 1, "max_attempts": 2 },
-    { "packet_id": "EVT-LIST-003", "module": "events", "status": "BLOCKED", "attempt_count": 1, "max_attempts": 2 },
+    { "packet_id": "EVT-LIST-003", "module": "events", "status": "PASS", "attempt_count": 2, "max_attempts": 2 },
     { "packet_id": "EVT-CREATE-001", "module": "events", "status": "READY", "attempt_count": 0, "max_attempts": 2 },
     { "packet_id": "EVT-CREATE-002", "module": "events", "status": "READY", "attempt_count": 0, "max_attempts": 2 },
     { "packet_id": "EVT-CREATE-006", "module": "events", "status": "READY", "attempt_count": 0, "max_attempts": 2 },
@@ -23,9 +23,9 @@
     "draft": 0,
     "ready": 6,
     "running": 0,
-    "passed": 1,
+    "passed": 2,
     "failed": 0,
-    "blocked": 1,
+    "blocked": 0,
     "stuck": 0,
     "spec_bug": 0,
     "needs_human_decision": 0
@@ -33,7 +33,7 @@
   "timestamps": {
     "created": "2026-04-13T00:00:00Z",
     "last_iteration_start": "2026-04-13T01:52:00Z",
-    "last_iteration_end": "2026-04-13T01:05:00Z"
+    "last_iteration_end": "2026-04-13T01:30:00Z"
   },
   "guard_rails": {
     "max_attempts_per_packet": 2,

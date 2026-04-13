@@ -61,12 +61,18 @@ Expected evidence:
 - Network trace (workspace API includes correct eventId)
 - metadata.json
 
-Attempt count: 1/2
+Attempt count: 2/2
 Failures: —
 Fix commits: —
-Disposition: BLOCKED_AUTH_HARNESS
-Evidence: qa/evidence/events/EVT-LIST-003/attempt-1/
-Note: No Gemini product evaluation was run because packet preconditions were not met.
+Disposition: PASS (verified)
+Evidence:
+  - Attempt 1 (BLOCKED_AUTH_HARNESS): qa/evidence/events/EVT-LIST-003/attempt-1/
+  - Attempt 2 (PASS): qa/evidence/events/EVT-LIST-003/attempt-2/
+Attempt 1 note: BLOCKED_AUTH_HARNESS — agent-browser had no Clerk Super Admin session.
+Attempt 2 note: Passed with agent-browser authenticated profile. Clicked GEM India 2026, navigated to /events/68ee91f0-..., workspace title matched, back navigation returned to /events.
+Evaluator model: gemini-3.1-pro-preview
+Fallback used: false
+Network evidence: sanitized (Clerk tokens redacted); Gemini accepted redaction as sufficient.
 ```
 
 ---
@@ -278,7 +284,7 @@ PM DECISIONS APPLIED:
 | Packet ID | Type | Role(s) | Status | PM Decisions Applied |
 |-----------|------|---------|--------|---------------------|
 | EVT-LIST-001 | Happy Path | Super Admin | PASS | Gemini critique: 5s threshold |
-| EVT-LIST-003 | Navigation | Super Admin | BLOCKED_AUTH_HARNESS | Gemini critique: 5s timeout |
+| EVT-LIST-003 | Navigation | Super Admin | PASS | Gemini critique: 5s timeout |
 | EVT-CREATE-001 | Happy Path | Super Admin | READY | — |
 | EVT-CREATE-002 | Validation | Super Admin | READY | Required fields + date validation + server-side bypass + XSS/SQLi |
 | EVT-CREATE-006 | Role Enforcement | Ops, Read-only | READY | Ops access + Read-only form behavior + server-side bypass |
