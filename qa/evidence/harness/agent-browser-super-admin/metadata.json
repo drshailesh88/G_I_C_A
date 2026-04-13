@@ -1,0 +1,24 @@
+{
+  "profile_path": "/tmp/gemindia-agent-browser-super-admin-profile",
+  "role": "Super Admin / org:super_admin",
+  "route_verified": "/events",
+  "verified_at": "2026-04-13T01:15:00Z",
+  "result": "PASS",
+  "no_secrets_stored": true,
+  "agent": "claude-code",
+  "events_visible": 7,
+  "events_listed": [
+    "Branding QA E2E",
+    "Program QA E2E",
+    "Registration QA E2E",
+    "Certificates QA E2E",
+    "Accommodation QA E2E",
+    "Transport QA E2E",
+    "GEM India 2026"
+  ],
+  "url_confirmed": "http://localhost:4000/events",
+  "new_button_visible": true,
+  "notes": "Clerk dev browser session active. Must use localhost (not 127.0.0.1) for Clerk dev instance compatibility. Profile created via --headed manual login flow.",
+  "network_log_redacted": true,
+  "redaction_reason": "Clerk auth/session query parameters removed before commit."
+}

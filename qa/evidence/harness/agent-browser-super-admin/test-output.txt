@@ -1,0 +1,33 @@
+agent-browser Super Admin Auth Harness Setup
+=============================================
+Tool: agent-browser v0.25.3
+Profile: /tmp/gemindia-agent-browser-super-admin-profile
+Timestamp: 2026-04-13T01:15:00Z
+
+Setup Steps:
+  1. agent-browser close --all -> OK
+  2. agent-browser --profile /tmp/gemindia-agent-browser-super-admin-profile --headed open http://localhost:4000/login -> OK
+  3. Clerk SignIn form rendered (Google OAuth + email/password)
+  4. Human completed manual login as Super Admin in headed browser
+  5. agent-browser open http://localhost:4000/events -> OK (page title: "GEM India — Conference Management Platform")
+
+Verification:
+  - get url -> http://localhost:4000/events (NOT /login)
+  - snapshot shows:
+    - heading "Events" [level=1]
+    - link "New" (href=/events/new) — Super Admin write access confirmed
+    - 7 event cards visible (Branding QA E2E, Program QA E2E, Registration QA E2E,
+      Certificates QA E2E, Accommodation QA E2E, Transport QA E2E, GEM India 2026)
+    - Each event card links to /events/[uuid]
+  - No redirect to /login
+  - No Clerk handshake loop
+
+Important Notes:
+  - Must use localhost (not 127.0.0.1) — Clerk dev instance only renders sign-in
+    form on localhost origin. 127.0.0.1 shows blank Clerk component.
+  - Profile is in /tmp — will be lost on system restart. Re-run headed login if needed.
+  - daemon reuse: once started with --profile, subsequent agent-browser commands in
+    the same daemon session retain the profile. Use "agent-browser close --all" before
+    restarting with --profile flag if daemon is already running.
+
+Result: PASS
