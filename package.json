@@ -75,6 +75,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.1",
+    "@clerk/backend": "^3.2.9",
     "@clerk/testing": "^2.0.13",
     "@playwright/test": "^1.59.1",
     "@stryker-mutator/core": "^9.6.0",
