@@ -19,6 +19,16 @@ tiers:
     - src/**/schema.ts
     - src/**/schema/**
     - src/middleware.ts
+    # Added 2026-04-14 — server actions, validations, cascade, inngest, API routes
+    - src/lib/actions/**
+    - src/lib/validations/**
+    - src/lib/cascade/**
+    - src/lib/inngest/**
+    - src/app/**/api/**
+    - src/app/api/**
+    # Certificates = credential issuance (supersession chains, revocation,
+    # one-current-valid enforcement, number generation). Integrity invariants.
+    - src/lib/certificates/**
   business_60:
     - app/**/api/email/**
     - sentry.client.config.ts
@@ -30,5 +40,30 @@ tiers:
     - src/**/queries/**
     - src/**/queue/**
     - src/**/repositories/**
-  ui_gates_only: []
+    # Added 2026-04-14 — backend support code, not integrity-critical
+    - src/lib/exports/**
+    - src/lib/attendance/**
+    - src/lib/import/**
+    - src/lib/flags.ts
+    - src/lib/sentry.ts
+    - src/instrumentation.ts
+    - src/instrumentation-client.ts
+  ui_gates_only:
+    # Added 2026-04-14 — typecheck + eslint + a11y only, no mutation floor
+    - src/app/(app)/**
+    - src/app/(public)/**
+    - src/app/(auth)/**
+    - src/app/page.tsx
+    - src/app/layout.tsx
+    - src/app/global-error.tsx
+    - src/app/maintenance/**
+    - src/app/fluid-tokens.test.ts
+    - src/app/safe-area.test.ts
+    - src/components/**
+    - src/hooks/**
+    - src/lib/hooks/**
+    - src/lib/utils.ts
+    - src/lib/utils.test.ts
+    - src/perf/**
+    - src/accessibility.test.ts
 unclassified_behavior: fail_fast
