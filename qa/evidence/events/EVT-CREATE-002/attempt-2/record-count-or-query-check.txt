@@ -1,0 +1,32 @@
+# Record Persistence Check — EVT-CREATE-002 Attempt 2
+# Date: 2026-04-13
+
+## Method
+Verified no invalid/partial/orphaned records were created:
+
+1. URL check: After every invalid submission (Steps 1-5), the page remained at /events/new.
+   Successful creation redirects to /events/{id}. No redirect occurred on any invalid submission.
+
+2. Server action return shape: After fix, createEvent returns:
+   - { ok: false, status: 400, fieldErrors, formErrors } on validation failure
+   - { ok: true, id } on success
+   The server action uses safeParse() instead of parse(), so no uncaught ZodError,
+   no HTTP 500 response.
+
+3. Code path analysis: The createEvent server action (src/lib/actions/event.ts):
+   - Auth check: throws Error('Unauthorized') if no userId
+   - safeJsonParse: catches ZodError, returns { ok: false }
+   - safeParse: if !parsed.success, returns { ok: false, fieldErrors }
+   - db.insert(events): ONLY reached if safeParse succeeds
+   Validation failures short-circuit before any database operation.
+
+4. Valid payloads (Steps 6-7): XSS and SQLi payloads were accepted because they are
+   valid strings that pass Zod validation. They were stored safely as inert text via
+   Drizzle ORM parameterized queries. React JSX escaping prevents XSS execution.
+   Events were created at:
+   - Step 6: /events/7064cb3e-fcc3-4993-879a-e1384b99e6bd (XSS payload as name)
+   - Step 7: /events/178756f8-1525-418d-9ba3-2647e61851ca (SQLi payload as venue)
+
+## Conclusion
+No partial, orphaned, or invalid records were created during validation failure tests.
+XSS and SQLi payloads were safely handled as inert text strings.

@@ -3,6 +3,14 @@
 Next.js 16 + Clerk + Drizzle ORM + Neon (Postgres) + shadcn/ui + Tailwind CSS.
 Monorepo. App Router. TypeScript strict mode.
 
+## Long-Term PM Memory
+
+Before QA, testing strategy, self-healing loops, feature census, Linear orchestration, or adversarial review work, read the Obsidian strategy note:
+
+`/Users/shaileshsingh/Documents/One Vault/GEM India QA Strategy - Anti Cheating And Self Healing.md`
+
+That file is a separate strategy document, not a test result. It captures the PM intent, anti-cheating policy, external research, agent-browser setup, feature-census review, and the planned self-healing QA architecture. Use it to regain project context after context compaction or when starting a fresh terminal.
+
 ## Critical Rules
 
 ### Never Do These

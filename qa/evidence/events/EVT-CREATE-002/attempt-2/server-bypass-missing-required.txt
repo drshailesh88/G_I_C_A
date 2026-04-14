@@ -1,0 +1,68 @@
+# Server-Side Bypass Test: Missing Required Fields
+# Packet: EVT-CREATE-002
+# Attempt: 2
+# Date: 2026-04-13
+
+## Method
+Monkey-patched the browser FormData constructor to override field values with empty strings
+after client-side validation passed with placeholder values. This sends empty name, startDate,
+endDate, and venueName directly to the createEvent server action, bypassing the client-side
+`validateRequired` check.
+
+## JavaScript Used (in browser eval)
+```js
+// Set non-empty values to pass client validation
+nativeSet.call(inputs.name, 'bypass');
+nativeSet.call(inputs.startDate, '2026-01-01');
+nativeSet.call(inputs.endDate, '2026-01-02');
+nativeSet.call(inputs.venueName, 'bypass');
+
+// Monkey-patch FormData to override values with empty strings
+class HijackedFormData extends OrigFormData {
+  constructor(...args) {
+    super(...args);
+    if (hijackNext) {
+      this.set('name', '');
+      this.set('startDate', '');
+      this.set('endDate', '');
+      this.set('venueName', '');
+      this.set('moduleToggles', '{}');
+    }
+  }
+}
+window.FormData = HijackedFormData;
+// Dispatch submit event
+```
+
+## Server Response
+The server action returned a structured validation result (NOT HTTP 500):
+```json
+{
+  "ok": false,
+  "status": 400,
+  "fieldErrors": {
+    "name": ["Event name is required"],
+    "startDate": ["Start date is required"],
+    "endDate": ["End date is required", "End date must be on or after start date"],
+    "venueName": ["Venue is required"]
+  },
+  "formErrors": []
+}
+```
+
+## UI Behavior
+- Page remained at /events/new (no redirect to /events/{id})
+- All 4 field-level error messages displayed in red text under their respective fields
+- No raw Zod JSON displayed
+- No HTTP 500 error
+- Fields show red error borders
+
+## Result
+- Server-side Zod validation REJECTED the submission with structured errors
+- All 4 required field errors returned with field-specific messages
+- No partial record created (URL stayed on /events/new)
+- createEvent returned { ok: false } instead of throwing ZodError
+- UI correctly rendered field-level errors from server response
+
+## Evidence
+- Screenshot: step4-server-bypass-missing-required.png

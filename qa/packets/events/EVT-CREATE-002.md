@@ -5,8 +5,8 @@
 | PACKET_ID | EVT-CREATE-002 |
 | MODULE | events |
 | DATE | 2026-04-13 |
-| STATUS | FAIL |
-| AMENDED | 2026-04-13 — PM decisions applied: required fields frozen, date validation resolved |
+| STATUS | BLOCKED |
+| AMENDED | 2026-04-13 — PM decisions applied: required fields frozen, date validation resolved; attempt-2 evidence complete; Gemini evaluator blocked by transport failures |
 
 ## Checkpoint
 
@@ -93,10 +93,10 @@ Optional fields (not required for creation): description, address/city/map URL, 
 - [ ] `metadata.json` with route, role, action, expected, actual, disposition
 
 ## Disposition
-- Result: FAIL
+- Result: BLOCKED
 - Set by: Codex PM
 - Timestamp: 2026-04-13
-- Reason: Attempt 1 proves server-side Zod rejects invalid data before persistence, but server action returns HTTP 500 instead of required 400/validation response; UI renders raw Zod JSON rather than clear field-specific validation messages; empty/partial screenshots do not show all required validation errors visible.
+- Reason: Attempt-2 evidence bundle satisfies the frozen product checks on PM review, but the required independent Gemini evaluator could not produce a verdict. The preferred model `gemini-3.1-pro-preview` and both mandated fallbacks (`gemini-3-pro-preview`, `pro`) failed with the same TLS transport error while calling `https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse` (`ERR_SSL_SSL/TLS_ALERT_BAD_RECORD_MAC`). Anti-cheat policy does not allow promotion to PASS without evaluator plus PM review, so the packet is blocked pending Gemini infrastructure recovery.
 
 ## Fix Attempts
 ### Attempt 1
@@ -104,6 +104,13 @@ Optional fields (not required for creation): description, address/city/map URL, 
 - Result: FAIL
 - Evidence: qa/evidence/events/EVT-CREATE-002/attempt-1/
 - Findings: Server-side Zod validation correctly rejects invalid data before DB insert. However: (1) server action returns HTTP 500 instead of 400; (2) UI renders raw Zod error JSON instead of field-specific validation messages; (3) empty/partial form submissions rely on HTML5 required attributes showing one error at a time via browser tooltip, not all 4 field errors simultaneously.
+
+### Attempt 2
+- Executor: Claude Code + agent-browser evidence capture
+- Result: BLOCKED_EVALUATOR
+- Fix commits: `e26f12b`, `1acb7ca`
+- Evidence: qa/evidence/events/EVT-CREATE-002/attempt-2/
+- Findings: Browser evidence now shows all 4 client-side required errors together, partial submission clears only the name error, invalid date range is rejected with structured server-side validation, bypass submissions return `{ ok: false, status: 400, fieldErrors }`, and XSS/SQLi payloads remain inert text with no console errors. However, the mandatory Gemini adversarial review could not complete because all allowed Gemini models failed with the same TLS transport error; see `qa/evidence/events/EVT-CREATE-002/attempt-2/gemini-evaluation.txt`.
 
 ## Linear Issue
 - Issue ID: _to be created_
@@ -117,3 +124,4 @@ Optional fields (not required for creation): description, address/city/map URL, 
 | 2026-04-13 | Claude Code | Amendment: Gemini 3.1 Pro critique — added server-side bypass check, XSS/SQLi payload tests, strengthened evidence requirements | — |
 | 2026-04-13 | Codex PM | Frozen after Gemini 3.1 Pro re-critique returned FREEZE_READY | Re-critique command: `cat /tmp/gemini-recritique-prompt.md \| gemini -m gemini-3.1-pro-preview` |
 | 2026-04-13 | Codex PM | Attempt 1 failed validation UX/server response requirements | FAIL |
+| 2026-04-13 | Codex PM | Attempt 2 evidence reviewed; PM screenshot spot-check passed; Gemini fallback chain failed with TLS transport errors on all mandated models | BLOCKED |

@@ -1,0 +1,66 @@
+# Network Evidence — EVT-CREATE-002 Attempt 2
+# Date: 2026-04-13
+# Route: http://localhost:4000/events/new
+# Role: Super Admin (org:super_admin)
+
+## Step 1 — Empty form submission (client-side validation)
+- Action: Clicked Save with all 4 required fields empty
+- Network: NO server action call made
+- Reason: Client-side validateRequired() caught all 4 empty fields and returned
+  before calling createEvent server action. setFieldErrors() populated errors
+  without any fetch/XHR.
+- Evidence: Page remained on /events/new, button never showed "Creating..." state
+  (setLoading(true) is called AFTER client validation passes)
+
+## Step 2 — Partial submission, name only (client-side validation)
+- Action: Filled name="Partial Test Event", left dates and venue empty, clicked Save
+- Network: NO server action call made
+- Reason: Client-side validateRequired() caught 3 empty fields (startDate, endDate,
+  venueName) and returned before calling createEvent. Name error cleared.
+- Evidence: Page remained on /events/new, button never entered loading state
+
+## Step 3 — Invalid date range (server-side validation)
+- Action: All fields valid except endDate (2026-12-10) before startDate (2026-12-15)
+- Network: Server action called (client validation passed — all fields non-empty)
+- Request: Next.js server action POST to /events/new (RSC protocol)
+- Response: Server action returned structured result:
+    { ok: false, status: 400, fieldErrors: { endDate: ["End date must be on or after start date"] }, formErrors: [] }
+- HTTP Status: 200 (Next.js RSC transport — validation result is in the payload, not HTTP status)
+- Evidence: endDate error displayed, page remained on /events/new
+
+## Step 4 — Server bypass: missing required fields (server-side validation)
+- Action: FormData monkey-patched to send empty values bypassing client validation
+- Network: Server action called (client validation was bypassed via FormData override)
+- Response: Server action returned structured result:
+    { ok: false, status: 400, fieldErrors: { name: [...], startDate: [...], endDate: [...], venueName: [...] }, formErrors: [] }
+- HTTP Status: 200 (Next.js RSC transport)
+- Key: No HTTP 500. Server action caught ZodError via safeParse() and returned
+  structured fieldErrors. Previous behavior threw raw ZodError -> HTTP 500.
+- Evidence: All 4 field errors displayed, page remained on /events/new
+
+## Step 5 — Server bypass: invalid date range (server-side validation)
+- Action: All fields filled via nativeSet, end before start, submitted normally
+- Network: Server action called (client validation passed — fields non-empty)
+- Response: Server action returned structured result:
+    { ok: false, status: 400, fieldErrors: { endDate: ["End date must be on or after start date"] }, formErrors: [] }
+- HTTP Status: 200 (Next.js RSC transport)
+- Evidence: endDate error displayed, page remained on /events/new
+
+## Step 6 — XSS payload (server-side accepted as text)
+- Action: name="<script>alert(1)</script>", valid dates and venue
+- Network: Server action called, returned { ok: true, id: "7064cb3e-..." }
+- Redirect: /events/7064cb3e-fcc3-4993-879a-e1384b99e6bd
+- Evidence: Event created, XSS payload stored as inert text, no script execution
+
+## Step 7 — SQLi payload (server-side accepted as text)
+- Action: venueName="' OR '1'='1", valid name and dates
+- Network: Server action called, returned { ok: true, id: "178756f8-..." }
+- Redirect: /events/178756f8-1525-418d-9ba3-2647e61851ca
+- Evidence: Event created, SQLi payload stored as inert text via Drizzle ORM parameterized queries
+
+## Summary
+- Steps 1-2: NO API/server-action calls (client-side validation blocked submission)
+- Steps 3-5: Server action returned structured { ok: false } validation (no HTTP 500)
+- Steps 6-7: Server action returned { ok: true } (payloads accepted as safe text)
+- No raw ZodError JSON in any response
+- No HTTP 500 responses

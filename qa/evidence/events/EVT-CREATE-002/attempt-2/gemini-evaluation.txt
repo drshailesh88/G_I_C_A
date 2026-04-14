@@ -1,0 +1,49 @@
+```yaml
+checkpoint_id: EVT-CREATE-002
+attempt: 2
+exact_command_used: "cat /tmp/gemini-evt-create-002-attempt-2-eval.md | gemini -m gemini-3.1-pro-preview"
+requested_model: "gemini-3.1-pro-preview"
+fallback_used: true
+fallback_chain:
+  - model: "gemini-3.1-pro-preview"
+    command: "cat /tmp/gemini-evt-create-002-attempt-2-eval.md | gemini -m gemini-3.1-pro-preview"
+    result: "ERROR"
+  - model: "gemini-3-pro-preview"
+    command: "cat /tmp/gemini-evt-create-002-attempt-2-eval.md | gemini -m gemini-3-pro-preview"
+    result: "ERROR"
+  - model: "pro"
+    command: "cat /tmp/gemini-evt-create-002-attempt-2-eval.md | gemini -m pro"
+    result: "ERROR"
+disposition: "BLOCKED"
+confidence: "HIGH"
+reason: |
+  All mandated Gemini models failed before returning any evaluator judgment.
+  The preferred model and both required fallbacks hit the same transport-layer TLS failure
+  against `https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse`:
+  `ERR_SSL_SSL/TLS_ALERT_BAD_RECORD_MAC`.
+  Per `qa/AGENT_ROLES.md` and `qa/templates/GEMINI_EVALUATOR_PROMPT.md`,
+  if all models are unavailable the packet is BLOCKED and may not be promoted to PASS.
+raw_output:
+  gemini-3.1-pro-preview: |
+    Error when talking to Gemini API Full report available at: /var/folders/h2/ynhx51354v59pfv5lks_j4ph0000gn/T/gemini-client-error-Turn.run-sendMessageStream-2026-04-13T07-06-29-551Z.json _GaxiosError: request to https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse failed, reason: C0E053EF01000000:error:0A0003FC:SSL routines:ssl3_read_bytes:ssl/tls alert bad record mac:../deps/openssl/openssl/ssl/record/rec_layer_s3.c:916:SSL alert number 20
+    ...
+    code: 'ERR_SSL_SSL/TLS_ALERT_BAD_RECORD_MAC'
+    ...
+    An unexpected critical error occurred:[object Object]
+  gemini-3-pro-preview: |
+    Error when talking to Gemini API Full report available at: /var/folders/h2/ynhx51354v59pfv5lks_j4ph0000gn/T/gemini-client-error-Turn.run-sendMessageStream-2026-04-13T07-07-01-314Z.json _GaxiosError: request to https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse failed, reason: C0E053EF01000000:error:0A0003FC:SSL routines:ssl3_read_bytes:ssl/tls alert bad record mac:../deps/openssl/openssl/ssl/record/rec_layer_s3.c:916:SSL alert number 20
+    ...
+    code: 'ERR_SSL_SSL/TLS_ALERT_BAD_RECORD_MAC'
+    ...
+    An unexpected critical error occurred:[object Object]
+  pro: |
+    Error when talking to Gemini API Full report available at: /var/folders/h2/ynhx51354v59pfv5lks_j4ph0000gn/T/gemini-client-error-Turn.run-sendMessageStream-2026-04-13T07-07-26-122Z.json _GaxiosError: request to https://cloudcode-pa.googleapis.com/v1internal:streamGenerateContent?alt=sse failed, reason: C0E053EF01000000:error:0A0003FC:SSL routines:ssl3_read_bytes:ssl/tls alert bad record mac:../deps/openssl/openssl/ssl/record/rec_layer_s3.c:916:SSL alert number 20
+    ...
+    code: 'ERR_SSL_SSL/TLS_ALERT_BAD_RECORD_MAC'
+    ...
+    An unexpected critical error occurred:[object Object]
+pm_note: |
+  PM locally reviewed all seven screenshots plus the full text evidence bundle. Product evidence
+  appears consistent with a likely PASS, but anti-cheat policy requires an independent evaluator
+  verdict before final promotion.
+```

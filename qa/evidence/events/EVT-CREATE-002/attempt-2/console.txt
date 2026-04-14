@@ -1,0 +1,30 @@
+# Browser Console Output — EVT-CREATE-002 Attempt 2
+# Date: 2026-04-13
+# Route: http://localhost:4000/events/new
+# Role: Super Admin (org:super_admin)
+# Browser: Headless Chrome via agent-browser
+
+## Console Errors
+None.
+
+## XSS Alert Check
+- Step 6: Event name set to <script>alert(1)</script>
+- agent-browser dialog status: "No dialog is currently open"
+- No alert() triggered
+- No script execution
+- Payload rendered as inert text by React JSX escaping
+
+## agent-browser errors command output
+(empty — no page errors reported)
+
+## Verification Method
+- `agent-browser errors` returned empty output after each step
+- `agent-browser dialog status` confirmed "No dialog is currently open" after XSS payload submission (Step 6)
+- No framework error overlays detected
+- All validation errors rendered as React component text, not raw JSON or console errors
+
+## Summary
+- No unhandled console errors across all 7 test steps
+- No XSS alert/execution (dialog status confirmed clean after Step 6)
+- No raw ZodError stack traces in console (server action returns structured result)
+- No HTTP 500 responses (validation errors returned as { ok: false, status: 400 })

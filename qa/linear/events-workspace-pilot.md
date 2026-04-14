@@ -136,17 +136,24 @@ Expected evidence:
 - Network check (no API call on invalid, AND 400 with Zod errors on bypass)
 - metadata.json
 
-Attempt count: 1/2
+Attempt count: 2/2
 Failures: 1
-Fix commits: —
-Disposition: FAIL
-Evidence: qa/evidence/events/EVT-CREATE-002/attempt-1/
+Fix commits: e26f12b, 1acb7ca
+Disposition: BLOCKED
+Evidence:
+  - Attempt 1 (FAIL): qa/evidence/events/EVT-CREATE-002/attempt-1/
+  - Attempt 2 (BLOCKED_EVALUATOR): qa/evidence/events/EVT-CREATE-002/attempt-2/
 
 FAILURE SUMMARY:
 1. Server-side invalid submissions return 500 instead of 400/validation response.
 2. Raw Zod JSON is shown to user.
 3. Empty/partial validation evidence does not show all field-specific errors visible.
 4. No invalid records appear to be persisted, so validation guard exists but response/UX is wrong.
+
+ATTEMPT 2 SUMMARY:
+- Product evidence improved materially: empty submit shows all 4 field errors; partial submit shows the remaining 3; invalid date range returns structured endDate error; direct server-side bypass returns `{ ok: false, status: 400, fieldErrors }`; XSS and SQLi payloads render as inert text with no alert or console error.
+- Independent evaluator could not complete. Gemini CLI failed on the preferred model and both required fallbacks with the same TLS transport error (`ERR_SSL_SSL/TLS_ALERT_BAD_RECORD_MAC`) while calling `cloudcode-pa.googleapis.com`.
+- Per anti-cheat policy, this packet cannot be promoted to PASS without evaluator plus PM review. Current state is BLOCKED pending Gemini infrastructure recovery.
 
 PM DECISIONS APPLIED:
 - Required fields: event name, start date, end date, venue name

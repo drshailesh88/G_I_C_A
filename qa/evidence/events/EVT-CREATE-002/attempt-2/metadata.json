@@ -1,0 +1,72 @@
+{
+  "packet_id": "EVT-CREATE-002",
+  "attempt": 2,
+  "date": "2026-04-13",
+  "route": "/events/new",
+  "role": "org:super_admin",
+  "action": "Create Event form validation",
+  "steps": [
+    {
+      "step": 1,
+      "description": "Empty form submission — all 4 required fields empty",
+      "expected": "All 4 field-level validation errors visible simultaneously",
+      "actual": "All 4 errors displayed: 'Event name is required', 'Start date is required', 'End date is required', 'Venue is required'. Red borders on all fields. No API call made.",
+      "disposition": "PASS",
+      "evidence": "step1-empty-submit-all-4-errors.png"
+    },
+    {
+      "step": 2,
+      "description": "Partial submission — name only filled",
+      "expected": "Name error cleared, 3 remaining errors visible (startDate, endDate, venueName)",
+      "actual": "Name field shows 'Partial Test Event' with no error. Three errors visible: 'Start date is required', 'End date is required', 'Venue is required'.",
+      "disposition": "PASS",
+      "evidence": "step2-partial-name-only-3-errors.png"
+    },
+    {
+      "step": 3,
+      "description": "Invalid date range — end date before start date",
+      "expected": "Server-side rejection with clear date range error on endDate field",
+      "actual": "End Date field shows 'End date must be on or after start date' with red border. Server-side Zod .refine() caught the invalid range. No record created.",
+      "disposition": "PASS",
+      "evidence": "step3-invalid-date-range-error.png"
+    },
+    {
+      "step": 4,
+      "description": "Server-side bypass — missing required fields via FormData monkey-patch",
+      "expected": "Server returns structured validation errors (not HTTP 500). All 4 field errors displayed.",
+      "actual": "Server action returned { ok: false, status: 400, fieldErrors: {...} }. All 4 field errors displayed in UI. No raw Zod JSON. No HTTP 500. Page stayed on /events/new.",
+      "disposition": "PASS",
+      "evidence": ["step4-server-bypass-missing-required.png", "server-bypass-missing-required.txt"]
+    },
+    {
+      "step": 5,
+      "description": "Server-side bypass — invalid date range via native value setter",
+      "expected": "Server rejects invalid date range with structured error on endDate",
+      "actual": "Server action returned structured error with endDate: 'End date must be on or after start date'. No record created. Page stayed on /events/new.",
+      "disposition": "PASS",
+      "evidence": ["step5-server-bypass-invalid-date-range.png", "server-bypass-invalid-date-range.txt"]
+    },
+    {
+      "step": 6,
+      "description": "XSS payload — <script>alert(1)</script> in event name",
+      "expected": "Payload rejected or stored as inert text. No script execution. No alert dialog.",
+      "actual": "Payload stored as inert text. Event created successfully. Event workspace displays '<script>alert(1)</script>' as literal text in header. No alert dialog. No DOM injection. React JSX escaping prevents execution.",
+      "disposition": "PASS",
+      "evidence": "step6-xss-payload-inert-text.png"
+    },
+    {
+      "step": 7,
+      "description": "SQLi payload — ' OR '1'='1 in venue name",
+      "expected": "Payload rejected or stored as inert text. No SQL injection behavior.",
+      "actual": "Payload stored as inert text via Drizzle ORM parameterized queries. Event created successfully. Venue displays as literal text \"' OR '1'='1\". No unintended records returned or modified.",
+      "disposition": "PASS",
+      "evidence": "step7-sqli-payload-inert-text.png"
+    }
+  ],
+  "console_errors": "None",
+  "invariants_checked": {
+    "INV-001": "PASS — No partial/orphaned records on validation failure",
+    "INV-002": "PASS — Zod validation before processing rejects invalid input"
+  },
+  "overall_disposition": "PASS"
+}

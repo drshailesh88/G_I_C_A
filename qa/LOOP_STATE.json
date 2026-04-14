@@ -7,12 +7,12 @@
     "pilot_module": "events"
   },
   "current_packet_id": null,
-  "iteration_count": 5,
+  "iteration_count": 6,
   "queue": [
     { "packet_id": "EVT-LIST-001", "module": "events", "status": "PASS", "attempt_count": 1, "max_attempts": 2 },
     { "packet_id": "EVT-LIST-003", "module": "events", "status": "PASS", "attempt_count": 2, "max_attempts": 2 },
     { "packet_id": "EVT-CREATE-001", "module": "events", "status": "PASS", "attempt_count": 1, "max_attempts": 2 },
-    { "packet_id": "EVT-CREATE-002", "module": "events", "status": "FAIL", "attempt_count": 1, "max_attempts": 2 },
+    { "packet_id": "EVT-CREATE-002", "module": "events", "status": "BLOCKED", "attempt_count": 2, "max_attempts": 2 },
     { "packet_id": "EVT-CREATE-006", "module": "events", "status": "READY", "attempt_count": 0, "max_attempts": 2 },
     { "packet_id": "EVT-WS-001", "module": "events", "status": "READY", "attempt_count": 0, "max_attempts": 2 },
     { "packet_id": "EVT-WS-003", "module": "events", "status": "READY", "attempt_count": 0, "max_attempts": 2 },
@@ -24,8 +24,8 @@
     "ready": 4,
     "running": 0,
     "passed": 3,
-    "failed": 1,
-    "blocked": 0,
+    "failed": 0,
+    "blocked": 1,
     "stuck": 0,
     "spec_bug": 0,
     "needs_human_decision": 0

@@ -1,0 +1,33 @@
+# Focused Post-Fix Test Output — EVT-CREATE-002 Attempt 2
+# After commit: 1acb7ca fix(events): add client-side required validation, remove native required tooltips
+# Date: 2026-04-13
+# Command: npx vitest run src/lib/actions/event.test.ts src/lib/actions/event.gap.test.ts src/lib/actions/full-journey.test.ts
+
+ RUN  v3.2.4 /Users/shaileshsingh/G_I_C_A
+
+ ✓ src/lib/actions/event.test.ts (12 tests) 7ms
+ ✓ src/lib/actions/event.gap.test.ts (30 tests) 11ms
+ ✓ src/lib/actions/full-journey.test.ts (23 tests) 255ms
+
+ Test Files  3 passed (3)
+      Tests  65 passed (65)
+   Start at  09:40:27
+   Duration  1.06s (transform 333ms, setup 0ms, collect 1.13s, tests 273ms, environment 0ms, prepare 190ms)
+
+# Key tests covering EVT-CREATE-002 fix:
+#
+# src/lib/actions/event.test.ts:
+#   - createEvent should return structured validation error for malformed moduleToggles
+#   - getEvent should reject invalid event ids with Zod before querying
+#   - getEvent should deny access when assertEventAccess rejects
+#   - updateEventStatus should deny status changes when assertEventAccess rejects
+#
+# src/lib/actions/event.gap.test.ts:
+#   - returns structured validation error for empty name (no db.insert called)
+#   - returns structured validation error for endDate before startDate (no db.insert called)
+#   - returns structured validation error for all empty required fields
+#   - creates event with status draft (returns { ok: true, id })
+#   - rejects unauthenticated user (still throws Error('Unauthorized'))
+#
+# src/lib/actions/full-journey.test.ts:
+#   - Full event lifecycle tests (23 tests)

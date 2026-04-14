@@ -1,0 +1,62 @@
+# Server-Side Bypass Test: Invalid Date Range (End Before Start)
+# Packet: EVT-CREATE-002
+# Attempt: 2
+# Date: 2026-04-13
+
+## Method
+Set valid name ("Bypass Date Range Test") and venue ("Test Venue") via agent-browser fill.
+Set startDate to "2026-12-15" and endDate to "2026-12-10" (end before start) via native
+value setter to bypass any potential client-side date picker constraints.
+Then clicked Save button. Client-side validateRequired passed (all fields non-empty).
+Server action createEvent received the invalid date range via FormData.
+
+## JavaScript Used (in browser eval)
+```js
+const ns = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+ns.call(startDate, '2026-12-15');
+startDate.dispatchEvent(new Event('input', { bubbles: true }));
+ns.call(endDate, '2026-12-10');
+endDate.dispatchEvent(new Event('input', { bubbles: true }));
+```
+
+## Server Response
+The server action returned a structured validation result:
+```json
+{
+  "ok": false,
+  "status": 400,
+  "fieldErrors": {
+    "endDate": ["End date must be on or after start date"]
+  },
+  "formErrors": []
+}
+```
+
+## Validation Source
+The date range check is a Zod `.refine()` on the createEventSchema at
+src/lib/validations/event.ts:45-48:
+```ts
+.refine(
+  (data) => new Date(data.endDate) >= new Date(data.startDate),
+  { message: 'End date must be on or after start date', path: ['endDate'] },
+);
+```
+
+## UI Behavior
+- Page remained at /events/new (no redirect)
+- "End date must be on or after start date" error displayed under End Date field in red
+- End Date field has red border
+- No other field errors (name, startDate, venueName are valid)
+- No raw Zod JSON displayed
+- No HTTP 500 error
+- Button returned to "Save" state (not stuck on "Creating...")
+
+## Result
+- Server-side Zod validation REJECTED the invalid date range with structured error
+- Clear error message: "End date must be on or after start date" on endDate field
+- No event record created with invalid dates
+- Rejection happens at Zod validation BEFORE any database insert operation
+- createEvent returned { ok: false } instead of throwing ZodError
+
+## Evidence
+- Screenshot: step5-server-bypass-invalid-date-range.png
