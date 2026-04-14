@@ -1,0 +1,93 @@
+{
+  "feature": "eventid-scoping",
+  "frozen": true,
+  "approvedBy": "Shailesh Singh",
+  "approvedDate": "2026-04-14",
+  "appliesTo": "every event-scoped server action and API route under /events/[eventId]/* and /api/events/[eventId]/*",
+  "rules": [
+    {
+      "rule": "URL is the source of truth for eventId",
+      "description": "Server derives eventId from URL path params. Body and query-string eventId are advisory only; any mismatch is rejected."
+    },
+    {
+      "rule": "Cross-event access returns 404",
+      "description": "Requests to an event the user has no role row for return HTTP 404 with a generic body. Never 403, never 200-with-empty, never disclose existence."
+    },
+    {
+      "rule": "Role-based denial within an assigned event returns 403",
+      "description": "A user who IS a member of the event but whose role (e.g. read_only) forbids a mutation receives HTTP 403 with body {\"error\":\"forbidden\"}."
+    },
+    {
+      "rule": "eventId mismatch returns 400 + Sentry log",
+      "description": "URL eventId=A + body eventId=B → HTTP 400 {\"error\":\"eventId mismatch\"}. Sentry event is emitted with {userId, urlEventId, bodyEventId, endpoint}."
+    }
+  ],
+  "errorCases": [
+    {
+      "condition": "Cross-event read (unmembered)",
+      "status": 404,
+      "bodyPattern": "must not contain eventId, event name, words 'access'/'permission'/'forbidden'",
+      "example": {
+        "error": "Not Found"
+      }
+    },
+    {
+      "condition": "Cross-event write (unmembered)",
+      "status": 404,
+      "bodyPattern": "identical to cross-event read",
+      "example": {
+        "error": "Not Found"
+      }
+    },
+    {
+      "condition": "Assigned event, read-only attempts mutation",
+      "status": 403,
+      "example": {
+        "error": "forbidden"
+      }
+    },
+    {
+      "condition": "URL eventId ≠ body eventId",
+      "status": 400,
+      "example": {
+        "error": "eventId mismatch"
+      },
+      "sideEffect": "Sentry event captured with {userId, urlEventId, bodyEventId, endpoint}"
+    },
+    {
+      "condition": "Malformed eventId in URL (non-UUID)",
+      "status": 404,
+      "example": {
+        "error": "Not Found"
+      }
+    },
+    {
+      "condition": "Valid UUID, non-existent event",
+      "status": 404,
+      "note": "Indistinguishable from exists-but-unmembered to prevent enumeration"
+    },
+    {
+      "condition": "Soft-deleted/archived event",
+      "status": 404
+    },
+    {
+      "condition": "Role revoked mid-session; new request to revoked event",
+      "status": 404
+    }
+  ],
+  "specialCases": {
+    "superAdminGlobal": {
+      "description": "event_user_roles.event_id IS NULL grants access to every event",
+      "auditRequirement": "Every cross-event read/write still emits an audit log row"
+    },
+    "peopleGlobal": {
+      "description": "`people` table is global; not event-filtered",
+      "constraint": "Per-event person attributes (registration, travel, sessions) reside in event-scoped junction tables"
+    },
+    "publicSurfaces": {
+      "paths": ["/register/[eventId]", "/api/inngest", "/api/webhooks/whatsapp"],
+      "auth": "none (public) or signature-verified (webhooks)",
+      "eventIdSource": "URL or signed payload; no membership check applies"
+    }
+  }
+}
