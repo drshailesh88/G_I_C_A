@@ -1,0 +1,10 @@
+# Installed by /playbook:install-qa-harness.
+# To enable codex/gemini: install Seatbelt wrapper + flip flags.
+schema_version: 1
+active_fixer: claude
+enabled:
+  - claude
+disabled:
+  - codex
+  - gemini
+max_turns: 30

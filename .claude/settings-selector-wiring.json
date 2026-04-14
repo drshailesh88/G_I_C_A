@@ -1,0 +1,34 @@
+{
+  "$comment": "Swapped in by /playbook:wire-selectors — surgical permission: adjust data-testid selectors in the feature's acceptance spec to match the actual DOM, without touching assertions (blueprint T3). Controller runs an AST diff check afterward — any expect() change is rejected + reverted.",
+  "permissions": {
+    "deny": [
+      "Edit(./src/**)",
+      "Write(./src/**)",
+      "Edit(./app/**)",
+      "Write(./app/**)",
+      "Edit(./components/**)",
+      "Write(./components/**)",
+      "Edit(./lib/**)",
+      "Write(./lib/**)",
+      "Edit(./pages/**)",
+      "Write(./pages/**)",
+      "Write(./.quality/contracts/**)",
+      "Edit(./.quality/contracts/*/examples.md)",
+      "Edit(./.quality/contracts/*/counterexamples.md)",
+      "Edit(./.quality/contracts/*/invariants.md)",
+      "Edit(./.quality/contracts/*/index.yaml)",
+      "Edit(./.quality/contracts/*/api-contract.json)"
+    ],
+    "allow": [
+      "Read(./src/app/**)",
+      "Read(./src/components/**)",
+      "Read(./src/pages/**)",
+      "Read(./app/**)",
+      "Read(./components/**)",
+      "Read(./pages/**)",
+      "Read(./.quality/contracts/*/acceptance.spec.ts)",
+      "Read(./.quality/contracts/*/index.yaml)",
+      "Edit(./.quality/contracts/*/acceptance.spec.ts)"
+    ]
+  }
+}

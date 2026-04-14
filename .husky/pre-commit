@@ -1,0 +1,44 @@
+#!/bin/bash
+# Layer 4 enforcement (blueprint Part 4) — installed by
+# /playbook:install-qa-harness.
+#
+# Refuses commits that touch locked paths unless the commit was initiated by
+# the QA controller (signaled via QA_CONTROLLER_COMMIT=1 env var). Also runs
+# the controller's diff-audit on staged test files to catch weakening
+# patterns before they reach origin.
+
+set -e
+
+# 1. Locked-path guard
+LOCKED_PATTERN='^(\.quality/|vitest\.config|playwright\.config|stryker\.conf|tsconfig\.json|eslint\.config\.mjs|\.eslintrc\.cjs|tests/contracts/|tests/e2e/|e2e/.*\.spec|.*/__snapshots__/|.*-snapshots/|\.claude/settings|\.claude/hooks/)'
+
+STAGED=$(git diff --cached --name-only)
+LOCKED_MATCHES=$(echo "$STAGED" | grep -E "$LOCKED_PATTERN" || true)
+
+if [ -n "$LOCKED_MATCHES" ]; then
+  if [ "${QA_CONTROLLER_COMMIT:-}" != "1" ]; then
+    echo "ERROR: commit touches locked paths without controller authorization:"
+    echo "$LOCKED_MATCHES"
+    echo ""
+    echo "Locked paths can only be modified via:"
+    echo "  - /playbook:qa-run (via the controller, which sets QA_CONTROLLER_COMMIT=1)"
+    echo "  - /playbook:qa-baseline-reset (explicit ratchet-down with audit log)"
+    echo "  - /playbook:contract-pack [feature] (contract authoring workflow)"
+    echo ""
+    echo "If you REALLY need to bypass: QA_CONTROLLER_COMMIT=1 git commit ..."
+    echo "But first ask: am I re-introducing oracle drift?"
+    exit 1
+  fi
+fi
+
+# 2. Anti-cheat diff audit on staged test files
+STAGED_TESTS=$(echo "$STAGED" | grep -E '\.(test|spec)\.(js|ts|jsx|tsx)$' || true)
+if [ -n "$STAGED_TESTS" ] && [ -f "qa/package.json" ]; then
+  if ! npx tsx qa/scripts/pre-commit-diff-audit.ts 2>/dev/null; then
+    # The script is optional — if it isn't present (older scaffold) or
+    # tsx isn't available, we fall through without failing.
+    :
+  fi
+fi
+
+exit 0

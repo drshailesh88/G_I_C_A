@@ -1,0 +1,22 @@
+{
+  "$comment": "Swapped in by /playbook:author-locked-tests. Source code READ denied — E2E tests generated from contract only, preserving oracle independence (blueprint T2).",
+  "permissions": {
+    "deny": [
+      "Read(./src/**)",
+      "Read(./app/**)",
+      "Read(./components/**)",
+      "Read(./lib/**)",
+      "Read(./pages/**)",
+      "Edit(./**)",
+      "Write(./**)"
+    ],
+    "allow": [
+      "Read(./.quality/contracts/**)",
+      "Read(./.planning/**)",
+      "Read(./tests/helpers/**)",
+      "Write(./tests/e2e/*.spec.ts.draft)",
+      "Write(./tests/contracts/*.spec.ts.draft)",
+      "Write(./.quality/contracts/*/acceptance.spec.ts.draft)"
+    ]
+  }
+}

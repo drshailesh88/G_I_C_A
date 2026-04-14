@@ -1,0 +1,53 @@
+{
+  "$comment": "Installed by /playbook:install-qa-harness. LOOP MODE — active during qa:run. Layer 1 enforcement per blueprint Part 4. Do not edit by hand; use the installer.",
+  "permissions": {
+    "deny": [
+      "Edit(./.quality/**)",
+      "Write(./.quality/**)",
+      "Edit(./vitest.config.ts)",
+      "Write(./vitest.config.ts)",
+      "Edit(./vitest.config.mjs)",
+      "Write(./vitest.config.mjs)",
+      "Edit(./playwright.config.ts)",
+      "Write(./playwright.config.ts)",
+      "Edit(./stryker.conf.mjs)",
+      "Write(./stryker.conf.mjs)",
+      "Edit(./stryker.conf.json)",
+      "Write(./stryker.conf.json)",
+      "Edit(./tsconfig.json)",
+      "Write(./tsconfig.json)",
+      "Edit(./eslint.config.mjs)",
+      "Write(./eslint.config.mjs)",
+      "Edit(./.eslintrc.cjs)",
+      "Write(./.eslintrc.cjs)",
+      "Edit(./tests/contracts/**)",
+      "Write(./tests/contracts/**)",
+      "Edit(./tests/e2e/**)",
+      "Write(./tests/e2e/**)",
+      "Edit(./e2e/contracts/**)",
+      "Write(./e2e/contracts/**)",
+      "Edit(./e2e/adversarial/**)",
+      "Write(./e2e/adversarial/**)",
+      "Edit(./e2e/a11y/**)",
+      "Write(./e2e/a11y/**)",
+      "Edit(./e2e/visual/**)",
+      "Write(./e2e/visual/**)",
+      "Edit(./**/__snapshots__/**)",
+      "Write(./**/__snapshots__/**)",
+      "Edit(./**/*-snapshots/**)",
+      "Write(./**/*-snapshots/**)",
+      "Edit(./.claude/settings.json)",
+      "Write(./.claude/settings.json)",
+      "Edit(./.claude/hooks/**)",
+      "Write(./.claude/hooks/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "command": ".claude/hooks/block-locked-paths.sh"
+      }
+    ]
+  }
+}

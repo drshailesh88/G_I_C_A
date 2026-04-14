@@ -1,0 +1,35 @@
+{
+  "name": "@build-playbook/qa-controller",
+  "version": "0.1.0",
+  "private": true,
+  "description": "QA controller scaffold — copied into target apps as qa/ by /playbook:install-qa-harness. Phase 1: types, state-manager, parsers.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.26.3",
+    "@babel/traverse": "^7.26.4",
+    "@babel/types": "^7.26.3",
+    "commander": "^12.1.0",
+    "dependency-cruiser": "^16.9.0",
+    "execa": "^9.5.2",
+    "fast-xml-parser": "^4.5.0",
+    "js-yaml": "^4.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/babel__traverse": "^7.20.6",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,9 @@
+# Installed by /playbook:install-qa-harness. Tune per-project as needed.
+schema_version: 1
+max_attempts: 10
+plateau_window: 3
+timeouts_ms:
+  vitest: 300000
+  playwright: 600000
+  stryker_incremental: 600000
+  stryker_full: 3600000

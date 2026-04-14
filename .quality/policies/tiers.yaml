@@ -1,0 +1,34 @@
+# Installed by /playbook:install-qa-harness.
+# Tier globs suggested by detected services are merged here.
+# Review carefully — unclassified_behavior=fail_fast means every source
+# file must match a glob or qa-run aborts.
+schema_version: 1
+tiers:
+  critical_75:
+    - app/**/api/auth/**
+    - drizzle/**
+    - middleware.ts
+    - prisma/schema.prisma
+    - src/**/auth/**
+    - src/**/cache/**
+    - src/**/database/**
+    - src/**/db/**
+    - src/**/migrations/**
+    - src/**/prisma/**
+    - src/**/rate-limit/**
+    - src/**/schema.ts
+    - src/**/schema/**
+    - src/middleware.ts
+  business_60:
+    - app/**/api/email/**
+    - sentry.client.config.ts
+    - sentry.edge.config.ts
+    - sentry.server.config.ts
+    - src/**/email/**
+    - src/**/jobs/**
+    - src/**/notifications/**
+    - src/**/queries/**
+    - src/**/queue/**
+    - src/**/repositories/**
+  ui_gates_only: []
+unclassified_behavior: fail_fast

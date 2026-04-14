@@ -1,0 +1,25 @@
+{
+  "$comment": "Swapped in by /playbook:contract-pack. Source code READ is denied — contracts must be written from PRD/spec only (blueprint A2).",
+  "permissions": {
+    "deny": [
+      "Read(./src/**)",
+      "Read(./app/**)",
+      "Read(./components/**)",
+      "Read(./lib/**)",
+      "Read(./pages/**)",
+      "Read(./tests/**)",
+      "Read(./e2e/**)",
+      "Edit(./**)",
+      "Write(./**)"
+    ],
+    "allow": [
+      "Read(./.planning/**)",
+      "Read(./docs/**)",
+      "Read(./README.md)",
+      "Read(./UBIQUITOUS_LANGUAGE.md)",
+      "Write(./.quality/contracts/*.yaml.draft)",
+      "Write(./.quality/contracts/*/*.md.draft)",
+      "Write(./.quality/contracts/*/index.yaml.draft)"
+    ]
+  }
+}
