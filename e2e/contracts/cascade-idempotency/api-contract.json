@@ -1,5 +1,9 @@
 {
   "feature": "cascade-idempotency",
+  "version": 1,
+  "versionHistory": [
+    { "version": 1, "date": "2026-04-14", "note": "Initial contract." }
+  ],
   "frozen": true,
   "approvedBy": "Shailesh Singh",
   "approvedDate": "2026-04-14",

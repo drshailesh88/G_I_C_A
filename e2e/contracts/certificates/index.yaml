@@ -1,0 +1,12 @@
+# Index — certificates
+# Auto-generated. Used by qa-doctor contract-hash drift check.
+feature: certificates
+version: 1
+frozen: true
+artifacts:
+  examples.md: sha256:d9fdd6b9b0aa7144786f51bd0d6cc12873d357b769f6f0b0a685357c4e39e2d5
+  counterexamples.md: sha256:912703582807cb5b9399da419460acf1dac45e3b62edf3cc5769f639c94e620a
+  invariants.md: sha256:71b19a02fa18a5a4a7967e2a472dd83d360784d73c5ee5a2d38889bbcf92ca1b
+  api-contract.json: sha256:2c22c3aac706c744594f961b43fec22fc598dc43462bcb88c3af8b9445ebf1e5
+  acceptance.spec.ts: sha256:178580ccab1dec5080a46d32e2da6612d3bc30ea1c4ae1599c62292e5091580e
+  regressions.spec.ts: sha256:5ff21e24454a3f1e0d8b62fa65ea15af7bdbfab2549d6a2a046298d11887ee3d

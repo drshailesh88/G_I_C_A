@@ -1,5 +1,10 @@
 {
   "feature": "eventid-scoping",
+  "version": 2,
+  "versionHistory": [
+    { "version": 1, "date": "2026-04-14", "note": "Initial contract." },
+    { "version": 2, "date": "2026-04-14", "note": "Schema alignment — renamed event_user_roles references to match actual Clerk + event_user_assignments model." }
+  ],
   "frozen": true,
   "approvedBy": "Shailesh Singh",
   "approvedDate": "2026-04-14",
@@ -77,7 +82,7 @@
   ],
   "specialCases": {
     "superAdminGlobal": {
-      "description": "event_user_roles.event_id IS NULL grants access to every event",
+      "description": "Clerk global role org:super_admin grants access to every event without requiring event_user_assignments rows",
       "auditRequirement": "Every cross-event read/write still emits an audit log row"
     },
     "peopleGlobal": {

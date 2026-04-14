@@ -1,6 +1,7 @@
 // FROZEN CONTRACT — DO NOT EDIT
 // Approved by: Shailesh Singh on 2026-04-14
-// Source: contracts/eventid-scoping/examples.md + counterexamples.md
+// Source: e2e/contracts/eventid-scoping/examples.md + counterexamples.md
+// Version: v2 (2026-04-14) — schema alignment: Clerk role + event_user_assignments.
 //
 // These tests run against the LIVE APPLICATION in a real browser.
 // No mocks. No jsdom.
@@ -10,12 +11,12 @@
 // is too shallow.
 //
 // Seed-data requirements (needed for these tests to go green):
-//   Users:
-//     coord_A        — event_user_roles(event_id=A, role=event_coordinator)
-//     coord_B        — event_user_roles(event_id=B, role=event_coordinator)
-//     coord_AB       — coordinator rows for both A and B
-//     super          — event_user_roles(event_id=NULL, role=super_admin)
-//     readonly_A     — event_user_roles(event_id=A, role=read_only)
+//   Users (v2 schema: Clerk global role + event_user_assignments rows):
+//     coord_A        — Clerk org:event_coordinator + assignment on A
+//     coord_B        — Clerk org:event_coordinator + assignment on B
+//     coord_AB       — Clerk org:event_coordinator + assignments on A and B
+//     super          — Clerk org:super_admin (no assignment rows required)
+//     readonly_A     — Clerk org:read_only + assignment on A
 //   Events:
 //     EVENT_A_ID, EVENT_B_ID — two distinct events, each populated with
 //                              delegates, travel, accommodation, sessions

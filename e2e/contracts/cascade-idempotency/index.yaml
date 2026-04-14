@@ -1,0 +1,12 @@
+# Index — cascade-idempotency
+# Auto-generated. Used by qa-doctor contract-hash drift check.
+feature: cascade-idempotency
+version: 1
+frozen: true
+artifacts:
+  examples.md: sha256:24e733907430ab742c77d3ee96f2b68cdfc831027290d3950e9187fc4d53cfcc
+  counterexamples.md: sha256:51eb53e09daf5b2176ef90254e538f7b6a699ec6956f0bbde13d632691d1de40
+  invariants.md: sha256:574504c2c938350f05412aea2200e97f2e82ad49f5033c52b9a53fe3d8964a53
+  api-contract.json: sha256:89238a044027ca7c557f39c7aeacd6429ba57bc0f2a3b3fd35ab4c7a50bd3d9d
+  acceptance.spec.ts: sha256:c803563fc7a3ebedefa0e553f46036c4c51470b145f37b1d52f4bc463fc8d0ec
+  regressions.spec.ts: sha256:c202c53f79de77f0482bc8a87c1b519821a248726f48040e5bc08ed85c85aad1

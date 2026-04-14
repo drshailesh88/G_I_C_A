@@ -1,0 +1,12 @@
+# Index — eventid-scoping
+# Auto-generated. Used by qa-doctor contract-hash drift check.
+feature: eventid-scoping
+version: 2
+frozen: true
+artifacts:
+  examples.md: sha256:23ccd617a89f7da5c29881123345332c47c7a0c0409fca851726c4ddf84dfbdb
+  counterexamples.md: sha256:fae327c7493978e97ee7279085ba54a6a80992f88271e8d347573d43dd87f786
+  invariants.md: sha256:8d35a32ff5defd0afaee342094c64b650b2dab97481af217d37c6e1c6928903f
+  api-contract.json: sha256:287bf1287a2644c94c905c3bf8a4866114413bf88993f4f335a58af851459e0f
+  acceptance.spec.ts: sha256:578d1004cc9ab5b5e8702dbda700eaf3c863885db23209fc65675104a163c73f
+  regressions.spec.ts: sha256:3054f5aaffee241c025e7cb2786d0c95fba84860c63f98e80197cc366344d6f0

@@ -1,13 +1,24 @@
 # Examples — eventid-scoping (multi-tenant isolation)
 # Approved by: Shailesh Singh on 2026-04-14
 # Status: FROZEN — do not edit without explicit PM approval + version bump
+#
+# Version history:
+#   v1 — 2026-04-14 — Initial contract.
+#   v2 — 2026-04-14 — Schema alignment. Renamed `event_user_roles` references to
+#        match actual model: Clerk global role + `event_user_assignments`.
+#        Behavioral intent unchanged; only storage names differ.
 
 Cross-cutting tenancy invariant: every event-scoped surface filters by the
-active event; `people` is the only global table; super_admin with
-`event_user_roles.event_id = NULL` is the documented escape hatch.
+active event; `people` is the only global table.
+
+Role model (authoritative as of v2):
+- **Clerk global role** (`org:super_admin | org:event_coordinator | org:ops | org:read_only`) — checked via `has({ role })`.
+- **`event_user_assignments(event_id, auth_user_id, assignment_type)`** — per-event scope for non-super-admin roles, where `assignment_type ∈ {owner, collaborator}`.
+- **Super Admin escape hatch**: Clerk role `org:super_admin` bypasses the assignment table entirely.
+- Non-super users require an active `event_user_assignments` row to access an event.
 
 ## Example 1: Coordinator views their event
-**Given:** User `coord_A` has `event_user_roles(event_id=A, role=event_coordinator)` and no row for Event B.
+**Given:** User `coord_A` has Clerk role `org:event_coordinator` and an active `event_user_assignments` row for Event A (no row for Event B).
 **When:** They GET `/events/A/people`.
 **Then:**
 - Response is 200.
@@ -15,7 +26,7 @@ active event; `people` is the only global table; super_admin with
 - Page reload returns the same list (persisted state).
 
 ## Example 2: Super Admin crosses events
-**Given:** User `super` has `event_user_roles(event_id=NULL, role=super_admin)`.
+**Given:** User `super` has Clerk role `org:super_admin` (no `event_user_assignments` rows required).
 **When:** They GET `/events/B/people`.
 **Then:**
 - Response is 200.
@@ -31,7 +42,7 @@ active event; `people` is the only global table; super_admin with
 - Switching events does not require re-login.
 
 ## Example 4: Read-only user reads assigned event
-**Given:** User `readonly_A` has `event_user_roles(event_id=A, role=read_only)`.
+**Given:** User `readonly_A` has Clerk role `org:read_only` and an active `event_user_assignments` row for Event A.
 **When:** They GET `/events/A/accommodation`.
 **Then:**
 - Response is 200 with accommodation rows for Event A.
