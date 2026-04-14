@@ -1,0 +1,145 @@
+{
+  "feature": "certificates",
+  "frozen": true,
+  "approvedBy": "Shailesh Singh",
+  "approvedDate": "2026-04-14",
+  "appliesTo": "Every certificate endpoint under /events/[eventId]/certificates/* and /api/events/[eventId]/certificates/*, plus public /verify/[token].",
+  "certificateTypes": [
+    "delegate_attendance",
+    "faculty_participation",
+    "speaker_recognition",
+    "chairperson_recognition",
+    "panelist_recognition",
+    "moderator_recognition",
+    "cme_attendance"
+  ],
+  "numbering": {
+    "format": "<EVENT_PREFIX><YEAR>-<TYPE_CODE>-<ZERO_PADDED_SEQ>",
+    "uniqueness": "globally unique across all events and types",
+    "monotonic": true,
+    "gapsAllowed": true,
+    "renumbering": "never"
+  },
+  "states": {
+    "issued": "Current valid certificate",
+    "superseded": "Replaced by a regenerated cert; superseded_by_id set",
+    "revoked": "Revoked with reason; not valid; transparent to public verify"
+  },
+  "rules": [
+    {
+      "rule": "One-current-valid",
+      "description": "At most one row with status='issued' per (person_id, event_id, certificate_type)."
+    },
+    {
+      "rule": "Regeneration creates supersession",
+      "description": "Regenerate issues a new row with supersedes_id pointing to the previous issued cert. Old cert becomes superseded. Revocation is a SEPARATE action, not implied by regeneration."
+    },
+    {
+      "rule": "Snapshot immutability",
+      "description": "template_snapshot_json and rendered_variables_json are captured at issuance and never mutated, even if the source template or person record changes."
+    },
+    {
+      "rule": "Bulk generation lock",
+      "description": "lock:certificates:generate:{eventId}:{type} in Upstash, 5-min TTL, released early on completion. Concurrent request returns 409."
+    },
+    {
+      "rule": "Public verify disclosure",
+      "description": "Transparent status for revoked (shows reason + timestamp) and superseded (shows new cert number). Never includes a download link. Never includes PII beyond what is printed on the certificate."
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "issue-single",
+      "method": "POST",
+      "path": "/api/events/{eventId}/certificates",
+      "role": "super_admin | event_coordinator",
+      "request": {
+        "person_id": "uuid",
+        "certificate_type": "one of the 7 enum values",
+        "template_id": "uuid",
+        "eligibility_basis_type": "registration | attendance | session_assignment | event_role | manual",
+        "eligibility_basis_id": "uuid | null",
+        "variables": { "<field>": "value" }
+      },
+      "success": {
+        "status": 201,
+        "body": { "id": "uuid", "certificate_number": "string", "verification_token": "uuid", "status": "issued" }
+      },
+      "errors": [
+        { "condition": "person not attached to event", "status": 400, "body": { "error": "person not attached to event" } },
+        { "condition": "event is archived", "status": 400, "body": { "error": "event archived" } },
+        { "condition": "CME fields missing/invalid", "status": 400, "body": { "error": "validation_failed", "fields": { "cme_credit_hours": "required, > 0, <= event duration hours" } } },
+        { "condition": "role is ops or read_only", "status": 403, "body": { "error": "forbidden" } },
+        { "condition": "cross-event", "status": 404 }
+      ]
+    },
+    {
+      "id": "regenerate",
+      "method": "POST",
+      "path": "/api/events/{eventId}/certificates/{certId}/regenerate",
+      "role": "super_admin | event_coordinator",
+      "success": {
+        "status": 201,
+        "body": { "id": "uuid (new)", "certificate_number": "string (new)", "supersedes_id": "uuid (old)" }
+      },
+      "sideEffects": "old cert.status => superseded, old cert.superseded_by_id => new cert.id"
+    },
+    {
+      "id": "revoke",
+      "method": "POST",
+      "path": "/api/events/{eventId}/certificates/{certId}/revoke",
+      "role": "super_admin | event_coordinator",
+      "request": { "reason": "non-empty string" },
+      "success": { "status": 200, "body": { "id": "uuid", "status": "revoked", "revoked_at": "timestamp" } },
+      "errors": [
+        { "condition": "reason empty or whitespace", "status": 400, "body": { "error": "reason_required" } }
+      ]
+    },
+    {
+      "id": "bulk-generate",
+      "method": "POST",
+      "path": "/api/events/{eventId}/certificates/bulk",
+      "role": "super_admin | event_coordinator",
+      "request": { "certificate_type": "enum", "scope": "all | ids[]" },
+      "success": { "status": 202, "body": { "batch_id": "uuid", "total": "integer", "lock_expires_at": "timestamp" } },
+      "errors": [
+        { "condition": "lock already held", "status": 409, "body": { "error": "generation in progress", "lock_holder": "userId", "started_at": "timestamp", "expires_at": "timestamp" } }
+      ]
+    },
+    {
+      "id": "signed-download",
+      "method": "GET",
+      "path": "/api/events/{eventId}/certificates/{certId}/download",
+      "role": "super_admin | event_coordinator (own event); NOT public",
+      "success": { "status": 200, "body": { "url": "signed https URL, short TTL" } },
+      "errors": [
+        { "condition": "revoked cert, role != super_admin", "status": 404 },
+        { "condition": "cross-event", "status": 404 }
+      ]
+    },
+    {
+      "id": "public-verify",
+      "method": "GET",
+      "path": "/verify/{token}",
+      "role": "public (no auth)",
+      "success": {
+        "status": 200,
+        "bodyShape": {
+          "status": "issued | superseded | revoked",
+          "certificate_number": "string",
+          "certificate_type": "enum",
+          "person_name": "string",
+          "event_name": "string",
+          "issued_at": "timestamp",
+          "revoked_at?": "timestamp (only if revoked)",
+          "revoke_reason?": "string (only if revoked)",
+          "superseded_by_certificate_number?": "string (only if superseded)"
+        },
+        "forbiddenFields": ["pdf_url", "storage_key", "download_url", "email", "phone", "person_id", "registration_id", "postal_address"]
+      },
+      "errors": [
+        { "condition": "token unknown", "status": 404 }
+      ]
+    }
+  ]
+}

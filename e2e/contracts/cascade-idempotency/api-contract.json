@@ -1,0 +1,60 @@
+{
+  "feature": "cascade-idempotency",
+  "frozen": true,
+  "approvedBy": "Shailesh Singh",
+  "approvedDate": "2026-04-14",
+  "cascadeEvents": [
+    { "name": "conference/travel.created", "handlers": ["notify-delegate-itinerary"] },
+    { "name": "conference/travel.updated", "handlers": ["flag-accommodation", "recalculate-transport", "notify-delegate-revised"] },
+    { "name": "conference/accommodation.created", "handlers": ["notify-delegate-accommodation"] },
+    { "name": "conference/accommodation.updated", "handlers": ["flag-transport", "notify-delegate-accommodation-update"] },
+    { "name": "conference/registration.created", "handlers": ["send-confirmation", "assign-qr"] },
+    { "name": "conference/session.updated", "handlers": ["notify-affected-faculty"] },
+    { "name": "conference/certificate.generated", "handlers": ["notify-recipient-certificate"] }
+  ],
+  "idempotencyKey": {
+    "format": "notification:{userId}:{eventId}:{type}:{triggerId}:{channel}",
+    "channels": ["email", "whatsapp"],
+    "store": "Upstash Redis"
+  },
+  "debounce": {
+    "windowSeconds": 5,
+    "keyScope": "(eventId, sourceEntityType, sourceEntityId)",
+    "coalesceBehavior": "merge change diffs into changeSummary"
+  },
+  "retryPolicy": {
+    "maxAttempts": 3,
+    "strategy": "exponential backoff (Inngest default)",
+    "onFinalFailure": [
+      "notification_log.status = 'failed'",
+      "notification_log.last_error = <stringified error>",
+      "Sentry.captureException with { cascadeEvent, payload, attempts, channel }",
+      "red_flags row inserted with flag_type='system_dispatch_failure' scoped to target entity",
+      "NO end-user notification"
+    ]
+  },
+  "validationPolicy": {
+    "when": "on handler entry",
+    "mode": "Zod schema per cascade event type",
+    "onFailure": "non-retriable error; dead-lettered on first attempt; Sentry captures raw payload"
+  },
+  "snapshotPolicy": {
+    "variablesCapturedAt": "cascade emit time",
+    "reusedOnRetry": true,
+    "recomputeOnRetry": false
+  },
+  "logRow": {
+    "table": "notification_log",
+    "oneRowPer": "idempotency_key",
+    "mutation": "attempts++ on each send attempt; sent_at/status updated on terminal outcome",
+    "forbidden": "no insert-per-attempt"
+  },
+  "redFlagDedup": {
+    "uniqueKey": "(event_id, target_entity_type, target_entity_id, flag_type) WHERE flag_status != 'resolved'",
+    "source": "data-requirements.md §19"
+  },
+  "lifecycleInteractions": {
+    "archivedEventInFlight": "in-flight cascades complete; new mutations blocked at server-action level",
+    "cascadeAcrossEvents": "forbidden; handler queries event-scoped except global `people`"
+  }
+}
