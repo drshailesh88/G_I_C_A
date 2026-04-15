@@ -10,10 +10,19 @@
 - Transaction-level retry uses PG error class 40 (code.startsWith('40')) to avoid conflicting with class-23 collision/constraint tests
 - Stryker baseline requires stryker.conf.mjs with ignoreStatic:true — without it, static mutants (26% of total) make the run exceed the controller's 60-min timeout. The .mjs file takes precedence over stryker.config.json without modifying the locked JSON config.
 - Controller's parseStrykerReport uses (killed+survived+timeout) as denominator — files with only NoCoverage or Ignored mutants get score=null and are skipped by applyMutationMeasurement
+- API route pattern: type Params = Promise<{ eventId: string }>; await params to destructure; paramsSchema validates UUID; assertEventAccess for auth; safeParse body with Zod; catch errors and map to status codes per contract
+- Certificate endpoints require super_admin or event_coordinator (not ops) — need extra role check beyond assertEventAccess's WRITE_ROLES which includes ops
+- API request bodies use snake_case per contract; Zod .transform() maps to camelCase for internal action functions
 
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T12:00:00Z — cert-api-006 — POST /api/events/[eventId]/certificates endpoint
+- Implemented: Created route handler with Zod request schema (snake_case → camelCase transform), eventId path validation, assertEventAccess + certificate-specific role guard (super_admin/event_coordinator only), body validation, issueCertificate call, and error mapping to contract status codes (400/403/404/201)
+- Files changed: src/app/api/events/[eventId]/certificates/route.ts (new), src/app/api/events/[eventId]/certificates/route.test.ts (new)
+- Tests added: 4 (route.test.ts — rejects missing fields, accepts valid body with transform, rejects invalid cert type, allows null eligibility_basis_id)
+- Learnings: API route tests need vi.mock for @/lib/db, @/lib/auth/event-access, @/lib/actions/certificate-issuance, and next/cache to avoid transitive db connection errors
 
 ## 2026-04-15T11:50:00Z — cert-code-005 — Full Stryker baseline across all modules
 - Implemented: Ran full Stryker mutation baseline via qa/controller.ts baseline; created stryker.conf.mjs with ignoreStatic:true to complete within controller's 60-min timeout; copied baseline snapshot to qa/baselines/
