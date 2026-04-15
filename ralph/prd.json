@@ -1822,7 +1822,7 @@
     "data_model": "In-process buffer (or Redis list 'test:sentry:events') with TTL.",
     "priority": 42,
     "core": false,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {
