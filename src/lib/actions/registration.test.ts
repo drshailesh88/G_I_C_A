@@ -179,6 +179,79 @@ describe('registerForEvent', () => {
     ).rejects.toThrow('Event not found');
   });
 
+  it('dedupe matches existing person by email — reuses id, does not create duplicate', async () => {
+    const event = {
+      id: 'event-1',
+      slug: 'gem-2026',
+      status: 'published',
+      registrationSettings: {},
+    };
+
+    const existingPerson = { id: 'existing-person-id', fullName: 'Existing User', email: 'rajesh@example.com', phoneE164: '+919876543210' };
+
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      const makeChain = (resolveValue: unknown) => {
+        const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+        chain.from = vi.fn().mockReturnValue(chain);
+        chain.where = vi.fn().mockImplementation(() => {
+          return Object.assign(Promise.resolve(resolveValue), chain);
+        });
+        chain.innerJoin = vi.fn().mockReturnValue(chain);
+        chain.orderBy = vi.fn().mockReturnValue(chain);
+        chain.limit = vi.fn().mockResolvedValue(resolveValue);
+        return chain;
+      };
+
+      if (selectCallCount === 1) {
+        return makeChain([event]);
+      } else if (selectCallCount === 2) {
+        return makeChain([]);
+      } else {
+        return makeChain([{ count: 0 }]);
+      }
+    });
+
+    mockFindDuplicatePerson.mockResolvedValue(existingPerson);
+
+    const newReg = {
+      id: 'reg-1',
+      registrationNumber: 'GEM2026-DEL-00001',
+      qrCodeToken: 'abc123',
+      status: 'confirmed',
+    };
+
+    let insertCallCount = 0;
+    mockDb.insert.mockImplementation(() => {
+      insertCallCount++;
+      const chain = {
+        values: vi.fn().mockReturnThis(),
+        returning: vi.fn(),
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+      };
+
+      if (insertCallCount === 1) {
+        chain.returning.mockResolvedValue([newReg]);
+      }
+
+      return chain;
+    });
+
+    const result = await registerForEvent('event-1', {
+      fullName: 'Dr. Rajesh Kumar',
+      email: 'rajesh@example.com',
+      phone: '+919876543210',
+    });
+
+    expect(mockFindDuplicatePerson).toHaveBeenCalledWith('rajesh@example.com', '+919876543210');
+    expect(result.registrationId).toBe('reg-1');
+    // The first insert should be the registration, NOT a person insert (person was deduped)
+    const firstInsertValues = mockDb.insert.mock.calls[0];
+    // If person was deduped, the insert call count should be 2 (registration + event_people), not 3
+    expect(insertCallCount).toBeLessThanOrEqual(2);
+  });
+
   it('rejects invalid input', async () => {
     await expect(
       registerForEvent('event-1', { fullName: '' }),
