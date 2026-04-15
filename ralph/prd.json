@@ -198,11 +198,11 @@
     "description": "Confirm full Stryker baseline runs after cert code gaps close; produce per-module scores for 107 files.",
     "page": "N/A \u2014 Backend",
     "ui_details": "N/A",
-    "behavior": "After stories 1\u20134 land, run DATABASE_URL=$DATABASE_URL_TEST npx tsx qa/controller.ts baseline. Stryker's dry-run must now succeed (vitest passes with 0 failures) and the full mutation run must complete, populating .quality/state.json with per-module mutation scores for all files matched by stryker.config.json's expanded mutate globs. Commit the resulting baseline snapshot to qa/baselines/. This story has no code to write; it is a verification gate before Block 2 begins.",
+    "behavior": "After stories 1-4 land, run a full Stryker mutation-testing baseline with DATABASE_URL=$DATABASE_URL_TEST npx tsx qa/controller.ts baseline. Stryker must successfully begin mutation analysis (vitest dry-run passes with 0 failures) and populate .quality/state.json plus commit a snapshot to qa/baselines/. ACCEPTABLE OUTCOMES (ladder, in order of preference): (a) PREFERRED \u2014 full baseline across all 107 files in the stryker.config.json mutate glob, exit code 0, all modules scored in state.json. (b) ACCEPTABLE \u2014 partial baseline covering >= 60 modules scored in state.json, with a plain-English note appended to the committed snapshot file explaining which modules were skipped and why (typically laptop OOM with exit 143/137). The partial is real data and still unblocks Block 2. (c) ABORT \u2014 if Stryker cannot complete even 60 modules, or if the dry-run fails, emit <promise>ABORT</promise>. Do NOT create shadow config files (stryker.conf.mjs or any variant), do NOT edit the locked stryker.config.json, and do NOT lower test expectations to force a completion. The lock is the contract; ABORT is the escape hatch. When an acceptable outcome is reached, commit the snapshot to qa/baselines/ and mark the story passes:true. This story writes no production code; it is a verification gate before Block 2 begins.",
     "data_model": ".quality/state.json \u2014 controller writes this automatically.",
     "priority": 5,
     "core": true,
-    "passes": true,
+    "passes": false,
     "tests": {
       "unit": [
         {
