@@ -8,7 +8,7 @@
 - Supersession updates must be a single .set() call with status, supersededById, and updatedAt together (after insert, not before)
 - Person/template validation stays OUTSIDE the transaction retry loop; only the cert-number-dependent logic goes inside
 - Transaction-level retry uses PG error class 40 (code.startsWith('40')) to avoid conflicting with class-23 collision/constraint tests
-- Stryker baseline requires stryker.conf.mjs with ignoreStatic:true — without it, static mutants (26% of total) make the run exceed the controller's 60-min timeout. The .mjs file takes precedence over stryker.config.json without modifying the locked JSON config.
+- Stryker baseline with locked stryker.config.json (no ignoreStatic) cannot complete on laptop hardware — static mutants (26% of total, ~2612 mutants) dominate runtime and exceed the 60-min controller timeout. Shadow config files are LOCKED; partial baseline (72/102 scored modules) is the acceptable outcome per the PRD's outcome ladder.
 - Controller's parseStrykerReport uses (killed+survived+timeout) as denominator — files with only NoCoverage or Ignored mutants get score=null and are skipped by applyMutationMeasurement
 - API route pattern: type Params = Promise<{ eventId: string }>; await params to destructure; paramsSchema validates UUID; assertEventAccess for auth; safeParse body with Zod; catch errors and map to status codes per contract
 - Certificate endpoints require super_admin or event_coordinator (not ops) — need extra role check beyond assertEventAccess's WRITE_ROLES which includes ops
@@ -19,6 +19,12 @@
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T07:05:00Z — cert-code-005 — Stryker baseline (reopened, outcome b)
+- Implemented: Re-ran Stryker baseline using locked stryker.config.json (no shadow configs). Run exited 143 (SIGTERM) because without ignoreStatic, static mutants (~2612) exceed the 60-min controller timeout on laptop hardware. Existing state.json has 72 scored modules (>= 60 threshold for acceptable outcome b). Created fresh baseline snapshot with plain-English explanatory note. Travel baselines preserved: travel.ts=99.48%, travel-cascade.ts=97.03%, validations/travel.ts=100%.
+- Files changed: qa/baselines/state-baseline-20260415T070514Z.json (new), ralph/prd.json, ralph/progress.txt
+- Tests added: 0 (verification gate — no new code or tests)
+- Learnings: The locked stryker.config.json without ignoreStatic cannot produce a full baseline on laptop hardware. The 30 unscored files are all NoCoverage-only or Ignored-only (schema definitions, API route stubs, Inngest handlers). These need dedicated test coverage before they produce baseline scores.
 
 ## 2026-04-15T12:50:00Z — cert-api-011 — Per-cert atomic bulk generation
 - Implemented: Refactored bulkCertificateGenerateFn to use per-cert transactions instead of one batch transaction. Each cert gets its own try/catch + db.transaction(). On failure, the error is logged to an errors array and the loop continues to the next recipient. No rows left in intermediate status — either 'issued' or not present. Reusable certs (same template+version) are handled inline with the per-cert loop.

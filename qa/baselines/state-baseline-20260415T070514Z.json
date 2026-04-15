@@ -1,0 +1,519 @@
+{
+  "schema_version": 1,
+  "last_updated": "2026-04-15T06:16:52.957Z",
+  "features": {},
+  "modules": {
+    "src/lib/actions/travel.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 99.48,
+      "mutation_baseline_set_at": "2026-04-15T01:28:27.432Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/cascade/handlers/travel-cascade.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 97.03,
+      "mutation_baseline_set_at": "2026-04-15T01:28:27.435Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/validations/travel.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 100,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/actions/batch-sync.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 65.22,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.955Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/lib/actions/branding.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 88.54,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/actions/certificate-bulk-zip.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 89.8,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/actions/certificate-issuance.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 93.55,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/actions/checkin.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 82.5,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/actions/event.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 73.08,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/lib/actions/notifications.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 41.67,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/lib/actions/program.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 83.6,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/actions/team.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 85.12,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/actions/transport.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 97.18,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/attendance/offline-queue.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 66.67,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/auth/event-access.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 82.98,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/cascade/automation-utils.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 73.63,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/lib/cascade/automation.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 86.79,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/certificates/bulk-zip.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 81.48,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/certificates/distributed-lock.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 86.84,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/certificates/issuance-utils.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 94.07,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/certificates/storage.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 71.93,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.956Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/lib/exports/archive.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 32.7,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/lib/exports/emergency-kit.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 29.6,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/lib/exports/excel.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 35.69,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/lib/import/csv-import.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 58.82,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/lib/inngest/bulk-functions.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 57.21,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/lib/notifications/circuit-breaker.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 92.68,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/email.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 87.8,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/send.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 96.55,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/template-renderer.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 89.86,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/webhook-auth.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 81.03,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/webhook-dlq.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 91.11,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/whatsapp.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 85.82,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/sentry.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 0,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/middleware.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 18.52,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/lib/actions/certificate-generation.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 85.71,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/actions/certificate.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 92.54,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/attendance/qr-utils.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 97.75,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/cascade/emit.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 88.57,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/cascade/red-flags.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 85.19,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/certificates/certificate-types.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 91.3,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/flags.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 97.53,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/delivery-event-queries.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 81.25,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/system-templates.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 100,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/webhook-parsers.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 89.58,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/validations/accommodation.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 100,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/validations/branding.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 100,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/validations/certificate.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 100,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/validations/event.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 100,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/validations/notification-template.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 100,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/validations/person.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 85.19,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/validations/program.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 100,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/validations/registration.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 94.74,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/validations/transport.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 100,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/actions/accommodation.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 95,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/actions/attendance.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 83.33,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/actions/checkin-search.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 54.55,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/lib/actions/dashboard.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 49.33,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/lib/actions/person.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 94.44,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/actions/registration.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 55.64,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/lib/cascade/handlers/accommodation-cascade.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 91,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/db/with-event-scope.ts": {
+      "tier": "critical_75",
+      "mutation_baseline": 46.67,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    },
+    "src/lib/notifications/idempotency.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 84.38,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/log-queries.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 80,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/seed-system-templates.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 93.75,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/template-queries.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 90.84,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/template-utils.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 95.24,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/timeout.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 92.86,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/trigger-queries.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 86.76,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/notifications/webhook-ingest.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 90.91,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/utils.ts": {
+      "tier": "ui_gates_only",
+      "mutation_baseline": 100,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": true
+    },
+    "src/lib/exports/types.ts": {
+      "tier": "business_60",
+      "mutation_baseline": 0,
+      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline_run_id": "baseline-manual",
+      "has_exceeded_floor": false
+    }
+  },
+  "baseline_reset_log": [],
+  "test_count_history": {
+    "vitest_unit": [],
+    "vitest_integration": [],
+    "playwright": []
+  },
+  "runs": {},
+  "_baseline_note": "PARTIAL BASELINE \u2014 72 of 102 files scored (69%). Stryker was run using the locked stryker.config.json (no shadow configs). The run was terminated (exit 143/SIGTERM) because the locked config does not include ignoreStatic:true, causing static mutants (26% of total, ~2612 mutants) to dominate runtime and exceed the controller's 60-minute timeout on laptop hardware. The 72 scored modules represent all files with at least one Killed, Survived, or Timeout mutant \u2014 i.e., files where mutation testing produced meaningful signal. The 30 unscored files fall into two categories: (1) 14 files with only NoCoverage mutants (API routes, Inngest handlers, stubs \u2014 no test exercises their code paths in unit/vitest), and (2) 16 files with only Ignored and/or NoCoverage mutants (Drizzle schema definitions, validation-only modules where all mutants are static/ignored). These unscored files need dedicated test coverage before they can produce baseline scores. Travel baselines preserved: travel.ts=99.48%, travel-cascade.ts=97.03%, validations/travel.ts=100%. This partial baseline unblocks Block 2."
+}
