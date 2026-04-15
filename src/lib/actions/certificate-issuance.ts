@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { issuedCertificates, certificateTemplates, people, eventRegistrations, events } from '@/lib/db/schema';
+import { issuedCertificates, certificateTemplates, people, eventRegistrations, events, eventPeople } from '@/lib/db/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
@@ -44,6 +44,14 @@ export async function issueCertificate(eventId: string, input: unknown) {
     .where(eq(people.id, validated.personId))
     .limit(1);
   if (!person) throw new Error('Person not found');
+
+  // Verify person is attached to this event
+  const [attachment] = await db
+    .select({ id: eventPeople.id })
+    .from(eventPeople)
+    .where(and(eq(eventPeople.eventId, eventId), eq(eventPeople.personId, validated.personId)))
+    .limit(1);
+  if (!attachment) throw new Error('person not attached to event');
 
   // Verify template exists and is active
   const [template] = await db

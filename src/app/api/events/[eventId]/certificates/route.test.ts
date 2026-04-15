@@ -173,6 +173,53 @@ describe('POST /api/events/[eventId]/certificates — archived event', () => {
   });
 });
 
+describe('POST /api/events/[eventId]/certificates — person-event attachment', () => {
+  const eventId = '550e8400-e29b-41d4-a716-446655440000';
+  const params = Promise.resolve({ eventId });
+
+  const validBody = {
+    person_id: '660e8400-e29b-41d4-a716-446655440001',
+    certificate_type: 'delegate_attendance',
+    template_id: '770e8400-e29b-41d4-a716-446655440002',
+    eligibility_basis_type: 'registration',
+    variables: {},
+  };
+
+  function makeRequest(body: unknown) {
+    return new Request('http://localhost:4000/api/events/' + eventId + '/certificates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns 400 when person is not attached to event', async () => {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:super_admin' });
+    mockIssueCertificate.mockRejectedValue(new Error('person not attached to event'));
+
+    const res = await POST(makeRequest(validBody), { params });
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toBe('person not attached to event');
+  });
+
+  it('returns 201 when person is attached to event', async () => {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:super_admin' });
+    mockIssueCertificate.mockResolvedValue({
+      id: 'cert-1',
+      certificateNumber: 'GEM2026-ATT-00001',
+      verificationToken: 'tok-1',
+    });
+
+    const res = await POST(makeRequest(validBody), { params });
+    expect(res.status).toBe(201);
+  });
+});
+
 describe('POST /api/events/[eventId]/certificates — CME validation', () => {
   const eventId = '550e8400-e29b-41d4-a716-446655440000';
   const params = Promise.resolve({ eventId });

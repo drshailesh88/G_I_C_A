@@ -3,10 +3,10 @@
     "id": "cert-code-001",
     "category": "crud",
     "description": "Add missing error-throw branches to issueCertificate so forbidden issuance conditions reject instead of resolving.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "issueCertificate must reject with a typed error when any of the following preconditions fail: the target template does not exist or is not status='active'; the event is in status='archived'; the person has no event_people row for the eventId; an existing current-valid issued cert already exists for (person, event, type) when the caller is not using the regenerate path; the prior certificate_number sequence could not be determined. Return shapes and error codes must match the mutation-kill tests in certificate-issuance.mutation-kill.test.ts; the 6 'promise resolved instead of rejecting' cases all flip to reject after this lands. No test file may be modified. Additionally return the new cert id on success so the 'expected undefined to be new-cert-id' case passes.",
-    "data_model": "certificates + certificate_templates + event_people + events in src/lib/db/schema \u2014 no schema changes; see .planning/data-requirements.md \u00a718 for the Rules list.",
+    "data_model": "certificates + certificate_templates + event_people + events in src/lib/db/schema — no schema changes; see .planning/data-requirements.md §18 for the Rules list.",
     "priority": 1,
     "core": true,
     "passes": true,
@@ -62,7 +62,7 @@
     "id": "cert-code-002",
     "category": "crud",
     "description": "Add single-retry-on-transaction-failure to issueCertificate so the retry mutation-kill test passes.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "On transaction failure during certificate issuance, issueCertificate must retry exactly once with the same input. The second attempt opens a new db.transaction() and redoes the full insert + number-sequence lookup. If the retry also fails, the original error is re-thrown. The mutation-kill test (`expected +0 to be 2`) asserts txCallCount === 2. Implementation must not retry more than once and must not alter the persisted state on the first failure.",
     "data_model": "certificates insert inside db.transaction(); no schema changes.",
@@ -73,13 +73,13 @@
       "unit": [
         {
           "name": "transaction retried once on first failure",
-          "description": "Simulate first tx throw, second tx success \u2014 tx callback count equals 2.",
+          "description": "Simulate first tx throw, second tx success — tx callback count equals 2.",
           "input": "first-call-throws mock db",
           "expected_output": "returns cert id; txCallCount === 2"
         },
         {
           "name": "no retry when first attempt succeeds",
-          "description": "Happy path \u2014 single tx call.",
+          "description": "Happy path — single tx call.",
           "input": "normal mock db",
           "expected_output": "txCallCount === 1"
         }
@@ -109,10 +109,10 @@
     "id": "cert-code-003",
     "category": "crud",
     "description": "Enforce transaction write-order in activateCertificateTemplate: archive existing active of same type, then activate target.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "activateCertificateTemplate must run inside a single db.transaction(). Inside the tx, it first UPDATEs any existing certificate_templates row matching (event_id, certificate_type, status='active') to status='archived', archivedAt=now(), updatedBy=<actor>. Only after that completes does it UPDATE the target template to status='active', updatedBy=<actor>. The mutation-kill tests assert this exact ordering via setCalls[0].status='archived' and setCalls[1].status='active'. Also assert mockDb.transaction was called. Data-requirements \u00a717: 'One active template per (event_id, certificate_type) \u2014 prevents generation mistakes.'",
-    "data_model": "certificate_templates \u2014 no schema changes. See data-requirements.md \u00a717.",
+    "behavior": "activateCertificateTemplate must run inside a single db.transaction(). Inside the tx, it first UPDATEs any existing certificate_templates row matching (event_id, certificate_type, status='active') to status='archived', archivedAt=now(), updatedBy=<actor>. Only after that completes does it UPDATE the target template to status='active', updatedBy=<actor>. The mutation-kill tests assert this exact ordering via setCalls[0].status='archived' and setCalls[1].status='active'. Also assert mockDb.transaction was called. Data-requirements §17: 'One active template per (event_id, certificate_type) — prevents generation mistakes.'",
+    "data_model": "certificate_templates — no schema changes. See data-requirements.md §17.",
     "priority": 3,
     "core": true,
     "passes": true,
@@ -125,7 +125,7 @@
           "expected_output": "setCalls[0].status==='archived'; setCalls[1].status==='active'"
         },
         {
-          "name": "no existing active \u2014 just activates target",
+          "name": "no existing active — just activates target",
           "description": "When no sibling active template exists, only one UPDATE is issued to activate the target.",
           "input": "no sibling active",
           "expected_output": "setCalls.length===1; setCalls[0].status==='active'"
@@ -156,10 +156,10 @@
     "id": "cert-code-004",
     "category": "crud",
     "description": "Return the inserted certificate id from issueCertificate so downstream consumers have the row reference.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "issueCertificate currently does not return the newly inserted row's id in all code paths, causing the mutation-kill 'expected undefined to be new-cert-id' failure. Update the function signature to return { id: string, certificateNumber: string, verificationToken: string } on success. All call sites in src/lib/actions/certificate*.ts and any route handlers must be updated to consume the return value.",
-    "data_model": "certificates \u2014 no schema changes; uses .returning({ id: certificates.id, certificateNumber, verificationToken }).",
+    "data_model": "certificates — no schema changes; uses .returning({ id: certificates.id, certificateNumber, verificationToken }).",
     "priority": 4,
     "core": true,
     "passes": true,
@@ -176,7 +176,7 @@
         {
           "name": "new-cert-id test passes",
           "steps": [
-            "Run certificate-issuance.mutation-kill.test.ts \u2192 'returns new cert id'"
+            "Run certificate-issuance.mutation-kill.test.ts → 'returns new cert id'"
           ],
           "expected": "green"
         }
@@ -196,10 +196,10 @@
     "id": "cert-code-005",
     "category": "data",
     "description": "Confirm full Stryker baseline runs after cert code gaps close; produce per-module scores for 107 files.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "After stories 1-4 land, run a full Stryker mutation-testing baseline with DATABASE_URL=$DATABASE_URL_TEST npx tsx qa/controller.ts baseline. Stryker must successfully begin mutation analysis (vitest dry-run passes with 0 failures) and populate .quality/state.json plus commit a snapshot to qa/baselines/. ACCEPTABLE OUTCOMES (ladder, in order of preference): (a) PREFERRED \u2014 full baseline across all 107 files in the stryker.config.json mutate glob, exit code 0, all modules scored in state.json. (b) ACCEPTABLE \u2014 partial baseline covering >= 60 modules scored in state.json, with a plain-English note appended to the committed snapshot file explaining which modules were skipped and why (typically laptop OOM with exit 143/137). The partial is real data and still unblocks Block 2. (c) ABORT \u2014 if Stryker cannot complete even 60 modules, or if the dry-run fails, emit <promise>ABORT</promise>. Do NOT create shadow config files (stryker.conf.mjs or any variant), do NOT edit the locked stryker.config.json, and do NOT lower test expectations to force a completion. The lock is the contract; ABORT is the escape hatch. When an acceptable outcome is reached, commit the snapshot to qa/baselines/ and mark the story passes:true. This story writes no production code; it is a verification gate before Block 2 begins.",
-    "data_model": ".quality/state.json \u2014 controller writes this automatically.",
+    "behavior": "After stories 1-4 land, run a full Stryker mutation-testing baseline with DATABASE_URL=$DATABASE_URL_TEST npx tsx qa/controller.ts baseline. Stryker must successfully begin mutation analysis (vitest dry-run passes with 0 failures) and populate .quality/state.json plus commit a snapshot to qa/baselines/. ACCEPTABLE OUTCOMES (ladder, in order of preference): (a) PREFERRED — full baseline across all 107 files in the stryker.config.json mutate glob, exit code 0, all modules scored in state.json. (b) ACCEPTABLE — partial baseline covering >= 60 modules scored in state.json, with a plain-English note appended to the committed snapshot file explaining which modules were skipped and why (typically laptop OOM with exit 143/137). The partial is real data and still unblocks Block 2. (c) ABORT — if Stryker cannot complete even 60 modules, or if the dry-run fails, emit <promise>ABORT</promise>. Do NOT create shadow config files (stryker.conf.mjs or any variant), do NOT edit the locked stryker.config.json, and do NOT lower test expectations to force a completion. The lock is the contract; ABORT is the escape hatch. When an acceptable outcome is reached, commit the snapshot to qa/baselines/ and mark the story passes:true. This story writes no production code; it is a verification gate before Block 2 begins.",
+    "data_model": ".quality/state.json — controller writes this automatically.",
     "priority": 5,
     "core": true,
     "passes": true,
@@ -207,7 +207,7 @@
       "unit": [
         {
           "name": "controller baseline command exits 0",
-          "description": "Verification step \u2014 no new unit tests.",
+          "description": "Verification step — no new unit tests.",
           "input": "qa/controller.ts baseline",
           "expected_output": "exitCode 0"
         }
@@ -236,8 +236,8 @@
   {
     "id": "cert-api-006",
     "category": "crud",
-    "description": "POST /api/events/[eventId]/certificates \u2014 single-issue endpoint matching the frozen certificates contract.",
-    "page": "N/A \u2014 Backend",
+    "description": "POST /api/events/[eventId]/certificates — single-issue endpoint matching the frozen certificates contract.",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "Create the route handler at src/app/api/events/[eventId]/certificates/route.ts with a POST handler. It must: derive eventId from URL path only; reject body.eventId mismatches with 400 + Sentry; call assertEventAccess(eventId, { requireWrite: true }); validate body with Zod; invoke issueCertificate (see cert-code-001..004); return 201 { id, certificate_number, verification_token, status: 'issued' }. Status codes per api-contract.json: 400 for CME field missing/invalid, 400 for person-not-attached, 400 for archived event, 403 for ops/read_only, 404 for cross-event.",
     "data_model": "certificates row inserted. See e2e/contracts/certificates/api-contract.json endpoint 'issue-single'.",
@@ -279,10 +279,10 @@
     "id": "cert-api-007",
     "category": "crud",
     "description": "Capture template_snapshot_json and rendered_variables_json immutably at issuance time.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "On every issuance, serialize the template's current templateJson and the resolved variable values (with master-person fields substituted) into the new row's template_snapshot_json and rendered_variables_json columns. These columns must never be updated by any subsequent operation \u2014 not template edits, not person-master edits, not regeneration of siblings. Enforce immutability at the repository layer (no UPDATE set of these columns anywhere). The contract (CE11 + CE12) hashes the snapshots before and after a template edit and asserts they match.",
-    "data_model": "issuedCertificates.templateSnapshotJson, renderedVariablesJson \u2014 data-requirements.md \u00a718 Rules line 'Regeneration creates a new row, supersedes the old one. Never overwrites.'",
+    "behavior": "On every issuance, serialize the template's current templateJson and the resolved variable values (with master-person fields substituted) into the new row's template_snapshot_json and rendered_variables_json columns. These columns must never be updated by any subsequent operation — not template edits, not person-master edits, not regeneration of siblings. Enforce immutability at the repository layer (no UPDATE set of these columns anywhere). The contract (CE11 + CE12) hashes the snapshots before and after a template edit and asserts they match.",
+    "data_model": "issuedCertificates.templateSnapshotJson, renderedVariablesJson — data-requirements.md §18 Rules line 'Regeneration creates a new row, supersedes the old one. Never overwrites.'",
     "priority": 7,
     "core": true,
     "passes": true,
@@ -297,7 +297,7 @@
       ],
       "e2e": [
         {
-          "name": "CE11+CE12 pass \u2014 snapshots immutable across edits",
+          "name": "CE11+CE12 pass — snapshots immutable across edits",
           "steps": [
             "Issue cert v1",
             "Edit template + update person master",
@@ -320,11 +320,11 @@
   {
     "id": "cert-api-008",
     "category": "crud",
-    "description": "POST /api/events/[eventId]/certificates/[certId]/regenerate \u2014 supersession chain.",
-    "page": "N/A \u2014 Backend",
+    "description": "POST /api/events/[eventId]/certificates/[certId]/regenerate — supersession chain.",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "Create a new issued row with supersedes_id pointing at the existing cert, a fresh certificate_number (next in sequence), a fresh verification_token, and a fresh template_snapshot_json / rendered_variables_json captured from the current template + person. In the same transaction, UPDATE the prior row to status='superseded', superseded_by_id=<new id>, updatedAt=now(). Prior row must NOT be marked revoked. Return 201 { id, certificate_number, supersedes_id }. See certificates contract Example 2 + Example 8.",
-    "data_model": "issuedCertificates \u2014 uses supersedesId, supersededById columns. Data-requirements \u00a718.",
+    "data_model": "issuedCertificates — uses supersedesId, supersededById columns. Data-requirements §18.",
     "priority": 8,
     "core": true,
     "passes": true,
@@ -362,8 +362,8 @@
   {
     "id": "cert-api-009",
     "category": "crud",
-    "description": "POST /api/events/[eventId]/certificates/[certId]/revoke \u2014 revocation with mandatory reason.",
-    "page": "N/A \u2014 Backend",
+    "description": "POST /api/events/[eventId]/certificates/[certId]/revoke — revocation with mandatory reason.",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "Endpoint must require a non-empty, non-whitespace reason string in the body (Zod refine). On success: UPDATE target cert SET status='revoked', revoked_at=now(), revoked_by=<actor>, revoke_reason=<reason>. Prior row's superseded_by_id remains null (revoke is distinct from supersede). Return 200 { id, status: 'revoked', revoked_at }. Missing/empty/whitespace reason returns 400 with { error: 'reason_required' }. CE15 covers these three body cases.",
     "data_model": "issuedCertificates.status, revokedAt, revokedBy, revokeReason.",
@@ -408,10 +408,10 @@
   {
     "id": "cert-api-010",
     "category": "crud",
-    "description": "POST /api/events/[eventId]/certificates/bulk \u2014 Upstash-locked bulk generation with 409 on contention.",
-    "page": "N/A \u2014 Backend",
+    "description": "POST /api/events/[eventId]/certificates/bulk — Upstash-locked bulk generation with 409 on contention.",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "Body: { certificate_type, scope: 'all' | { ids: string[] } }. Before starting, acquire Redis lock 'lock:certificates:generate:{eventId}:{type}' with 5-minute TTL using SET NX. If NX fails, return 409 { error: 'generation in progress', lock_holder, started_at, expires_at } (read holder metadata from the lock value). On success, kick off the bulk run (sync or enqueued to Inngest \u2014 spec does not require sync). Release the lock on completion (both success and failure paths) via DEL, not TTL expiry. Per-cert atomicity: cert N failure leaves 1..N-1 issued and retryable; no rows remain in a non-terminal intermediate status. Return 202 { batch_id, total, lock_expires_at }.",
+    "behavior": "Body: { certificate_type, scope: 'all' | { ids: string[] } }. Before starting, acquire Redis lock 'lock:certificates:generate:{eventId}:{type}' with 5-minute TTL using SET NX. If NX fails, return 409 { error: 'generation in progress', lock_holder, started_at, expires_at } (read holder metadata from the lock value). On success, kick off the bulk run (sync or enqueued to Inngest — spec does not require sync). Release the lock on completion (both success and failure paths) via DEL, not TTL expiry. Per-cert atomicity: cert N failure leaves 1..N-1 issued and retryable; no rows remain in a non-terminal intermediate status. Return 202 { batch_id, total, lock_expires_at }.",
     "data_model": "issuedCertificates bulk-inserted; Upstash lock key. See BACKEND_ARCHITECTURE_MAP.md Redis section.",
     "priority": 10,
     "core": true,
@@ -420,7 +420,7 @@
       "unit": [
         {
           "name": "lock acquired with NX + TTL",
-          "description": "Mock Redis \u2014 assert SET with NX+EX arguments.",
+          "description": "Mock Redis — assert SET with NX+EX arguments.",
           "input": "fresh event+type",
           "expected_output": "SET lock_key {holder,started_at} EX 300 NX"
         },
@@ -458,9 +458,9 @@
     "id": "cert-api-011",
     "category": "crud",
     "description": "Bulk generation is per-cert atomic; failure mid-batch leaves prior successes issued with no non-terminal rows.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "Inside the bulk loop, each certificate is issued in its own transaction. On exception for cert N, log the failure, skip to the next cert, and continue. Do not abort the batch on a single failure. No row is ever left in a pending/intermediate status \u2014 rows are either status='issued' (success) or not present (not attempted or rolled back by its own tx). Failures are reported in a summary that can be retrieved via batch_id. Contract CE9 + CE20 enforce: 46 successes + 54 retryable absent rows when failure injected at cert 47/100.",
+    "behavior": "Inside the bulk loop, each certificate is issued in its own transaction. On exception for cert N, log the failure, skip to the next cert, and continue. Do not abort the batch on a single failure. No row is ever left in a pending/intermediate status — rows are either status='issued' (success) or not present (not attempted or rolled back by its own tx). Failures are reported in a summary that can be retrieved via batch_id. Contract CE9 + CE20 enforce: 46 successes + 54 retryable absent rows when failure injected at cert 47/100.",
     "data_model": "issuedCertificates; no intermediate pending status.",
     "priority": 11,
     "core": true,
@@ -499,11 +499,11 @@
   {
     "id": "cert-api-012",
     "category": "crud",
-    "description": "CME certificate issuance \u2014 require all four CME fields with credit-hours bound by event duration.",
-    "page": "N/A \u2014 Backend",
+    "description": "CME certificate issuance — require all four CME fields with credit-hours bound by event duration.",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "When certificate_type='cme_attendance', Zod schema for variables must require: cme_credit_hours (number, > 0, <= event duration hours); accrediting_body_name (non-empty string); accreditation_code (non-empty string); cme_claim_text (non-empty string). Event duration hours is derived from (event.endDate - event.startDate) in hours. Any missing or invalid field returns 400 with ZodError fields. Data-requirements \u00a718 'CME certificate type' bullet is the spec anchor.",
-    "data_model": "issuedCertificates.renderedVariablesJson \u2014 the 4 CME fields persisted verbatim.",
+    "behavior": "When certificate_type='cme_attendance', Zod schema for variables must require: cme_credit_hours (number, > 0, <= event duration hours); accrediting_body_name (non-empty string); accreditation_code (non-empty string); cme_claim_text (non-empty string). Event duration hours is derived from (event.endDate - event.startDate) in hours. Any missing or invalid field returns 400 with ZodError fields. Data-requirements §18 'CME certificate type' bullet is the spec anchor.",
+    "data_model": "issuedCertificates.renderedVariablesJson — the 4 CME fields persisted verbatim.",
     "priority": 12,
     "core": false,
     "passes": true,
@@ -553,10 +553,10 @@
   {
     "id": "cert-api-013",
     "category": "crud",
-    "description": "GET /verify/[token] \u2014 public verify endpoint with strict response shape.",
+    "description": "GET /verify/[token] — public verify endpoint with strict response shape.",
     "page": "/verify/[token]",
     "ui_details": "Public route; may be a minimal page that also exposes JSON via Accept: application/json, OR a dedicated /api/verify/[token] endpoint called by a thin page. Either works; contract asserts JSON shape via Playwright page.request.get().",
-    "behavior": "No auth. Response body MUST be exactly: { status, certificate_number, certificate_type, person_name, event_name, issued_at } with optional { revoked_at, revoke_reason } when status='revoked' and { superseded_by_certificate_number } when status='superseded'. Forbidden fields: pdf_url, storage_key, download_url, email, phone, person_id, registration_id, postal_address. Increment verification_count and set last_verified_at atomically. Unknown token \u2192 404. Revoked cert \u2192 status='revoked' transparently (CE5). Superseded cert \u2192 status='superseded' with superseded_by_certificate_number (CE6 + Example 2).",
+    "behavior": "No auth. Response body MUST be exactly: { status, certificate_number, certificate_type, person_name, event_name, issued_at } with optional { revoked_at, revoke_reason } when status='revoked' and { superseded_by_certificate_number } when status='superseded'. Forbidden fields: pdf_url, storage_key, download_url, email, phone, person_id, registration_id, postal_address. Increment verification_count and set last_verified_at atomically. Unknown token → 404. Revoked cert → status='revoked' transparently (CE5). Superseded cert → status='superseded' with superseded_by_certificate_number (CE6 + Example 2).",
     "data_model": "issuedCertificates.verificationToken, verificationCount, lastVerifiedAt.",
     "priority": 13,
     "core": true,
@@ -596,8 +596,8 @@
   {
     "id": "cert-api-014",
     "category": "crud",
-    "description": "GET /api/events/[eventId]/certificates/[certId]/download \u2014 signed URL, revoked-cert super-admin-only.",
-    "page": "N/A \u2014 Backend",
+    "description": "GET /api/events/[eventId]/certificates/[certId]/download — signed URL, revoked-cert super-admin-only.",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "Return { url: <signed R2 URL with short TTL, e.g. 5 minutes> } for issued/superseded certs to any authorized role. For revoked certs, only super_admin gets a working URL; coordinator/ops/read_only get 404 (not 403, per CE17 and to avoid disclosing the cert exists). Cross-event access returns 404. Signed URL generation uses the existing R2 client helper; no permanent public URLs are stored on the cert row.",
     "data_model": "issuedCertificates.storageKey (private R2 path).",
@@ -643,9 +643,9 @@
     "id": "cert-api-015",
     "category": "crud",
     "description": "Ops + Read-only roles cannot mutate certificates; all mutation endpoints return 403 forbidden.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "Every certificate mutation endpoint (issue, regenerate, revoke, bulk) must check the actor's Clerk role and reject with HTTP 403 { error: 'forbidden' } when role is 'org:ops' or 'org:read_only'. This is role-based denial within an assigned event; the user IS a member, just not authorized to write certs. Data-requirements \u00a718 explicitly: 'Ops and Read-only: no certificate management.' Contract CE14.",
+    "behavior": "Every certificate mutation endpoint (issue, regenerate, revoke, bulk) must check the actor's Clerk role and reject with HTTP 403 { error: 'forbidden' } when role is 'org:ops' or 'org:read_only'. This is role-based denial within an assigned event; the user IS a member, just not authorized to write certs. Data-requirements §18 explicitly: 'Ops and Read-only: no certificate management.' Contract CE14.",
     "data_model": "No schema; middleware-style check in each mutation route.",
     "priority": 15,
     "core": false,
@@ -689,9 +689,9 @@
     "id": "cert-api-016",
     "category": "crud",
     "description": "Block certificate issuance on archived events.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "When the target event has status='archived', POST /api/events/[eventId]/certificates and its bulk variant return HTTP 400 (or 404 \u2014 either acceptable per CE19) with zero rows inserted. Existing issued certs on archived events remain verifiable (GET /verify/[token] continues to serve). Data-requirements \u00a789: 'archived \u2014 fully read-only, preserved for reports and certificate verification.'",
+    "behavior": "When the target event has status='archived', POST /api/events/[eventId]/certificates and its bulk variant return HTTP 400 (or 404 — either acceptable per CE19) with zero rows inserted. Existing issued certs on archived events remain verifiable (GET /verify/[token] continues to serve). Data-requirements §89: 'archived — fully read-only, preserved for reports and certificate verification.'",
     "data_model": "Reads events.status inside the access layer; no new schema.",
     "priority": 16,
     "core": false,
@@ -729,13 +729,13 @@
     "id": "cert-api-017",
     "category": "crud",
     "description": "Issuance rejects persons not attached to the target event.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "Before inserting a cert row, confirm an event_people row exists for (eventId, personId). If not, return HTTP 400 { error: 'person not attached to event' } with zero rows inserted. Data-requirements \u00a718: 'Only issuable to people already attached to the event.' Contract CE16.",
-    "data_model": "event_people \u2014 existence check before issuance.",
+    "behavior": "Before inserting a cert row, confirm an event_people row exists for (eventId, personId). If not, return HTTP 400 { error: 'person not attached to event' } with zero rows inserted. Data-requirements §18: 'Only issuable to people already attached to the event.' Contract CE16.",
+    "data_model": "event_people — existence check before issuance.",
     "priority": 17,
     "core": false,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {
@@ -769,7 +769,7 @@
     "id": "tenancy-018",
     "category": "crud",
     "description": "assertEventAccess returns 404 for cross-event access instead of throwing a generic Forbidden.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "Refactor src/lib/auth/event-access.ts so that assertEventAccess, when called from an API route handler and the user has no Clerk super_admin role AND no active event_user_assignments row for the event, signals a 404 result to the caller (via throw-NotFound helper or structured return). Route handlers catch this and respond with HTTP 404 and a generic body containing no eventId or event-identifying strings. Server actions called from UI can keep throwing but the thrown error must carry a code the UI layer maps to a 404 page. Contract invariants 5 and 6 enforce the 404-vs-403 split: 404 for unmembered, 403 only for role-denial within an assigned event.",
     "data_model": "No schema; refactors src/lib/auth/event-access.ts.",
@@ -779,7 +779,7 @@
     "tests": {
       "unit": [
         {
-          "name": "coord_A \u2192 event B returns 404 signal",
+          "name": "coord_A → event B returns 404 signal",
           "description": "No super role, no assignment for B.",
           "input": "coord_A session, eventId=B",
           "expected_output": "NotFoundError or structured { ok: false, status: 404 }"
@@ -809,7 +809,7 @@
     "id": "tenancy-019",
     "category": "crud",
     "description": "assertEventAccess returns 403 for role-denial within an assigned event.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "When the user IS a member of the event (Clerk super_admin OR active event_user_assignments row) but their Clerk role is org:read_only and the caller requested requireWrite, assertEventAccess signals 403 with body { error: 'forbidden' }. Ops and read-only should not pass a write-required check on mutation endpoints; see CE14 (Ops denied certificate management). This is distinct from 404: 403 reveals that the user has read-level access but lacks write authority.",
     "data_model": "No schema change; refactors src/lib/auth/event-access.ts.",
@@ -819,7 +819,7 @@
     "tests": {
       "unit": [
         {
-          "name": "read_only + requireWrite \u2192 403",
+          "name": "read_only + requireWrite → 403",
           "description": "Role-based write deny inside an assigned event.",
           "input": "read_only_A session, eventId=A, requireWrite=true",
           "expected_output": "ForbiddenError carrying 403"
@@ -849,7 +849,7 @@
     "id": "tenancy-020",
     "category": "crud",
     "description": "URL vs body eventId mismatch returns 400 with Sentry breadcrumb.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "For every API route that accepts a JSON body containing an eventId field, compare to the URL path eventId. If different, return HTTP 400 { error: 'eventId mismatch' } and emit a Sentry event with { userId, urlEventId, bodyEventId, endpoint }. No row is inserted. Implement this as a shared helper invoked at the start of each route so the behavior is uniform. Contract CE3.",
     "data_model": "No schema.",
@@ -860,7 +860,7 @@
       "unit": [
         {
           "name": "helper detects mismatch",
-          "description": "URL A, body B \u2192 throws/returns mismatch.",
+          "description": "URL A, body B → throws/returns mismatch.",
           "input": "{ urlEventId: 'A', bodyEventId: 'B' }",
           "expected_output": "mismatch signal"
         }
@@ -890,7 +890,7 @@
     "id": "tenancy-021",
     "category": "crud",
     "description": "Cross-event 404 responses leak zero event-identifying information.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "The 404 body returned from the tenancy layer must not contain the requested eventId, the event name, or the words 'access', 'permission', 'forbidden'. Standardize the body to { error: 'Not Found' } or similar generic text. This is CE4. Add a response sanitizer helper so every cross-event 404 uses it.",
     "data_model": "No schema.",
@@ -930,11 +930,11 @@
   {
     "id": "tenancy-022",
     "category": "ui",
-    "description": "/events/[eventId]/people \u2014 list page renders event-scoped delegates/people.",
+    "description": "/events/[eventId]/people — list page renders event-scoped delegates/people.",
     "page": "/events/[eventId]/people",
     "ui_details": "Existing wireframe; reuse shell. Heading 'People' with role check 'heading'. List of delegate cards.",
-    "behavior": "Server component that calls assertEventAccess(eventId), then getPeople(eventId) scoped to event_people JOIN people. Renders a list of delegates for the event. Contract Example 1 asserts the heading is visible and /api/test/state?entity=delegates&eventId=A returns rows all scoped to A. Existing module boundary in src/app/(dashboard)/people/ \u2014 keep inside that module.",
-    "data_model": "event_people JOIN people \u2014 filter by event_id.",
+    "behavior": "Server component that calls assertEventAccess(eventId), then getPeople(eventId) scoped to event_people JOIN people. Renders a list of delegates for the event. Contract Example 1 asserts the heading is visible and /api/test/state?entity=delegates&eventId=A returns rows all scoped to A. Existing module boundary in src/app/(dashboard)/people/ — keep inside that module.",
+    "data_model": "event_people JOIN people — filter by event_id.",
     "priority": 22,
     "core": false,
     "passes": false,
@@ -984,7 +984,7 @@
       "unit": [
         {
           "name": "super bypasses assignment check",
-          "description": "resolveClerkRole returns isSuperAdmin=true \u2192 assertEventAccess returns authorized without hitting event_user_assignments.",
+          "description": "resolveClerkRole returns isSuperAdmin=true → assertEventAccess returns authorized without hitting event_user_assignments.",
           "input": "super session, eventId=B",
           "expected_output": "authorized=true"
         }
@@ -1025,7 +1025,7 @@
       "unit": [
         {
           "name": "button component passes disabled prop for read_only",
-          "description": "Snapshot/RTL-style test \u2014 render with role=read_only, assert disabled attribute.",
+          "description": "Snapshot/RTL-style test — render with role=read_only, assert disabled attribute.",
           "input": "role=org:read_only",
           "expected_output": "button[disabled] aria-disabled='true'"
         }
@@ -1055,10 +1055,10 @@
   {
     "id": "tenancy-025",
     "category": "crud",
-    "description": "POST /api/events/[eventId]/sessions \u2014 session-create endpoint that derives eventId from URL only.",
-    "page": "N/A \u2014 Backend",
+    "description": "POST /api/events/[eventId]/sessions — session-create endpoint that derives eventId from URL only.",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "Create the route at src/app/api/events/[eventId]/sessions/route.ts. POST creates a session row with event_id = <urlEventId>. Body fields: title (required), startsAt (ISO timestamp), endsAt (ISO timestamp), optional hallId, optional sessionType. Body.eventId if present triggers tenancy-020 (mismatch \u2192 400). Validate with Zod. Insert uses createdBy/updatedBy from the session user. This endpoint is the probe used by eventid-scoping Example 7 and CE2 + CE3.",
+    "behavior": "Create the route at src/app/api/events/[eventId]/sessions/route.ts. POST creates a session row with event_id = <urlEventId>. Body fields: title (required), startsAt (ISO timestamp), endsAt (ISO timestamp), optional hallId, optional sessionType. Body.eventId if present triggers tenancy-020 (mismatch → 400). Validate with Zod. Insert uses createdBy/updatedBy from the session user. This endpoint is the probe used by eventid-scoping Example 7 and CE2 + CE3.",
     "data_model": "sessions schema in src/lib/db/schema/program.ts.",
     "priority": 25,
     "core": true,
@@ -1103,10 +1103,10 @@
     "id": "tenancy-026",
     "category": "crud",
     "description": "GET /api/events/[eventId]/people/[personId] returns master person + only event-A-scoped attributes.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "Return { person: {id, full_name, email, phone_e164, designation, ...master fields}, travel: <travel_records row for this event + person or null>, sessions: <session_assignments rows for this event + person>, registration: <event_registrations row or null> }. Every non-master field filtered by event_id = URL eventId. Contract CE14 enforces: person attached to both A and B returns only A-scoped attributes when called on /events/A/.",
-    "data_model": "people, travel_records, session_assignments, event_registrations \u2014 all scoped by eventId.",
+    "data_model": "people, travel_records, session_assignments, event_registrations — all scoped by eventId.",
     "priority": 26,
     "core": false,
     "passes": false,
@@ -1142,9 +1142,9 @@
   {
     "id": "tenancy-027",
     "category": "ui",
-    "description": "/register/[eventId] \u2014 public registration page that accepts URL eventId pre-auth.",
+    "description": "/register/[eventId] — public registration page that accepts URL eventId pre-auth.",
     "page": "/register/[eventId]",
-    "ui_details": "Public page, no auth chrome. Heading 'Register'. Form fields per registration_settings on the event + core person fields (full_name, email, phone_e164, city, organization). Submit button posts to a server action. See FRONTEND_ARCHITECTURE.md \u00a74 'URL state' and data-requirements \u00a79 registration fields.",
+    "ui_details": "Public page, no auth chrome. Heading 'Register'. Form fields per registration_settings on the event + core person fields (full_name, email, phone_e164, city, organization). Submit button posts to a server action. See FRONTEND_ARCHITECTURE.md §4 'URL state' and data-requirements §9 registration fields.",
     "behavior": "Server component reads eventId from params, fetches event metadata (name, dates, venue, registration open status), and renders the form. No auth required. Submission creates a person (if not deduped) and an event_registrations row with event_id = URL. Contract Example 5 renders the form and asserts the heading is visible.",
     "data_model": "events (read), people (insert or dedupe), event_registrations (insert).",
     "priority": 27,
@@ -1185,9 +1185,9 @@
     "id": "cascade-028",
     "category": "data",
     "description": "Notification idempotency key builder and enforcement.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "Deep module src/lib/notifications/idempotency.ts exports buildIdempotencyKey({ userId, eventId, type, triggerId, channel }) returning 'notification:{userId}:{eventId}:{type}:{triggerId}:{channel}'. Before every send, lib/notifications/send.ts sets this key via Redis SET NX EX <ttl>; if NX fails, the send is skipped (already sent). The channel suffix is always :email or :whatsapp \u2014 never omitted, never shared across channels. Keys across different events differ even for the same (userId, type, triggerId). Contract Invariant 1, 2, 10 and CE1, CE12.",
+    "behavior": "Deep module src/lib/notifications/idempotency.ts exports buildIdempotencyKey({ userId, eventId, type, triggerId, channel }) returning 'notification:{userId}:{eventId}:{type}:{triggerId}:{channel}'. Before every send, lib/notifications/send.ts sets this key via Redis SET NX EX <ttl>; if NX fails, the send is skipped (already sent). The channel suffix is always :email or :whatsapp — never omitted, never shared across channels. Keys across different events differ even for the same (userId, type, triggerId). Contract Invariant 1, 2, 10 and CE1, CE12.",
     "data_model": "No schema; Upstash Redis keys.",
     "priority": 28,
     "core": true,
@@ -1234,10 +1234,10 @@
     "id": "cascade-029",
     "category": "data",
     "description": "notification_log has exactly one row per idempotency key; retries UPDATE in place.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "On first send attempt, INSERT a notification_log row keyed by idempotency_key (unique constraint). On retry, UPDATE that same row: attempts++, last_error, lastErrorCode, sentAt (on success), status transitions (queued\u2192sending\u2192sent|failed). Never INSERT a second row for the same key. Attempts counter monotonically increases; never resets or decrements. Contract Invariants 3, 4 and CE4, CE18.",
-    "data_model": "notification_log schema in src/lib/db/schema/communications.ts \u2014 idempotencyKey already unique.",
+    "behavior": "On first send attempt, INSERT a notification_log row keyed by idempotency_key (unique constraint). On retry, UPDATE that same row: attempts++, last_error, lastErrorCode, sentAt (on success), status transitions (queued→sending→sent|failed). Never INSERT a second row for the same key. Attempts counter monotonically increases; never resets or decrements. Contract Invariants 3, 4 and CE4, CE18.",
+    "data_model": "notification_log schema in src/lib/db/schema/communications.ts — idempotencyKey already unique.",
     "priority": 29,
     "core": true,
     "passes": false,
@@ -1245,13 +1245,13 @@
       "unit": [
         {
           "name": "first attempt inserts row",
-          "description": "Send once \u2192 one row with attempts=1, status='sent'.",
+          "description": "Send once → one row with attempts=1, status='sent'.",
           "input": "single successful send",
           "expected_output": "one row, attempts=1"
         },
         {
           "name": "retry updates same row",
-          "description": "Fail twice then succeed \u2192 one row, attempts=3, status='sent'.",
+          "description": "Fail twice then succeed → one row, attempts=3, status='sent'.",
           "input": "providerMode=failN=2",
           "expected_output": "row count stays 1; attempts=3"
         }
@@ -1282,7 +1282,7 @@
     "id": "cascade-030",
     "category": "data",
     "description": "3-attempt retry then dead-letter: Sentry + notification_log.failed + system_dispatch_failure red flag.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "Inngest function wrappers use retries=3 with exponential backoff. On final failure (exhausted retries) or on non-retriable Zod validation error (retries=0): (a) set notification_log.status='failed' with last_error populated; (b) emit Sentry event kind='cascade-dispatch-failure' with { cascadeEvent, payload, attempts, channel, triggerId }; (c) upsert a red_flags row of flag_type='system_dispatch_failure' scoped to (eventId, targetEntityType, targetEntityId). No end-user notification is sent about the failure. Contract Invariants 9, 10, and CE15, CE16.",
     "data_model": "notification_log.status, red_flags (upsert by unique key).",
@@ -1312,7 +1312,7 @@
       ],
       "edge_cases": [
         {
-          "name": "CE16 passes \u2014 no user-facing failure notification sent",
+          "name": "CE16 passes — no user-facing failure notification sent",
           "steps": [
             "After dead-letter, probe notification_log for recipient=<user>"
           ],
@@ -1325,7 +1325,7 @@
     "id": "cascade-031",
     "category": "data",
     "description": "5-second cascade debounce keyed on (eventId, sourceEntityType, sourceEntityId).",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "Deep module src/lib/cascade/debounce.ts wraps emitCascadeEvent. Before emitting, SETEX in Upstash with key 'cascade:debounce:{eventId}:{sourceEntityType}:{sourceEntityId}' and TTL 5s. If the key already exists, merge the new changes into the pending buffer (second key or hash) and do not emit a new Inngest event. When the debounce window expires (Inngest scheduled function or a worker-side timer), emit one event with the combined changeSummary. Different (sourceEntityType, sourceEntityId) tuples use distinct keys so they never coalesce. Contract Example 3, CE2, CE14.",
     "data_model": "No DB schema; Upstash Redis keys.",
@@ -1359,7 +1359,7 @@
       ],
       "edge_cases": [
         {
-          "name": "CE14 passes \u2014 different travelIds not coalesced",
+          "name": "CE14 passes — different travelIds not coalesced",
           "steps": [
             "Save two different travel records 2s apart"
           ],
@@ -1372,7 +1372,7 @@
     "id": "cascade-032",
     "category": "data",
     "description": "Variable snapshot captured at emit time, reused on retries.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "Cascade event payload includes a variables snapshot: all template variable values resolved from current DB state at the moment of emit. Retry attempts reuse this snapshot verbatim; they never re-query the DB for fresh values. Implementation: the emitter resolves variables once and embeds them in payload.variables. The handler passes payload.variables to the template renderer. Contract CE7, CE20 and Invariant 5.",
     "data_model": "Payload only; no DB column.",
@@ -1415,9 +1415,9 @@
     "id": "cascade-033",
     "category": "data",
     "description": "Wire all 7 cascade events to their handlers per the frozen contract.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "Register Inngest functions so each cascade event fans out to its declared handlers: travel.created\u2192notify-delegate-itinerary; travel.updated\u2192flag-accommodation, recalculate-transport, notify-delegate-revised; accommodation.created\u2192notify-delegate-accommodation; accommodation.updated\u2192flag-transport, notify-delegate-accommodation-update; registration.created\u2192send-confirmation, assign-qr; session.updated\u2192notify-affected-faculty; certificate.generated\u2192notify-recipient-certificate. Each function is an independent Inngest handler with its own retry budget; failure in one does not affect siblings. Each handler filters every DB query by eventId (except people master reads).",
+    "behavior": "Register Inngest functions so each cascade event fans out to its declared handlers: travel.created→notify-delegate-itinerary; travel.updated→flag-accommodation, recalculate-transport, notify-delegate-revised; accommodation.created→notify-delegate-accommodation; accommodation.updated→flag-transport, notify-delegate-accommodation-update; registration.created→send-confirmation, assign-qr; session.updated→notify-affected-faculty; certificate.generated→notify-recipient-certificate. Each function is an independent Inngest handler with its own retry budget; failure in one does not affect siblings. Each handler filters every DB query by eventId (except people master reads).",
     "data_model": "Existing cascade handler tables + notification_log + red_flags.",
     "priority": 33,
     "core": true,
@@ -1426,14 +1426,14 @@
       "unit": [
         {
           "name": "7 handlers registered",
-          "description": "Introspect inngest.functions list \u2014 7 cascade handlers + their declared events.",
+          "description": "Introspect inngest.functions list — 7 cascade handlers + their declared events.",
           "input": "inngest client after boot",
           "expected_output": "each declared (event, handler) pair present"
         }
       ],
       "e2e": [
         {
-          "name": "Example 2 passes \u2014 fan-out 3 handlers for travel.updated",
+          "name": "Example 2 passes — fan-out 3 handlers for travel.updated",
           "steps": [
             "Update travel",
             "Wait",
@@ -1444,7 +1444,7 @@
       ],
       "edge_cases": [
         {
-          "name": "CE6 \u2014 one handler failure doesn't roll back upstream",
+          "name": "CE6 — one handler failure doesn't roll back upstream",
           "steps": [
             "Force flag-accommodation handler to throw",
             "Verify travel row + transport recalc + notification still persisted"
@@ -1458,7 +1458,7 @@
     "id": "cascade-034",
     "category": "data",
     "description": "Zod-validate cascade payload at handler entry; dead-letter on malformed without retry.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "Each cascade handler's first step is a Zod parse on its expected payload shape. On parse failure, throw a NonRetriableError (or Inngest's NonRetriableError) so Inngest makes exactly one attempt and dead-letters. Emit a Sentry event kind='cascade-payload-invalid' with the raw payload and the Zod issues. No DB writes, no notification sends. Contract Example 9 and CE10.",
     "data_model": "No schema.",
@@ -1469,7 +1469,7 @@
       "unit": [
         {
           "name": "missing eventId yields NonRetriableError",
-          "description": "Handler receives payload without eventId \u2192 Zod fails \u2192 NonRetriableError thrown.",
+          "description": "Handler receives payload without eventId → Zod fails → NonRetriableError thrown.",
           "input": "{}",
           "expected_output": "throws NonRetriableError"
         }
@@ -1499,9 +1499,9 @@
     "id": "cascade-035",
     "category": "data",
     "description": "Red-flag creation is an upsert keyed on (event_id, target_entity_type, target_entity_id, flag_type).",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "Deep module src/lib/cascade/red-flags.ts exports upsertRedFlag(input). Uses ON CONFLICT DO UPDATE on a partial unique index covering the 4 key columns WHERE flag_status != 'resolved'. The resolved-state filter is important: a previously-resolved flag of the same tuple should allow a new active row. Handlers call this instead of raw insert. Contract Invariant 17 and CE8. Data-requirements \u00a719 defines the active-flag uniqueness rule.",
+    "behavior": "Deep module src/lib/cascade/red-flags.ts exports upsertRedFlag(input). Uses ON CONFLICT DO UPDATE on a partial unique index covering the 4 key columns WHERE flag_status != 'resolved'. The resolved-state filter is important: a previously-resolved flag of the same tuple should allow a new active row. Handlers call this instead of raw insert. Contract Invariant 17 and CE8. Data-requirements §19 defines the active-flag uniqueness rule.",
     "data_model": "red_flags + partial unique index on (event_id, target_entity_type, target_entity_id, flag_type) WHERE flag_status != 'resolved'.",
     "priority": 35,
     "core": false,
@@ -1510,13 +1510,13 @@
       "unit": [
         {
           "name": "upsert updates existing unresolved flag",
-          "description": "Existing unresolved row \u2192 UPDATE; no second row inserted.",
+          "description": "Existing unresolved row → UPDATE; no second row inserted.",
           "input": "two consecutive calls with same key",
           "expected_output": "one row; updated flag_detail"
         },
         {
           "name": "resolved flag does not block new one",
-          "description": "Previous flag resolved \u2192 new call inserts new unresolved row.",
+          "description": "Previous flag resolved → new call inserts new unresolved row.",
           "input": "resolved flag + new call",
           "expected_output": "two rows total; new one unresolved"
         }
@@ -1546,9 +1546,9 @@
     "id": "cascade-036",
     "category": "data",
     "description": "Every cascade handler query filters by cascade's eventId; no writes to other events.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "Audit existing and new cascade handlers. Every .select() / .update() / .delete() / .insert() on an event-scoped table must include .where(eq(table.eventId, cascadeEvent.eventId)) or its transactional equivalent. The only exception is src/lib/db/schema/people \u2014 the master table is global. Add an eslint rule or AST-level lint (qa/diff-audit already has similar tooling) to reject merges that violate this. Contract CE9, CE19 and Invariant 13.",
+    "behavior": "Audit existing and new cascade handlers. Every .select() / .update() / .delete() / .insert() on an event-scoped table must include .where(eq(table.eventId, cascadeEvent.eventId)) or its transactional equivalent. The only exception is src/lib/db/schema/people — the master table is global. Add an eslint rule or AST-level lint (qa/diff-audit already has similar tooling) to reject merges that violate this. Contract CE9, CE19 and Invariant 13.",
     "data_model": "No schema; discipline in handler queries.",
     "priority": 36,
     "core": false,
@@ -1587,9 +1587,9 @@
     "id": "cascade-037",
     "category": "data",
     "description": "In-flight cascades complete after event transitions to archived.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "When an event is archived, new mutations are blocked at the server-action level (assertEventAccess should reject writes on archived events). However, cascade events already emitted before the state transition should complete normally \u2014 handlers do not check event state on entry. Contract Example 10 and CE17: emit cascade at T=0, archive at T=1, handler runs at T=2 and sends the notification as if the event were still active. The archive restriction lives in mutation entry points, not in cascade handlers.",
+    "behavior": "When an event is archived, new mutations are blocked at the server-action level (assertEventAccess should reject writes on archived events). However, cascade events already emitted before the state transition should complete normally — handlers do not check event state on entry. Contract Example 10 and CE17: emit cascade at T=0, archive at T=1, handler runs at T=2 and sends the notification as if the event were still active. The archive restriction lives in mutation entry points, not in cascade handlers.",
     "data_model": "No schema change; behavior lives in auth/event-access + mutation routes.",
     "priority": 37,
     "core": false,
@@ -1598,7 +1598,7 @@
       "unit": [
         {
           "name": "handler does not check archive state",
-          "description": "Call handler with archived event and valid payload \u2014 it proceeds normally.",
+          "description": "Call handler with archived event and valid payload — it proceeds normally.",
           "input": "archived event + valid payload",
           "expected_output": "handler runs; notification_log row inserted"
         }
@@ -1629,9 +1629,9 @@
     "id": "infra-038",
     "category": "data",
     "description": "Add audit_log table and write-on-every-mutation.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "New table audit_log with columns: id (uuid pk), event_id (nullable fk), actor_user_id (text, clerk_user_id), action (text: 'create'|'update'|'delete'|'read'), resource (text: 'certificate'|'session'|'travel'|'accommodation'|...), resource_id (uuid), timestamp (timestamptz), meta (jsonb). Add a src/lib/audit/write.ts helper writeAudit({...}) that inserts a row. Every mutation server action + API route calls writeAudit before returning success. Super Admin cross-event reads are also audited (resource='read', action='read'). Spec anchors: BACKEND_ARCHITECTURE_MAP.md audit log section; DB_DECISIONS.md \u00a74 immutable audit fields.",
+    "behavior": "New table audit_log with columns: id (uuid pk), event_id (nullable fk), actor_user_id (text, clerk_user_id), action (text: 'create'|'update'|'delete'|'read'), resource (text: 'certificate'|'session'|'travel'|'accommodation'|...), resource_id (uuid), timestamp (timestamptz), meta (jsonb). Add a src/lib/audit/write.ts helper writeAudit({...}) that inserts a row. Every mutation server action + API route calls writeAudit before returning success. Super Admin cross-event reads are also audited (resource='read', action='read'). Spec anchors: BACKEND_ARCHITECTURE_MAP.md audit log section; DB_DECISIONS.md §4 immutable audit fields.",
     "data_model": "New table audit_log; Drizzle schema file src/lib/db/schema/audit-log.ts; migration.",
     "priority": 38,
     "core": true,
@@ -1671,10 +1671,10 @@
     "id": "infra-039",
     "category": "data",
     "description": "/api/test/audit-log probe returns rows matching filters.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "Replace the current stub. Support query params: event_id, actor_username (JOIN Clerk via clerkClient.users.getUser email lookup, or accept actor_user_id directly), resource, cert_id (filter meta->>'cert_id' OR resource_id when resource='certificate'). Return array of audit_log rows with camelCase field names matching TypeScript conventions. Gate via guard() \u2014 already in place.",
-    "data_model": "audit_log reads; optional Clerk lookup for username\u2192user_id translation.",
+    "behavior": "Replace the current stub. Support query params: event_id, actor_username (JOIN Clerk via clerkClient.users.getUser email lookup, or accept actor_user_id directly), resource, cert_id (filter meta->>'cert_id' OR resource_id when resource='certificate'). Return array of audit_log rows with camelCase field names matching TypeScript conventions. Gate via guard() — already in place.",
+    "data_model": "audit_log reads; optional Clerk lookup for username→user_id translation.",
     "priority": 39,
     "core": false,
     "passes": false,
@@ -1718,7 +1718,7 @@
     "id": "infra-040",
     "category": "data",
     "description": "Provider-mode shim in lib/notifications that toggles transports between normal/fail/failN/flaky and records sent bodies.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "Intercept the Resend and Evolution API adapters. A state machine (backed by Upstash keys 'test:provider-mode:{channel}') decides whether to call the real transport or simulate a failure. Modes: 'normal' (real call), 'fail' (always throw), 'failN:<n>' (throw first n attempts then real call), 'flaky:<rate>' (random fail). The existing /api/test/provider-mode endpoint needs to be created to POST the mode. On every simulated or real send, persist the rendered body to 'test:last-sent:{triggerId}:{channel}' so /api/test/last-sent-body returns something. Fail modes throw the exact error shape the production code expects. Used by cascade-idempotency tests for retry / failure / flaky scenarios.",
     "data_model": "Upstash keys; no DB changes.",
@@ -1767,9 +1767,9 @@
     "id": "infra-041",
     "category": "data",
     "description": "Captured Inngest events store + replay endpoint.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "On every Inngest emit, persist the full event (id, name, payload, timestamp) to an in-memory or Redis-backed store. On every handler invocation, record (eventId, attemptN, status). Replace stubs for /api/test/inngest-events (query by name/triggerId/window), /api/test/inngest-attempts (count invocations per inngest event id), /api/test/inngest-replay (re-send a captured event unchanged \u2014 uses the same event id so Inngest's own dedup / handler idempotency is exercised). Test-only; behind guard().",
+    "behavior": "On every Inngest emit, persist the full event (id, name, payload, timestamp) to an in-memory or Redis-backed store. On every handler invocation, record (eventId, attemptN, status). Replace stubs for /api/test/inngest-events (query by name/triggerId/window), /api/test/inngest-attempts (count invocations per inngest event id), /api/test/inngest-replay (re-send a captured event unchanged — uses the same event id so Inngest's own dedup / handler idempotency is exercised). Test-only; behind guard().",
     "data_model": "Upstash key prefix 'test:inngest:events:<id>' and 'test:inngest:attempts:<id>'.",
     "priority": 41,
     "core": false,
@@ -1778,7 +1778,7 @@
       "unit": [
         {
           "name": "store records emit",
-          "description": "Emit \u2192 one record persisted with payload.",
+          "description": "Emit → one record persisted with payload.",
           "input": "inngest.send(...)",
           "expected_output": "store.get(id) returns event"
         }
@@ -1816,7 +1816,7 @@
     "id": "infra-042",
     "category": "data",
     "description": "Sentry test transport: /api/test/sentry-events returns recently captured events.",
-    "page": "N/A \u2014 Backend",
+    "page": "N/A — Backend",
     "ui_details": "N/A",
     "behavior": "In test mode, configure @sentry/nextjs with a custom transport that, instead of sending to Sentry, buffers events in an in-process array (or Redis list). Expose via /api/test/sentry-events (behind guard) with query params kind, triggerId, endpoint, inngestEventId. Return matching events as JSON. This unblocks CE3 (eventId-mismatch breadcrumb assertion), CE15 (cascade-dispatch-failure), CE10 (cascade-payload-invalid). In non-test mode, the normal Sentry transport is used; no test buffer is allocated.",
     "data_model": "In-process buffer (or Redis list 'test:sentry:events') with TTL.",
@@ -1827,7 +1827,7 @@
       "unit": [
         {
           "name": "custom transport buffers events",
-          "description": "Sentry.captureException in test mode \u2192 event appears in buffer.",
+          "description": "Sentry.captureException in test mode → event appears in buffer.",
           "input": "Sentry.captureException(err)",
           "expected_output": "buffer.length > 0"
         }

@@ -131,6 +131,7 @@ describe('issueCertificate — insert shape assertions', () => {
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [],
       [],
@@ -155,6 +156,7 @@ describe('issueCertificate — insert shape assertions', () => {
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [],
       [],
@@ -171,6 +173,7 @@ describe('issueCertificate — insert shape assertions', () => {
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [],
       [],
@@ -189,6 +192,7 @@ describe('issueCertificate — insert shape assertions', () => {
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [],
       [],
@@ -204,6 +208,7 @@ describe('issueCertificate — insert shape assertions', () => {
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [],
       [],
@@ -220,6 +225,7 @@ describe('issueCertificate — insert shape assertions', () => {
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [],
       [],
@@ -237,6 +243,7 @@ describe('issueCertificate — insert shape assertions', () => {
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [],
       [],
@@ -255,6 +262,7 @@ describe('issueCertificate — supersession behavior', () => {
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [existingCert],
       [{ certificateNumber: 'GEM2026-ATT-00001' }],
@@ -277,6 +285,7 @@ describe('issueCertificate — supersession behavior', () => {
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [],
       [],
@@ -299,7 +308,7 @@ describe('issueCertificate — retry loop boundary (L58,151,152)', () => {
     let globalSelectCount = 0;
     const selectResponses = [
       [{ status: 'published' }],
-      [{ id: PERSON_ID }], [mockTemplate],
+      [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate],
       [], [], [], [], [], [],
     ];
     mockDb.select.mockImplementation(() => {
@@ -333,7 +342,7 @@ describe('issueCertificate — retry loop boundary (L58,151,152)', () => {
     const genericError = new Error('some other DB error');
 
     chainedSelectSequence([
-      [{ status: 'published' }], [{ id: PERSON_ID }], [mockTemplate], [], [],
+      [{ status: 'published' }], [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate], [], [],
     ]);
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
@@ -803,6 +812,7 @@ describe('issueCertificate — assertEventAccess + select shapes', () => {
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [],
       [],
@@ -816,6 +826,7 @@ describe('issueCertificate — assertEventAccess + select shapes', () => {
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [],
       [],
@@ -840,7 +851,7 @@ describe('issueCertificate — assertEventAccess + select shapes', () => {
   });
 
   it('throws exact "Active certificate template not found" (L76 StringLiteral)', async () => {
-    chainedSelectSequence([[{ status: 'published' }], [{ id: PERSON_ID }], []]);
+    chainedSelectSequence([[{ status: 'published' }], [{ id: PERSON_ID }], [{ id: 'ep-1' }], []]);
     try {
       await issueCertificate(EVENT_ID, validIssueInput);
     } catch (e) {
@@ -852,6 +863,7 @@ describe('issueCertificate — assertEventAccess + select shapes', () => {
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [],
       [{ certificateNumber: 'GEM2026-ATT-00001' }],
@@ -875,7 +887,7 @@ describe('issueCertificate — assertEventAccess + select shapes', () => {
     let globalSelectCount = 0;
     const selectResponses = [
       [{ status: 'published' }],
-      [{ id: PERSON_ID }], [mockTemplate],
+      [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate],
       [], [], [], [], [], [], [], [],
     ];
     mockDb.select.mockImplementation(() => {
@@ -914,7 +926,7 @@ describe('issueCertificate — collision detection', () => {
     const nonErrorThrow = 'string error';
 
     chainedSelectSequence([
-      [{ status: 'published' }], [{ id: PERSON_ID }], [mockTemplate], [], [],
+      [{ status: 'published' }], [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate], [], [],
     ]);
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
@@ -935,7 +947,7 @@ describe('issueCertificate — collision detection', () => {
     const noCodeError = new Error('some db error without code');
 
     chainedSelectSequence([
-      [{ status: 'published' }], [{ id: PERSON_ID }], [mockTemplate], [], [],
+      [{ status: 'published' }], [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate], [], [],
     ]);
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
@@ -959,7 +971,7 @@ describe('issueCertificate — collision detection', () => {
     );
 
     chainedSelectSequence([
-      [{ status: 'published' }], [{ id: PERSON_ID }], [mockTemplate], [], [],
+      [{ status: 'published' }], [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate], [], [],
     ]);
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
@@ -984,6 +996,7 @@ describe('issueCertificate — currentCert AND chain.oldCertUpdate check (L126)'
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [revokedCert], // existing cert is revoked
       [],
@@ -1147,6 +1160,7 @@ describe('issueCertificate — select argument verification', () => {
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [],
       [],
@@ -1166,14 +1180,15 @@ describe('issueCertificate — select argument verification', () => {
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [],
       [{ certificateNumber: 'GEM2026-ATT-00001' }],
     ]);
     chainedInsert([mockIssuedCert]);
     await issueCertificate(EVENT_ID, validIssueInput);
-    // 5th select call is for cert numbers (1st is event status)
-    const selectArg = mockDb.select.mock.calls[4]?.[0];
+    // 6th select call is for cert numbers (1=event status, 2=person, 3=event_people, 4=template, 5=existing certs, 6=cert numbers)
+    const selectArg = mockDb.select.mock.calls[5]?.[0];
     expect(selectArg).toBeDefined();
     if (selectArg) {
       expect(typeof selectArg).toBe('object');
@@ -1425,7 +1440,7 @@ describe('issueCertificate — collision detection: code property handling (L152
     let globalSelectCount = 0;
     const selectResponses = [
       [{ status: 'published' }],
-      [{ id: PERSON_ID }], [mockTemplate],
+      [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate],
       [], [],
       [], [],
     ];
@@ -1474,6 +1489,7 @@ describe('issueCertificate — L126 both conditions required', () => {
     chainedSelectSequence([
       [{ status: 'published' }],
       [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
       [mockTemplate],
       [], // no existing certs
       [],

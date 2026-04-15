@@ -17,9 +17,17 @@
 - Bulk generation uses per-cert atomicity: each recipient gets its own try/catch + db.transaction(); failures reported in errors array, not thrown; no intermediate/pending status rows
 - CME validation uses createCmeVariablesSchema(maxHours) factory — event duration fetched in route handler, schema created at request time with runtime max; non-CME types skip this validation
 
+- issueCertificate select sequence order: event status → person exists → event_people attachment → template active → (inside tx) existing certs + cert numbers. All tests using chainedSelectSequence must include the event_people row after person row.
+
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T13:20:00Z — cert-api-017 — Reject persons not attached to target event
+- Implemented: Added event_people existence check in issueCertificate action between person-exists and template-active checks. Queries event_people table for (eventId, personId) row; throws 'person not attached to event' if missing. Route handler already had error mapping for this message → 400 { error: 'person not attached to event' }. Updated all existing test chainedSelectSequence arrays to include the new event_people select row.
+- Files changed: src/lib/actions/certificate-issuance.ts, src/lib/actions/certificate-issuance.test.ts, src/lib/actions/certificate-issuance.mutation-kill.test.ts, src/lib/actions/full-journey.test.ts, src/app/api/events/[eventId]/certificates/route.test.ts
+- Tests added: 4 (1 action-level cross-event rejection, 2 route-level person-attachment tests, all existing tests updated with event_people select)
+- Learnings: Adding a new select step between person and template checks requires updating every test's chainedSelectSequence that proceeds past the person check. The select call index assertions in mutation-kill tests also shifted by +1.
 
 ## 2026-04-15T13:15:00Z — cert-api-016 — Block certificate issuance on archived events
 - Implemented: Added event status check in issueCertificate action — queries events.status before any DB insert, throws if archived. Added same check in bulk route handler before lock acquisition. Route handler maps the error to 400 { error: 'event archived' }. Verify endpoint remains unaffected (public, no event status check). Fixed case-insensitive error matching in route handler.

@@ -346,10 +346,11 @@ describe('Full Journey Integration Test (Req 9A-1)', () => {
     const act = await activateCertificateTemplate(EVENT_ID, { templateId: TEMPLATE_ID });
     expect(act.status).toBe('active');
 
-    // issueCertificate: event status → person exists → template active → transaction(existing certs + numbers + insert)
+    // issueCertificate: event status → person exists → event_people → template active → transaction(existing certs + numbers + insert)
     for (let i = 0; i < 5; i++) {
       chainSelect([{ status: 'published' }]); // event not archived
       chainSelect([{ id: PERSON_IDS[i] }]); // person exists
+      chainSelect([{ id: `ep-${i}` }]); // event_people row exists
       chainSelect([{ id: TEMPLATE_ID, eventId: EVENT_ID, status: 'active', certificateType: 'delegate_attendance' }]);
       // Inside transaction:
       chainSelect([]); // existing certs (FOR UPDATE) → none
