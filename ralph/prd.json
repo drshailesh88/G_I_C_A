@@ -524,7 +524,10 @@
           "expected": "only previously-absent persons get new certs; duplicates not created"
         }
       ]
-    }
+    },
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-15T15:56:13Z",
+    "qa_tested_by": "codex"
   },
   {
     "id": "cert-api-012",

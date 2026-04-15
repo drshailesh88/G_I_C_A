@@ -279,5 +279,40 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused bulk route plus Inngest bulk worker suites passed (2 files, 23 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors, but a targeted grep of the post-fix typecheck output found no errors in the touched bulk route, bulk worker, or Inngest event type files. Manual review confirmed SET NX EX 300 acquisition, 409 lock-holder metadata, lock deletion by the worker finally block on success/failure, API payload compatibility for certificateType/scope runs, archived-event 400 mapping, role 403 behavior, and body eventId/event_id mismatch rejection through assertEventIdMatch. Persistence was not re-probed through the browser contract because the authenticated fixture is blocked."
+  },
+  {
+    "story_id": "cert-api-011",
+    "qa_timestamp": "2026-04-15T15:56:13Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "Bulk generation returned a batch_id but never persisted or exposed the per-batch success/error summary required for failure review and retry decisions.",
+        "severity": "high",
+        "fix_commit": "e4dcdc0b98aed1d8c9c295a07f06e23193c01e0c",
+        "files_changed": [
+          "src/lib/certificates/bulk-generation-state.ts",
+          "src/lib/inngest/bulk-functions.ts",
+          "src/app/api/events/[eventId]/certificates/bulk/route.ts"
+        ]
+      },
+      {
+        "description": "Already-issued certificates in a resume run were counted as successful before their PDF refresh/update completed, so a refresh failure could inflate the bulk summary.",
+        "severity": "low",
+        "fix_commit": "e4dcdc0b98aed1d8c9c295a07f06e23193c01e0c",
+        "files_changed": [
+          "src/lib/inngest/bulk-functions.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused bulk worker plus bulk route suites passed (2 files, 23 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; a targeted grep of post-fix typecheck output found no errors in the touched bulk route, bulk worker, or bulk generation state helper. Manual review confirmed recipients and issued-certificate queries remain event-scoped, each new certificate insert/supersession update is inside a per-cert transaction, per-recipient exceptions are caught and logged while later recipients continue, issued_certificates has only issued/superseded/revoked terminal statuses with new rows defaulting to issued, existing current certificates are reused without duplicate inserts, and the worker now stores completed/failed batch summaries in Redis for GET /api/events/[eventId]/certificates/bulk?batch_id=... with auth, role, event, and batch_id validation."
   }
 ]

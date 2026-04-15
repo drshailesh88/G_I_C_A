@@ -11,6 +11,7 @@
 - API routes that call `assertEventAccess(eventId, { requireWrite: true })` can accidentally collapse `EventArchivedError` into a generic 403 catch-all; archived-event contract checks need a separate 400 assertion.
 - Backend event-scoped POST routes can validate the main body while silently stripping submitted `eventId`/`event_id`; explicitly probe path-vs-body event ID mismatches and Sentry mismatch capture.
 - Certificate rendered-variable snapshots must be resolved from authoritative DB state at issuance time, not trusted from caller-provided variables; stale master-person values become permanent once inserted.
+- Bulk APIs that return `batch_id` need a durable retrievable summary keyed by that id; an Inngest handler return value alone is not an operator-visible batch report.
 
 ## Iteration log
 
@@ -75,3 +76,9 @@
 - Bugs: 4 (high: 3, medium: 1)
 - Fix commits: 9b46663
 - Notes: Fixed worker-side lock release, API-to-worker payload compatibility, bulk body eventId mismatch rejection, and archived-event 400 mapping. Full Vitest and focused bulk suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-15T15:56:13Z — cert-api-011 — per-cert atomic bulk generation
+- Status: fixed
+- Bugs: 2 (high: 1, low: 1)
+- Fix commits: e4dcdc0b98aed1d8c9c295a07f06e23193c01e0c
+- Notes: Fixed missing batch_id-retrievable summary persistence/API and corrected resume-path success accounting. Full Vitest and focused bulk suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
