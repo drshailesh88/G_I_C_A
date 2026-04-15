@@ -725,7 +725,10 @@
           "expected": "201"
         }
       ]
-    }
+    },
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-15T19:06:59.118Z",
+    "qa_tested_by": "gemini-3-pro-preview"
   },
   {
     "id": "cert-api-016",

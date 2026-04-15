@@ -101,3 +101,9 @@
 - Bugs: 0
 - Fix commits: none
 - Notes: Verified the download route returns short-lived R2 signed URLs for issued/superseded certs, hides revoked certs from non-super-admin roles with 404, preserves cross-event 404 scoping, and stores only private storage keys. Full Vitest and focused download route suite passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-16T00:00:00Z — cert-api-015 — ops/read_only mutation forbidden
+- Status: pass
+- Bugs: 0
+- Fix commits: none
+- Notes: Verified all certificate mutation endpoints (issue, regenerate, revoke, bulk) use assertEventAccess with requireWrite:true and explicitly check CERTIFICATE_WRITE_ROLES to reject org:ops and org:read_only with 403 forbidden. Full Vitest passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.

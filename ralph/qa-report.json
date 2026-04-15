@@ -387,5 +387,21 @@
     },
     "bugs": [],
     "notes": "Full Vitest passed (231 files, 4736 tests), and the focused download route suite passed (10 tests). Certificate Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; a targeted grep of the typecheck output found no errors in the certificate download route or immediate production dependencies. Manual verification confirmed params are Zod-validated before processing, assertEventAccess gates the event, the certificate lookup is event-scoped with withEventScope, missing and cross-event certificates return 404, revoked certificates return 404 for coordinator/ops/read_only while super_admin receives a signed URL, issued and superseded certificates receive signed URLs, the R2 provider helper is called with the private storageKey and 300-second TTL, and the issued_certificates schema stores a private storage_key with no permanent public download URL column."
+  },
+  {
+    "story_id": "cert-api-015",
+    "qa_timestamp": "2026-04-15T19:06:59.115Z",
+    "qa_model": "gemini-3-pro-preview",
+    "status": "pass",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "skip",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "skip",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [],
+    "notes": "Full Vitest passed. Playwright certificate contracts remain blocked by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story. Manual review confirmed that all 4 certificate mutation endpoints (issue, regenerate, revoke, bulk) use assertEventAccess(eventId, { requireWrite: true }) which rejects read_only with 403, and subsequently verify the role against CERTIFICATE_WRITE_ROLES (Super Admin, Event Coordinator) to correctly reject ops with 403."
   }
 ]
