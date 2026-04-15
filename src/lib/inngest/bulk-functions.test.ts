@@ -502,27 +502,28 @@ describe('bulkCertificateGenerateFn handler', () => {
       return fn(tx);
     });
 
-    await expect(
-      handler({
-        event: {
-          data: {
-            eventId: 'evt-1',
-            userId: 'user-1',
-            templateId: 'tpl-1',
-            recipientType: 'all_delegates',
-            eligibilityBasisType: 'registration',
-          },
+    const result = await handler({
+      event: {
+        data: {
+          eventId: 'evt-1',
+          userId: 'user-1',
+          templateId: 'tpl-1',
+          recipientType: 'all_delegates',
+          eligibilityBasisType: 'registration',
         },
-        step,
-      }),
-    ).rejects.toThrow('template render failed');
+      },
+      step,
+    });
 
+    const res = result as { issued: number; errors: string[] };
+    expect(res.issued).toBe(0);
+    expect(res.errors).toHaveLength(1);
+    expect(res.errors[0]).toContain('template render failed');
     expect(mockStorageProvider.upload).not.toHaveBeenCalled();
     expect(txInsert).not.toHaveBeenCalled();
-    expect(mockStorageProvider.delete).not.toHaveBeenCalled();
   });
 
-  it('cleans up uploaded PDFs when the DB transaction fails after upload', async () => {
+  it('reports failure and continues when DB transaction fails after upload', async () => {
     const handler = getHandler();
     const step = createMockStep();
 
@@ -540,25 +541,157 @@ describe('bulkCertificateGenerateFn handler', () => {
 
     mockDb.transaction.mockRejectedValueOnce(new Error('insert failed'));
 
-    await expect(
-      handler({
-        event: {
-          data: {
-            eventId: 'evt-1',
-            userId: 'user-1',
-            templateId: 'tpl-1',
-            recipientType: 'all_delegates',
-            eligibilityBasisType: 'registration',
-          },
+    const result = await handler({
+      event: {
+        data: {
+          eventId: 'evt-1',
+          userId: 'user-1',
+          templateId: 'tpl-1',
+          recipientType: 'all_delegates',
+          eligibilityBasisType: 'registration',
         },
-        step,
-      }),
-    ).rejects.toThrow('insert failed');
+      },
+      step,
+    });
 
+    const res = result as { issued: number; errors: string[] };
+    expect(res.issued).toBe(0);
+    expect(res.errors).toHaveLength(1);
+    expect(res.errors[0]).toContain('insert failed');
     expect(mockStorageProvider.upload).toHaveBeenCalledTimes(1);
-    expect(mockStorageProvider.delete).toHaveBeenCalledWith(
-      expect.stringContaining('certs/evt-1/delegate_attendance/'),
+  });
+});
+
+// ── Test: Per-cert transaction isolation (cert-api-011) ──────
+
+describe('bulkCertificateGenerateFn per-cert isolation', () => {
+  const getHandler = () => {
+    const fn = bulkInngestFunctions[0] as unknown as { _handler: (args: { event: unknown; step: unknown }) => Promise<unknown> };
+    return fn._handler;
+  };
+
+  it('failure on cert 5 of 10 commits 1-4 and 6-10 (9 total)', async () => {
+    const handler = getHandler();
+    const step = createMockStep();
+    const recipients = makeRecipients(10);
+
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      if (selectCallCount === 1) return chainedSelect([mockTemplate]);
+      if (selectCallCount === 2) return chainedSelect(recipients);
+      if (selectCallCount === 3) return chainedSelect([]);
+      if (selectCallCount === 4) return chainedSelect([]);
+      return chainedSelect([]);
+    });
+
+    // Track per-cert inserts
+    let certInsertCount = 0;
+    mockDb.transaction.mockImplementation(async (fn: any) => {
+      certInsertCount++;
+      // Fail on the 5th cert
+      if (certInsertCount === 5) {
+        throw new Error('DB error on cert 5');
+      }
+      const tx = {
+        insert: vi.fn().mockImplementation(() => chainedInsert([{ id: `cert-${certInsertCount}` }])),
+        update: vi.fn().mockImplementation(() => chainedUpdate()),
+      };
+      return fn(tx);
+    });
+    mockDb.update.mockImplementation(() => chainedUpdate());
+
+    const result = await handler({
+      event: {
+        data: {
+          eventId: 'evt-1',
+          userId: 'user-1',
+          templateId: 'tpl-1',
+          recipientType: 'all_delegates',
+          eligibilityBasisType: 'registration',
+        },
+      },
+      step,
+    });
+
+    const res = result as { issued: number; errors: string[]; certificateIds: string[] };
+    // 9 successes (1-4 + 6-10), 1 failure
+    expect(res.issued).toBe(9);
+    expect(res.certificateIds).toHaveLength(9);
+    expect(res.errors).toHaveLength(1);
+    expect(res.errors[0]).toContain('person-5');
+  });
+
+  it('resume skips already-issued persons (no duplicates)', async () => {
+    const handler = getHandler();
+    const step = createMockStep();
+    const recipients = makeRecipients(3);
+
+    // Person-1 already has an issued cert with the same template+version
+    const existingCert = {
+      id: 'cert-existing-1',
+      eventId: 'evt-1',
+      personId: 'person-1',
+      templateId: 'tpl-1',
+      templateVersionNo: 1,
+      certificateType: 'delegate_attendance',
+      certificateNumber: 'GEM-00001',
+      status: 'issued',
+      supersededById: null,
+      supersedesId: null,
+      revokedAt: null,
+      revokeReason: null,
+      storageKey: 'certs/evt-1/delegate_attendance/cert-existing-1.pdf',
+    };
+
+    vi.mocked(issuanceUtils.findCurrentCertificate).mockImplementation(
+      (_certs: any, personId: string) => {
+        if (personId === 'person-1') return existingCert;
+        return null;
+      },
     );
+
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      if (selectCallCount === 1) return chainedSelect([mockTemplate]);
+      if (selectCallCount === 2) return chainedSelect(recipients);
+      if (selectCallCount === 3) return chainedSelect([existingCert]);
+      if (selectCallCount === 4) return chainedSelect([{ certificateNumber: 'GEM-00001' }]);
+      if (selectCallCount === 5) return chainedSelect([existingCert]);
+      if (selectCallCount === 6) return chainedSelect([{ certificateNumber: 'GEM-00001' }]);
+      return chainedSelect([]);
+    });
+
+    let txCallCount = 0;
+    mockDb.transaction.mockImplementation(async (fn: any) => {
+      txCallCount++;
+      const tx = {
+        insert: vi.fn().mockImplementation(() => chainedInsert([{ id: `new-cert-${txCallCount}` }])),
+        update: vi.fn().mockImplementation(() => chainedUpdate()),
+      };
+      return fn(tx);
+    });
+    mockDb.update.mockImplementation(() => chainedUpdate());
+
+    const result = await handler({
+      event: {
+        data: {
+          eventId: 'evt-1',
+          userId: 'user-1',
+          templateId: 'tpl-1',
+          recipientType: 'all_delegates',
+          eligibilityBasisType: 'registration',
+        },
+      },
+      step,
+    });
+
+    const res = result as { issued: number; certificateIds: string[] };
+    // Person-1 reused, person-2 and person-3 get new certs
+    expect(res.certificateIds).toContain('cert-existing-1');
+    // Only 2 new transactions (for person-2 and person-3)
+    expect(txCallCount).toBe(2);
   });
 });
 

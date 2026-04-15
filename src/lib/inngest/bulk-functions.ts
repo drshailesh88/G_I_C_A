@@ -260,15 +260,17 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
     // Step 3: Process in batches of 50
     const batches = chunk(setup.recipients, 50);
     const allCertificateIds: string[] = [];
+    const allErrors: string[] = [];
     let nextSeq = getNextSequence(existing.numbers, config.certificateNumberPrefix);
 
     for (let i = 0; i < batches.length; i++) {
       const batch: Recipient[] = batches[i];
       const batchStartSeq = nextSeq;
 
-      const batchResult = await step.run(`generate-batch-${i + 1}`, async (): Promise<{ certificateIds: string[]; nextSeq: number }> => {
+      const batchResult = await step.run(`generate-batch-${i + 1}`, async (): Promise<{ certificateIds: string[]; nextSeq: number; errors: string[] }> => {
         const storageProvider = createR2Provider();
         const certificateIds: string[] = [];
+        const errors: string[] = [];
         const batchPersonIds = batch.map((recipient) => recipient.id);
         const batchExistingCerts = await db
           .select({
@@ -308,12 +310,9 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
           batchStartSeq,
           getNextSequence(freshNumbers.map((row) => row.certificateNumber), config.certificateNumberPrefix),
         );
-        const reusableCertificates: RenderableCertificate[] = [];
-        const preparedNewCertificates: PreparedNewCertificate[] = [];
-        const uploadedNewStorageKeys: string[] = [];
 
-        try {
-          for (const recipient of batch) {
+        for (const recipient of batch) {
+          try {
             const currentCert = findCurrentCertificate(
               batchExistingCerts as ExistingBatchCertificate[],
               recipient.id,
@@ -335,14 +334,26 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
             ) {
               renderedVariables.certificate_number = currentCert.certificateNumber;
               certificateIds.push(currentCert.id);
-              reusableCertificates.push({
-                id: currentCert.id,
-                storageKey:
-                  currentCert.storageKey ??
-                  buildCertificateStorageKey(eventId, template.certificateType, currentCert.id),
-                certificateNumber: currentCert.certificateNumber,
-                renderedVariables,
-              });
+
+              const pdfBuffer = await renderCertificatePdf(template.templateJson, renderedVariables);
+              const storageKey = currentCert.storageKey ??
+                buildCertificateStorageKey(eventId, template.certificateType, currentCert.id);
+              const uploadResult = await storageProvider.upload(storageKey, pdfBuffer, 'application/pdf');
+
+              await db
+                .update(issuedCertificates)
+                .set({
+                  fileSizeBytes: uploadResult.fileSizeBytes,
+                  fileChecksumSha256: uploadResult.fileChecksumSha256,
+                  updatedAt: new Date(),
+                })
+                .where(
+                  withEventScope(
+                    issuedCertificates.eventId,
+                    eventId,
+                    eq(issuedCertificates.id, currentCert.id),
+                  ),
+                );
               continue;
             }
 
@@ -361,49 +372,31 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
             const pdfBuffer = await renderCertificatePdf(template.templateJson, renderedVariables);
             const uploadResult = await storageProvider.upload(storageKey, pdfBuffer, 'application/pdf');
 
-            uploadedNewStorageKeys.push(storageKey);
-            preparedNewCertificates.push({
-              id: certId,
-              personId: recipient.id,
-              storageKey,
-              certificateNumber,
-              renderedVariables,
-              uploadResult,
-              supersedesId: chain.newCertLink?.supersedesId || null,
-            });
-          }
-        } catch (error) {
-          await cleanupUploadedFiles(storageProvider, uploadedNewStorageKeys);
-          throw error;
-        }
-
-        try {
-          await db.transaction(async (tx) => {
-            for (const preparedCert of preparedNewCertificates) {
+            await db.transaction(async (tx) => {
               const [newCert] = await tx
                 .insert(issuedCertificates)
                 .values({
-                  id: preparedCert.id,
+                  id: certId,
                   eventId,
-                  personId: preparedCert.personId,
+                  personId: recipient.id,
                   templateId: template.id,
                   templateVersionNo: template.versionNo,
                   certificateType: template.certificateType,
                   eligibilityBasisType,
-                  certificateNumber: preparedCert.certificateNumber,
-                  storageKey: preparedCert.storageKey,
-                  fileName: `${preparedCert.certificateNumber}.pdf`,
-                  fileSizeBytes: preparedCert.uploadResult.fileSizeBytes,
-                  fileChecksumSha256: preparedCert.uploadResult.fileChecksumSha256,
-                  renderedVariablesJson: preparedCert.renderedVariables,
+                  certificateNumber,
+                  storageKey,
+                  fileName: `${certificateNumber}.pdf`,
+                  fileSizeBytes: uploadResult.fileSizeBytes,
+                  fileChecksumSha256: uploadResult.fileChecksumSha256,
+                  renderedVariablesJson: renderedVariables,
                   brandingSnapshotJson: template.brandingSnapshotJson,
                   templateSnapshotJson: template.templateJson,
-                  supersedesId: preparedCert.supersedesId,
+                  supersedesId: chain.newCertLink?.supersedesId || null,
                   issuedBy: userId,
                 })
                 .returning();
 
-              if (preparedCert.supersedesId) {
+              if (chain.newCertLink?.supersedesId) {
                 await tx
                   .update(issuedCertificates)
                   .set({
@@ -412,42 +405,23 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
                     updatedAt: new Date(),
                   })
                   .where(
-                    withEventScope(issuedCertificates.eventId, eventId, eq(issuedCertificates.id, preparedCert.supersedesId)),
+                    withEventScope(issuedCertificates.eventId, eventId, eq(issuedCertificates.id, chain.newCertLink.supersedesId)),
                   );
               }
 
               certificateIds.push(newCert.id);
-            }
-          });
-        } catch (error) {
-          await cleanupUploadedFiles(storageProvider, uploadedNewStorageKeys);
-          throw error;
+            });
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            errors.push(`${recipient.id}: ${msg}`);
+          }
         }
 
-        for (const cert of reusableCertificates) {
-          const pdfBuffer = await renderCertificatePdf(template.templateJson, cert.renderedVariables);
-          const uploadResult = await storageProvider.upload(cert.storageKey, pdfBuffer, 'application/pdf');
-
-          await db
-            .update(issuedCertificates)
-            .set({
-              fileSizeBytes: uploadResult.fileSizeBytes,
-              fileChecksumSha256: uploadResult.fileChecksumSha256,
-              updatedAt: new Date(),
-            })
-            .where(
-              withEventScope(
-                issuedCertificates.eventId,
-                eventId,
-                eq(issuedCertificates.id, cert.id),
-              ),
-            );
-        }
-
-        return { certificateIds, nextSeq: seq };
+        return { certificateIds, nextSeq: seq, errors };
       });
 
       allCertificateIds.push(...batchResult.certificateIds);
+      allErrors.push(...batchResult.errors);
       nextSeq = batchResult.nextSeq;
     }
 
@@ -455,7 +429,7 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
       issued: allCertificateIds.length,
       skipped: setup.recipients.length - allCertificateIds.length,
       certificateIds: allCertificateIds,
-      errors: [] as string[],
+      errors: allErrors,
     };
   },
 );

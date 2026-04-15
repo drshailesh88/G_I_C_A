@@ -14,10 +14,17 @@
 - Certificate endpoints require super_admin or event_coordinator (not ops) — need extra role check beyond assertEventAccess's WRITE_ROLES which includes ops
 - API request bodies use snake_case per contract; Zod .transform() maps to camelCase for internal action functions
 - Bulk endpoints with Redis locking: use SET NX EX with JSON metadata (lock_holder, started_at); store lockKey in Inngest payload so handler can DEL on completion; mock @upstash/redis constructor in tests
+- Bulk generation uses per-cert atomicity: each recipient gets its own try/catch + db.transaction(); failures reported in errors array, not thrown; no intermediate/pending status rows
 
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T12:50:00Z — cert-api-011 — Per-cert atomic bulk generation
+- Implemented: Refactored bulkCertificateGenerateFn to use per-cert transactions instead of one batch transaction. Each cert gets its own try/catch + db.transaction(). On failure, the error is logged to an errors array and the loop continues to the next recipient. No rows left in intermediate status — either 'issued' or not present. Reusable certs (same template+version) are handled inline with the per-cert loop.
+- Files changed: src/lib/inngest/bulk-functions.ts, src/lib/inngest/bulk-functions.test.ts
+- Tests added: 2 (per-cert tx isolation: 9/10 succeed when cert 5 fails; resume skips already-issued persons)
+- Learnings: Per-cert atomicity means each cert's render+upload+insert is wrapped in try/catch at the recipient loop level; the errors array aggregates per-batch and returns in the final result. Existing tests for PDF-render-failure and DB-tx-failure updated to assert error reporting instead of exception propagation.
 
 ## 2026-04-15T12:40:00Z — cert-api-010 — POST bulk with Redis lock
 - Implemented: Created POST /api/events/[eventId]/certificates/bulk route with Upstash Redis distributed lock. Lock key format: lock:certificates:generate:{eventId}:{type} with 5-min TTL via SET NX EX. Stores JSON metadata (lock_holder, started_at) in lock value. Returns 409 with holder info when lock held, 202 { batch_id, total, lock_expires_at } on success. Lock released via DEL on handler exception. Enqueues to Inngest for async bulk generation.
