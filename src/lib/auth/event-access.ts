@@ -6,6 +6,13 @@ import { eventUserAssignments } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { ROLES } from './roles';
 
+export class EventNotFoundError extends Error {
+  constructor() {
+    super('Not found');
+    this.name = 'EventNotFoundError';
+  }
+}
+
 export type EventAccessResult = {
   authorized: boolean;
   userId: string;
@@ -106,7 +113,7 @@ export async function assertEventAccess(
 ): Promise<{ userId: string; role: string | null }> {
   const result = await checkEventAccess(eventId);
   if (!result.authorized) {
-    throw new Error('Forbidden: you do not have access to this event');
+    throw new EventNotFoundError();
   }
 
   if (options?.requireWrite && (!result.role || !WRITE_ROLES.has(result.role as string))) {

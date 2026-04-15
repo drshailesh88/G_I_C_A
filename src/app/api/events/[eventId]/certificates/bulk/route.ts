@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { events } from '@/lib/db/schema';
-import { assertEventAccess } from '@/lib/auth/event-access';
+import { assertEventAccess, EventNotFoundError } from '@/lib/auth/event-access';
 import { ROLES } from '@/lib/auth/roles';
 import { CERTIFICATE_TYPES } from '@/lib/validations/certificate';
 import { Redis } from '@upstash/redis';
@@ -53,8 +53,7 @@ export async function POST(
     role = access.role;
     userId = access.userId;
   } catch (err) {
-    const message = err instanceof Error ? err.message : '';
-    if (message.includes('do not have access')) {
+    if (err instanceof EventNotFoundError) {
       return NextResponse.json(null, { status: 404 });
     }
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });

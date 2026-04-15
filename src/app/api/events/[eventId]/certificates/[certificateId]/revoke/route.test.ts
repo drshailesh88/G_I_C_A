@@ -1,16 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockDb, mockAssertEventAccess, mockRevalidatePath } = vi.hoisted(() => ({
-  mockDb: {
-    select: vi.fn(),
-    update: vi.fn(),
-  },
-  mockAssertEventAccess: vi.fn(),
-  mockRevalidatePath: vi.fn(),
-}));
+const { mockDb, mockAssertEventAccess, mockRevalidatePath, EventNotFoundError } = vi.hoisted(() => {
+  class EventNotFoundError extends Error {
+    constructor() { super('Not found'); this.name = 'EventNotFoundError'; }
+  }
+  return {
+    mockDb: { select: vi.fn(), update: vi.fn() },
+    mockAssertEventAccess: vi.fn(),
+    mockRevalidatePath: vi.fn(),
+    EventNotFoundError,
+  };
+});
 
 vi.mock('@/lib/db', () => ({ db: mockDb }));
-vi.mock('@/lib/auth/event-access', () => ({ assertEventAccess: mockAssertEventAccess }));
+vi.mock('@/lib/auth/event-access', () => ({ assertEventAccess: mockAssertEventAccess, EventNotFoundError }));
 vi.mock('next/cache', () => ({ revalidatePath: mockRevalidatePath }));
 vi.mock('@/lib/db/with-event-scope', () => ({
   withEventScope: vi.fn((_col: unknown, _eid: unknown, cond: unknown) => cond),

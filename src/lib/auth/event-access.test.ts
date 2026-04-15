@@ -15,7 +15,7 @@ vi.mock('@/lib/db', () => ({
   db: mockDb,
 }));
 
-import { checkEventAccess, assertEventAccess, getEventListContext } from './event-access';
+import { checkEventAccess, assertEventAccess, getEventListContext, EventNotFoundError } from './event-access';
 
 function mockAssignmentQuery(result: unknown[]) {
   const limit = vi.fn().mockResolvedValue(result);
@@ -134,14 +134,30 @@ describe('assertEventAccess', () => {
     vi.clearAllMocks();
   });
 
-  it('throws when access is denied', async () => {
+  it('throws EventNotFoundError when access is denied (no assignment)', async () => {
     mockAuth.mockResolvedValue({
       userId: 'coord-2',
       has: ({ role }: { role: string }) => role === 'org:event_coordinator',
     });
     mockAssignmentQuery([]);
 
-    await expect(assertEventAccess('event-1')).rejects.toThrow(/forbidden/i);
+    await expect(assertEventAccess('event-1')).rejects.toThrow(EventNotFoundError);
+  });
+
+  it('coord_A → event B returns 404 signal (NotFoundError)', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'coord-A',
+      has: ({ role }: { role: string }) => role === 'org:event_coordinator',
+    });
+    mockAssignmentQuery([]);
+
+    try {
+      await assertEventAccess('event-B');
+      expect.fail('should have thrown');
+    } catch (err) {
+      expect(err).toBeInstanceOf(EventNotFoundError);
+      expect((err as EventNotFoundError).message).not.toContain('event-B');
+    }
   });
 
   it('returns userId and role when access is granted', async () => {
@@ -175,6 +191,17 @@ describe('assertEventAccess', () => {
 
     const result = await assertEventAccess('event-1', { requireWrite: true });
     expect(result.userId).toBe('coord-1');
+  });
+
+  it('super admin crosses events freely (no EventNotFoundError)', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'admin-1',
+      has: ({ role }: { role: string }) => role === 'org:super_admin',
+    });
+
+    const result = await assertEventAccess('event-B');
+    expect(result.userId).toBe('admin-1');
+    expect(result.role).toBe('org:super_admin');
   });
 
   it('allows assigned owners without Clerk roles to write via fallback role', async () => {

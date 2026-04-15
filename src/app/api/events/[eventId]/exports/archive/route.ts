@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { assertEventAccess } from '@/lib/auth/event-access';
+import { assertEventAccess, EventNotFoundError } from '@/lib/auth/event-access';
 import { generateEventArchive } from '@/lib/exports/archive';
 import { createR2Provider } from '@/lib/certificates/storage';
 import { z } from 'zod';
@@ -26,7 +26,10 @@ export async function POST(
   // Auth check — write access required (creates R2 artifact)
   try {
     await assertEventAccess(eventId, { requireWrite: true });
-  } catch {
+  } catch (err) {
+    if (err instanceof EventNotFoundError) {
+      return NextResponse.json(null, { status: 404 });
+    }
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

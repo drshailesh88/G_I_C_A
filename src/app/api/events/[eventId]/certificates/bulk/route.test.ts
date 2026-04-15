@@ -1,12 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockSet, mockGet, mockTtl, mockDel, mockSelect } = vi.hoisted(() => ({
-  mockSet: vi.fn(),
-  mockGet: vi.fn(),
-  mockTtl: vi.fn(),
-  mockDel: vi.fn(),
-  mockSelect: vi.fn(),
-}));
+const { mockSet, mockGet, mockTtl, mockDel, mockSelect, EventNotFoundError } = vi.hoisted(() => {
+  class EventNotFoundError extends Error {
+    constructor() { super('Not found'); this.name = 'EventNotFoundError'; }
+  }
+  return {
+    mockSet: vi.fn(),
+    mockGet: vi.fn(),
+    mockTtl: vi.fn(),
+    mockDel: vi.fn(),
+    mockSelect: vi.fn(),
+    EventNotFoundError,
+  };
+});
 
 vi.mock('@upstash/redis', () => ({
   Redis: vi.fn().mockImplementation(() => ({
@@ -31,6 +37,7 @@ vi.mock('drizzle-orm', () => ({
 
 vi.mock('@/lib/auth/event-access', () => ({
   assertEventAccess: vi.fn().mockResolvedValue({ userId: 'user-1', role: 'org:super_admin' }),
+  EventNotFoundError,
 }));
 
 vi.mock('@/lib/inngest/client', () => ({

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { assertEventAccess } from '@/lib/auth/event-access';
+import { assertEventAccess, EventNotFoundError } from '@/lib/auth/event-access';
 import { generateExport, EXPORT_TYPES, type ExportType } from '@/lib/exports/excel';
 
 type Params = Promise<{ eventId: string; type: string }>;
@@ -21,7 +21,10 @@ export async function GET(
   // Auth check — read access is sufficient for exports
   try {
     await assertEventAccess(eventId);
-  } catch {
+  } catch (err) {
+    if (err instanceof EventNotFoundError) {
+      return NextResponse.json(null, { status: 404 });
+    }
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 

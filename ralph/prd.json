@@ -775,7 +775,7 @@
     "data_model": "No schema; refactors src/lib/auth/event-access.ts.",
     "priority": 18,
     "core": true,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {

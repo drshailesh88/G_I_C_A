@@ -1,10 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockSelect, mockAssertEventAccess, mockIssueCertificate } = vi.hoisted(() => ({
-  mockSelect: vi.fn(),
-  mockAssertEventAccess: vi.fn(),
-  mockIssueCertificate: vi.fn(),
-}));
+const { mockSelect, mockAssertEventAccess, mockIssueCertificate, EventNotFoundError } = vi.hoisted(() => {
+  class EventNotFoundError extends Error {
+    constructor() { super('Not found'); this.name = 'EventNotFoundError'; }
+  }
+  return {
+    mockSelect: vi.fn(),
+    mockAssertEventAccess: vi.fn(),
+    mockIssueCertificate: vi.fn(),
+    EventNotFoundError,
+  };
+});
 
 vi.mock('@/lib/db', () => ({ db: { select: mockSelect } }));
 vi.mock('@/lib/db/schema', () => ({
@@ -15,6 +21,7 @@ vi.mock('drizzle-orm', () => ({
 }));
 vi.mock('@/lib/auth/event-access', () => ({
   assertEventAccess: mockAssertEventAccess,
+  EventNotFoundError,
 }));
 vi.mock('@/lib/actions/certificate-issuance', () => ({
   issueCertificate: mockIssueCertificate,

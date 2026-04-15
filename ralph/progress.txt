@@ -18,10 +18,17 @@
 - CME validation uses createCmeVariablesSchema(maxHours) factory — event duration fetched in route handler, schema created at request time with runtime max; non-CME types skip this validation
 
 - issueCertificate select sequence order: event status → person exists → event_people attachment → template active → (inside tx) existing certs + cert numbers. All tests using chainedSelectSequence must include the event_people row after person row.
+- assertEventAccess throws EventNotFoundError (→ 404) for unmembered cross-event access; route handlers use instanceof check. Test mocks must export EventNotFoundError via vi.hoisted() to avoid "Cannot access before initialization" errors.
 
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T13:25:00Z — tenancy-018 — assertEventAccess returns 404 for cross-event access
+- Implemented: Added EventNotFoundError class to event-access.ts. assertEventAccess now throws EventNotFoundError (generic 'Not found' message, no eventId leak) when a non-super-admin has no event_user_assignments row. Route handlers updated from string-matching ('do not have access') to instanceof EventNotFoundError → 404. 403 reserved for role-denial within an assigned event. Updated 7 route handlers (certificates issue/regenerate/revoke/bulk/download, exports archive/type) and 5 route test files with EventNotFoundError in vi.hoisted() mocks.
+- Files changed: src/lib/auth/event-access.ts, src/lib/auth/event-access.test.ts, src/app/api/events/[eventId]/certificates/route.ts, src/app/api/events/[eventId]/certificates/route.test.ts, src/app/api/events/[eventId]/certificates/[certificateId]/regenerate/route.ts, src/app/api/events/[eventId]/certificates/[certificateId]/regenerate/route.test.ts, src/app/api/events/[eventId]/certificates/[certificateId]/revoke/route.ts, src/app/api/events/[eventId]/certificates/[certificateId]/revoke/route.test.ts, src/app/api/events/[eventId]/certificates/[certificateId]/download/route.ts, src/app/api/events/[eventId]/certificates/bulk/route.ts, src/app/api/events/[eventId]/certificates/bulk/route.test.ts, src/app/api/events/[eventId]/exports/archive/route.ts, src/app/api/events/[eventId]/exports/[type]/route.ts
+- Tests added: 3 (EventNotFoundError on no-assignment, no eventId in error message, super admin crosses freely)
+- Learnings: vi.mock factories are hoisted — classes referenced in them must be defined in vi.hoisted() or the mock will throw ReferenceError. The download route already catches all errors as 404 so it doesn't need the instanceof check.
 
 ## 2026-04-15T13:20:00Z — cert-api-017 — Reject persons not attached to target event
 - Implemented: Added event_people existence check in issueCertificate action between person-exists and template-active checks. Queries event_people table for (eventId, personId) row; throws 'person not attached to event' if missing. Route handler already had error mapping for this message → 400 { error: 'person not attached to event' }. Updated all existing test chainedSelectSequence arrays to include the new event_people select row.

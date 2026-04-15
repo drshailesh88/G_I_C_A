@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { issuedCertificates, certificateTemplates } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { assertEventAccess } from '@/lib/auth/event-access';
+import { assertEventAccess, EventNotFoundError } from '@/lib/auth/event-access';
 import { ROLES } from '@/lib/auth/roles';
 import { issueCertificate } from '@/lib/actions/certificate-issuance';
 import { withEventScope } from '@/lib/db/with-event-scope';
@@ -37,8 +37,7 @@ export async function POST(
     const access = await assertEventAccess(eventId, { requireWrite: true });
     role = access.role;
   } catch (err) {
-    const message = err instanceof Error ? err.message : '';
-    if (message.includes('do not have access')) {
+    if (err instanceof EventNotFoundError) {
       return NextResponse.json(null, { status: 404 });
     }
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
