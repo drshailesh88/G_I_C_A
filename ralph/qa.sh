@@ -307,19 +307,37 @@ Output <promise>ABORT</promise> if blocked (explain why above the tag)."
     echo "[grader] iteration used: $LAST_PROVIDER"
   fi
 
-  if echo "$result" | grep -q '<promise>QA_COMPLETE</promise>'; then
-    echo ""
-    echo "Grader signaled QA_COMPLETE."
-    break
-  elif echo "$result" | grep -q '<promise>ABORT</promise>'; then
+  # Only grep the LAST 40 lines — promise tags are emitted at the end of
+  # the agent's response. Greeping the whole output falsely matches prompt
+  # text that the CLI echoed back early in its transcript (the prompt
+  # contains all three tag strings as instructions to the agent).
+  result_tail=$(printf '%s\n' "$result" | tail -n 40)
+
+  # Cross-check: if we got a quota error from ALL layers, the final line
+  # tends to be the provider's rate-limit message and NOT a promise tag.
+  # Treat that as a fake signal and NOT QA_COMPLETE.
+  quota_tail=$(printf '%s' "$result_tail" | grep -ciE "$QUOTA_REGEX|hit your usage limit|try again at")
+
+  if echo "$result_tail" | grep -q '<promise>QA_COMPLETE</promise>' && [ "$quota_tail" -eq 0 ]; then
+    # Cross-verify by counting unQA'd stories. Only celebrate if truly 0.
+    unqad=$(python3 -c "import json; d=json.load(open('$PRD')); r=json.load(open('$QA_REPORT')); done={e['story_id'] for e in r if e.get('story_id')}; print(sum(1 for x in d if x.get('passes') and x.get('id') not in done))")
+    if [ "$unqad" -eq 0 ]; then
+      echo ""
+      echo "Grader signaled QA_COMPLETE (verified: 0 stories un-QA'd)."
+      break
+    else
+      echo ""
+      echo "Grader emitted QA_COMPLETE but $unqad stories still un-QA'd — ignoring false signal."
+    fi
+  elif echo "$result_tail" | grep -q '<promise>ABORT</promise>' && [ "$quota_tail" -eq 0 ]; then
     echo ""
     echo "Grader signaled ABORT — QA blocked. Stopping." >&2
     exit 2
-  elif echo "$result" | grep -q '<promise>NEXT</promise>'; then
+  elif echo "$result_tail" | grep -q '<promise>NEXT</promise>' && [ "$quota_tail" -eq 0 ]; then
     :
   else
     echo ""
-    echo "No promise tag (exit=$RC). Restarting iteration."
+    echo "No usable promise tag (exit=$RC, quota_signals=$quota_tail). Restarting iteration."
   fi
 
   sleep "$SLEEP_BETWEEN"
