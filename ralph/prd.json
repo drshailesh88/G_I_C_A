@@ -479,7 +479,10 @@
           "expected": "retry succeeds (not blocked by stale lock)"
         }
       ]
-    }
+    },
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-15T15:47:15Z",
+    "qa_tested_by": "codex"
   },
   {
     "id": "cert-api-011",

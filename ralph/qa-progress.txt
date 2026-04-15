@@ -3,6 +3,7 @@
 ## QA Patterns
 
 <!-- Cross-feature QA findings: common bug classes, edge cases worth re-checking. Codex writes here. -->
+- Bulk generation QA must follow the lock across the async worker boundary: route-level SET NX is insufficient unless the queued worker receives the same lock key and deletes it in success and failure paths.
 - Certificate Playwright contracts are currently blocked before product assertions by Clerk auth setup redirecting `/events` with `ERR_TOO_MANY_REDIRECTS`; record this as a harness blocker when it recurs rather than treating it as certificate product behavior.
 - Repo-level `npx tsc --noEmit` currently fails on broad existing errors across QA/test, Sentry, people, navigation, notification, and cascade files; distinguish those from story-local production type regressions.
 - Certificate template activation can pass archive-before-activate ordering while still doing extra no-op archive writes; explicitly check the no-sibling active-template path against the PRD.
@@ -68,3 +69,9 @@
 - Bugs: 2 (high: 1, medium: 1)
 - Fix commits: 35d3d9d26e6b5ea033ad088852b91501ca3f366f
 - Notes: Fixed archived-event 400 mapping and body eventId/event_id mismatch rejection with Sentry capture on the revoke API. Full Vitest passed; focused revoke route suite passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-15T15:47:15Z — cert-api-010 — bulk generation lock
+- Status: fixed
+- Bugs: 4 (high: 3, medium: 1)
+- Fix commits: 9b46663
+- Notes: Fixed worker-side lock release, API-to-worker payload compatibility, bulk body eventId mismatch rejection, and archived-event 400 mapping. Full Vitest and focused bulk suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.

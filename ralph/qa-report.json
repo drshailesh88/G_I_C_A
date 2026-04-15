@@ -227,5 +227,57 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and the focused revoke route suite passed (10 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; a targeted grep of the typecheck output found no revoke-route, event-id-mismatch, or event-access errors. Manual review confirmed the route derives eventId and certificateId from validated URL params, trims and requires a non-empty reason with Zod, rejects body eventId/event_id mismatches via assertEventIdMatch with Sentry capture, maps archived-event auth failures to 400, keeps ops/read_only at 403, event-scopes select/update queries with withEventScope, rejects already-revoked and non-issued certificates before update so the original revoked_at remains unchanged, leaves superseded_by_id untouched, and returns 200 with id, status, and revoked_at. Persistence and public verify were not re-probed through the browser contract because the authenticated fixture is blocked; schema inspection found issued_certificates has revoked_at and revoke_reason but no revoked_by column, so no schema change was made under the no-schema-change rule."
+  },
+  {
+    "story_id": "cert-api-010",
+    "qa_timestamp": "2026-04-15T15:47:15Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "skip",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "The bulk worker never released the acquired Redis lock after a queued run completed, so successful or failed runs could block retries until TTL expiry.",
+        "severity": "high",
+        "fix_commit": "9b46663",
+        "files_changed": [
+          "src/lib/inngest/bulk-functions.ts",
+          "src/lib/inngest/events.ts"
+        ]
+      },
+      {
+        "description": "The bulk API enqueued certificateType/scope/lockKey data that the bulk worker type and recipient/template loader did not understand, allowing a 202 response to queue a doomed generation run.",
+        "severity": "high",
+        "fix_commit": "9b46663",
+        "files_changed": [
+          "src/app/api/events/[eventId]/certificates/bulk/route.ts",
+          "src/lib/inngest/bulk-functions.ts",
+          "src/lib/inngest/events.ts"
+        ]
+      },
+      {
+        "description": "The bulk certificate API ignored submitted body eventId/event_id mismatches instead of returning 400 and capturing the tenancy mismatch in Sentry.",
+        "severity": "high",
+        "fix_commit": "9b46663",
+        "files_changed": [
+          "src/app/api/events/[eventId]/certificates/bulk/route.ts"
+        ]
+      },
+      {
+        "description": "Archived events could reach the bulk API auth catch-all and return 403 instead of the contract-required event archived response.",
+        "severity": "medium",
+        "fix_commit": "9b46663",
+        "files_changed": [
+          "src/app/api/events/[eventId]/certificates/bulk/route.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused bulk route plus Inngest bulk worker suites passed (2 files, 23 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors, but a targeted grep of the post-fix typecheck output found no errors in the touched bulk route, bulk worker, or Inngest event type files. Manual review confirmed SET NX EX 300 acquisition, 409 lock-holder metadata, lock deletion by the worker finally block on success/failure, API payload compatibility for certificateType/scope runs, archived-event 400 mapping, role 403 behavior, and body eventId/event_id mismatch rejection through assertEventIdMatch. Persistence was not re-probed through the browser contract because the authenticated fixture is blocked."
   }
 ]
