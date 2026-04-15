@@ -149,16 +149,24 @@ export async function handleAccommodationUpdated(params: {
   }
 
   // 3. Notify delegate via email + WhatsApp
-  const person = await resolvePersonContact(data.personId);
-  const ts = Date.now();
-  const baseVars: Record<string, unknown> = {
-    changeSummary: data.changeSummary,
-    recipientEmail: person?.email ?? null,
-    recipientPhoneE164: person?.phoneE164 ?? null,
-    recipientName: person?.fullName ?? null,
-  };
+  const snapshotVars = payload.variables as Record<string, unknown> | undefined;
+  let baseVars: Record<string, unknown>;
 
-  if (person?.email) {
+  if (snapshotVars) {
+    baseVars = snapshotVars;
+  } else {
+    const person = await resolvePersonContact(data.personId);
+    baseVars = {
+      changeSummary: data.changeSummary,
+      recipientEmail: person?.email ?? null,
+      recipientPhoneE164: person?.phoneE164 ?? null,
+      recipientName: person?.fullName ?? null,
+    };
+  }
+
+  const ts = Date.now();
+
+  if (baseVars.recipientEmail) {
     await safeSendNotification({
       eventId,
       personId: data.personId,
@@ -172,7 +180,7 @@ export async function handleAccommodationUpdated(params: {
     });
   }
 
-  if (person?.phoneE164) {
+  if (baseVars.recipientPhoneE164) {
     await safeSendNotification({
       eventId,
       personId: data.personId,
@@ -222,17 +230,25 @@ export async function handleAccommodationCancelled(params: {
   }
 
   // Notify delegate via email + WhatsApp
-  const person = await resolvePersonContact(data.personId);
-  const ts = Date.now();
-  const baseVars: Record<string, unknown> = {
-    cancelledAt: data.cancelledAt,
-    reason: data.reason,
-    recipientEmail: person?.email ?? null,
-    recipientPhoneE164: person?.phoneE164 ?? null,
-    recipientName: person?.fullName ?? null,
-  };
+  const snapshotVars = payload.variables as Record<string, unknown> | undefined;
+  let baseVars: Record<string, unknown>;
 
-  if (person?.email) {
+  if (snapshotVars) {
+    baseVars = snapshotVars;
+  } else {
+    const person = await resolvePersonContact(data.personId);
+    baseVars = {
+      cancelledAt: data.cancelledAt,
+      reason: data.reason,
+      recipientEmail: person?.email ?? null,
+      recipientPhoneE164: person?.phoneE164 ?? null,
+      recipientName: person?.fullName ?? null,
+    };
+  }
+
+  const ts = Date.now();
+
+  if (baseVars.recipientEmail) {
     await safeSendNotification({
       eventId,
       personId: data.personId,
@@ -246,7 +262,7 @@ export async function handleAccommodationCancelled(params: {
     });
   }
 
-  if (person?.phoneE164) {
+  if (baseVars.recipientPhoneE164) {
     await safeSendNotification({
       eventId,
       personId: data.personId,

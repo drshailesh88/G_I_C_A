@@ -10,7 +10,7 @@
  */
 
 import { db } from '@/lib/db';
-import { accommodationRecords, transportPassengerAssignments } from '@/lib/db/schema';
+import { accommodationRecords, transportPassengerAssignments, people } from '@/lib/db/schema';
 import { eq, ne } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { upsertRedFlag } from '../red-flags';
@@ -19,7 +19,6 @@ import { onCascadeEvent } from '../emit';
 import { CASCADE_EVENTS } from '../events';
 import type { TravelUpdatedPayload, TravelCancelledPayload } from '../events';
 import { captureCascadeError } from '@/lib/sentry';
-import { people } from '@/lib/db/schema';
 import type { NotificationTriggerType } from '@/lib/notifications/types';
 
 /** Resolve person email and phone for notification variables */
@@ -46,20 +45,48 @@ async function sendCascadeNotification(params: {
   triggerEntityType: string;
   triggerEntityId: string;
   variables: Record<string, unknown>;
+  snapshotVars: Record<string, unknown> | undefined;
   idempotencyKey: string;
 }): Promise<void> {
   try {
-    const contact = await resolvePersonContact(params.personId);
+    let vars: Record<string, unknown>;
 
-    // Guard: skip notification if no recipient address for the channel
-    if (params.channel === 'email' && !contact.email) {
+    if (params.snapshotVars) {
+      vars = params.snapshotVars;
+    } else {
+      const contact = await resolvePersonContact(params.personId);
+
+      if (params.channel === 'email' && !contact.email) {
+        console.warn('[cascade:travel] skipping email notification — person has no email', {
+          personId: params.personId,
+          eventId: params.eventId,
+        });
+        return;
+      }
+      if (params.channel === 'whatsapp' && !contact.phoneE164) {
+        console.warn('[cascade:travel] skipping WhatsApp notification — person has no phone', {
+          personId: params.personId,
+          eventId: params.eventId,
+        });
+        return;
+      }
+
+      vars = {
+        ...params.variables,
+        recipientEmail: contact.email,
+        recipientPhoneE164: contact.phoneE164,
+        recipientName: contact.fullName,
+      };
+    }
+
+    if (params.channel === 'email' && !vars.recipientEmail) {
       console.warn('[cascade:travel] skipping email notification — person has no email', {
         personId: params.personId,
         eventId: params.eventId,
       });
       return;
     }
-    if (params.channel === 'whatsapp' && !contact.phoneE164) {
+    if (params.channel === 'whatsapp' && !vars.recipientPhoneE164) {
       console.warn('[cascade:travel] skipping WhatsApp notification — person has no phone', {
         personId: params.personId,
         eventId: params.eventId,
@@ -77,12 +104,7 @@ async function sendCascadeNotification(params: {
       triggerEntityId: params.triggerEntityId,
       sendMode: 'automatic',
       idempotencyKey: params.idempotencyKey,
-      variables: {
-        ...params.variables,
-        recipientEmail: contact.email,
-        recipientPhoneE164: contact.phoneE164,
-        recipientName: contact.fullName,
-      },
+      variables: vars,
     });
   } catch (error) {
     // Cascade must never fail due to notification failure
@@ -159,6 +181,7 @@ export async function handleTravelUpdated(params: {
   }
 
   // 3. Notify delegate of travel update (email + WhatsApp)
+  const snapshotVars = payload.variables as Record<string, unknown> | undefined;
   const ts = Date.now();
   await sendCascadeNotification({
     eventId,
@@ -169,6 +192,7 @@ export async function handleTravelUpdated(params: {
     triggerEntityType: 'travel_record',
     triggerEntityId: data.travelRecordId,
     variables: { changeSummary: data.changeSummary },
+    snapshotVars,
     idempotencyKey: `notify:travel-updated:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:email`,
   });
   await sendCascadeNotification({
@@ -180,6 +204,7 @@ export async function handleTravelUpdated(params: {
     triggerEntityType: 'travel_record',
     triggerEntityId: data.travelRecordId,
     variables: { changeSummary: data.changeSummary },
+    snapshotVars,
     idempotencyKey: `notify:travel-updated:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:whatsapp`,
   });
 }
@@ -244,6 +269,7 @@ export async function handleTravelCancelled(params: {
   }
 
   // 3. Notify delegate of travel cancellation (email + WhatsApp)
+  const snapshotVars = payload.variables as Record<string, unknown> | undefined;
   const ts = Date.now();
   await sendCascadeNotification({
     eventId,
@@ -254,6 +280,7 @@ export async function handleTravelCancelled(params: {
     triggerEntityType: 'travel_record',
     triggerEntityId: data.travelRecordId,
     variables: { cancelledAt: data.cancelledAt, reason: data.reason },
+    snapshotVars,
     idempotencyKey: `notify:travel-cancelled:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:email`,
   });
   await sendCascadeNotification({
@@ -265,6 +292,7 @@ export async function handleTravelCancelled(params: {
     triggerEntityType: 'travel_record',
     triggerEntityId: data.travelRecordId,
     variables: { cancelledAt: data.cancelledAt, reason: data.reason },
+    snapshotVars,
     idempotencyKey: `notify:travel-cancelled:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:whatsapp`,
   });
 }
