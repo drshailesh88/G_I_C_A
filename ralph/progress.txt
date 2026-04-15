@@ -44,6 +44,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T15:35:00Z — infra-039 — Audit-log test probe endpoint
+- Implemented: Replaced stub GET /api/test/audit-log with real implementation. Supports query params: event_id, actor_user_id, actor_username (Clerk email lookup via getUserList), resource, cert_id (matches resource_id OR meta->>'cert_id'). Returns camelCase fields. Capped at 200 rows. Guard-gated for test/dev only.
+- Files changed: src/app/api/test/audit-log/route.ts, src/app/api/test/audit-log/route.test.ts (new), ralph/prd.json, ralph/progress.txt
+- Tests added: 6 (filter by event_id, filter by actor_username with Clerk lookup, actor_username not found returns empty, filter by cert_id, no filters capped at 200, camelCase field names)
+- Learnings: Clerk getUserList accepts emailAddress array filter. Test probe routes don't need Zod validation since they're dev/test-only behind guard().
+
 ## 2026-04-15T15:30:00Z — infra-038 — Add audit_log table and writeAudit helper
 - Implemented: Created audit_log Drizzle schema (uuid pk, nullable event_id fk, actor_user_id, action, resource, resource_id, timestamp, meta jsonb) with 4 indexes. Created writeAudit() helper in src/lib/audit/write.ts that inserts a row with defaults for meta. Migration 0006 creates the table and indexes.
 - Files changed: src/lib/db/schema/audit-log.ts (new), src/lib/db/schema/index.ts, src/lib/audit/write.ts (new), src/lib/audit/write.test.ts (new), drizzle/migrations/0006_audit_log_table.sql (new), ralph/prd.json, ralph/progress.txt

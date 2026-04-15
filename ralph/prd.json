@@ -1677,7 +1677,7 @@
     "data_model": "audit_log reads; optional Clerk lookup for username→user_id translation.",
     "priority": 39,
     "core": false,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {
