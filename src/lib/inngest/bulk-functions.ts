@@ -15,11 +15,11 @@ import { inngest } from './client';
 import { db } from '@/lib/db';
 import { issuedCertificates, certificateTemplates, people, eventRegistrations, sessionAssignments, attendanceRecords, eventPeople } from '@/lib/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
-import { Redis } from '@upstash/redis';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { findCurrentCertificate, buildSupersessionChain, getNextSequence, type IssuedCertificateRecord } from '@/lib/certificates/issuance-utils';
 import { generateCertificateNumber, getCertificateTypeConfig } from '@/lib/certificates/certificate-types';
 import { buildCertificateStorageKey, createR2Provider, type StorageUploadResult } from '@/lib/certificates/storage';
+import { createBulkGenerationRedisClient, writeBulkCertificateGenerationSummary } from '@/lib/certificates/bulk-generation-state';
 import type { BulkCertificateGenerateData, BulkCertificateNotifyData, ArchiveGenerateData } from './events';
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -95,29 +95,48 @@ type StepRunner = {
 
 type BulkScope = 'all' | { ids: string[] };
 
-function redisCredentials(): { url: string; token: string } | null {
-  const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.UPSTASH_REDIS_REST_URL_TEST;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN_TEST;
-  if (!url && !token && process.env.NODE_ENV === 'test') {
-    return { url: 'https://redis.test', token: 'test-token' };
-  }
-  return url && token ? { url, token } : null;
-}
-
 async function releaseBulkGenerationLock(lockKey: string | undefined): Promise<void> {
   if (!lockKey) return;
 
-  const credentials = redisCredentials();
-  if (!credentials) {
+  const redis = createBulkGenerationRedisClient();
+  if (!redis) {
     console.error('Bulk certificate generation completed but Redis is not configured for lock release');
     return;
   }
 
   try {
-    await new Redis(credentials).del(lockKey);
+    await redis.del(lockKey);
   } catch (err) {
     console.error(`Failed to release bulk certificate generation lock ${lockKey}:`, err);
   }
+}
+
+type BulkGenerationResult = {
+  issued: number;
+  skipped: number;
+  certificateIds: string[];
+  errors: string[];
+};
+
+async function storeBulkGenerationSummary(
+  data: BulkCertificateGenerateData,
+  result: BulkGenerationResult,
+  total: number,
+  status: 'completed' | 'failed' = 'completed',
+): Promise<void> {
+  if (!data.batchId) return;
+
+  await writeBulkCertificateGenerationSummary({
+    batch_id: data.batchId,
+    event_id: data.eventId,
+    status,
+    total,
+    issued: result.issued,
+    skipped: result.skipped,
+    certificate_ids: result.certificateIds,
+    errors: result.errors,
+    completed_at: new Date().toISOString(),
+  });
 }
 
 function isBulkScope(value: unknown): value is BulkScope {
@@ -295,12 +314,14 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
       });
 
       if (!setup.template || setup.recipients.length === 0) {
-        return {
+        const result = {
           issued: 0,
           skipped: 0,
           certificateIds: [] as string[],
           errors: [] as string[],
         };
+        await storeBulkGenerationSummary(data, result, setup.recipients.length);
+        return result;
       }
 
       const template = setup.template;
@@ -393,7 +414,6 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
 
                 if (currentCert && currentCert.templateId === template.id && currentCert.templateVersionNo === template.versionNo) {
                   renderedVariables.certificate_number = currentCert.certificateNumber;
-                  certificateIds.push(currentCert.id);
 
                   const pdfBuffer = await renderCertificatePdf(template.templateJson, renderedVariables);
                   const storageKey = currentCert.storageKey ?? buildCertificateStorageKey(eventId, template.certificateType, currentCert.id);
@@ -407,6 +427,7 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
                       updatedAt: new Date(),
                     })
                     .where(withEventScope(issuedCertificates.eventId, eventId, eq(issuedCertificates.id, currentCert.id)));
+                  certificateIds.push(currentCert.id);
                   continue;
                 }
 
@@ -477,12 +498,28 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
         nextSeq = batchResult.nextSeq;
       }
 
-      return {
+      const result = {
         issued: allCertificateIds.length,
         skipped: setup.recipients.length - allCertificateIds.length,
         certificateIds: allCertificateIds,
         errors: allErrors,
       };
+      await storeBulkGenerationSummary(data, result, setup.recipients.length);
+      return result;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      await storeBulkGenerationSummary(
+        data,
+        {
+          issued: 0,
+          skipped: 0,
+          certificateIds: [],
+          errors: [msg],
+        },
+        0,
+        'failed',
+      );
+      throw err;
     } finally {
       await releaseBulkGenerationLock(lockKey);
     }

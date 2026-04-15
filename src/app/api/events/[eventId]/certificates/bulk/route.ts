@@ -10,6 +10,7 @@ import { ROLES } from '@/lib/auth/roles';
 import { CERTIFICATE_TYPES } from '@/lib/validations/certificate';
 import { Redis } from '@upstash/redis';
 import { inngest } from '@/lib/inngest/client';
+import { readBulkCertificateGenerationSummary } from '@/lib/certificates/bulk-generation-state';
 
 type Params = Promise<{ eventId: string }>;
 
@@ -24,6 +25,10 @@ const LOCK_TTL_SECONDS = 300;
 const bulkBodySchema = z.object({
   certificate_type: z.enum(CERTIFICATE_TYPES),
   scope: z.union([z.literal('all'), z.object({ ids: z.array(z.string().uuid()).min(1) })]),
+});
+
+const bulkSummaryQuerySchema = z.object({
+  batch_id: z.string().uuid('Invalid batch ID'),
 });
 
 function buildLockKey(eventId: string, certificateType: string): string {
@@ -205,5 +210,57 @@ export async function POST(request: Request, { params }: { params: Params }) {
     await redis.del(lockKey);
     console.error(`Bulk certificate generation failed for eventId=${eventId}:`, err);
     return NextResponse.json({ error: 'Bulk generation failed' }, { status: 500 });
+  }
+}
+
+export async function GET(request: Request, { params }: { params: Params }) {
+  const { eventId: rawEventId } = await params;
+
+  const parsed = paramsSchema.safeParse({ eventId: rawEventId });
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid event ID' }, { status: 400 });
+  }
+  const { eventId } = parsed.data;
+
+  let role: string | null;
+  try {
+    const access = await assertEventAccess(eventId);
+    role = access.role;
+  } catch (err) {
+    if (err instanceof EventNotFoundError) {
+      return crossEvent404Response();
+    }
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+
+  if (!role || (role !== ROLES.SUPER_ADMIN && role !== ROLES.EVENT_COORDINATOR && role !== ROLES.READ_ONLY)) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+
+  const url = new URL(request.url);
+  const queryResult = bulkSummaryQuerySchema.safeParse({
+    batch_id: url.searchParams.get('batch_id'),
+  });
+  if (!queryResult.success) {
+    return NextResponse.json(
+      {
+        error: 'validation_failed',
+        fields: queryResult.error.flatten().fieldErrors,
+      },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const summary = await readBulkCertificateGenerationSummary(eventId, queryResult.data.batch_id);
+    if (!summary) {
+      return NextResponse.json({ error: 'batch not found' }, { status: 404 });
+    }
+    return NextResponse.json(summary);
+  } catch (err) {
+    if (err instanceof SyntaxError) {
+      return NextResponse.json({ error: 'invalid batch summary' }, { status: 500 });
+    }
+    return NextResponse.json({ error: 'Redis not configured' }, { status: 500 });
   }
 }
