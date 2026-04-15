@@ -13,6 +13,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T09:35:00Z — cert-code-003 — Enforce transaction write-order in activateCertificateTemplate
+- Implemented: Wrapped archive-existing + activate-target updates inside db.transaction() so both run atomically with correct ordering
+- Files changed: src/lib/actions/certificate.ts
+- Tests added: 0 (existing mutation-kill tests now pass; 70/70 green)
+- Learnings: activateCertificateTemplate must use db.transaction() with tx for both updates; test captures setCalls ordering via tx mock
+
 ## 2026-04-15T09:30:00Z — cert-code-002 — Add single-retry-on-transaction-failure
 - Implemented: Added retry logic for PostgreSQL class-40 transaction failures (serialization, deadlock) — retries exactly once (attempt === 0 guard), separate from existing collision retry (up to 3 attempts)
 - Files changed: src/lib/actions/certificate-issuance.ts, src/lib/actions/certificate-issuance.test.ts

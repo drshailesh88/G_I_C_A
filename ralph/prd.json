@@ -115,7 +115,7 @@
     "data_model": "certificate_templates — no schema changes. See data-requirements.md §17.",
     "priority": 3,
     "core": true,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {
