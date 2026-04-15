@@ -108,7 +108,7 @@ run_grader() {
   local prompt="$1"
   echo "[grader] trying opencode/$OPENCODE_MODEL..." >&2
   local output exitcode
-  output=$("${TIMEOUT_CMD[@]}" opencode run --model "$OPENCODE_MODEL" "$prompt" 2>&1) || true
+  output=$("${TIMEOUT_CMD[@]}" opencode run --dangerously-skip-permissions --model "$OPENCODE_MODEL" "$prompt" 2>&1) || true
   exitcode=$?
 
   local output_tail
