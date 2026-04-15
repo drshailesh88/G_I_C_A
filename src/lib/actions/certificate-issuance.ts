@@ -22,6 +22,42 @@ import {
 import { generateCertificateNumber, getCertificateTypeConfig } from '@/lib/certificates/certificate-types';
 import { buildCertificateStorageKey } from '@/lib/certificates/storage';
 
+type PersonVariableSnapshot = {
+  fullName?: string | null;
+  salutation?: string | null;
+  email?: string | null;
+  phoneE164?: string | null;
+  designation?: string | null;
+  organization?: string | null;
+  specialty?: string | null;
+  city?: string | null;
+};
+
+function buildRenderedVariablesSnapshot(
+  variables: Record<string, unknown>,
+  person: PersonVariableSnapshot,
+): Record<string, unknown> {
+  const snapshot: Record<string, unknown> = { ...variables };
+
+  const put = (key: string, value: string | null | undefined) => {
+    if (value === undefined) return;
+    snapshot[key] = value ?? '';
+  };
+
+  put('full_name', person.fullName);
+  put('recipient_name', person.fullName);
+  put('salutation', person.salutation);
+  put('email', person.email);
+  put('phone', person.phoneE164);
+  put('phone_e164', person.phoneE164);
+  put('designation', person.designation);
+  put('organization', person.organization);
+  put('specialty', person.specialty);
+  put('city', person.city);
+
+  return snapshot;
+}
+
 // ── Issue a single certificate ───────────────────────────────
 export async function issueCertificate(eventId: string, input: unknown) {
   const { userId } = await assertEventAccess(eventId, { requireWrite: true });
@@ -39,7 +75,17 @@ export async function issueCertificate(eventId: string, input: unknown) {
 
   // Verify person exists
   const [person] = await db
-    .select({ id: people.id })
+    .select({
+      id: people.id,
+      fullName: people.fullName,
+      salutation: people.salutation,
+      email: people.email,
+      phoneE164: people.phoneE164,
+      designation: people.designation,
+      organization: people.organization,
+      specialty: people.specialty,
+      city: people.city,
+    })
     .from(people)
     .where(eq(people.id, validated.personId))
     .limit(1);
@@ -112,6 +158,10 @@ export async function issueCertificate(eventId: string, input: unknown) {
 
         const certId = crypto.randomUUID();
         const storageKey = buildCertificateStorageKey(eventId, validated.certificateType, certId);
+        const renderedVariablesSnapshot = buildRenderedVariablesSnapshot(
+          validated.renderedVariablesJson,
+          person,
+        );
 
         const [newCert] = await tx
           .insert(issuedCertificates)
@@ -127,7 +177,7 @@ export async function issueCertificate(eventId: string, input: unknown) {
             certificateNumber,
             storageKey,
             fileName: `${certificateNumber}.pdf`,
-            renderedVariablesJson: validated.renderedVariablesJson,
+            renderedVariablesJson: renderedVariablesSnapshot,
             brandingSnapshotJson: template.brandingSnapshotJson,
             templateSnapshotJson: template.templateJson,
             supersedesId: chain.newCertLink?.supersedesId || null,
