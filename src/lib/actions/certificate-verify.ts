@@ -37,8 +37,8 @@ export async function lookupAndVerify(token: string) {
     return null;
   }
 
-  // Increment verification_count and set last_verified_at atomically for ALL statuses
-  db.update(issuedCertificates)
+  // Increment verification_count and set last_verified_at atomically for ALL statuses.
+  await db.update(issuedCertificates)
     .set({
       verificationCount: sql`${issuedCertificates.verificationCount} + 1`,
       lastVerifiedAt: new Date(),
@@ -47,11 +47,7 @@ export async function lookupAndVerify(token: string) {
     .where(and(
       eq(issuedCertificates.id, cert.id),
       eq(issuedCertificates.eventId, cert.eventId),
-    ))
-    .then(() => {})
-    .catch((err: unknown) => {
-      console.error('[certificate-verify] failed to increment verification count:', err);
-    });
+    ));
 
   const responseData: Record<string, unknown> = {
     status: cert.status,
@@ -71,7 +67,10 @@ export async function lookupAndVerify(token: string) {
     const [newer] = await db
       .select({ certificateNumber: issuedCertificates.certificateNumber })
       .from(issuedCertificates)
-      .where(eq(issuedCertificates.id, cert.supersededById))
+      .where(and(
+        eq(issuedCertificates.id, cert.supersededById),
+        eq(issuedCertificates.eventId, cert.eventId),
+      ))
       .limit(1);
 
     if (newer) {
