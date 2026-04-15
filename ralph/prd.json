@@ -163,6 +163,9 @@
   },
   {
     "id": "cert-code-004",
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-15T14:24:16Z",
+    "qa_tested_by": "codex",
     "category": "crud",
     "description": "Return the inserted certificate id from issueCertificate so downstream consumers have the row reference.",
     "page": "N/A — Backend",

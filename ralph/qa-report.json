@@ -71,5 +71,21 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), including focused certificate action and full-journey suites (114 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this certificate activation change, and a targeted typecheck grep found no certificate action errors. Manual review confirmed eventId-scoped target lookup, eventId-scoped sibling lookup, transactional archive-before-activate ordering when a sibling exists, and the corrected no-sibling activation-only path. Persistence was not re-probed because the available contract browser fixture is blocked."
+  },
+  {
+    "story_id": "cert-code-004",
+    "qa_timestamp": "2026-04-15T14:24:16Z",
+    "qa_model": "codex",
+    "status": "pass",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "skip",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [],
+    "notes": "Full Vitest passed (231 files, 4736 tests), and focused certificate issuance plus issue/regenerate route suites passed (4 files, 151 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; targeted typecheck output showed only a certificate-issuance test-file regex target error, with no production certificate issuance or route errors. Manual verification confirmed issueCertificate returns the inserted id, certificateNumber, and verificationToken; production issue/regenerate route consumers map those fields into their response bodies; the UI server-action caller ignores the return value. Persistence was not re-probed through the browser contract because the authenticated fixture is blocked."
   }
 ]

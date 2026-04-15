@@ -28,3 +28,9 @@
 - Bugs: 1 (medium: 1)
 - Fix commits: 878a35d
 - Notes: Fixed the no-active-sibling path so activation skips the archive update and only activates the target, while preserving transactional archive-before-activate ordering when a sibling exists. Full Vitest passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-15T14:24:16Z — cert-code-004 — issueCertificate return reference
+- Status: pass
+- Bugs: 0
+- Fix commits: none
+- Notes: Verified issueCertificate returns the inserted id, certificateNumber, and verificationToken; route consumers use those fields correctly. Full Vitest and focused certificate suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
