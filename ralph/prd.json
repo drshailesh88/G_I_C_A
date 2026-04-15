@@ -369,7 +369,7 @@
     "data_model": "issuedCertificates.status, revokedAt, revokedBy, revokeReason.",
     "priority": 9,
     "core": true,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {

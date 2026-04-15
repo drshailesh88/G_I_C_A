@@ -18,6 +18,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T12:30:00Z — cert-api-009 — POST revoke endpoint
+- Implemented: Created POST /api/events/[eventId]/certificates/[certId]/revoke route. Validates non-empty/non-whitespace reason via Zod refine. Looks up cert (must be 'issued' status), updates status='revoked', revokedAt, revokeReason, updatedAt. Returns 200 { id, status, revoked_at }. Already-revoked returns 400. Missing/empty/whitespace reason returns 400 { error: 'reason_required' }.
+- Files changed: src/app/api/events/[eventId]/certificates/[certificateId]/revoke/route.ts (new), route.test.ts (new)
+- Tests added: 9 (route.test.ts — 200 success with fields, 400 empty body/empty reason/whitespace reason, 400 already-revoked, 404 not found, 403 ops role, 400 invalid params)
+- Learnings: Schema has revokedAt and revokeReason but no revokedBy column; the spec data_model mentions revokedBy but the column doesn't exist. Implemented without it since schema modification is not allowed.
+
 ## 2026-04-15T12:20:00Z — cert-api-008 — POST regenerate endpoint
 - Implemented: Created POST /api/events/[eventId]/certificates/[certId]/regenerate route. Looks up old cert (must be 'issued'), finds current active template for that cert type, calls issueCertificate with old cert's personId/type/variables. Returns 201 { id, certificate_number, supersedes_id }. Supersession handled by existing issueCertificate logic.
 - Files changed: src/app/api/events/[eventId]/certificates/[certificateId]/regenerate/route.ts (new), route.test.ts (new)
