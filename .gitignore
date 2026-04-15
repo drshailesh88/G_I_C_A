@@ -48,3 +48,6 @@ adapters
 scripts/.env.test.local.fixtures
 ralph/ralph-*.log
 ralph/progress.txt
+ralph/ralph-build-*.log
+ralph/ralph-qa-*.log
+ralph/qa-progress.txt
