@@ -147,6 +147,16 @@ export async function issueCertificate(eventId: string, input: unknown) {
       if (isCertNumberCollision && attempt < MAX_CERT_NUMBER_RETRIES - 1) {
         continue;
       }
+
+      const isTransactionFailure =
+        error instanceof Error &&
+        'code' in error &&
+        String((error as any).code).startsWith('40');
+
+      if (isTransactionFailure && attempt === 0) {
+        continue;
+      }
+
       throw error;
     }
   }

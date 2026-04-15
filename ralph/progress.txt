@@ -7,10 +7,17 @@
 - issueCertificate retry loop must use db.transaction() — tests mock mockDb.transaction and count calls
 - Supersession updates must be a single .set() call with status, supersededById, and updatedAt together (after insert, not before)
 - Person/template validation stays OUTSIDE the transaction retry loop; only the cert-number-dependent logic goes inside
+- Transaction-level retry uses PG error class 40 (code.startsWith('40')) to avoid conflicting with class-23 collision/constraint tests
 
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T09:30:00Z — cert-code-002 — Add single-retry-on-transaction-failure
+- Implemented: Added retry logic for PostgreSQL class-40 transaction failures (serialization, deadlock) — retries exactly once (attempt === 0 guard), separate from existing collision retry (up to 3 attempts)
+- Files changed: src/lib/actions/certificate-issuance.ts, src/lib/actions/certificate-issuance.test.ts
+- Tests added: 3 (transaction retried once on first failure, no retry when first attempt succeeds, second failure re-throws original error)
+- Learnings: Transaction retry uses `code.startsWith('40')` to match PG class-40 errors without conflicting with existing collision/non-collision mutation-kill tests that use class-23 codes
 
 ## 2026-04-15T09:15:00Z — cert-code-001 — Fix issueCertificate error-throw branches
 - Implemented: Wrapped retry loop body in db.transaction(), merged two supersession updates into one post-insert call with status+supersededById+updatedAt

@@ -321,6 +321,86 @@ describe('issueCertificate', () => {
   });
 });
 
+// ── Transaction retry (cert-code-002) ───────────────────────
+describe('issueCertificate — transaction retry', () => {
+  it('transaction retried once on first failure', async () => {
+    let txCallCount = 0;
+    const serializationError = Object.assign(
+      new Error('could not serialize access due to concurrent update'),
+      { code: '40001' },
+    );
+
+    let globalSelectCount = 0;
+    const selectResponses = [
+      [{ id: PERSON_ID }], [mockTemplate],
+      [], [],
+    ];
+    mockDb.select.mockImplementation(() => {
+      const rows = selectResponses[globalSelectCount] ?? [];
+      globalSelectCount++;
+      const chain: any = {
+        from: vi.fn().mockImplementation(() => chain),
+        where: vi.fn().mockImplementation(() => chain),
+        limit: vi.fn().mockResolvedValue(rows),
+        for: vi.fn().mockResolvedValue(rows),
+        orderBy: vi.fn().mockResolvedValue(rows),
+        then: (resolve: (val: unknown) => void) => Promise.resolve(rows).then(resolve),
+      };
+      return chain;
+    });
+
+    chainedInsert([mockIssuedCert]);
+
+    mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
+      txCallCount++;
+      if (txCallCount === 1) throw serializationError;
+      return callback(mockDb);
+    });
+
+    const result = await issueCertificate(EVENT_ID, validIssueInput);
+    expect(result).toBeDefined();
+    expect(txCallCount).toBe(2);
+  });
+
+  it('no retry when first attempt succeeds', async () => {
+    let txCallCount = 0;
+
+    chainedSelectSequence([
+      [{ id: PERSON_ID }], [mockTemplate], [], [],
+    ]);
+    chainedInsert([mockIssuedCert]);
+
+    mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
+      txCallCount++;
+      return callback(mockDb);
+    });
+
+    const result = await issueCertificate(EVENT_ID, validIssueInput);
+    expect(result).toBeDefined();
+    expect(txCallCount).toBe(1);
+  });
+
+  it('second failure re-throws original error', async () => {
+    let txCallCount = 0;
+    const deadlockError = Object.assign(
+      new Error('deadlock detected'),
+      { code: '40P01' },
+    );
+
+    chainedSelectSequence([
+      [{ id: PERSON_ID }], [mockTemplate], [], [],
+    ]);
+
+    mockDb.transaction.mockImplementation(async () => {
+      txCallCount++;
+      throw deadlockError;
+    });
+
+    await expect(issueCertificate(EVENT_ID, validIssueInput)).rejects.toThrow('deadlock detected');
+    expect(txCallCount).toBe(2);
+  });
+});
+
 // ── Revoke Certificate ───────────────────────────────────────
 describe('revokeCertificate', () => {
   it('revokes an issued certificate', async () => {

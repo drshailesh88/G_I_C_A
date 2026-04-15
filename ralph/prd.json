@@ -68,7 +68,7 @@
     "data_model": "certificates insert inside db.transaction(); no schema changes.",
     "priority": 2,
     "core": true,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {
