@@ -136,5 +136,30 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and the focused single-issue certificate route suite passed (15 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; the visible output remains in QA/test, Sentry, people, navigation, notification, and cascade files rather than the certificate API route. Manual review confirmed the route derives eventId from the URL, rejects body eventId/event_id mismatches via assertEventIdMatch with Sentry capture, maps archived-event auth failures to 400, keeps ops/read_only at 403, returns cross-event access through the sanitized 404 path, validates body and CME variables with Zod, and returns the inserted certificate id, certificate_number, verification_token, and issued status. Persistence was not re-probed through the browser contract because the authenticated fixture is blocked."
+  },
+  {
+    "story_id": "cert-api-007",
+    "qa_timestamp": "2026-04-15T14:47:51Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "skip",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "issueCertificate persisted caller-supplied renderedVariablesJson verbatim, allowing stale or empty master-person fields to become the immutable rendered_variables_json snapshot.",
+        "severity": "high",
+        "fix_commit": "7307c65",
+        "files_changed": [
+          "src/lib/actions/certificate-issuance.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused certificate issuance plus issue/regenerate route suites passed (4 files, 151 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; a targeted post-fix typecheck grep found no errors in certificate production paths. Manual review confirmed templateSnapshotJson is copied from the active template at insert time, renderedVariablesJson is now merged from authoritative people master fields before insert, and issuedCertificates update paths only touch status, supersession, revocation, download, verification, and sent-at fields, not templateSnapshotJson or renderedVariablesJson. Persistence was not re-probed through the browser contract because the authenticated fixture is blocked."
   }
 ]

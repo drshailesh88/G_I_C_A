@@ -304,6 +304,9 @@
     "priority": 7,
     "core": true,
     "passes": true,
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-15T14:47:51Z",
+    "qa_tested_by": "codex",
     "tests": {
       "unit": [
         {

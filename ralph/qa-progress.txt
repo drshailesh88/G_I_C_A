@@ -9,6 +9,7 @@
 - Stryker baseline story cert-code-005 is accepted only under outcome b: verify the committed snapshot has >=60 scored modules, a plain-English partial-baseline note, preserved travel scores, and no `stryker.conf.mjs` shadow config in the working tree.
 - API routes that call `assertEventAccess(eventId, { requireWrite: true })` can accidentally collapse `EventArchivedError` into a generic 403 catch-all; archived-event contract checks need a separate 400 assertion.
 - Backend event-scoped POST routes can validate the main body while silently stripping submitted `eventId`/`event_id`; explicitly probe path-vs-body event ID mismatches and Sentry mismatch capture.
+- Certificate rendered-variable snapshots must be resolved from authoritative DB state at issuance time, not trusted from caller-provided variables; stale master-person values become permanent once inserted.
 
 ## Iteration log
 
@@ -49,3 +50,9 @@
 - Bugs: 2 (high: 1, medium: 1)
 - Fix commits: 13402769cd929583d6f5c5a7b8934d78b6f05d9f
 - Notes: Fixed archived-event 400 mapping and body eventId/event_id mismatch rejection with Sentry capture. Full Vitest passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-15T14:47:51Z — cert-api-007 — immutable certificate snapshots
+- Status: fixed
+- Bugs: 1 (high: 1)
+- Fix commits: 7307c65
+- Notes: Fixed rendered_variables_json snapshot resolution so master-person fields come from the people row before insert. Full Vitest passed; focused certificate suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
