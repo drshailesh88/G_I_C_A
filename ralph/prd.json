@@ -9,7 +9,7 @@
     "data_model": "certificates + certificate_templates + event_people + events in src/lib/db/schema — no schema changes; see .planning/data-requirements.md §18 for the Rules list.",
     "priority": 1,
     "core": true,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {
