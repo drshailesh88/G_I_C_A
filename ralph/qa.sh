@@ -1,17 +1,15 @@
 #!/usr/bin/env bash
-# Ralph QA loop — OpenCode / GLM-5.1 as sole independent grader.
+# Ralph QA loop — Gemini 3 pro preview as sole independent grader.
 #
-# Builder ≠ grader principle: Claude built the code, a DIFFERENT model
-# family (GLM-5.1 via z.ai coding plan, through the OpenCode CLI) grades
-# it. For each passes:true story in prd.json, OpenCode verifies the
-# feature, probes edge cases, and fixes bugs in production code.
+# Builder ≠ grader principle: Claude built the code, Google Gemini 3
+# grades it independently. For each passes:true story in prd.json,
+# Gemini verifies, probes edge cases, fixes bugs in production code.
 # Findings → ralph/qa-report.json. Progress → ralph/qa-progress.txt.
 #
-# No fallback providers. If OpenCode fails, the loop aborts cleanly.
-# This is intentional — we're proving GLM-5.1 can carry QA end to end.
+# No fallback providers. If Gemini fails, the loop aborts cleanly.
 #
 # Env overrides:
-#   OPENCODE_MODEL=<id>   override model (default zai-coding-plan/glm-5.1)
+#   GEMINI_MODEL=<id>    override model (default gemini-3-pro-preview)
 #
 # Usage: ./ralph/qa.sh [max_iterations=999]
 
@@ -25,18 +23,19 @@ QA_PROGRESS=ralph/qa-progress.txt
 ITER_TIMEOUT=1800
 SLEEP_BETWEEN=3
 
-OPENCODE_MODEL="${OPENCODE_MODEL:-opencode/minimax-m2.5-free}"
+GEMINI_MODEL="${GEMINI_MODEL:-gemini-3-pro-preview}"
 
-# Quota / auth / transport detection
-QUOTA_REGEX='429|rate.?limit|rate_limit|quota.?exceeded|quota_exceeded|usage.?limit|insufficient_quota|retry.?after|RESOURCE_EXHAUSTED|hit your usage limit|try again at|unauthorized|invalid.?api.?key|401|402|403'
+# Quota / auth / transport detection (only applied to FAILED calls — gemini's
+# internal retries sometimes print 429/TLS noise even on successful runs)
+QUOTA_REGEX='429|rate.?limit|rate_limit|quota.?exceeded|quota_exceeded|usage.?limit|insufficient_quota|retry.?after|RESOURCE_EXHAUSTED|hit your usage limit|try again at|unauthorized|invalid.?api.?key|401|402|403|ERR_SSL_|TLS.?ALERT|UNAVAILABLE|overloaded'
 
 if [ ! -f "$PRD" ]; then
-  echo "ERROR: $PRD not found. Cannot QA without a PRD." >&2
+  echo "ERROR: $PRD not found." >&2
   exit 1
 fi
 
-if ! command -v opencode >/dev/null 2>&1; then
-  echo "ERROR: opencode CLI not found. Install via 'npm i -g opencode-ai' or equivalent." >&2
+if ! command -v gemini >/dev/null 2>&1; then
+  echo "ERROR: gemini CLI not found. Install via 'npm i -g @google/gemini-cli'." >&2
   exit 1
 fi
 
@@ -46,13 +45,12 @@ if command -v timeout >/dev/null 2>&1; then
 elif command -v gtimeout >/dev/null 2>&1; then
   TIMEOUT_CMD=(gtimeout "$ITER_TIMEOUT")
 else
-  echo "WARNING: no timeout command found (install coreutils for gtimeout). Iterations will run without time limit — Ctrl-C if hung." >&2
+  echo "WARNING: no timeout command found. Install 'brew install coreutils'." >&2
   TIMEOUT_CMD=()
 fi
 
 if [ ! -f "$QA_REPORT" ]; then
   echo "[]" > "$QA_REPORT"
-  echo "Initialized $QA_REPORT"
 fi
 
 if [ ! -f "$QA_PROGRESS" ]; then
@@ -61,13 +59,9 @@ if [ ! -f "$QA_PROGRESS" ]; then
 
 ## QA Patterns
 
-<!-- Cross-feature QA findings: common bug classes, edge cases worth re-checking. -->
-
 ## Iteration log
 
-<!-- Dated entries per QA'd feature. -->
 EOF
-  echo "Initialized $QA_PROGRESS"
 fi
 
 count_built() {
@@ -81,7 +75,7 @@ BUILT=$(count_built)
 QAD=$(count_qad)
 
 echo "───────────────────────────────────────────────────────────────"
-echo "Ralph QA loop — OpenCode / GLM-5.1 sole grader"
+echo "Ralph QA loop — Gemini sole grader"
 echo "  prd:        $PRD  ($BUILT features built, $QAD already QA'd)"
 echo "  report:     $QA_REPORT"
 echo "  progress:   $QA_PROGRESS"
@@ -89,47 +83,44 @@ echo "  max iter:   $MAX_ITER"
 if [ ${#TIMEOUT_CMD[@]} -gt 0 ]; then
   echo "  timeout:    ${ITER_TIMEOUT}s per iter (${TIMEOUT_CMD[0]})"
 else
-  echo "  timeout:    (none available — install coreutils)"
+  echo "  timeout:    (none available)"
 fi
-echo "  grader:     opencode/$OPENCODE_MODEL"
+echo "  grader:     gemini/$GEMINI_MODEL"
 echo "───────────────────────────────────────────────────────────────"
 
 if [ "$BUILT" -eq 0 ]; then
-  echo "No features built yet (passes:true count = 0). Nothing to QA. Exiting."
+  echo "No features built yet. Nothing to QA. Exiting."
   exit 0
 fi
 
-# ── OpenCode invocation ────────────────────────────────────────────
-# Returns:
-#   0  success; output printed to stdout
-#   1  quota / auth / transport failure
-#   N  other non-zero exit; output printed to stdout
 run_grader() {
   local prompt="$1"
-  echo "[grader] trying opencode/$OPENCODE_MODEL..." >&2
+  echo "[grader] trying gemini/$GEMINI_MODEL..." >&2
   local output exitcode
-  output=$("${TIMEOUT_CMD[@]}" opencode run --dangerously-skip-permissions --model "$OPENCODE_MODEL" "$prompt" 2>&1) || true
+  output=$("${TIMEOUT_CMD[@]}" gemini -m "$GEMINI_MODEL" --yolo -p "$prompt" 2>&1) || true
   exitcode=$?
 
   local output_tail
   output_tail=$(printf '%s\n' "$output" | tail -n 30)
 
-  # Quota / auth / transport patterns in response tail
-  if echo "$output_tail" | grep -qiE "$QUOTA_REGEX"; then
-    echo "[grader] opencode/$OPENCODE_MODEL quota/auth pattern matched in response tail" >&2
-    return 1
-  fi
-  # Success
+  # Success first: Gemini internal retries emit 429 noise even on success
   if [ "$exitcode" -eq 0 ] && [ -n "${output// }" ]; then
+    # Check tail for quota markers that actually indicate failure
+    if echo "$output_tail" | grep -qiE "$QUOTA_REGEX"; then
+      echo "[grader] gemini/$GEMINI_MODEL quota/transport pattern in tail of exit-0 response — treating as failure" >&2
+      return 1
+    fi
     printf '%s' "$output"
     return 0
   fi
-  # Silent failure
   if [ "$exitcode" -ne 0 ] && [ -z "${output// }" ]; then
-    echo "[grader] opencode/$OPENCODE_MODEL silent non-zero exit" >&2
+    echo "[grader] gemini/$GEMINI_MODEL silent non-zero exit — treating as quota" >&2
     return 1
   fi
-  # Non-quota failure — propagate output + exitcode
+  if [ "$exitcode" -ne 0 ] && echo "$output_tail" | grep -qiE "$QUOTA_REGEX"; then
+    echo "[grader] gemini/$GEMINI_MODEL quota/transport failure" >&2
+    return 1
+  fi
   printf '%s' "$output"
   return "$exitcode"
 }
@@ -160,8 +151,10 @@ $RECENT_QA_COMMITS
 Pick the FIRST story in $PRD where passes:true AND no entry in $QA_REPORT has a matching story_id.
 Verify it independently per ralph/qa-prompt.md: automated checks, manual acceptance, edge cases.
 Fix any bugs you find in PRODUCTION code only — never tests, never locked files.
-Append a structured entry to $QA_REPORT. Also flip qa_tested:true in $PRD for that story (per qa-prompt.md step 9b).
+Append a structured entry to $QA_REPORT with qa_model set to \"gemini-3-pro-preview\".
+Also flip qa_tested:true in $PRD for that story (per qa-prompt.md step 9b).
 Update $QA_PROGRESS.
+Commit your changes with a 'QA: <story-id> — ...' prefix before finishing.
 Output <promise>NEXT</promise> when done.
 Output <promise>QA_COMPLETE</promise> only if every passes:true story has a qa-report entry.
 Output <promise>ABORT</promise> if blocked (explain why above the tag)."
@@ -175,12 +168,11 @@ Output <promise>ABORT</promise> if blocked (explain why above the tag)."
 
   if [ "$RC" -eq 1 ]; then
     echo ""
-    echo "[grader] opencode failed (quota/auth/transport). No fallback configured. Exiting." >&2
+    echo "[grader] gemini failed (quota/auth/transport). No fallback configured. Exiting." >&2
     exit 1
   fi
 
-  # Only grep the LAST 40 lines for promise tags — prompt-echo substrings
-  # elsewhere in the output would cause false matches.
+  # Grep only the last 40 lines for promise tags to avoid prompt-echo false matches.
   result_tail=$(printf '%s\n' "$result" | tail -n 40)
   quota_tail=$(printf '%s' "$result_tail" | grep -ciE "$QUOTA_REGEX")
 
@@ -196,7 +188,7 @@ Output <promise>ABORT</promise> if blocked (explain why above the tag)."
     fi
   elif echo "$result_tail" | grep -q '<promise>ABORT</promise>' && [ "$quota_tail" -eq 0 ]; then
     echo ""
-    echo "Grader signaled ABORT — QA blocked. Stopping." >&2
+    echo "Grader signaled ABORT. Stopping." >&2
     exit 2
   elif echo "$result_tail" | grep -q '<promise>NEXT</promise>' && [ "$quota_tail" -eq 0 ]; then
     :
