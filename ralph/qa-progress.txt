@@ -7,6 +7,8 @@
 - Repo-level `npx tsc --noEmit` currently fails on broad existing errors across QA/test, Sentry, people, navigation, notification, and cascade files; distinguish those from story-local production type regressions.
 - Certificate template activation can pass archive-before-activate ordering while still doing extra no-op archive writes; explicitly check the no-sibling active-template path against the PRD.
 - Stryker baseline story cert-code-005 is accepted only under outcome b: verify the committed snapshot has >=60 scored modules, a plain-English partial-baseline note, preserved travel scores, and no `stryker.conf.mjs` shadow config in the working tree.
+- API routes that call `assertEventAccess(eventId, { requireWrite: true })` can accidentally collapse `EventArchivedError` into a generic 403 catch-all; archived-event contract checks need a separate 400 assertion.
+- Backend event-scoped POST routes can validate the main body while silently stripping submitted `eventId`/`event_id`; explicitly probe path-vs-body event ID mismatches and Sentry mismatch capture.
 
 ## Iteration log
 
@@ -41,3 +43,9 @@
 - Bugs: 0
 - Fix commits: none
 - Notes: Accepted outcome b: 72 scored modules in .quality/state.json and the latest qa/baselines snapshot, explanatory partial-baseline note present, no shadow Stryker config exists, travel baselines preserved, and Stryker dry-run succeeded; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-15T14:40:04Z — cert-api-006 — single certificate issue API
+- Status: fixed
+- Bugs: 2 (high: 1, medium: 1)
+- Fix commits: 13402769cd929583d6f5c5a7b8934d78b6f05d9f
+- Notes: Fixed archived-event 400 mapping and body eventId/event_id mismatch rejection with Sentry capture. Full Vitest passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.

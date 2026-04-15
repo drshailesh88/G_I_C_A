@@ -250,6 +250,9 @@
   },
   {
     "id": "cert-api-006",
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-15T14:40:04Z",
+    "qa_tested_by": "codex",
     "category": "crud",
     "description": "POST /api/events/[eventId]/certificates — single-issue endpoint matching the frozen certificates contract.",
     "page": "N/A — Backend",

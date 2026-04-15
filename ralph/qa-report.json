@@ -103,5 +103,38 @@
     },
     "bugs": [],
     "notes": "Full Vitest passed (231 files, 4736 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story. Independent Stryker dry-run with the locked stryker.config.json succeeded and ran 4578 tests without executing mutants. Manual verification accepted outcome b: .quality/state.json and qa/baselines/state-baseline-20260415T070514Z.json contain 72 scored modules, the committed snapshot has a plain-English partial-baseline note explaining the 30 unscored files and exit 143 timeout, no stryker.conf.mjs shadow config exists, and the travel-flow baselines are preserved at travel.ts=99.48, travel-cascade.ts=97.03, validations/travel.ts=100."
+  },
+  {
+    "story_id": "cert-api-006",
+    "qa_timestamp": "2026-04-15T14:40:04Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "skip",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "Archived events reached the certificate API auth catch-all and returned 403 instead of the contract-required 400 event archived response.",
+        "severity": "medium",
+        "fix_commit": "13402769cd929583d6f5c5a7b8934d78b6f05d9f",
+        "files_changed": [
+          "src/app/api/events/[eventId]/certificates/route.ts"
+        ]
+      },
+      {
+        "description": "The single-issue certificate API ignored submitted body eventId mismatches instead of returning 400 and capturing the tenancy mismatch in Sentry.",
+        "severity": "high",
+        "fix_commit": "13402769cd929583d6f5c5a7b8934d78b6f05d9f",
+        "files_changed": [
+          "src/app/api/events/[eventId]/certificates/route.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and the focused single-issue certificate route suite passed (15 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; the visible output remains in QA/test, Sentry, people, navigation, notification, and cascade files rather than the certificate API route. Manual review confirmed the route derives eventId from the URL, rejects body eventId/event_id mismatches via assertEventIdMatch with Sentry capture, maps archived-event auth failures to 400, keeps ops/read_only at 403, returns cross-event access through the sanitized 404 path, validates body and CME variables with Zod, and returns the inserted certificate id, certificate_number, verification_token, and issued status. Persistence was not re-probed through the browser contract because the authenticated fixture is blocked."
   }
 ]
