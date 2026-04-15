@@ -120,7 +120,7 @@ export async function POST(
     if (message.includes('Person not found') || message.includes('person not attached')) {
       return NextResponse.json({ error: 'person not attached to event' }, { status: 400 });
     }
-    if (message.includes('event') && message.toLowerCase().includes('archived')) {
+    if (message.toLowerCase().includes('event') && message.toLowerCase().includes('archived')) {
       return NextResponse.json({ error: 'event archived' }, { status: 400 });
     }
     if (message.includes('template not found') || message.includes('Active certificate template not found')) {

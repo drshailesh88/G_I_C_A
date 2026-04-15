@@ -695,7 +695,7 @@
     "data_model": "Reads events.status inside the access layer; no new schema.",
     "priority": 16,
     "core": false,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {

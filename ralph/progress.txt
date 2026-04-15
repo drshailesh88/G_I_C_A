@@ -21,6 +21,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T13:15:00Z — cert-api-016 — Block certificate issuance on archived events
+- Implemented: Added event status check in issueCertificate action — queries events.status before any DB insert, throws if archived. Added same check in bulk route handler before lock acquisition. Route handler maps the error to 400 { error: 'event archived' }. Verify endpoint remains unaffected (public, no event status check). Fixed case-insensitive error matching in route handler.
+- Files changed: src/lib/actions/certificate-issuance.ts, src/app/api/events/[eventId]/certificates/route.ts, src/app/api/events/[eventId]/certificates/bulk/route.ts, src/app/api/events/[eventId]/certificates/route.test.ts, src/app/api/events/[eventId]/certificates/bulk/route.test.ts, src/app/api/verify/[token]/route.test.ts, src/lib/actions/certificate-issuance.test.ts, src/lib/actions/certificate-issuance.mutation-kill.test.ts, src/lib/actions/full-journey.test.ts
+- Tests added: 4 (1 action-level archived guard, 1 route-level 400, 1 bulk route-level 400, 1 verify edge case for archived event)
+- Learnings: issueCertificate now has an event status select as its first DB query; all existing tests needed their chainedSelectSequence arrays prepended with [{ status: 'published' }]. Route error matching must use toLowerCase() on both sides for case-insensitive matching.
+
 ## 2026-04-15T13:10:00Z — cert-api-015 — Ops + read_only RBAC denial on all cert mutations
 - Implemented: Added missing RBAC test coverage for ops and read_only role rejection across all 4 certificate mutation endpoints (issue, regenerate, revoke, bulk). Implementation already correct via CERTIFICATE_WRITE_ROLES constant; this story adds the explicit test assertions for both denied roles. Also added coordinator-succeeds confirmatory test on issue route.
 - Files changed: src/app/api/events/[eventId]/certificates/route.test.ts, src/app/api/events/[eventId]/certificates/[certificateId]/regenerate/route.test.ts, src/app/api/events/[eventId]/certificates/[certificateId]/revoke/route.test.ts, src/app/api/events/[eventId]/certificates/bulk/route.test.ts

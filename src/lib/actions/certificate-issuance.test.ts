@@ -123,10 +123,26 @@ beforeEach(() => {
   mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => callback(mockDb));
 });
 
+// ── Archived event guard ────────────────────────────────────
+describe('issueCertificate — archived event', () => {
+  it('short-circuits on archived event before any DB insert', async () => {
+    chainedSelectSequence([
+      [{ status: 'archived' }],  // event status check
+    ]);
+
+    await expect(issueCertificate(EVENT_ID, validIssueInput)).rejects.toThrow(
+      /event.*archived/i,
+    );
+    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(mockDb.transaction).not.toHaveBeenCalled();
+  });
+});
+
 // ── Issue Certificate ────────────────────────────────────────
 describe('issueCertificate', () => {
   it('issues a new certificate when none exists', async () => {
     chainedSelectSequence([
+      [{ status: 'published' }], // event not archived
       [{ id: PERSON_ID }],    // person exists
       [mockTemplate],           // active template exists
       [],                       // no existing certs for this person/type
@@ -147,6 +163,7 @@ describe('issueCertificate', () => {
       verificationToken: VERIFICATION_TOKEN_ID,
     };
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [],
@@ -164,12 +181,12 @@ describe('issueCertificate', () => {
   });
 
   it('throws when person not found', async () => {
-    chainedSelectSequence([[]]);
+    chainedSelectSequence([[{ status: 'published' }], []]);
     await expect(issueCertificate(EVENT_ID, validIssueInput)).rejects.toThrow('Person not found');
   });
 
   it('throws when template not found or not active', async () => {
-    chainedSelectSequence([[{ id: PERSON_ID }], []]);
+    chainedSelectSequence([[{ status: 'published' }], [{ id: PERSON_ID }], []]);
     await expect(issueCertificate(EVENT_ID, validIssueInput)).rejects.toThrow('Active certificate template not found');
   });
 
@@ -185,6 +202,7 @@ describe('issueCertificate', () => {
   it('supersedes existing certificate when one exists', async () => {
     const existingCert = { ...mockIssuedCert, id: 'old-cert-id' };
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [existingCert],
@@ -208,6 +226,8 @@ describe('issueCertificate', () => {
     // Global select counter across both outer calls and inner transaction calls
     let globalSelectCount = 0;
     const selectResponses = [
+      // Outer: event status
+      [{ status: 'published' }],
       // Outer: person
       [{ id: PERSON_ID }],
       // Outer: template
@@ -257,9 +277,10 @@ describe('issueCertificate', () => {
       { code: '23505' },
     );
 
-    // Person + template + 3x (existing certs + cert numbers) = 2 + 6 = 8 selects
+    // Event + Person + template + 3x (existing certs + cert numbers) = 3 + 6 = 9 selects
     let globalSelectCount = 0;
     const selectResponses = [
+      [{ status: 'published' }],
       [{ id: PERSON_ID }], [mockTemplate],
       [], [], // attempt 1
       [], [], // attempt 2
@@ -291,6 +312,7 @@ describe('issueCertificate', () => {
   it('issues new cert after revocation without supersession link (CP-33)', async () => {
     const revokedCert = { ...mockIssuedCert, id: 'revoked-id', status: 'revoked' };
     chainedSelectSequence([
+      [{ status: 'published' }], // event not archived
       [{ id: PERSON_ID }],    // person exists
       [mockTemplate],           // active template
       [revokedCert],             // existing cert is revoked
@@ -313,6 +335,7 @@ describe('issueCertificate', () => {
 
     let globalSelectCount = 0;
     const selectResponses = [
+      [{ status: 'published' }],
       [{ id: PERSON_ID }], [mockTemplate],
       [], [],
     ];
@@ -349,6 +372,7 @@ describe('issueCertificate', () => {
       templateJson: { layout: 'formal', fields: ['name', 'date'], version: 42 },
     };
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [templateWithRichJson],
       [],
@@ -368,6 +392,7 @@ describe('issueCertificate', () => {
       renderedVariablesJson: { full_name: 'Dr. Priya', designation: 'Professor' },
     };
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [],
@@ -393,6 +418,7 @@ describe('issueCertificate — transaction retry', () => {
 
     let globalSelectCount = 0;
     const selectResponses = [
+      [{ status: 'published' }],
       [{ id: PERSON_ID }], [mockTemplate],
       [], [],
     ];
@@ -427,7 +453,7 @@ describe('issueCertificate — transaction retry', () => {
     let txCallCount = 0;
 
     chainedSelectSequence([
-      [{ id: PERSON_ID }], [mockTemplate], [], [],
+      [{ status: 'published' }], [{ id: PERSON_ID }], [mockTemplate], [], [],
     ]);
     chainedInsert([mockIssuedCert]);
 
@@ -449,7 +475,7 @@ describe('issueCertificate — transaction retry', () => {
     );
 
     chainedSelectSequence([
-      [{ id: PERSON_ID }], [mockTemplate], [], [],
+      [{ status: 'published' }], [{ id: PERSON_ID }], [mockTemplate], [], [],
     ]);
 
     mockDb.transaction.mockImplementation(async () => {

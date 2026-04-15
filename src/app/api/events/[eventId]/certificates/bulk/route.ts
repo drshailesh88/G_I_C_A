@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { events } from '@/lib/db/schema';
 import { assertEventAccess } from '@/lib/auth/event-access';
 import { ROLES } from '@/lib/auth/roles';
 import { CERTIFICATE_TYPES } from '@/lib/validations/certificate';
@@ -59,6 +62,15 @@ export async function POST(
 
   if (!role || !CERTIFICATE_WRITE_ROLES.has(role)) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+
+  const [event] = await db
+    .select({ status: events.status })
+    .from(events)
+    .where(eq(events.id, eventId))
+    .limit(1);
+  if (!event || event.status === 'archived') {
+    return NextResponse.json({ error: 'event archived' }, { status: 400 });
   }
 
   let body: unknown;

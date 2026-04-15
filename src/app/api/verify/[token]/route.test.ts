@@ -109,4 +109,20 @@ describe('GET /api/verify/[token]', () => {
     const res = await GET(request, { params });
     expect(res.status).toBe(500);
   });
+
+  it('returns 200 for cert on archived event (verify still works)', async () => {
+    mockLookupAndVerify.mockResolvedValue({
+      status: 'issued',
+      certificate_number: 'GEM2026-ATT-00099',
+      certificate_type: 'delegate_attendance',
+      person_name: 'Archived Event Person',
+      event_name: 'Archived Conference',
+      issued_at: '2025-01-01T10:00:00.000Z',
+    });
+    const { request, params } = makeRequest(VALID_TOKEN);
+    const res = await GET(request, { params });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe('issued');
+  });
 });

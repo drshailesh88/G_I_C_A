@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mockSet = vi.fn();
-const mockGet = vi.fn();
-const mockTtl = vi.fn();
-const mockDel = vi.fn();
+const { mockSet, mockGet, mockTtl, mockDel, mockSelect } = vi.hoisted(() => ({
+  mockSet: vi.fn(),
+  mockGet: vi.fn(),
+  mockTtl: vi.fn(),
+  mockDel: vi.fn(),
+  mockSelect: vi.fn(),
+}));
 
 vi.mock('@upstash/redis', () => ({
   Redis: vi.fn().mockImplementation(() => ({
@@ -12,6 +15,18 @@ vi.mock('@upstash/redis', () => ({
     ttl: mockTtl,
     del: mockDel,
   })),
+}));
+
+vi.mock('@/lib/db', () => ({
+  db: { select: mockSelect },
+}));
+
+vi.mock('@/lib/db/schema', () => ({
+  events: { id: 'events.id', status: 'events.status' },
+}));
+
+vi.mock('drizzle-orm', () => ({
+  eq: vi.fn((...args: unknown[]) => args),
 }));
 
 vi.mock('@/lib/auth/event-access', () => ({
@@ -42,6 +57,12 @@ describe('POST /api/events/[eventId]/certificates/bulk', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockSet.mockResolvedValue('OK');
+    const chain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([{ status: 'published' }]),
+    };
+    mockSelect.mockReturnValue(chain);
   });
 
   // ── Spec unit tests ───────────────────────────────────────────
@@ -139,5 +160,21 @@ describe('POST /api/events/[eventId]/certificates/bulk', () => {
     const body = { certificate_type: 'invalid_type', scope: 'all' };
     const res = await POST(makeRequest(body), makeParams());
     expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when event is archived', async () => {
+    const chain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([{ status: 'archived' }]),
+    };
+    mockSelect.mockReturnValue(chain);
+
+    const body = { certificate_type: 'delegate_attendance', scope: 'all' };
+    const res = await POST(makeRequest(body), makeParams());
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toBe('event archived');
+    expect(mockSet).not.toHaveBeenCalled();
   });
 });

@@ -129,6 +129,7 @@ beforeEach(() => {
 describe('issueCertificate — insert shape assertions', () => {
   it('inserts with correct person/template/event fields (L105 ObjectLiteral)', async () => {
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [],
@@ -152,6 +153,7 @@ describe('issueCertificate — insert shape assertions', () => {
 
   it('sets eligibilityBasisId to null when not provided (L113 || null)', async () => {
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [],
@@ -167,6 +169,7 @@ describe('issueCertificate — insert shape assertions', () => {
   it('passes eligibilityBasisId when provided', async () => {
     const basisId = '550e8400-e29b-41d4-a716-446655440099';
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [],
@@ -184,6 +187,7 @@ describe('issueCertificate — insert shape assertions', () => {
 
   it('sets supersedesId to null when no existing cert (L120 chain.newCertLink)', async () => {
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [],
@@ -198,6 +202,7 @@ describe('issueCertificate — insert shape assertions', () => {
 
   it('sets fileName to certificateNumber.pdf (L116)', async () => {
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [],
@@ -213,6 +218,7 @@ describe('issueCertificate — insert shape assertions', () => {
 
   it('sets storageKey containing eventId and certificateType', async () => {
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [],
@@ -229,6 +235,7 @@ describe('issueCertificate — insert shape assertions', () => {
 
   it('sets id as a valid UUID', async () => {
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [],
@@ -246,6 +253,7 @@ describe('issueCertificate — supersession behavior', () => {
   it('calls update to mark old cert as superseded when current exists (L126-130)', async () => {
     const existingCert = { ...mockIssuedCert, id: 'old-cert-id', status: 'issued' };
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [existingCert],
@@ -267,6 +275,7 @@ describe('issueCertificate — supersession behavior', () => {
 
   it('does NOT call update when no current cert exists (L126 conditional)', async () => {
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [],
@@ -289,6 +298,7 @@ describe('issueCertificate — retry loop boundary (L58,151,152)', () => {
 
     let globalSelectCount = 0;
     const selectResponses = [
+      [{ status: 'published' }],
       [{ id: PERSON_ID }], [mockTemplate],
       [], [], [], [], [], [],
     ];
@@ -323,7 +333,7 @@ describe('issueCertificate — retry loop boundary (L58,151,152)', () => {
     const genericError = new Error('some other DB error');
 
     chainedSelectSequence([
-      [{ id: PERSON_ID }], [mockTemplate], [], [],
+      [{ status: 'published' }], [{ id: PERSON_ID }], [mockTemplate], [], [],
     ]);
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
@@ -791,6 +801,7 @@ describe('resendCertificateNotification — notification call shape', () => {
 describe('issueCertificate — assertEventAccess + select shapes', () => {
   it('calls assertEventAccess with requireWrite: true (L168 BooleanLiteral)', async () => {
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [],
@@ -803,6 +814,7 @@ describe('issueCertificate — assertEventAccess + select shapes', () => {
 
   it('select for person uses { id: people.id } shape (L32 ObjectLiteral)', async () => {
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [],
@@ -816,11 +828,11 @@ describe('issueCertificate — assertEventAccess + select shapes', () => {
   });
 
   it('throws exact "Person not found" error (L48 StringLiteral)', async () => {
-    chainedSelectSequence([[]]);
+    chainedSelectSequence([[{ status: 'published' }], []]);
     await expect(issueCertificate(EVENT_ID, validIssueInput)).rejects.toThrow('Person not found');
     // Verify it's the exact error message, not empty string
     try {
-      chainedSelectSequence([[]]);
+      chainedSelectSequence([[{ status: 'published' }], []]);
       await issueCertificate(EVENT_ID, validIssueInput);
     } catch (e) {
       expect((e as Error).message).toBe('Person not found');
@@ -828,7 +840,7 @@ describe('issueCertificate — assertEventAccess + select shapes', () => {
   });
 
   it('throws exact "Active certificate template not found" (L76 StringLiteral)', async () => {
-    chainedSelectSequence([[{ id: PERSON_ID }], []]);
+    chainedSelectSequence([[{ status: 'published' }], [{ id: PERSON_ID }], []]);
     try {
       await issueCertificate(EVENT_ID, validIssueInput);
     } catch (e) {
@@ -838,6 +850,7 @@ describe('issueCertificate — assertEventAccess + select shapes', () => {
 
   it('select for existing cert numbers uses { certificateNumber } shape (L89 ObjectLiteral)', async () => {
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [],
@@ -861,6 +874,7 @@ describe('issueCertificate — assertEventAccess + select shapes', () => {
 
     let globalSelectCount = 0;
     const selectResponses = [
+      [{ status: 'published' }],
       [{ id: PERSON_ID }], [mockTemplate],
       [], [], [], [], [], [], [], [],
     ];
@@ -900,7 +914,7 @@ describe('issueCertificate — collision detection', () => {
     const nonErrorThrow = 'string error';
 
     chainedSelectSequence([
-      [{ id: PERSON_ID }], [mockTemplate], [], [],
+      [{ status: 'published' }], [{ id: PERSON_ID }], [mockTemplate], [], [],
     ]);
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
@@ -921,7 +935,7 @@ describe('issueCertificate — collision detection', () => {
     const noCodeError = new Error('some db error without code');
 
     chainedSelectSequence([
-      [{ id: PERSON_ID }], [mockTemplate], [], [],
+      [{ status: 'published' }], [{ id: PERSON_ID }], [mockTemplate], [], [],
     ]);
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
@@ -945,7 +959,7 @@ describe('issueCertificate — collision detection', () => {
     );
 
     chainedSelectSequence([
-      [{ id: PERSON_ID }], [mockTemplate], [], [],
+      [{ status: 'published' }], [{ id: PERSON_ID }], [mockTemplate], [], [],
     ]);
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
@@ -968,6 +982,7 @@ describe('issueCertificate — currentCert AND chain.oldCertUpdate check (L126)'
   it('when currentCert exists but is revoked, does not update (chain returns nulls)', async () => {
     const revokedCert = { ...mockIssuedCert, id: 'revoked-id', status: 'revoked' };
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [revokedCert], // existing cert is revoked
@@ -1130,6 +1145,7 @@ describe('getCertificateDownloadUrl — storageKey defense-in-depth', () => {
 describe('issueCertificate — select argument verification', () => {
   it('person select passes non-empty shape (L32 ObjectLiteral)', async () => {
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [],
@@ -1137,8 +1153,8 @@ describe('issueCertificate — select argument verification', () => {
     ]);
     chainedInsert([mockIssuedCert]);
     await issueCertificate(EVENT_ID, validIssueInput);
-    // First select call is for person — verify it got a non-empty argument
-    const selectArg = mockDb.select.mock.calls[0][0];
+    // Second select call is for person (first is event status) — verify it got a non-empty argument
+    const selectArg = mockDb.select.mock.calls[1][0];
     expect(selectArg).toBeDefined();
     expect(typeof selectArg).toBe('object');
     if (selectArg) {
@@ -1148,6 +1164,7 @@ describe('issueCertificate — select argument verification', () => {
 
   it('cert number select passes non-empty shape (L89 ObjectLiteral)', async () => {
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [],
@@ -1155,8 +1172,8 @@ describe('issueCertificate — select argument verification', () => {
     ]);
     chainedInsert([mockIssuedCert]);
     await issueCertificate(EVENT_ID, validIssueInput);
-    // 4th select call is for cert numbers
-    const selectArg = mockDb.select.mock.calls[3]?.[0];
+    // 5th select call is for cert numbers (1st is event status)
+    const selectArg = mockDb.select.mock.calls[4]?.[0];
     expect(selectArg).toBeDefined();
     if (selectArg) {
       expect(typeof selectArg).toBe('object');
@@ -1407,6 +1424,7 @@ describe('issueCertificate — collision detection: code property handling (L152
 
     let globalSelectCount = 0;
     const selectResponses = [
+      [{ status: 'published' }],
       [{ id: PERSON_ID }], [mockTemplate],
       [], [],
       [], [],
@@ -1454,6 +1472,7 @@ describe('issueCertificate — L126 both conditions required', () => {
   it('both currentCert AND chain.oldCertUpdate must be truthy to update', async () => {
     // No existing cert → currentCert is null → no update should happen
     chainedSelectSequence([
+      [{ status: 'published' }],
       [{ id: PERSON_ID }],
       [mockTemplate],
       [], // no existing certs

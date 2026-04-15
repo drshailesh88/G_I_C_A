@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { issuedCertificates, certificateTemplates, people, eventRegistrations } from '@/lib/db/schema';
+import { issuedCertificates, certificateTemplates, people, eventRegistrations, events } from '@/lib/db/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
@@ -26,6 +26,16 @@ import { buildCertificateStorageKey } from '@/lib/certificates/storage';
 export async function issueCertificate(eventId: string, input: unknown) {
   const { userId } = await assertEventAccess(eventId, { requireWrite: true });
   const validated = issueCertificateSchema.parse(input);
+
+  // Block issuance on archived events
+  const [event] = await db
+    .select({ status: events.status })
+    .from(events)
+    .where(eq(events.id, eventId))
+    .limit(1);
+  if (!event || event.status === 'archived') {
+    throw new Error('Event is archived — certificate issuance is blocked');
+  }
 
   // Verify person exists
   const [person] = await db
