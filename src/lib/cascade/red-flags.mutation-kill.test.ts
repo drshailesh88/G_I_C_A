@@ -85,8 +85,8 @@ beforeEach(() => {
 // ── Constants: kill ArrayDeclaration and exact value mutations ──
 
 describe('Red flag type registries', () => {
-  it('FLAG_TYPES has exactly 6 entries', () => {
-    expect(FLAG_TYPES).toHaveLength(6);
+  it('FLAG_TYPES has exactly 7 entries', () => {
+    expect(FLAG_TYPES).toHaveLength(7);
   });
 
   it('FLAG_TYPES contains all required types', () => {
@@ -96,20 +96,23 @@ describe('Red flag type registries', () => {
     expect(FLAG_TYPES).toContain('accommodation_cancelled');
     expect(FLAG_TYPES).toContain('registration_cancelled');
     expect(FLAG_TYPES).toContain('shared_room_affected');
+    expect(FLAG_TYPES).toContain('system_dispatch_failure');
   });
 
-  it('TARGET_ENTITY_TYPES has exactly 3 entries', () => {
-    expect(TARGET_ENTITY_TYPES).toHaveLength(3);
+  it('TARGET_ENTITY_TYPES has exactly 4 entries', () => {
+    expect(TARGET_ENTITY_TYPES).toHaveLength(4);
     expect(TARGET_ENTITY_TYPES).toContain('accommodation_record');
     expect(TARGET_ENTITY_TYPES).toContain('transport_batch');
     expect(TARGET_ENTITY_TYPES).toContain('transport_passenger_assignment');
+    expect(TARGET_ENTITY_TYPES).toContain('notification_log');
   });
 
-  it('SOURCE_ENTITY_TYPES has exactly 3 entries', () => {
-    expect(SOURCE_ENTITY_TYPES).toHaveLength(3);
+  it('SOURCE_ENTITY_TYPES has exactly 4 entries', () => {
+    expect(SOURCE_ENTITY_TYPES).toHaveLength(4);
     expect(SOURCE_ENTITY_TYPES).toContain('travel_record');
     expect(SOURCE_ENTITY_TYPES).toContain('accommodation_record');
     expect(SOURCE_ENTITY_TYPES).toContain('registration');
+    expect(SOURCE_ENTITY_TYPES).toContain('cascade_dispatch');
   });
 
   it('FLAG_STATUSES are in lifecycle order', () => {

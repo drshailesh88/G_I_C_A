@@ -32,6 +32,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T14:30:00Z — cascade-030 — 3-attempt retry then dead-letter
+- Implemented: Created handleDeadLetter() in src/lib/cascade/dead-letter.ts. On final failure: (a) updates notification_log status='failed' via updateLogStatus with error code/message, (b) captures Sentry event with kind='cascade-dispatch-failure' tag and { cascadeEvent, payload, attempts, channel, triggerId } in extra, (c) upserts red_flags row with flag_type='system_dispatch_failure' scoped to (eventId, targetEntityType, targetEntityId). No user-facing notification sent. Added 'system_dispatch_failure' to FLAG_TYPES, 'notification_log' to TARGET_ENTITY_TYPES, 'cascade_dispatch' to SOURCE_ENTITY_TYPES.
+- Files changed: src/lib/cascade/dead-letter.ts (new), src/lib/cascade/dead-letter.test.ts (new), src/lib/cascade/red-flags.ts, src/lib/cascade/red-flags.test.ts, src/lib/cascade/red-flags.mutation-kill.test.ts, ralph/prd.json, ralph/progress.txt
+- Tests added: 2 (final-failure emits all 3 signals, CE16 no user-facing failure notification)
+- Learnings: Dead-letter uses updateLogStatus (not upsertLogEntry) since the log row already exists from earlier send attempts. captureError with tags.kind='cascade-dispatch-failure' is the Sentry signal — no separate Sentry event type needed.
+
 ## 2026-04-15T14:25:00Z — cascade-029 — Notification log upsert (one row per idempotency key)
 - Implemented: Added upsertLogEntry() to src/lib/notifications/log-queries.ts. Uses INSERT...ON CONFLICT(idempotency_key) DO UPDATE to enforce single-row-per-key invariant. On conflict: atomically increments attempts via SQL `attempts + 1`, updates status/lastErrorCode/lastErrorMessage/lastAttemptAt/updatedAt, conditionally sets sentAt (on sent) or failedAt (on failed). First insert creates row with attempts=1.
 - Files changed: src/lib/notifications/log-queries.ts, src/lib/notifications/log-upsert.test.ts (new), ralph/prd.json, ralph/progress.txt

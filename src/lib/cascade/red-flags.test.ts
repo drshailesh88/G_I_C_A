@@ -63,11 +63,12 @@ beforeEach(() => {
 
 // ── Constants ─────────────────────────────────────────────────
 describe('Red flag constants', () => {
-  it('defines 6 flag types', () => {
-    expect(FLAG_TYPES).toHaveLength(6);
+  it('defines 7 flag types', () => {
+    expect(FLAG_TYPES).toHaveLength(7);
     expect(FLAG_TYPES).toContain('travel_change');
     expect(FLAG_TYPES).toContain('travel_cancelled');
     expect(FLAG_TYPES).toContain('shared_room_affected');
+    expect(FLAG_TYPES).toContain('system_dispatch_failure');
   });
 
   it('defines 3 flag statuses', () => {

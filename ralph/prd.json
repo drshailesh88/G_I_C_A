@@ -1288,7 +1288,7 @@
     "data_model": "notification_log.status, red_flags (upsert by unique key).",
     "priority": 30,
     "core": true,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {

@@ -21,6 +21,7 @@ export const FLAG_TYPES = [
   'accommodation_cancelled',
   'registration_cancelled',
   'shared_room_affected',
+  'system_dispatch_failure',
 ] as const;
 export type FlagType = (typeof FLAG_TYPES)[number];
 
@@ -29,6 +30,7 @@ export const TARGET_ENTITY_TYPES = [
   'accommodation_record',
   'transport_batch',
   'transport_passenger_assignment',
+  'notification_log',
 ] as const;
 export type TargetEntityType = (typeof TARGET_ENTITY_TYPES)[number];
 
@@ -37,6 +39,7 @@ export const SOURCE_ENTITY_TYPES = [
   'travel_record',
   'accommodation_record',
   'registration',
+  'cascade_dispatch',
 ] as const;
 export type SourceEntityType = (typeof SOURCE_ENTITY_TYPES)[number];
 
