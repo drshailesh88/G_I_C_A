@@ -1149,7 +1149,7 @@
     "data_model": "events (read), people (insert or dedupe), event_registrations (insert).",
     "priority": 27,
     "core": false,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {

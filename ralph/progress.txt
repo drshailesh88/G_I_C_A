@@ -30,6 +30,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T14:15:00Z — tenancy-027 — /register/[eventId] public registration page
+- Implemented: Created public registration page at /register/[eventId] (no auth). Server component fetches event by ID with UUID validation, checks published status, reads registrationSettings.open for registration state. Client component renders "Register" heading, core person fields form, submits to existing registerForEvent action. Closed registration shows disabled fieldset with "Registration closed" message.
+- Files changed: src/app/(public)/register/[eventId]/page.tsx (new), src/app/(public)/register/[eventId]/register-page-client.tsx (new), src/app/(public)/register/[eventId]/register-page-client.test.tsx (new), src/lib/actions/registration.test.ts
+- Tests added: 5 (1 email dedupe in registration.test.ts, 4 client component: heading, fields, closed state, event info)
+- Learnings: Existing /e/[eventSlug]/register/ uses slug-based routing with getEventBySlug; the new /register/[eventId] route uses direct DB query by ID without auth (public page). registrationSettings.open field controls form disabled state. renderToStaticMarkup pattern used for client component tests (no @testing-library/react).
+
 ## 2026-04-15T14:10:00Z — tenancy-026 — GET /api/events/[eventId]/people/[personId] endpoint
 - Implemented: Created GET route returning master person fields (snake_case) plus event-scoped travel, sessions, registration. event_people check ensures person is attached to the event (404 if not). All sub-queries filter by eventId + personId. assertEventAccess for auth (read-only allowed). Cross-event access returns sanitized 404.
 - Files changed: src/app/api/events/[eventId]/people/[personId]/route.ts (new), src/app/api/events/[eventId]/people/[personId]/route.test.ts (new), ralph/prd.json, ralph/progress.txt
