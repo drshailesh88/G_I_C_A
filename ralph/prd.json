@@ -1,6 +1,9 @@
 [
   {
     "id": "cert-code-001",
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-15T14:07:17Z",
+    "qa_tested_by": "codex",
     "category": "crud",
     "description": "Add missing error-throw branches to issueCertificate so forbidden issuance conditions reject instead of resolving.",
     "page": "N/A — Backend",

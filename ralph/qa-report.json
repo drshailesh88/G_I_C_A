@@ -1,0 +1,25 @@
+[
+  {
+    "story_id": "cert-code-001",
+    "qa_timestamp": "2026-04-15T14:07:17Z",
+    "qa_model": "codex",
+    "status": "fail",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "skip",
+      "manual_persistence": "skip",
+      "manual_edge_cases": "fail"
+    },
+    "bugs": [
+      {
+        "description": "issueCertificate supersedes an existing issued certificate during a normal issue call instead of rejecting unless the regenerate path explicitly opts in.",
+        "severity": "high",
+        "fix_commit": null,
+        "files_changed": []
+      }
+    ],
+    "notes": "Automated vitest passed. The required Playwright certificate contract command is blocked before product assertions by Clerk auth setup redirect loops; a diagnostic --no-deps run then fails because certificate fixture env vars such as EVENT_A_ID are absent. Typecheck fails with broad pre-existing repo errors outside the certificate issuance module. Manual code/spec review found a production behavior gap, but fixing it safely would require reconciling existing non-contract tests that currently assert the conflicting supersession behavior."
+  }
+]
