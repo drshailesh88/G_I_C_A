@@ -12,6 +12,7 @@
 - Backend event-scoped POST routes can validate the main body while silently stripping submitted `eventId`/`event_id`; explicitly probe path-vs-body event ID mismatches and Sentry mismatch capture.
 - Certificate rendered-variable snapshots must be resolved from authoritative DB state at issuance time, not trusted from caller-provided variables; stale master-person values become permanent once inserted.
 - Bulk APIs that return `batch_id` need a durable retrievable summary keyed by that id; an Inngest handler return value alone is not an operator-visible batch report.
+- Public certificate verification must satisfy the frozen `/verify/{token}` contract, not only `/api/verify/{token}`; also verify counter persistence is awaited and any follow-up cert lookup is event-scoped.
 
 ## Iteration log
 
@@ -88,3 +89,9 @@
 - Bugs: 0
 - Fix commits: none
 - Notes: Verified CME route validation requires all four CME fields, bounds credit hours by event duration, returns 400 with Zod field errors for invalid inputs, and preserves variables into issuance snapshots. Full Vitest and focused CME suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-15T16:09:57Z — cert-api-013 — public verify endpoint
+- Status: fixed
+- Bugs: 3 (high: 2, medium: 1)
+- Fix commits: bd821525fe1e6ef1045380fb6b8c43f5c4d1fe0c
+- Notes: Fixed the missing `/verify/[token]` JSON route, awaited verification counter persistence, and event-scoped the superseded certificate lookup. Full Vitest and focused verify suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.

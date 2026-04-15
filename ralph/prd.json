@@ -627,7 +627,10 @@
           "expected": "status='revoked'; revoke_reason present; no pdf_url string"
         }
       ]
-    }
+    },
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-15T16:09:57Z",
+    "qa_tested_by": "codex"
   },
   {
     "id": "cert-api-014",

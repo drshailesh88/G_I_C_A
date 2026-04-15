@@ -330,5 +330,46 @@
     },
     "bugs": [],
     "notes": "Full Vitest passed (231 files, 4736 tests), and focused CME route/validation suites passed (3 files, 61 tests). An independent schema probe confirmed valid complete CME variables and credit_hours equal to event duration are accepted, while credit_hours above duration, zero, negative, string-valued, missing fields, and blank string fields are rejected. Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story. Manual review confirmed the route derives event duration from the URL eventId row, runs createCmeVariablesSchema before issueCertificate, returns flattened Zod field errors with 400 for invalid CME variables, and issueCertificate persists renderedVariablesJson from a snapshot that starts with caller variables before adding authoritative person fields. Direct DB persistence was not re-probed because the authenticated contract fixture is blocked."
+  },
+  {
+    "story_id": "cert-api-013",
+    "qa_timestamp": "2026-04-15T16:09:57Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "The implementation exposed only /api/verify/[token], so the contract-required public /verify/[token] JSON route would 404.",
+        "severity": "high",
+        "fix_commit": "bd821525fe1e6ef1045380fb6b8c43f5c4d1fe0c",
+        "files_changed": [
+          "src/app/(public)/verify/[token]/route.ts"
+        ]
+      },
+      {
+        "description": "lookupAndVerify returned success before verification_count and last_verified_at persistence completed, allowing the required counter update to race or fail silently.",
+        "severity": "medium",
+        "fix_commit": "bd821525fe1e6ef1045380fb6b8c43f5c4d1fe0c",
+        "files_changed": [
+          "src/lib/actions/certificate-verify.ts"
+        ]
+      },
+      {
+        "description": "The superseded certificate number lookup was scoped only by certificate id and skipped the verified certificate eventId.",
+        "severity": "high",
+        "fix_commit": "bd821525fe1e6ef1045380fb6b8c43f5c4d1fe0c",
+        "files_changed": [
+          "src/lib/actions/certificate-verify.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), including focused public verify route/serializer suites (11 tests). Certificate Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; visible failures remain in QA/test, Sentry, people, tab-bar, notification, and cascade files rather than the public verify production paths. Manual verification confirmed /verify/[token] now has a public JSON route, invalid tokens return 400 JSON, response serialization emits only allowed public fields, revoked and superseded optional fields are conditionally emitted, verification_count/last_verified_at are updated with an awaited atomic increment, and superseded number lookup is event-scoped. Live DB re-query was not performed because the authenticated contract fixture is blocked and no seeded public verification token was available in this loop."
   }
 ]
