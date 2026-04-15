@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 MAX_ITER="${1:-999}"
 PRD=ralph/prd.json
 PROGRESS=ralph/progress.txt
-ITER_TIMEOUT=1200
+ITER_TIMEOUT=1800   # 30-minute hard wall-clock per iteration (gtimeout/timeout)
 SLEEP_BETWEEN=3
 
 if [ ! -f "$PRD" ]; then
