@@ -34,11 +34,19 @@
 
 - Inngest function wiring: 7 cascade events mapped to 7 independent Inngest functions (cascade-{event} id pattern). Each has retries:3 and triggers on its respective conference/* event. New handlers (registration, session, certificate) follow the same catch-and-log-never-throw notification pattern as travel/accommodation handlers.
 
+- Red-flag upsert: upsertRedFlag uses INSERT...ON CONFLICT DO UPDATE with Drizzle's onConflictDoUpdate({ target: [4 columns], targetWhere: ne(flagStatus, 'resolved'), set: {...} }). Partial unique index uq_red_flag_active created in migration 0005. Pre-check SELECT kept for action='created'|'updated' tracking. Mock chainedInsert must include onConflictDoUpdate: vi.fn().mockReturnThis().
+
 - Cascade payload validation: All Inngest cascade functions call validateCascadePayload(eventName, event.data) as first step. Uses cascadeEventDataSchema (Zod: eventId string, actor {type, id}, payload record). On parse failure: throws NonRetriableError (from 'inngest' package) so Inngest makes exactly one attempt + dead-letters; emits Sentry event with tags.kind='cascade-payload-invalid' and extra containing rawPayload + zodIssues. No DB writes or notifications on malformed payload.
 
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T15:17:00Z — cascade-035 — Red-flag upsert via ON CONFLICT partial unique index
+- Implemented: Rewrote upsertRedFlag to use INSERT...ON CONFLICT DO UPDATE on partial unique index uq_red_flag_active (event_id, target_entity_type, target_entity_id, flag_type) WHERE flag_status != 'resolved'. Atomic write eliminates race between SELECT and INSERT/UPDATE. Created migration 0005. Pre-check SELECT retained for action tracking.
+- Files changed: src/lib/cascade/red-flags.ts, src/lib/cascade/red-flags.test.ts, src/lib/cascade/red-flags.mutation-kill.test.ts, drizzle/migrations/0005_red_flags_partial_unique_index.sql (new), ralph/prd.json, ralph/progress.txt
+- Tests added: 4 (onConflictDoUpdate atomic upsert, upsert updates existing unresolved, resolved flag does not block new, partial index migration exists)
+- Learnings: Drizzle 0.36+ supports targetWhere in onConflictDoUpdate for partial unique index conflict targets. Mock chain needs onConflictDoUpdate: vi.fn().mockReturnThis() added to chainedInsert helper.
 
 ## 2026-04-15T15:09:00Z — cascade-034 — Zod-validate cascade payload at handler entry
 - Implemented: Created cascadeEventDataSchema (Zod) validating eventId, actor, and payload envelope. validateCascadePayload() parses event.data at Inngest function entry — on failure throws NonRetriableError (no retry, dead-letter) and emits Sentry event with kind='cascade-payload-invalid' plus raw payload and Zod issues. All 9 cascade Inngest functions now call validateCascadePayload before invoking their handler.

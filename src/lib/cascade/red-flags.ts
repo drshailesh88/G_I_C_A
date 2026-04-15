@@ -10,7 +10,7 @@
 
 import { db } from '@/lib/db';
 import { redFlags } from '@/lib/db/schema';
-import { eq, and, ne } from 'drizzle-orm';
+import { eq, and, ne, sql } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 
 // ── Flag Types ────────────────────────────────────────────────
@@ -55,7 +55,8 @@ export const FLAG_TRANSITIONS: Record<FlagStatus, FlagStatus[]> = {
 
 // ── Create or update red flag ─────────────────────────────────
 // Idempotency: one active flag per (event_id, target_type, target_id, flag_type).
-// If an unresolved flag already exists, update its detail and source info.
+// Uses ON CONFLICT DO UPDATE on partial unique index uq_red_flag_active
+// (WHERE flag_status != 'resolved'). A resolved flag does not block a new one.
 export async function upsertRedFlag(params: {
   eventId: string;
   flagType: FlagType;
@@ -77,7 +78,7 @@ export async function upsertRedFlag(params: {
     sourceChangeSummaryJson,
   } = params;
 
-  // Check for existing unresolved flag on same target + type
+  // Pre-check for action tracking (the write itself is atomic via ON CONFLICT)
   const [existing] = await db
     .select()
     .from(redFlags)
@@ -93,28 +94,7 @@ export async function upsertRedFlag(params: {
     )
     .limit(1);
 
-  if (existing) {
-    // Update existing flag with new detail
-    const [updated] = await db
-      .update(redFlags)
-      .set({
-        flagDetail,
-        sourceEntityType,
-        sourceEntityId,
-        sourceChangeSummaryJson: sourceChangeSummaryJson ?? null,
-        flagStatus: 'unreviewed',  // Reset to unreviewed on new change
-        reviewedBy: null,
-        reviewedAt: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(redFlags.id, existing.id))
-      .returning();
-
-    return { flag: updated, action: 'updated' as const };
-  }
-
-  // Create new flag
-  const [created] = await db
+  const [flag] = await db
     .insert(redFlags)
     .values({
       eventId,
@@ -127,9 +107,23 @@ export async function upsertRedFlag(params: {
       sourceChangeSummaryJson: sourceChangeSummaryJson ?? null,
       flagStatus: 'unreviewed',
     })
+    .onConflictDoUpdate({
+      target: [redFlags.eventId, redFlags.targetEntityType, redFlags.targetEntityId, redFlags.flagType],
+      targetWhere: ne(redFlags.flagStatus, 'resolved'),
+      set: {
+        flagDetail,
+        sourceEntityType,
+        sourceEntityId,
+        sourceChangeSummaryJson: sourceChangeSummaryJson ?? null,
+        flagStatus: 'unreviewed',
+        reviewedBy: null,
+        reviewedAt: null,
+        updatedAt: new Date(),
+      },
+    })
     .returning();
 
-  return { flag: created, action: 'created' as const };
+  return { flag, action: (existing ? 'updated' : 'created') as 'created' | 'updated' };
 }
 
 // ── Review a red flag ─────────────────────────────────────────

@@ -57,6 +57,7 @@ function chainedSelectNoLimit(rows: unknown[]) {
 function chainedInsert(rows: unknown[]) {
   const chain = {
     values: vi.fn().mockReturnThis(),
+    onConflictDoUpdate: vi.fn().mockReturnThis(),
     returning: vi.fn().mockResolvedValue(rows),
   };
   mockDb.insert.mockReturnValue(chain);
@@ -166,25 +167,25 @@ describe('upsertRedFlag sourceChangeSummaryJson handling', () => {
     expect(values.sourceChangeSummaryJson).toEqual(summary);
   });
 
-  it('sets sourceChangeSummaryJson to null when not provided (update path)', async () => {
+  it('sets sourceChangeSummaryJson to null when not provided (update path via onConflict)', async () => {
     chainedSelect([{ id: FLAG_ID, flagStatus: 'unreviewed' }]);
-    const updateChain = chainedUpdate([{ id: FLAG_ID }]);
+    const insertChain = chainedInsert([{ id: FLAG_ID }]);
 
     await upsertRedFlag(baseParams);
 
-    const setCall = updateChain.set.mock.calls[0][0];
-    expect(setCall.sourceChangeSummaryJson).toBeNull();
+    const conflictConfig = insertChain.onConflictDoUpdate.mock.calls[0][0];
+    expect(conflictConfig.set.sourceChangeSummaryJson).toBeNull();
   });
 
-  it('passes sourceChangeSummaryJson through when provided (update path)', async () => {
+  it('passes sourceChangeSummaryJson through when provided (update path via onConflict)', async () => {
     chainedSelect([{ id: FLAG_ID, flagStatus: 'reviewed' }]);
-    const updateChain = chainedUpdate([{ id: FLAG_ID }]);
+    const insertChain = chainedInsert([{ id: FLAG_ID }]);
 
     const summary = { room: { from: 'A101', to: 'B202' } };
     await upsertRedFlag({ ...baseParams, sourceChangeSummaryJson: summary });
 
-    const setCall = updateChain.set.mock.calls[0][0];
-    expect(setCall.sourceChangeSummaryJson).toEqual(summary);
+    const conflictConfig = insertChain.onConflictDoUpdate.mock.calls[0][0];
+    expect(conflictConfig.set.sourceChangeSummaryJson).toEqual(summary);
   });
 });
 
@@ -211,26 +212,26 @@ describe('upsertRedFlag status values', () => {
     expect(values.flagStatus).toBe('unreviewed');
   });
 
-  it('resets updated flag to exact status "unreviewed"', async () => {
+  it('resets updated flag to exact status "unreviewed" (via onConflict set)', async () => {
     chainedSelect([{ id: FLAG_ID, flagStatus: 'reviewed' }]);
-    const updateChain = chainedUpdate([{ id: FLAG_ID }]);
+    const insertChain = chainedInsert([{ id: FLAG_ID }]);
 
     await upsertRedFlag(baseParams);
 
-    const setCall = updateChain.set.mock.calls[0][0];
-    expect(setCall.flagStatus).toBe('unreviewed');
+    const conflictConfig = insertChain.onConflictDoUpdate.mock.calls[0][0];
+    expect(conflictConfig.set.flagStatus).toBe('unreviewed');
   });
 
-  it('clears reviewedBy and reviewedAt on update (reset to unreviewed)', async () => {
+  it('clears reviewedBy and reviewedAt on update (via onConflict set)', async () => {
     chainedSelect([{ id: FLAG_ID, flagStatus: 'reviewed' }]);
-    const updateChain = chainedUpdate([{ id: FLAG_ID }]);
+    const insertChain = chainedInsert([{ id: FLAG_ID }]);
 
     await upsertRedFlag(baseParams);
 
-    const setCall = updateChain.set.mock.calls[0][0];
-    expect(setCall.reviewedBy).toBeNull();
-    expect(setCall.reviewedAt).toBeNull();
-    expect(setCall.updatedAt).toBeInstanceOf(Date);
+    const conflictConfig = insertChain.onConflictDoUpdate.mock.calls[0][0];
+    expect(conflictConfig.set.reviewedBy).toBeNull();
+    expect(conflictConfig.set.reviewedAt).toBeNull();
+    expect(conflictConfig.set.updatedAt).toBeInstanceOf(Date);
   });
 });
 

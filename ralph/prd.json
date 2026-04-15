@@ -1505,7 +1505,7 @@
     "data_model": "red_flags + partial unique index on (event_id, target_entity_type, target_entity_id, flag_type) WHERE flag_status != 'resolved'.",
     "priority": 35,
     "core": false,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {

@@ -5,6 +5,7 @@ const { mockDb } = vi.hoisted(() => ({
     select: vi.fn(),
     insert: vi.fn(),
     update: vi.fn(),
+    execute: vi.fn(),
   },
 }));
 
@@ -36,6 +37,7 @@ function chainedSelect(rows: unknown[]) {
 function chainedInsert(rows: unknown[]) {
   const chain = {
     values: vi.fn().mockReturnThis(),
+    onConflictDoUpdate: vi.fn().mockReturnThis(),
     returning: vi.fn().mockResolvedValue(rows),
   };
   mockDb.insert.mockReturnValue(chain);
@@ -102,36 +104,49 @@ describe('upsertRedFlag', () => {
   };
 
   it('creates a new flag when no unresolved flag exists', async () => {
-    chainedSelect([]);  // No existing flag
+    chainedSelect([]);  // No existing flag for action detection
     const created = { id: FLAG_ID, ...baseParams, flagStatus: 'unreviewed' };
     chainedInsert([created]);
 
     const result = await upsertRedFlag(baseParams);
     expect(result.action).toBe('created');
     expect(result.flag.id).toBe(FLAG_ID);
+    expect(mockDb.insert).toHaveBeenCalled();
   });
 
-  it('updates existing unresolved flag instead of creating duplicate', async () => {
-    const existingFlag = { id: FLAG_ID, flagStatus: 'unreviewed' };
-    chainedSelect([existingFlag]);
-    const updated = { id: FLAG_ID, flagStatus: 'unreviewed', flagDetail: baseParams.flagDetail };
-    chainedUpdate([updated]);
-
-    const result = await upsertRedFlag(baseParams);
-    expect(result.action).toBe('updated');
-  });
-
-  it('resets reviewed flag to unreviewed on new change', async () => {
-    const existingFlag = { id: FLAG_ID, flagStatus: 'reviewed' };
-    chainedSelect([existingFlag]);
-    const updateChain = chainedUpdate([{ id: FLAG_ID, flagStatus: 'unreviewed' }]);
+  it('uses onConflictDoUpdate for atomic upsert', async () => {
+    chainedSelect([]);
+    const insertChain = chainedInsert([{ id: FLAG_ID, ...baseParams, flagStatus: 'unreviewed' }]);
 
     await upsertRedFlag(baseParams);
 
-    const setCall = updateChain.set.mock.calls[0][0];
-    expect(setCall.flagStatus).toBe('unreviewed');
-    expect(setCall.reviewedBy).toBeNull();
-    expect(setCall.reviewedAt).toBeNull();
+    expect(insertChain.onConflictDoUpdate).toHaveBeenCalledTimes(1);
+    const conflictConfig = insertChain.onConflictDoUpdate.mock.calls[0][0];
+    expect(conflictConfig.set.flagStatus).toBe('unreviewed');
+    expect(conflictConfig.set.reviewedBy).toBeNull();
+    expect(conflictConfig.set.reviewedAt).toBeNull();
+  });
+
+  it('upsert updates existing unresolved flag (cascade-035)', async () => {
+    const existingFlag = { id: FLAG_ID, flagStatus: 'unreviewed' };
+    chainedSelect([existingFlag]);
+    const updated = { id: FLAG_ID, flagStatus: 'unreviewed', flagDetail: 'Updated detail' };
+    chainedInsert([updated]);
+
+    const result = await upsertRedFlag({ ...baseParams, flagDetail: 'Updated detail' });
+    expect(result.action).toBe('updated');
+    expect(result.flag.flagDetail).toBe('Updated detail');
+    expect(mockDb.insert).toHaveBeenCalled();
+  });
+
+  it('resolved flag does not block new one (cascade-035)', async () => {
+    chainedSelect([]);
+    const newFlag = { id: 'new-flag-id', ...baseParams, flagStatus: 'unreviewed' };
+    chainedInsert([newFlag]);
+
+    const result = await upsertRedFlag(baseParams);
+    expect(result.action).toBe('created');
+    expect(result.flag.flagStatus).toBe('unreviewed');
   });
 
   it('passes change summary JSON when provided', async () => {
@@ -227,5 +242,21 @@ describe('resolveRedFlag', () => {
 
     const setCall = updateChain.set.mock.calls[0][0];
     expect(setCall.resolutionNote).toBeNull();
+  });
+});
+
+// ── Edge case: migration exists ──────────────────────────────
+describe('cascade-035 edge cases', () => {
+  it('partial index migration exists', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const migrationPath = path.resolve(
+      process.cwd(),
+      'drizzle/migrations/0005_red_flags_partial_unique_index.sql',
+    );
+    const content = fs.readFileSync(migrationPath, 'utf8');
+    expect(content).toContain('uq_red_flag_active');
+    expect(content).toContain('flag_status');
+    expect(content).toContain('resolved');
   });
 });
