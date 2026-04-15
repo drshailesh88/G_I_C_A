@@ -62,3 +62,9 @@
 - Bugs: 2 (high: 1, medium: 1)
 - Fix commits: c8c0d7b0eae4d15929d4f2f117dac712ed8eb7e9
 - Notes: Fixed archived-event 400 mapping and body eventId/event_id mismatch rejection with Sentry capture on the regenerate API. Full Vitest passed; focused regenerate/issuance suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-15T15:35:00Z — cert-api-009 — revoke certificate API
+- Status: fixed
+- Bugs: 2 (high: 1, medium: 1)
+- Fix commits: 35d3d9d26e6b5ea033ad088852b91501ca3f366f
+- Notes: Fixed archived-event 400 mapping and body eventId/event_id mismatch rejection with Sentry capture on the revoke API. Full Vitest passed; focused revoke route suite passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
