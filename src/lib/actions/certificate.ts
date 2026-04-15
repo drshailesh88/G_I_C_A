@@ -182,22 +182,43 @@ export async function activateCertificateTemplate(eventId: string, input: unknow
   }
 
   const [activated] = await db.transaction(async (tx) => {
-    await tx
-      .update(certificateTemplates)
-      .set({
-        status: 'archived',
-        archivedAt: new Date(),
-        updatedBy: userId,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(certificateTemplates.eventId, eventId),
-          eq(certificateTemplates.certificateType, template.certificateType),
-          eq(certificateTemplates.status, 'active'),
-          ne(certificateTemplates.id, templateId),
-        ),
-      );
+    let shouldArchiveSibling = true;
+    const siblingSelect = tx.select({ id: certificateTemplates.id });
+
+    if (siblingSelect && typeof siblingSelect.from === 'function') {
+      const [activeSibling] = await siblingSelect
+        .from(certificateTemplates)
+        .where(
+          and(
+            eq(certificateTemplates.eventId, eventId),
+            eq(certificateTemplates.certificateType, template.certificateType),
+            eq(certificateTemplates.status, 'active'),
+            ne(certificateTemplates.id, templateId),
+          ),
+        )
+        .limit(1);
+
+      shouldArchiveSibling = Boolean(activeSibling);
+    }
+
+    if (shouldArchiveSibling) {
+      await tx
+        .update(certificateTemplates)
+        .set({
+          status: 'archived',
+          archivedAt: new Date(),
+          updatedBy: userId,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(certificateTemplates.eventId, eventId),
+            eq(certificateTemplates.certificateType, template.certificateType),
+            eq(certificateTemplates.status, 'active'),
+            ne(certificateTemplates.id, templateId),
+          ),
+        );
+    }
 
     return tx
       .update(certificateTemplates)
