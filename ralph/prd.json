@@ -560,7 +560,7 @@
     "data_model": "issuedCertificates.verificationToken, verificationCount, lastVerifiedAt.",
     "priority": 13,
     "core": true,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {

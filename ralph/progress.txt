@@ -21,6 +21,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T13:00:00Z — cert-api-013 — Public verify endpoint with strict response shape
+- Implemented: Created GET /api/verify/[token] public endpoint (no auth). Serializer whitelist enforces only allowed keys (status, certificate_number, certificate_type, person_name, event_name, issued_at, plus optional revoked_at/revoke_reason/superseded_by_certificate_number). lookupAndVerify joins issuedCertificates+people+events, increments verification_count atomically, returns null for unknown token. Superseded certs look up the newer cert's number.
+- Files changed: src/lib/actions/certificate-verify-serializer.ts (new), src/lib/actions/certificate-verify.ts (new), src/lib/actions/certificate-verify.test.ts (new), src/app/api/verify/[token]/route.ts (new), src/app/api/verify/[token]/route.test.ts (new)
+- Tests added: 10 (4 serializer whitelist tests, 6 route tests: 400/404/200 issued/revoked/superseded/500)
+- Learnings: Extract pure serializer to a separate file to avoid triggering DB import in unit tests. The verify route is public (no assertEventAccess) — the UUID token's 122-bit entropy provides sufficient security.
+
 ## 2026-04-15T12:55:00Z — cert-api-012 — CME certificate issuance validation
 - Implemented: Added createCmeVariablesSchema(maxHours) factory to certificate validations. When certificate_type='cme_attendance', route handler fetches event dates, computes duration hours, and validates variables against CME schema requiring cme_credit_hours (>0, <=duration), accrediting_body_name, accreditation_code, cme_claim_text. Returns 400 with ZodError fields on failure.
 - Files changed: src/lib/validations/certificate.ts, src/app/api/events/[eventId]/certificates/route.ts, src/app/api/events/[eventId]/certificates/route.test.ts, src/lib/validations/certificate-cme.test.ts (new)
