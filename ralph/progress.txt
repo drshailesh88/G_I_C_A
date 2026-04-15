@@ -18,6 +18,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T12:20:00Z — cert-api-008 — POST regenerate endpoint
+- Implemented: Created POST /api/events/[eventId]/certificates/[certId]/regenerate route. Looks up old cert (must be 'issued'), finds current active template for that cert type, calls issueCertificate with old cert's personId/type/variables. Returns 201 { id, certificate_number, supersedes_id }. Supersession handled by existing issueCertificate logic.
+- Files changed: src/app/api/events/[eventId]/certificates/[certificateId]/regenerate/route.ts (new), route.test.ts (new)
+- Tests added: 9 (route.test.ts — 201 success with supersedes_id, data forwarding to issueCertificate, 404 cert not found, 400 superseded/revoked/no template, 403 ops role, 400 invalid params)
+- Learnings: Regenerate body is empty {}; route derives all issueCertificate input from the old cert + active template lookup. issueCertificate already handles supersession chain internally.
+
 ## 2026-04-15T12:10:00Z — cert-api-007 — Snapshot immutability at issuance time
 - Implemented: Verified existing issueCertificate already captures templateSnapshotJson (from template.templateJson) and renderedVariablesJson (from validated input) at insert time. Added 3 unit tests: snapshot capture from template, rendered variables capture from input, and static analysis verifying no UPDATE path touches snapshot columns across certificate-issuance.ts and bulk-functions.ts.
 - Files changed: src/lib/actions/certificate-issuance.test.ts

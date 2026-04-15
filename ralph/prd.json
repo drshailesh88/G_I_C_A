@@ -327,7 +327,7 @@
     "data_model": "issuedCertificates — uses supersedesId, supersededById columns. Data-requirements §18.",
     "priority": 8,
     "core": true,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {
