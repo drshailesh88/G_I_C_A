@@ -1464,7 +1464,7 @@
     "data_model": "No schema.",
     "priority": 34,
     "core": false,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {

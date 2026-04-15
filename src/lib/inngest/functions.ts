@@ -12,6 +12,7 @@ import {
 import { handleRegistrationCreated } from '../cascade/handlers/registration-cascade';
 import { handleSessionUpdated } from '../cascade/handlers/session-cascade';
 import { handleCertificateGenerated } from '../cascade/handlers/certificate-cascade';
+import { validateCascadePayload } from '../cascade/payload-validation';
 import { bulkInngestFunctions } from './bulk-functions';
 import {
   findEventsNeedingBackup,
@@ -29,10 +30,11 @@ export const travelSavedFn = inngest.createFunction(
     triggers: [{ event: 'conference/travel.saved' }],
   },
   async ({ event }) => {
+    const data = validateCascadePayload('conference/travel.saved', event.data);
     await handleTravelSaved({
-      eventId: event.data.eventId,
-      actor: event.data.actor,
-      payload: event.data.payload,
+      eventId: data.eventId,
+      actor: data.actor,
+      payload: data.payload,
     });
   },
 );
@@ -45,10 +47,11 @@ export const travelUpdatedFn = inngest.createFunction(
     triggers: [{ event: 'conference/travel.updated' }],
   },
   async ({ event }) => {
+    const data = validateCascadePayload('conference/travel.updated', event.data);
     await handleTravelUpdated({
-      eventId: event.data.eventId,
-      actor: event.data.actor,
-      payload: event.data.payload,
+      eventId: data.eventId,
+      actor: data.actor,
+      payload: data.payload,
     });
   },
 );
@@ -61,10 +64,11 @@ export const travelCancelledFn = inngest.createFunction(
     triggers: [{ event: 'conference/travel.cancelled' }],
   },
   async ({ event }) => {
+    const data = validateCascadePayload('conference/travel.cancelled', event.data);
     await handleTravelCancelled({
-      eventId: event.data.eventId,
-      actor: event.data.actor,
-      payload: event.data.payload,
+      eventId: data.eventId,
+      actor: data.actor,
+      payload: data.payload,
     });
   },
 );
@@ -77,10 +81,11 @@ export const accommodationSavedFn = inngest.createFunction(
     triggers: [{ event: 'conference/accommodation.saved' }],
   },
   async ({ event }) => {
+    const data = validateCascadePayload('conference/accommodation.saved', event.data);
     await handleAccommodationSaved({
-      eventId: event.data.eventId,
-      actor: event.data.actor,
-      payload: event.data.payload,
+      eventId: data.eventId,
+      actor: data.actor,
+      payload: data.payload,
     });
   },
 );
@@ -93,10 +98,11 @@ export const accommodationUpdatedFn = inngest.createFunction(
     triggers: [{ event: 'conference/accommodation.updated' }],
   },
   async ({ event }) => {
+    const data = validateCascadePayload('conference/accommodation.updated', event.data);
     await handleAccommodationUpdated({
-      eventId: event.data.eventId,
-      actor: event.data.actor,
-      payload: event.data.payload,
+      eventId: data.eventId,
+      actor: data.actor,
+      payload: data.payload,
     });
   },
 );
@@ -109,10 +115,11 @@ export const accommodationCancelledFn = inngest.createFunction(
     triggers: [{ event: 'conference/accommodation.cancelled' }],
   },
   async ({ event }) => {
+    const data = validateCascadePayload('conference/accommodation.cancelled', event.data);
     await handleAccommodationCancelled({
-      eventId: event.data.eventId,
-      actor: event.data.actor,
-      payload: event.data.payload,
+      eventId: data.eventId,
+      actor: data.actor,
+      payload: data.payload,
     });
   },
 );
@@ -125,10 +132,11 @@ export const registrationCreatedFn = inngest.createFunction(
     triggers: [{ event: 'conference/registration.created' }],
   },
   async ({ event }) => {
+    const data = validateCascadePayload('conference/registration.created', event.data);
     await handleRegistrationCreated({
-      eventId: event.data.eventId,
-      actor: event.data.actor,
-      payload: event.data.payload,
+      eventId: data.eventId,
+      actor: data.actor,
+      payload: data.payload,
     });
   },
 );
@@ -141,10 +149,11 @@ export const sessionUpdatedFn = inngest.createFunction(
     triggers: [{ event: 'conference/session.updated' }],
   },
   async ({ event }) => {
+    const data = validateCascadePayload('conference/session.updated', event.data);
     await handleSessionUpdated({
-      eventId: event.data.eventId,
-      actor: event.data.actor,
-      payload: event.data.payload,
+      eventId: data.eventId,
+      actor: data.actor,
+      payload: data.payload,
     });
   },
 );
@@ -157,10 +166,11 @@ export const certificateGeneratedFn = inngest.createFunction(
     triggers: [{ event: 'conference/certificate.generated' }],
   },
   async ({ event }) => {
+    const data = validateCascadePayload('conference/certificate.generated', event.data);
     await handleCertificateGenerated({
-      eventId: event.data.eventId,
-      actor: event.data.actor,
-      payload: event.data.payload,
+      eventId: data.eventId,
+      actor: data.actor,
+      payload: data.payload,
     });
   },
 );

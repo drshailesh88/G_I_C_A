@@ -34,9 +34,17 @@
 
 - Inngest function wiring: 7 cascade events mapped to 7 independent Inngest functions (cascade-{event} id pattern). Each has retries:3 and triggers on its respective conference/* event. New handlers (registration, session, certificate) follow the same catch-and-log-never-throw notification pattern as travel/accommodation handlers.
 
+- Cascade payload validation: All Inngest cascade functions call validateCascadePayload(eventName, event.data) as first step. Uses cascadeEventDataSchema (Zod: eventId string, actor {type, id}, payload record). On parse failure: throws NonRetriableError (from 'inngest' package) so Inngest makes exactly one attempt + dead-letters; emits Sentry event with tags.kind='cascade-payload-invalid' and extra containing rawPayload + zodIssues. No DB writes or notifications on malformed payload.
+
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T15:09:00Z — cascade-034 — Zod-validate cascade payload at handler entry
+- Implemented: Created cascadeEventDataSchema (Zod) validating eventId, actor, and payload envelope. validateCascadePayload() parses event.data at Inngest function entry — on failure throws NonRetriableError (no retry, dead-letter) and emits Sentry event with kind='cascade-payload-invalid' plus raw payload and Zod issues. All 9 cascade Inngest functions now call validateCascadePayload before invoking their handler.
+- Files changed: src/lib/cascade/payload-schemas.ts (new), src/lib/cascade/payload-validation.ts (new), src/lib/cascade/payload-validation.test.ts (new), src/lib/inngest/functions.ts, ralph/prd.json, ralph/progress.txt
+- Tests added: 6 (NonRetriableError on missing eventId, Sentry capture with correct tags, Sentry extra includes raw payload + Zod issues, valid payload passes through, schema rejects missing actor, schema accepts valid envelope)
+- Learnings: Inngest's NonRetriableError is exported directly from 'inngest' package. Validation at Inngest function level (not handler level) ensures malformed payloads never reach handler code. No DB writes or notification sends occur on validation failure.
 
 ## 2026-04-15T15:05:00Z — cascade-033 — Wire all 7 cascade events to handlers
 - Implemented: Registered 7 cascade Inngest functions (travel.saved, travel.updated, accommodation.saved, accommodation.updated, registration.created, session.updated, certificate.generated). Added 3 new event types to CASCADE_EVENTS. Created 3 new handler files (registration-cascade.ts, session-cascade.ts, certificate-cascade.ts) and added handleTravelSaved/handleAccommodationSaved to existing handlers. Updated handler registry, InngestEvents type map, and inngestFunctions array.
