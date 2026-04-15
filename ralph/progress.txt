@@ -44,6 +44,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T15:30:00Z — infra-038 — Add audit_log table and writeAudit helper
+- Implemented: Created audit_log Drizzle schema (uuid pk, nullable event_id fk, actor_user_id, action, resource, resource_id, timestamp, meta jsonb) with 4 indexes. Created writeAudit() helper in src/lib/audit/write.ts that inserts a row with defaults for meta. Migration 0006 creates the table and indexes.
+- Files changed: src/lib/db/schema/audit-log.ts (new), src/lib/db/schema/index.ts, src/lib/audit/write.ts (new), src/lib/audit/write.test.ts (new), drizzle/migrations/0006_audit_log_table.sql (new), ralph/prd.json, ralph/progress.txt
+- Tests added: 3 (inserts row with all fields, nullable eventId for cross-event reads, meta defaults to empty object)
+- Learnings: writeAudit is a simple insert helper; wiring into every existing mutation action is noted as an optional follow-up (edge_case). The helper accepts null eventId for Super Admin cross-event reads.
+
 ## 2026-04-15T15:26:00Z — cascade-037 — In-flight cascades complete after event archived
 - Implemented: Added EventArchivedError to assertEventAccess — blocks writes (requireWrite:true) on archived events with statusCode 400. Cascade handlers remain archive-agnostic; in-flight cascades emitted before archival complete normally (CE10, CE17).
 - Files changed: src/lib/auth/event-access.ts, src/lib/auth/event-archived.test.ts (new), src/lib/cascade/handlers/archive-bypass.test.ts (new), ralph/prd.json, ralph/progress.txt

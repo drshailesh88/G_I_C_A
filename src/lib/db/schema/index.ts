@@ -12,3 +12,4 @@ export * from './certificates';
 export * from './communications';
 export * from './red-flags';
 export * from './attendance';
+export * from './audit-log';
