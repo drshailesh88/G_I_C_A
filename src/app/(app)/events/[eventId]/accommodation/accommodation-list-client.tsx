@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { format, formatDistanceToNow } from 'date-fns';
 import { cancelAccommodationRecord } from '@/lib/actions/accommodation';
 import { reviewFlag, resolveFlag } from '@/lib/actions/red-flag-actions';
+import { useRole } from '@/hooks/use-role';
 
 type AccommodationRecord = {
   id: string;
@@ -62,6 +63,7 @@ export function AccommodationListClient({
   flaggedIds: string[];
 }) {
   const router = useRouter();
+  const { canWrite } = useRole();
   const [showFlaggedOnly, setShowFlaggedOnly] = useState(false);
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [reviewingFlag, setReviewingFlag] = useState<string | null>(null);
@@ -128,13 +130,24 @@ export function AccommodationListClient({
           </Link>
           <h1 className="text-xl font-bold text-text-primary">Accommodation</h1>
         </div>
-        <Link
-          href={`/events/${eventId}/accommodation/new`}
-          className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-light"
-        >
-          <Plus className="h-4 w-4" />
-          Add
-        </Link>
+        {canWrite ? (
+          <Link
+            href={`/events/${eventId}/accommodation/new`}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-light"
+          >
+            <Plus className="h-4 w-4" />
+            Add
+          </Link>
+        ) : (
+          <button
+            disabled
+            aria-disabled="true"
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white opacity-50 cursor-not-allowed"
+          >
+            <Plus className="h-4 w-4" />
+            Add
+          </button>
+        )}
       </div>
 
       {/* Flagged Only Toggle */}
@@ -175,6 +188,7 @@ export function AccommodationListClient({
                 onResolveFlag={handleResolveFlag}
                 cancelling={cancelling === record.id}
                 reviewingFlag={reviewingFlag}
+                canWrite={canWrite}
               />
             ))}
           </div>
@@ -190,6 +204,7 @@ export function AccommodationListClient({
               onResolveFlag={handleResolveFlag}
               cancelling={cancelling}
               reviewingFlag={reviewingFlag}
+              canWrite={canWrite}
             />
           </div>
         </section>
@@ -215,6 +230,7 @@ export function AccommodationListClient({
                 onResolveFlag={handleResolveFlag}
                 cancelling={false}
                 reviewingFlag={null}
+                canWrite={canWrite}
               />
             ))}
           </div>
@@ -230,6 +246,7 @@ export function AccommodationListClient({
               onResolveFlag={handleResolveFlag}
               cancelling={null}
               reviewingFlag={null}
+              canWrite={canWrite}
             />
           </div>
         </section>
@@ -244,12 +261,22 @@ export function AccommodationListClient({
             <p className="font-semibold text-text-primary">No accommodation records</p>
             <p className="text-sm text-text-secondary">Add accommodation details for event participants</p>
           </div>
-          <Link
-            href={`/events/${eventId}/accommodation/new`}
-            className="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-light"
-          >
-            Add Accommodation
-          </Link>
+          {canWrite ? (
+            <Link
+              href={`/events/${eventId}/accommodation/new`}
+              className="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-light"
+            >
+              Add Accommodation
+            </Link>
+          ) : (
+            <button
+              disabled
+              aria-disabled="true"
+              className="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-white opacity-50 cursor-not-allowed"
+            >
+              Add Accommodation
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -265,6 +292,7 @@ function AccommodationTable({
   onResolveFlag,
   cancelling,
   reviewingFlag,
+  canWrite,
 }: {
   records: AccommodationRecord[];
   eventId: string;
@@ -274,6 +302,7 @@ function AccommodationTable({
   onResolveFlag: (id: string) => void;
   cancelling: string | null;
   reviewingFlag: string | null;
+  canWrite: boolean;
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-border">
@@ -383,8 +412,9 @@ function AccommodationTable({
                   {!isCancelled && (
                     <button
                       onClick={() => onCancel(record.id)}
-                      disabled={cancelling === record.id}
-                      className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
+                      disabled={!canWrite || cancelling === record.id}
+                      aria-disabled={!canWrite || cancelling === record.id}
+                      className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {cancelling === record.id ? 'Cancelling...' : 'Cancel'}
                     </button>
@@ -408,6 +438,7 @@ function AccommodationCard({
   onResolveFlag,
   cancelling,
   reviewingFlag,
+  canWrite,
 }: {
   record: AccommodationRecord;
   eventId: string;
@@ -417,6 +448,7 @@ function AccommodationCard({
   onResolveFlag: (id: string) => void;
   cancelling: boolean;
   reviewingFlag: string | null;
+  canWrite: boolean;
 }) {
   const style = STATUS_STYLES[record.recordStatus] || STATUS_STYLES.draft;
   const isCancelled = record.recordStatus === 'cancelled';
@@ -497,8 +529,9 @@ function AccommodationCard({
         <div className="mt-3 flex justify-end">
           <button
             onClick={() => onCancel(record.id)}
-            disabled={cancelling}
-            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
+            disabled={!canWrite || cancelling}
+            aria-disabled={!canWrite || cancelling}
+            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {cancelling ? 'Cancelling...' : 'Cancel'}
           </button>

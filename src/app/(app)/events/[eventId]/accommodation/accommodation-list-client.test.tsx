@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+const mockCanWrite = vi.hoisted(() => ({ value: true }));
+
 vi.mock('@/lib/actions/accommodation', () => ({
   cancelAccommodationRecord: vi.fn(),
 }));
@@ -11,6 +13,16 @@ vi.mock('@/lib/actions/red-flag-actions', () => ({
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+}));
+vi.mock('@/hooks/use-role', () => ({
+  useRole: () => ({
+    isLoaded: true,
+    isSuperAdmin: false,
+    isCoordinator: false,
+    isOps: false,
+    isReadOnly: !mockCanWrite.value,
+    canWrite: mockCanWrite.value,
+  }),
 }));
 
 import { AccommodationListClient } from './accommodation-list-client';
@@ -161,6 +173,40 @@ describe('AccommodationListClient', () => {
       expect(html).toContain('Active');
       expect(html).toContain('Cancelled');
       expect(html).toContain('Dr. Cancelled');
+    });
+  });
+
+  describe('read_only disabled buttons', () => {
+    it('renders Add button as disabled with aria-disabled for read_only', () => {
+      mockCanWrite.value = false;
+      const html = render();
+      expect(html).toContain('aria-disabled="true"');
+      expect(html).toMatch(/<button[^>]*disabled[^>]*>[^]*?Add/);
+      mockCanWrite.value = true;
+    });
+
+    it('renders Cancel button as disabled with aria-disabled for read_only', () => {
+      mockCanWrite.value = false;
+      const html = render();
+      const cancelMatch = html.match(/<button[^>]*aria-disabled="true"[^>]*>[^<]*Cancel/);
+      expect(cancelMatch).not.toBeNull();
+      mockCanWrite.value = true;
+    });
+
+    it('renders Add as a link for writable roles', () => {
+      mockCanWrite.value = true;
+      const html = render();
+      expect(html).toContain('accommodation/new');
+      const addDisabled = html.match(/<button[^>]*aria-disabled="true"[^>]*>[^]*?Add/);
+      expect(addDisabled).toBeNull();
+    });
+
+    it('renders empty-state Add button as disabled for read_only', () => {
+      mockCanWrite.value = false;
+      const html = render({ records: [] });
+      expect(html).toContain('aria-disabled="true"');
+      expect(html).toMatch(/<button[^>]*disabled[^>]*>[^]*?Add Accommodation/);
+      mockCanWrite.value = true;
     });
   });
 });

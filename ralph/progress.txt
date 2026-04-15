@@ -23,9 +23,17 @@
 - eventId mismatch guard: import assertEventIdMatch from src/lib/auth/event-id-mismatch.ts. Call after body parse with { urlEventId, bodyEventId: body.eventId, userId, endpoint }. Catches EventIdMismatchError → 400 { error: 'eventId mismatch' }. Sentry event emitted with tags { module: 'tenancy', kind: 'eventId-mismatch' } and extra { urlEventId, bodyEventId, endpoint }.
 - Cross-event 404 sanitizer: import crossEvent404Response from src/lib/auth/sanitize-cross-event-404.ts. Use instead of NextResponse.json(null, { status: 404 }) in EventNotFoundError catch blocks. Returns { error: 'Not Found' } with no event-identifying info. sanitize404Body(body) available for custom sanitization.
 
+- Read-only disabled buttons: import useRole() in client component, use canWrite to conditionally render Link (writable) vs disabled button with aria-disabled="true" + disabled attribute + opacity-50 + cursor-not-allowed. Cancel buttons add !canWrite to existing disabled condition. Pattern applies to any module needing read_only UI gating.
+
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T14:00:00Z — tenancy-024 — Read-only users see write buttons disabled
+- Implemented: Added useRole() hook to AccommodationListClient. Header "Add" link and empty-state "Add Accommodation" link conditionally render as disabled buttons (aria-disabled="true", disabled attribute, opacity-50) for read_only role. Cancel buttons in both AccommodationTable and AccommodationCard add !canWrite to their disabled condition with aria-disabled. Writable roles see the original Link/button behavior unchanged.
+- Files changed: src/app/(app)/events/[eventId]/accommodation/accommodation-list-client.tsx, src/app/(app)/events/[eventId]/accommodation/accommodation-list-client.test.tsx
+- Tests added: 4 (Add disabled for read_only, Cancel disabled for read_only, Add as link for writable, empty-state Add disabled for read_only)
+- Learnings: Next.js Link does not support disabled attribute, so read_only rendering must swap to a button element. The useRole() hook from @/hooks/use-role.ts provides canWrite boolean that excludes read_only role.
 
 ## 2026-04-15T13:55:00Z — tenancy-023 — Super Admin views any event without assignment
 - Implemented: Added unit test verifying super admin assertEventAccess does NOT query event_user_assignments. Added event existence check in people page (queries events table after assertEventAccess, calls notFound() if missing). This ensures super admin gets 404 for non-existent events instead of an empty page. No auth-layer changes needed — super admin bypass was already in place.
