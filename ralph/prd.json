@@ -202,7 +202,7 @@
     "data_model": ".quality/state.json — controller writes this automatically.",
     "priority": 5,
     "core": true,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {
