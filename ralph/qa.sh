@@ -40,12 +40,14 @@ SLEEP_BETWEEN=3
 CODEX_ACC1="${CODEX_ACC1:-$HOME/.codex-acc1}"
 CODEX_ACC2="${CODEX_ACC2:-$HOME/.codex-acc2}"
 CODEX_SINGLE_ACCOUNT="${CODEX_SINGLE_ACCOUNT:-0}"
+QA_NO_OPENCODE="${QA_NO_OPENCODE:-0}"
+OPENCODE_MODEL="${OPENCODE_MODEL:-zai-coding-plan/glm-5}"
 QA_NO_GEMINI="${QA_NO_GEMINI:-0}"
 GEMINI_MODEL_1="${GEMINI_MODEL_1:-gemini-3.1-pro-preview}"
 GEMINI_MODEL_2="${GEMINI_MODEL_2:-gemini-3-pro-preview}"
 
 # Quota detection — regex is OR'd across patterns seen in the wild
-QUOTA_REGEX='429|rate.?limit|rate_limit|quota.?exceeded|quota_exceeded|usage.?limit|insufficient_quota|retry.?after|RESOURCE_EXHAUSTED|5h limit|weekly limit'
+QUOTA_REGEX='429|rate.?limit|rate_limit|quota.?exceeded|quota_exceeded|usage.?limit|insufficient_quota|retry.?after|RESOURCE_EXHAUSTED|5h limit|weekly limit|hit your usage limit|try again at'
 BOTH_EXHAUSTED_SLEEP=300   # 5 min
 
 if [ ! -f "$PRD" ]; then
@@ -60,6 +62,8 @@ fi
 
 HAS_GEMINI=0
 if command -v gemini >/dev/null 2>&1; then HAS_GEMINI=1; fi
+HAS_OPENCODE=0
+if command -v opencode >/dev/null 2>&1; then HAS_OPENCODE=1; fi
 
 # Resolve timeout command (macOS ships without `timeout`).
 if command -v timeout >/dev/null 2>&1; then
@@ -127,13 +131,20 @@ if [ "$CODEX_SINGLE_ACCOUNT" = "1" ]; then
 else
   echo "    2. codex/acc2    $CODEX_ACC2  (authed: $ACC2_OK)"
 fi
-if [ "$QA_NO_GEMINI" = "1" ]; then
-  echo "    3. gemini/*      (disabled — QA_NO_GEMINI=1)"
-elif [ "$HAS_GEMINI" -eq 0 ]; then
-  echo "    3. gemini/*      (gemini CLI not found — install via 'npm i -g @google/gemini-cli')"
+if [ "$QA_NO_OPENCODE" = "1" ]; then
+  echo "    3. opencode/*    (disabled — QA_NO_OPENCODE=1)"
+elif [ "$HAS_OPENCODE" -eq 0 ]; then
+  echo "    3. opencode/*    (opencode CLI not found)"
 else
-  echo "    3. gemini/$GEMINI_MODEL_1"
-  echo "    4. gemini/$GEMINI_MODEL_2"
+  echo "    3. opencode/$OPENCODE_MODEL"
+fi
+if [ "$QA_NO_GEMINI" = "1" ]; then
+  echo "    4. gemini/*      (disabled — QA_NO_GEMINI=1)"
+elif [ "$HAS_GEMINI" -eq 0 ]; then
+  echo "    4. gemini/*      (gemini CLI not found)"
+else
+  echo "    4. gemini/$GEMINI_MODEL_1"
+  echo "    5. gemini/$GEMINI_MODEL_2"
 fi
 echo "───────────────────────────────────────────────────────────────"
 
@@ -166,26 +177,63 @@ try_codex() {
   output=$(CODEX_HOME="$dir" "${TIMEOUT_CMD[@]}" codex exec --dangerously-bypass-approvals-and-sandbox "$prompt" 2>&1) || true
   exitcode=$?
 
-  # Success: exit 0 AND non-empty output. Any quota-looking strings inside
-  # the output are probably just transient retry noise that Codex already
-  # handled internally.
+  # Check for quota in the LAST 30 lines of output (rate-limit messages
+  # appear at the end of the transcript). Do this BEFORE declaring
+  # success, because Codex CLI exits 0 even when its only output is
+  # "ERROR: You've hit your usage limit..." — a pattern that would
+  # otherwise be mistaken for a valid agent response.
+  local output_tail
+  output_tail=$(printf '%s\n' "$output" | tail -n 30)
+  if echo "$output_tail" | grep -qiE "$QUOTA_REGEX"; then
+    echo "[grader] codex/$label quota pattern matched in response tail" >&2
+    return 1
+  fi
+
+  # Success: exit 0 AND non-empty output AND no quota markers in tail.
   if [ "$exitcode" -eq 0 ] && [ -n "${output// }" ]; then
     LAST_PROVIDER="codex/$label"
     printf '%s' "$output"
     return 0
   fi
-  # Silent quota signal: exit=2 + empty output (OpenAI rate-limit path)
+  # Silent quota signal: exit=2 + empty output
   if [ "$exitcode" -eq 2 ] && [ -z "${output// }" ]; then
     echo "[grader] codex/$label silent exit 2 — treating as quota" >&2
     return 1
   fi
-  # Explicit quota keywords in a FAILED output
-  if [ "$exitcode" -ne 0 ] && echo "$output" | grep -qiE "$QUOTA_REGEX"; then
-    echo "[grader] codex/$label quota pattern matched on failure" >&2
-    return 1
-  fi
   # Non-quota failure — propagate
   LAST_PROVIDER="codex/$label"
+  printf '%s' "$output"
+  return "$exitcode"
+}
+
+try_opencode() {
+  local prompt="$1"
+  local model="${2:-$OPENCODE_MODEL}"
+  if [ "$HAS_OPENCODE" -eq 0 ] || [ "$QA_NO_OPENCODE" = "1" ]; then return 1; fi
+  echo "[grader] trying opencode/$model..." >&2
+  local output exitcode
+  # opencode run: headless mode, takes a message string; --model selects provider/model
+  output=$("${TIMEOUT_CMD[@]}" opencode run --model "$model" "$prompt" 2>&1) || true
+  exitcode=$?
+
+  local output_tail
+  output_tail=$(printf '%s\n' "$output" | tail -n 30)
+
+  # Quota / auth / transport patterns
+  if echo "$output_tail" | grep -qiE "$QUOTA_REGEX|unauthorized|invalid.?api.?key|401|402|403"; then
+    echo "[grader] opencode/$model quota/auth pattern matched in response tail" >&2
+    return 1
+  fi
+  if [ "$exitcode" -eq 0 ] && [ -n "${output// }" ]; then
+    LAST_PROVIDER="opencode/$model"
+    printf '%s' "$output"
+    return 0
+  fi
+  if [ "$exitcode" -ne 0 ] && [ -z "${output// }" ]; then
+    echo "[grader] opencode/$model silent non-zero exit — treating as quota" >&2
+    return 1
+  fi
+  LAST_PROVIDER="opencode/$model"
   printf '%s' "$output"
   return "$exitcode"
 }
@@ -198,9 +246,23 @@ try_gemini() {
   output=$("${TIMEOUT_CMD[@]}" gemini -m "$model" --yolo -p "$prompt" 2>&1) || true
   exitcode=$?
 
-  # Success first: Gemini often prints transient 429/TLS noise to stderr even
-  # on successful calls because the CLI retries internally. Trust the exit
-  # code + output presence.
+  # Check the tail for quota/transport patterns. Gemini's CLI also
+  # occasionally emits rate-limit messages at the end of a successful
+  # transcript (some retries succeed mid-attempt). The tail check is more
+  # reliable than greping the entire transcript which may contain transient
+  # retry noise near the start.
+  local output_tail
+  output_tail=$(printf '%s\n' "$output" | tail -n 30)
+
+  # Terminal quota: regex hits in the TAIL (where final errors land)
+  if echo "$output_tail" | grep -qiE "$QUOTA_REGEX|ERR_SSL_|TLS.?ALERT|UNAVAILABLE|overloaded"; then
+    echo "[grader] gemini/$model quota/transport pattern matched in response tail" >&2
+    return 1
+  fi
+
+  # Success first: Gemini often prints transient 429/TLS noise earlier in
+  # stderr even on successful calls because the CLI retries internally.
+  # Trust the exit code + output presence once tail is clean.
   if [ "$exitcode" -eq 0 ] && [ -n "${output// }" ]; then
     LAST_PROVIDER="gemini/$model"
     printf '%s' "$output"
@@ -209,11 +271,6 @@ try_gemini() {
   # Silent failure signals quota
   if [ "$exitcode" -ne 0 ] && [ -z "${output// }" ]; then
     echo "[grader] gemini/$model silent non-zero exit — treating as quota" >&2
-    return 1
-  fi
-  # Failed WITH output containing quota/transport markers
-  if [ "$exitcode" -ne 0 ] && echo "$output" | grep -qiE "$QUOTA_REGEX|ERR_SSL_|TLS.?ALERT|UNAVAILABLE|overloaded"; then
-    echo "[grader] gemini/$model quota/transport pattern matched on failure" >&2
     return 1
   fi
   # Non-quota failure — propagate
@@ -244,12 +301,17 @@ run_grader_with_failover() {
     if [ "$rc" -ne 1 ]; then return "$rc"; fi
   fi
 
-  # Layer 3: gemini primary
+  # Layer 3: opencode (z.ai GLM, separate quota pool)
+  rc=0; try_opencode "$prompt" || rc=$?
+  if [ "$rc" -eq 0 ]; then return 0; fi
+  if [ "$rc" -ne 1 ]; then return "$rc"; fi
+
+  # Layer 4: gemini primary
   rc=0; try_gemini "$prompt" "$GEMINI_MODEL_1" || rc=$?
   if [ "$rc" -eq 0 ]; then return 0; fi
   if [ "$rc" -ne 1 ]; then return "$rc"; fi
 
-  # Layer 4: gemini fallback
+  # Layer 5: gemini fallback
   rc=0; try_gemini "$prompt" "$GEMINI_MODEL_2" || rc=$?
   if [ "$rc" -eq 0 ]; then return 0; fi
   if [ "$rc" -ne 1 ]; then return "$rc"; fi
@@ -261,7 +323,7 @@ run_grader_with_failover() {
   if [ "$rc" -eq 0 ]; then return 0; fi
 
   echo "<promise>ABORT</promise>"
-  echo "All grader providers exhausted (codex/acc1, codex/acc2, gemini/$GEMINI_MODEL_1, gemini/$GEMINI_MODEL_2) after 5-min wait. Rate-limit windows need time to reset." >&2
+  echo "All grader providers exhausted (codex/acc1, codex/acc2, opencode/$OPENCODE_MODEL, gemini/$GEMINI_MODEL_1, gemini/$GEMINI_MODEL_2) after 5-min wait. Rate-limit windows need time to reset." >&2
   return 2
 }
 
