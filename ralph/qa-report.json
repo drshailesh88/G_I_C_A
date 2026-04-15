@@ -161,5 +161,38 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused certificate issuance plus issue/regenerate route suites passed (4 files, 151 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; a targeted post-fix typecheck grep found no errors in certificate production paths. Manual review confirmed templateSnapshotJson is copied from the active template at insert time, renderedVariablesJson is now merged from authoritative people master fields before insert, and issuedCertificates update paths only touch status, supersession, revocation, download, verification, and sent-at fields, not templateSnapshotJson or renderedVariablesJson. Persistence was not re-probed through the browser contract because the authenticated fixture is blocked."
+  },
+  {
+    "story_id": "cert-api-008",
+    "qa_timestamp": "2026-04-15T15:28:47Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "skip",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "Archived events reached the regenerate API auth catch-all and returned 403 instead of the contract-required 400 event archived response.",
+        "severity": "medium",
+        "fix_commit": "c8c0d7b0eae4d15929d4f2f117dac712ed8eb7e9",
+        "files_changed": [
+          "src/app/api/events/[eventId]/certificates/[certificateId]/regenerate/route.ts"
+        ]
+      },
+      {
+        "description": "The regenerate API ignored submitted body eventId/event_id mismatches instead of returning 400 and capturing the tenancy mismatch in Sentry.",
+        "severity": "high",
+        "fix_commit": "c8c0d7b0eae4d15929d4f2f117dac712ed8eb7e9",
+        "files_changed": [
+          "src/app/api/events/[eventId]/certificates/[certificateId]/regenerate/route.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused regenerate route plus certificate issuance suites passed (3 files, 136 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; a targeted typecheck grep found no errors in the regenerate production route or certificate-issuance production file. Manual review confirmed the route derives eventId and certificateId from validated URL params, validates the otherwise-empty body with Zod, rejects body eventId/event_id mismatches via assertEventIdMatch with Sentry capture, maps archived-event auth failures to 400, keeps ops/read_only at 403, event-scopes old certificate and active-template lookups, delegates insertion and same-transaction supersession update to issueCertificate, and returns 201 with the new certificate id, new certificate_number, and old supersedes_id. Persistence was not re-probed through the browser contract because the authenticated fixture is blocked."
   }
 ]

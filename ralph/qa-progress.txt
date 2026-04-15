@@ -56,3 +56,9 @@
 - Bugs: 1 (high: 1)
 - Fix commits: 7307c65
 - Notes: Fixed rendered_variables_json snapshot resolution so master-person fields come from the people row before insert. Full Vitest passed; focused certificate suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-15T15:28:47Z — cert-api-008 — regenerate supersession chain
+- Status: fixed
+- Bugs: 2 (high: 1, medium: 1)
+- Fix commits: c8c0d7b0eae4d15929d4f2f117dac712ed8eb7e9
+- Notes: Fixed archived-event 400 mapping and body eventId/event_id mismatch rejection with Sentry capture on the regenerate API. Full Vitest passed; focused regenerate/issuance suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
