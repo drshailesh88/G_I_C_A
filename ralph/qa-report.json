@@ -87,5 +87,21 @@
     },
     "bugs": [],
     "notes": "Full Vitest passed (231 files, 4736 tests), and focused certificate issuance plus issue/regenerate route suites passed (4 files, 151 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; targeted typecheck output showed only a certificate-issuance test-file regex target error, with no production certificate issuance or route errors. Manual verification confirmed issueCertificate returns the inserted id, certificateNumber, and verificationToken; production issue/regenerate route consumers map those fields into their response bodies; the UI server-action caller ignores the return value. Persistence was not re-probed through the browser contract because the authenticated fixture is blocked."
+  },
+  {
+    "story_id": "cert-code-005",
+    "qa_timestamp": "2026-04-15T14:31:40Z",
+    "qa_model": "codex",
+    "status": "pass",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [],
+    "notes": "Full Vitest passed (231 files, 4736 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story. Independent Stryker dry-run with the locked stryker.config.json succeeded and ran 4578 tests without executing mutants. Manual verification accepted outcome b: .quality/state.json and qa/baselines/state-baseline-20260415T070514Z.json contain 72 scored modules, the committed snapshot has a plain-English partial-baseline note explaining the 30 unscored files and exit 143 timeout, no stryker.conf.mjs shadow config exists, and the travel-flow baselines are preserved at travel.ts=99.48, travel-cascade.ts=97.03, validations/travel.ts=100."
   }
 ]

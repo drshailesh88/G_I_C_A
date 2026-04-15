@@ -206,6 +206,9 @@
   },
   {
     "id": "cert-code-005",
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-15T14:31:40Z",
+    "qa_tested_by": "codex",
     "category": "data",
     "description": "Confirm full Stryker baseline runs after cert code gaps close; produce per-module scores for 107 files.",
     "page": "N/A — Backend",

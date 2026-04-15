@@ -6,6 +6,7 @@
 - Certificate Playwright contracts are currently blocked before product assertions by Clerk auth setup redirecting `/events` with `ERR_TOO_MANY_REDIRECTS`; record this as a harness blocker when it recurs rather than treating it as certificate product behavior.
 - Repo-level `npx tsc --noEmit` currently fails on broad existing errors across QA/test, Sentry, people, navigation, notification, and cascade files; distinguish those from story-local production type regressions.
 - Certificate template activation can pass archive-before-activate ordering while still doing extra no-op archive writes; explicitly check the no-sibling active-template path against the PRD.
+- Stryker baseline story cert-code-005 is accepted only under outcome b: verify the committed snapshot has >=60 scored modules, a plain-English partial-baseline note, preserved travel scores, and no `stryker.conf.mjs` shadow config in the working tree.
 
 ## Iteration log
 
@@ -34,3 +35,9 @@
 - Bugs: 0
 - Fix commits: none
 - Notes: Verified issueCertificate returns the inserted id, certificateNumber, and verificationToken; route consumers use those fields correctly. Full Vitest and focused certificate suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-15T14:31:40Z — cert-code-005 — Stryker baseline partial gate
+- Status: pass
+- Bugs: 0
+- Fix commits: none
+- Notes: Accepted outcome b: 72 scored modules in .quality/state.json and the latest qa/baselines snapshot, explanatory partial-baseline note present, no shadow Stryker config exists, travel baselines preserved, and Stryker dry-run succeeded; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
