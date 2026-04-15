@@ -13,23 +13,11 @@
 
 import { inngest } from './client';
 import { db } from '@/lib/db';
-import {
-  issuedCertificates,
-  certificateTemplates,
-  people,
-  eventRegistrations,
-  sessionAssignments,
-  attendanceRecords,
-  eventPeople,
-} from '@/lib/db/schema';
+import { issuedCertificates, certificateTemplates, people, eventRegistrations, sessionAssignments, attendanceRecords, eventPeople } from '@/lib/db/schema';
 import { eq, and, inArray } from 'drizzle-orm';
+import { Redis } from '@upstash/redis';
 import { withEventScope } from '@/lib/db/with-event-scope';
-import {
-  findCurrentCertificate,
-  buildSupersessionChain,
-  getNextSequence,
-  type IssuedCertificateRecord,
-} from '@/lib/certificates/issuance-utils';
+import { findCurrentCertificate, buildSupersessionChain, getNextSequence, type IssuedCertificateRecord } from '@/lib/certificates/issuance-utils';
 import { generateCertificateNumber, getCertificateTypeConfig } from '@/lib/certificates/certificate-types';
 import { buildCertificateStorageKey, createR2Provider, type StorageUploadResult } from '@/lib/certificates/storage';
 import type { BulkCertificateGenerateData, BulkCertificateNotifyData, ArchiveGenerateData } from './events';
@@ -45,7 +33,12 @@ export function chunk<T>(arr: T[], size: number): T[][] {
   return chunks;
 }
 
-type Recipient = { id: string; fullName: string; email: string | null; designation: string | null };
+type Recipient = {
+  id: string;
+  fullName: string;
+  email: string | null;
+  designation: string | null;
+};
 
 type TemplateSetup = {
   template: {
@@ -100,10 +93,38 @@ type StepRunner = {
   sleep(name: string, duration: string): Promise<void>;
 };
 
-async function renderCertificatePdf(
-  template: unknown,
-  renderedVariables: Record<string, string>,
-): Promise<Buffer> {
+type BulkScope = 'all' | { ids: string[] };
+
+function redisCredentials(): { url: string; token: string } | null {
+  const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.UPSTASH_REDIS_REST_URL_TEST;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN_TEST;
+  if (!url && !token && process.env.NODE_ENV === 'test') {
+    return { url: 'https://redis.test', token: 'test-token' };
+  }
+  return url && token ? { url, token } : null;
+}
+
+async function releaseBulkGenerationLock(lockKey: string | undefined): Promise<void> {
+  if (!lockKey) return;
+
+  const credentials = redisCredentials();
+  if (!credentials) {
+    console.error('Bulk certificate generation completed but Redis is not configured for lock release');
+    return;
+  }
+
+  try {
+    await new Redis(credentials).del(lockKey);
+  } catch (err) {
+    console.error(`Failed to release bulk certificate generation lock ${lockKey}:`, err);
+  }
+}
+
+function isBulkScope(value: unknown): value is BulkScope {
+  return value === 'all' || (!!value && typeof value === 'object' && !Array.isArray(value) && Array.isArray((value as { ids?: unknown }).ids));
+}
+
+async function renderCertificatePdf(template: unknown, renderedVariables: Record<string, string>): Promise<Buffer> {
   const { generate } = await import('@pdfme/generator');
   const { text, image, line, rectangle, ellipse, barcodes } = await import('@pdfme/schemas');
 
@@ -116,10 +137,7 @@ async function renderCertificatePdf(
   return Buffer.from(pdf);
 }
 
-async function cleanupUploadedFiles(
-  storageProvider: ReturnType<typeof createR2Provider>,
-  storageKeys: string[],
-): Promise<void> {
+async function cleanupUploadedFiles(storageProvider: ReturnType<typeof createR2Provider>, storageKeys: string[]): Promise<void> {
   await Promise.all(
     storageKeys.map(async (storageKey) => {
       try {
@@ -142,295 +160,332 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
   },
   async ({ event, step }: { event: { data: BulkCertificateGenerateData }; step: StepRunner }) => {
     const data = event.data;
-    const { eventId, userId, templateId, recipientType, personIds, eligibilityBasisType } = data;
+    const { eventId, userId } = data;
+    const lockKey = typeof data.lockKey === 'string' ? data.lockKey : undefined;
+    const eligibilityBasisType = data.eligibilityBasisType ?? 'manual';
 
-    // Step 1: Load template and recipients
-    const setup: TemplateSetup = await step.run('load-template-and-recipients', async (): Promise<TemplateSetup> => {
-      const [template] = await db
-        .select()
-        .from(certificateTemplates)
-        .where(
-          withEventScope(
-            certificateTemplates.eventId,
-            eventId,
-            and(
-              eq(certificateTemplates.id, templateId),
-              eq(certificateTemplates.status, 'active'),
-            )!,
-          ),
-        )
-        .limit(1);
-      if (!template) throw new Error('Active certificate template not found');
-
-      let recipients: Recipient[];
-
-      switch (recipientType) {
-        case 'all_delegates': {
-          recipients = await db
-            .select({ id: people.id, fullName: people.fullName, email: people.email, designation: people.designation })
-            .from(eventRegistrations)
-            .innerJoin(people, eq(eventRegistrations.personId, people.id))
-            .where(
-              withEventScope(eventRegistrations.eventId, eventId,
-                and(eq(eventRegistrations.status, 'confirmed'), eq(eventRegistrations.category, 'delegate'))!),
-            );
-          break;
+    try {
+      // Step 1: Load template and recipients
+      const setup: TemplateSetup = await step.run('load-template-and-recipients', async (): Promise<TemplateSetup> => {
+        if (!data.templateId && !data.certificateType) {
+          throw new Error('Certificate template or type is required');
         }
-        case 'all_faculty': {
-          recipients = await db
-            .selectDistinctOn([sessionAssignments.personId], { id: people.id, fullName: people.fullName, email: people.email, designation: people.designation })
-            .from(sessionAssignments)
-            .innerJoin(people, eq(sessionAssignments.personId, people.id))
-            .where(eq(sessionAssignments.eventId, eventId));
-          break;
-        }
-        case 'all_attendees': {
-          recipients = await db
-            .selectDistinctOn([attendanceRecords.personId], { id: people.id, fullName: people.fullName, email: people.email, designation: people.designation })
-            .from(attendanceRecords)
-            .innerJoin(people, eq(attendanceRecords.personId, people.id))
-            .where(eq(attendanceRecords.eventId, eventId));
-          break;
-        }
-        case 'custom': {
-          if (!personIds || personIds.length === 0) return { template: null, recipients: [], eligibilityBasisType };
-          // Defense-in-depth: join with eventPeople to enforce eventId scoping
-          // even though custom personIds should already be event-scoped from UI
-          recipients = await db
-            .select({ id: people.id, fullName: people.fullName, email: people.email, designation: people.designation })
-            .from(people)
-            .innerJoin(eventPeople, eq(eventPeople.personId, people.id))
-            .where(and(eq(eventPeople.eventId, eventId), inArray(people.id, personIds))!);
-          break;
-        }
-      }
+        const templateFilter = data.templateId ? eq(certificateTemplates.id, data.templateId) : eq(certificateTemplates.certificateType, data.certificateType as string);
+        const [template] = await db
+          .select()
+          .from(certificateTemplates)
+          .where(withEventScope(certificateTemplates.eventId, eventId, and(templateFilter, eq(certificateTemplates.status, 'active'))!))
+          .limit(1);
+        if (!template) throw new Error('Active certificate template not found');
 
-      // Deduplicate
-      const seen = new Set<string>();
-      const deduped = recipients.filter(r => {
-        if (seen.has(r.id)) return false;
-        seen.add(r.id);
-        return true;
-      });
+        let recipients: Recipient[];
 
-      return {
-        template: {
-          id: template.id,
-          certificateType: template.certificateType,
-          versionNo: template.versionNo,
-          templateJson: template.templateJson,
-          brandingSnapshotJson: template.brandingSnapshotJson,
-        },
-        recipients: deduped,
-        eligibilityBasisType,
-      };
-    });
-
-    if (!setup.template || setup.recipients.length === 0) {
-      return { issued: 0, skipped: 0, certificateIds: [] as string[], errors: [] as string[] };
-    }
-
-    const template = setup.template;
-    const certType = template.certificateType as import('@/lib/validations/certificate').CertificateType;
-    const config = getCertificateTypeConfig(certType);
-
-    // Step 2: Load existing certificates and numbers
-    // Note: step.run serializes return values through JSON (Inngest memoization),
-    // so we store the raw data and cast when needed.
-    const existing: ExistingCertsData = await step.run('load-existing-certs', async (): Promise<ExistingCertsData> => {
-      const existingCerts = await db
-        .select()
-        .from(issuedCertificates)
-        .where(
-          withEventScope(issuedCertificates.eventId, eventId,
-            eq(issuedCertificates.certificateType, template.certificateType)),
-        );
-
-      const existingNumbers = await db
-        .select({ certificateNumber: issuedCertificates.certificateNumber })
-        .from(issuedCertificates)
-        .where(eq(issuedCertificates.eventId, eventId));
-
-      return {
-        existingCerts,
-        numbers: existingNumbers.map(r => r.certificateNumber),
-      };
-    });
-
-    // Step 3: Process in batches of 50
-    const batches = chunk(setup.recipients, 50);
-    const allCertificateIds: string[] = [];
-    const allErrors: string[] = [];
-    let nextSeq = getNextSequence(existing.numbers, config.certificateNumberPrefix);
-
-    for (let i = 0; i < batches.length; i++) {
-      const batch: Recipient[] = batches[i];
-      const batchStartSeq = nextSeq;
-
-      const batchResult = await step.run(`generate-batch-${i + 1}`, async (): Promise<{ certificateIds: string[]; nextSeq: number; errors: string[] }> => {
-        const storageProvider = createR2Provider();
-        const certificateIds: string[] = [];
-        const errors: string[] = [];
-        const batchPersonIds = batch.map((recipient) => recipient.id);
-        const batchExistingCerts = await db
-          .select({
-            id: issuedCertificates.id,
-            eventId: issuedCertificates.eventId,
-            personId: issuedCertificates.personId,
-            templateId: issuedCertificates.templateId,
-            templateVersionNo: issuedCertificates.templateVersionNo,
-            certificateType: issuedCertificates.certificateType,
-            certificateNumber: issuedCertificates.certificateNumber,
-            status: issuedCertificates.status,
-            supersededById: issuedCertificates.supersededById,
-            supersedesId: issuedCertificates.supersedesId,
-            revokedAt: issuedCertificates.revokedAt,
-            revokeReason: issuedCertificates.revokeReason,
-            storageKey: issuedCertificates.storageKey,
-          })
-          .from(issuedCertificates)
-          .where(
-            withEventScope(
-              issuedCertificates.eventId,
-              eventId,
-              and(
-                eq(issuedCertificates.certificateType, template.certificateType),
-                inArray(issuedCertificates.personId, batchPersonIds),
-              )!,
-            ),
-          );
-
-        const freshNumbers = await db
-          .select({ certificateNumber: issuedCertificates.certificateNumber })
-          .from(issuedCertificates)
-          .where(eq(issuedCertificates.eventId, eventId));
-
-        const numbersInUse = new Set(freshNumbers.map((row) => row.certificateNumber));
-        let seq = Math.max(
-          batchStartSeq,
-          getNextSequence(freshNumbers.map((row) => row.certificateNumber), config.certificateNumberPrefix),
-        );
-
-        for (const recipient of batch) {
-          try {
-            const currentCert = findCurrentCertificate(
-              batchExistingCerts as ExistingBatchCertificate[],
-              recipient.id,
-              eventId,
-              template.certificateType,
-            ) as ExistingBatchCertificate | null;
-
-            const renderedVariables: Record<string, string> = {
-              full_name: recipient.fullName,
-              recipient_name: recipient.fullName,
-              designation: recipient.designation ?? '',
-              email: recipient.email ?? '',
-            };
-
-            if (
-              currentCert &&
-              currentCert.templateId === template.id &&
-              currentCert.templateVersionNo === template.versionNo
-            ) {
-              renderedVariables.certificate_number = currentCert.certificateNumber;
-              certificateIds.push(currentCert.id);
-
-              const pdfBuffer = await renderCertificatePdf(template.templateJson, renderedVariables);
-              const storageKey = currentCert.storageKey ??
-                buildCertificateStorageKey(eventId, template.certificateType, currentCert.id);
-              const uploadResult = await storageProvider.upload(storageKey, pdfBuffer, 'application/pdf');
-
-              await db
-                .update(issuedCertificates)
-                .set({
-                  fileSizeBytes: uploadResult.fileSizeBytes,
-                  fileChecksumSha256: uploadResult.fileChecksumSha256,
-                  updatedAt: new Date(),
+        if (isBulkScope(data.scope)) {
+          if (data.scope === 'all') {
+            recipients = await db
+              .select({
+                id: people.id,
+                fullName: people.fullName,
+                email: people.email,
+                designation: people.designation,
+              })
+              .from(eventPeople)
+              .innerJoin(people, eq(eventPeople.personId, people.id))
+              .where(eq(eventPeople.eventId, eventId));
+          } else if (data.scope.ids.length === 0) {
+            return { template: null, recipients: [], eligibilityBasisType };
+          } else {
+            recipients = await db
+              .select({
+                id: people.id,
+                fullName: people.fullName,
+                email: people.email,
+                designation: people.designation,
+              })
+              .from(people)
+              .innerJoin(eventPeople, eq(eventPeople.personId, people.id))
+              .where(and(eq(eventPeople.eventId, eventId), inArray(people.id, data.scope.ids))!);
+          }
+        } else {
+          switch (data.recipientType) {
+            case 'all_delegates': {
+              recipients = await db
+                .select({
+                  id: people.id,
+                  fullName: people.fullName,
+                  email: people.email,
+                  designation: people.designation,
                 })
-                .where(
-                  withEventScope(
-                    issuedCertificates.eventId,
-                    eventId,
-                    eq(issuedCertificates.id, currentCert.id),
-                  ),
-                );
-              continue;
+                .from(eventRegistrations)
+                .innerJoin(people, eq(eventRegistrations.personId, people.id))
+                .where(withEventScope(eventRegistrations.eventId, eventId, and(eq(eventRegistrations.status, 'confirmed'), eq(eventRegistrations.category, 'delegate'))!));
+              break;
             }
-
-            const chain = buildSupersessionChain(currentCert);
-            let certificateNumber = generateCertificateNumber(certType, seq);
-            while (numbersInUse.has(certificateNumber)) {
-              seq++;
-              certificateNumber = generateCertificateNumber(certType, seq);
+            case 'all_faculty': {
+              recipients = await db
+                .selectDistinctOn([sessionAssignments.personId], {
+                  id: people.id,
+                  fullName: people.fullName,
+                  email: people.email,
+                  designation: people.designation,
+                })
+                .from(sessionAssignments)
+                .innerJoin(people, eq(sessionAssignments.personId, people.id))
+                .where(eq(sessionAssignments.eventId, eventId));
+              break;
             }
-            numbersInUse.add(certificateNumber);
-            seq++;
-            renderedVariables.certificate_number = certificateNumber;
-
-            const certId = crypto.randomUUID();
-            const storageKey = buildCertificateStorageKey(eventId, template.certificateType, certId);
-            const pdfBuffer = await renderCertificatePdf(template.templateJson, renderedVariables);
-            const uploadResult = await storageProvider.upload(storageKey, pdfBuffer, 'application/pdf');
-
-            await db.transaction(async (tx) => {
-              const [newCert] = await tx
-                .insert(issuedCertificates)
-                .values({
-                  id: certId,
-                  eventId,
-                  personId: recipient.id,
-                  templateId: template.id,
-                  templateVersionNo: template.versionNo,
-                  certificateType: template.certificateType,
+            case 'all_attendees': {
+              recipients = await db
+                .selectDistinctOn([attendanceRecords.personId], {
+                  id: people.id,
+                  fullName: people.fullName,
+                  email: people.email,
+                  designation: people.designation,
+                })
+                .from(attendanceRecords)
+                .innerJoin(people, eq(attendanceRecords.personId, people.id))
+                .where(eq(attendanceRecords.eventId, eventId));
+              break;
+            }
+            case 'custom': {
+              if (!data.personIds || data.personIds.length === 0)
+                return {
+                  template: null,
+                  recipients: [],
                   eligibilityBasisType,
-                  certificateNumber,
-                  storageKey,
-                  fileName: `${certificateNumber}.pdf`,
-                  fileSizeBytes: uploadResult.fileSizeBytes,
-                  fileChecksumSha256: uploadResult.fileChecksumSha256,
-                  renderedVariablesJson: renderedVariables,
-                  brandingSnapshotJson: template.brandingSnapshotJson,
-                  templateSnapshotJson: template.templateJson,
-                  supersedesId: chain.newCertLink?.supersedesId || null,
-                  issuedBy: userId,
+                };
+              // Defense-in-depth: join with eventPeople to enforce eventId scoping
+              // even though custom personIds should already be event-scoped from UI
+              recipients = await db
+                .select({
+                  id: people.id,
+                  fullName: people.fullName,
+                  email: people.email,
+                  designation: people.designation,
                 })
-                .returning();
-
-              if (chain.newCertLink?.supersedesId) {
-                await tx
-                  .update(issuedCertificates)
-                  .set({
-                    status: 'superseded',
-                    supersededById: newCert.id,
-                    updatedAt: new Date(),
-                  })
-                  .where(
-                    withEventScope(issuedCertificates.eventId, eventId, eq(issuedCertificates.id, chain.newCertLink.supersedesId)),
-                  );
-              }
-
-              certificateIds.push(newCert.id);
-            });
-          } catch (error) {
-            const msg = error instanceof Error ? error.message : String(error);
-            errors.push(`${recipient.id}: ${msg}`);
+                .from(people)
+                .innerJoin(eventPeople, eq(eventPeople.personId, people.id))
+                .where(and(eq(eventPeople.eventId, eventId), inArray(people.id, data.personIds))!);
+              break;
+            }
+            default:
+              throw new Error('Invalid bulk certificate generation recipient scope');
           }
         }
 
-        return { certificateIds, nextSeq: seq, errors };
+        // Deduplicate
+        const seen = new Set<string>();
+        const deduped = recipients.filter((r) => {
+          if (seen.has(r.id)) return false;
+          seen.add(r.id);
+          return true;
+        });
+
+        return {
+          template: {
+            id: template.id,
+            certificateType: template.certificateType,
+            versionNo: template.versionNo,
+            templateJson: template.templateJson,
+            brandingSnapshotJson: template.brandingSnapshotJson,
+          },
+          recipients: deduped,
+          eligibilityBasisType,
+        };
       });
 
-      allCertificateIds.push(...batchResult.certificateIds);
-      allErrors.push(...batchResult.errors);
-      nextSeq = batchResult.nextSeq;
-    }
+      if (!setup.template || setup.recipients.length === 0) {
+        return {
+          issued: 0,
+          skipped: 0,
+          certificateIds: [] as string[],
+          errors: [] as string[],
+        };
+      }
 
-    return {
-      issued: allCertificateIds.length,
-      skipped: setup.recipients.length - allCertificateIds.length,
-      certificateIds: allCertificateIds,
-      errors: allErrors,
-    };
+      const template = setup.template;
+      const certType = template.certificateType as import('@/lib/validations/certificate').CertificateType;
+      const config = getCertificateTypeConfig(certType);
+
+      // Step 2: Load existing certificates and numbers
+      // Note: step.run serializes return values through JSON (Inngest memoization),
+      // so we store the raw data and cast when needed.
+      const existing: ExistingCertsData = await step.run('load-existing-certs', async (): Promise<ExistingCertsData> => {
+        const existingCerts = await db
+          .select()
+          .from(issuedCertificates)
+          .where(withEventScope(issuedCertificates.eventId, eventId, eq(issuedCertificates.certificateType, template.certificateType)));
+
+        const existingNumbers = await db.select({ certificateNumber: issuedCertificates.certificateNumber }).from(issuedCertificates).where(eq(issuedCertificates.eventId, eventId));
+
+        return {
+          existingCerts,
+          numbers: existingNumbers.map((r) => r.certificateNumber),
+        };
+      });
+
+      // Step 3: Process in batches of 50
+      const batches = chunk(setup.recipients, 50);
+      const allCertificateIds: string[] = [];
+      const allErrors: string[] = [];
+      let nextSeq = getNextSequence(existing.numbers, config.certificateNumberPrefix);
+
+      for (let i = 0; i < batches.length; i++) {
+        const batch: Recipient[] = batches[i];
+        const batchStartSeq = nextSeq;
+
+        const batchResult = await step.run(
+          `generate-batch-${i + 1}`,
+          async (): Promise<{
+            certificateIds: string[];
+            nextSeq: number;
+            errors: string[];
+          }> => {
+            const storageProvider = createR2Provider();
+            const certificateIds: string[] = [];
+            const errors: string[] = [];
+            const batchPersonIds = batch.map((recipient) => recipient.id);
+            const batchExistingCerts = await db
+              .select({
+                id: issuedCertificates.id,
+                eventId: issuedCertificates.eventId,
+                personId: issuedCertificates.personId,
+                templateId: issuedCertificates.templateId,
+                templateVersionNo: issuedCertificates.templateVersionNo,
+                certificateType: issuedCertificates.certificateType,
+                certificateNumber: issuedCertificates.certificateNumber,
+                status: issuedCertificates.status,
+                supersededById: issuedCertificates.supersededById,
+                supersedesId: issuedCertificates.supersedesId,
+                revokedAt: issuedCertificates.revokedAt,
+                revokeReason: issuedCertificates.revokeReason,
+                storageKey: issuedCertificates.storageKey,
+              })
+              .from(issuedCertificates)
+              .where(withEventScope(issuedCertificates.eventId, eventId, and(eq(issuedCertificates.certificateType, template.certificateType), inArray(issuedCertificates.personId, batchPersonIds))!));
+
+            const freshNumbers = await db
+              .select({
+                certificateNumber: issuedCertificates.certificateNumber,
+              })
+              .from(issuedCertificates)
+              .where(eq(issuedCertificates.eventId, eventId));
+
+            const numbersInUse = new Set(freshNumbers.map((row) => row.certificateNumber));
+            let seq = Math.max(
+              batchStartSeq,
+              getNextSequence(
+                freshNumbers.map((row) => row.certificateNumber),
+                config.certificateNumberPrefix,
+              ),
+            );
+
+            for (const recipient of batch) {
+              try {
+                const currentCert = findCurrentCertificate(batchExistingCerts as ExistingBatchCertificate[], recipient.id, eventId, template.certificateType) as ExistingBatchCertificate | null;
+
+                const renderedVariables: Record<string, string> = {
+                  full_name: recipient.fullName,
+                  recipient_name: recipient.fullName,
+                  designation: recipient.designation ?? '',
+                  email: recipient.email ?? '',
+                };
+
+                if (currentCert && currentCert.templateId === template.id && currentCert.templateVersionNo === template.versionNo) {
+                  renderedVariables.certificate_number = currentCert.certificateNumber;
+                  certificateIds.push(currentCert.id);
+
+                  const pdfBuffer = await renderCertificatePdf(template.templateJson, renderedVariables);
+                  const storageKey = currentCert.storageKey ?? buildCertificateStorageKey(eventId, template.certificateType, currentCert.id);
+                  const uploadResult = await storageProvider.upload(storageKey, pdfBuffer, 'application/pdf');
+
+                  await db
+                    .update(issuedCertificates)
+                    .set({
+                      fileSizeBytes: uploadResult.fileSizeBytes,
+                      fileChecksumSha256: uploadResult.fileChecksumSha256,
+                      updatedAt: new Date(),
+                    })
+                    .where(withEventScope(issuedCertificates.eventId, eventId, eq(issuedCertificates.id, currentCert.id)));
+                  continue;
+                }
+
+                const chain = buildSupersessionChain(currentCert);
+                let certificateNumber = generateCertificateNumber(certType, seq);
+                while (numbersInUse.has(certificateNumber)) {
+                  seq++;
+                  certificateNumber = generateCertificateNumber(certType, seq);
+                }
+                numbersInUse.add(certificateNumber);
+                seq++;
+                renderedVariables.certificate_number = certificateNumber;
+
+                const certId = crypto.randomUUID();
+                const storageKey = buildCertificateStorageKey(eventId, template.certificateType, certId);
+                const pdfBuffer = await renderCertificatePdf(template.templateJson, renderedVariables);
+                const uploadResult = await storageProvider.upload(storageKey, pdfBuffer, 'application/pdf');
+
+                await db.transaction(async (tx) => {
+                  const [newCert] = await tx
+                    .insert(issuedCertificates)
+                    .values({
+                      id: certId,
+                      eventId,
+                      personId: recipient.id,
+                      templateId: template.id,
+                      templateVersionNo: template.versionNo,
+                      certificateType: template.certificateType,
+                      eligibilityBasisType,
+                      certificateNumber,
+                      storageKey,
+                      fileName: `${certificateNumber}.pdf`,
+                      fileSizeBytes: uploadResult.fileSizeBytes,
+                      fileChecksumSha256: uploadResult.fileChecksumSha256,
+                      renderedVariablesJson: renderedVariables,
+                      brandingSnapshotJson: template.brandingSnapshotJson,
+                      templateSnapshotJson: template.templateJson,
+                      supersedesId: chain.newCertLink?.supersedesId || null,
+                      issuedBy: userId,
+                    })
+                    .returning();
+
+                  if (chain.newCertLink?.supersedesId) {
+                    await tx
+                      .update(issuedCertificates)
+                      .set({
+                        status: 'superseded',
+                        supersededById: newCert.id,
+                        updatedAt: new Date(),
+                      })
+                      .where(withEventScope(issuedCertificates.eventId, eventId, eq(issuedCertificates.id, chain.newCertLink.supersedesId)));
+                  }
+
+                  certificateIds.push(newCert.id);
+                });
+              } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                errors.push(`${recipient.id}: ${msg}`);
+              }
+            }
+
+            return { certificateIds, nextSeq: seq, errors };
+          },
+        );
+
+        allCertificateIds.push(...batchResult.certificateIds);
+        allErrors.push(...batchResult.errors);
+        nextSeq = batchResult.nextSeq;
+      }
+
+      return {
+        issued: allCertificateIds.length,
+        skipped: setup.recipients.length - allCertificateIds.length,
+        certificateIds: allCertificateIds,
+        errors: allErrors,
+      };
+    } finally {
+      await releaseBulkGenerationLock(lockKey);
+    }
   },
 );
 
@@ -462,16 +517,7 @@ export const bulkCertificateNotifyFn = inngest.createFunction(
         })
         .from(issuedCertificates)
         .innerJoin(people, eq(issuedCertificates.personId, people.id))
-        .where(
-          withEventScope(
-            issuedCertificates.eventId,
-            eventId,
-            and(
-              inArray(issuedCertificates.id, certificateIds),
-              eq(issuedCertificates.status, 'issued'),
-            )!,
-          ),
-        );
+        .where(withEventScope(issuedCertificates.eventId, eventId, and(inArray(issuedCertificates.id, certificateIds), eq(issuedCertificates.status, 'issued'))!));
     });
 
     const certsWithStorage = certs.filter((c: CertRecord) => c.storageKey);
@@ -479,7 +525,7 @@ export const bulkCertificateNotifyFn = inngest.createFunction(
     let failed = 0;
     const sentCertIds: string[] = []; // Track only successfully sent certs
 
-    const channels = channel === 'both' ? ['email', 'whatsapp'] as const : [channel] as const;
+    const channels = channel === 'both' ? (['email', 'whatsapp'] as const) : ([channel] as const);
     const wantsEmail = channels.includes('email');
     const wantsWhatsApp = channels.includes('whatsapp');
 
@@ -488,42 +534,58 @@ export const bulkCertificateNotifyFn = inngest.createFunction(
       const emailBatches = chunk(certsWithStorage, 20);
       for (let i = 0; i < emailBatches.length; i++) {
         const batchCerts = emailBatches[i];
-        const batchResult = await step.run(`email-batch-${i + 1}`, async (): Promise<{ sent: number; failed: number; sentIds: string[] }> => {
-          const { sendNotification } = await import('@/lib/notifications/send');
-          let batchSent = 0;
-          let batchFailed = 0;
-          const batchSentIds: string[] = [];
+        const batchResult = await step.run(
+          `email-batch-${i + 1}`,
+          async (): Promise<{
+            sent: number;
+            failed: number;
+            sentIds: string[];
+          }> => {
+            const { sendNotification } = await import('@/lib/notifications/send');
+            let batchSent = 0;
+            let batchFailed = 0;
+            const batchSentIds: string[] = [];
 
-          for (const cert of batchCerts) {
-            try {
-              await sendNotification({
-                eventId,
-                personId: cert.personId,
-                channel: 'email',
-                templateKey: 'certificate_delivery',
-                triggerType: 'certificate.generated',
-                triggerEntityType: 'issued_certificate',
-                triggerEntityId: cert.id,
-                sendMode: 'manual',
-                idempotencyKey: `cert-send-${cert.id}-email`,
-                variables: {
-                  full_name: cert.personFullName,
-                  certificate_number: cert.certificateNumber,
-                  certificate_type: cert.certificateType.replace(/_/g, ' '),
-                  recipientEmail: cert.personEmail ?? '',
-                  recipientPhoneE164: cert.personPhone ?? '',
-                },
-                attachments: [{ storageKey: cert.storageKey!, fileName: `${cert.certificateNumber}.pdf` }],
-              });
-              batchSent++;
-              batchSentIds.push(cert.id);
-            } catch {
-              batchFailed++;
+            for (const cert of batchCerts) {
+              try {
+                await sendNotification({
+                  eventId,
+                  personId: cert.personId,
+                  channel: 'email',
+                  templateKey: 'certificate_delivery',
+                  triggerType: 'certificate.generated',
+                  triggerEntityType: 'issued_certificate',
+                  triggerEntityId: cert.id,
+                  sendMode: 'manual',
+                  idempotencyKey: `cert-send-${cert.id}-email`,
+                  variables: {
+                    full_name: cert.personFullName,
+                    certificate_number: cert.certificateNumber,
+                    certificate_type: cert.certificateType.replace(/_/g, ' '),
+                    recipientEmail: cert.personEmail ?? '',
+                    recipientPhoneE164: cert.personPhone ?? '',
+                  },
+                  attachments: [
+                    {
+                      storageKey: cert.storageKey!,
+                      fileName: `${cert.certificateNumber}.pdf`,
+                    },
+                  ],
+                });
+                batchSent++;
+                batchSentIds.push(cert.id);
+              } catch {
+                batchFailed++;
+              }
             }
-          }
 
-          return { sent: batchSent, failed: batchFailed, sentIds: batchSentIds };
-        });
+            return {
+              sent: batchSent,
+              failed: batchFailed,
+              sentIds: batchSentIds,
+            };
+          },
+        );
 
         sent += batchResult.sent;
         failed += batchResult.failed;
@@ -540,33 +602,45 @@ export const bulkCertificateNotifyFn = inngest.createFunction(
     if (wantsWhatsApp) {
       for (let i = 0; i < certsWithStorage.length; i++) {
         const cert = certsWithStorage[i];
-        const msgResult = await step.run(`whatsapp-msg-${i + 1}`, async (): Promise<{ sent: number; failed: number; sentId: string | null }> => {
-          try {
-            const { sendNotification } = await import('@/lib/notifications/send');
-            await sendNotification({
-              eventId,
-              personId: cert.personId,
-              channel: 'whatsapp',
-              templateKey: 'certificate_delivery',
-              triggerType: 'certificate.generated',
-              triggerEntityType: 'issued_certificate',
-              triggerEntityId: cert.id,
-              sendMode: 'manual',
-              idempotencyKey: `cert-send-${cert.id}-whatsapp`,
-              variables: {
-                full_name: cert.personFullName,
-                certificate_number: cert.certificateNumber,
-                certificate_type: cert.certificateType.replace(/_/g, ' '),
-                recipientEmail: cert.personEmail ?? '',
-                recipientPhoneE164: cert.personPhone ?? '',
-              },
-              attachments: [{ storageKey: cert.storageKey!, fileName: `${cert.certificateNumber}.pdf` }],
-            });
-            return { sent: 1, failed: 0, sentId: cert.id };
-          } catch {
-            return { sent: 0, failed: 1, sentId: null };
-          }
-        });
+        const msgResult = await step.run(
+          `whatsapp-msg-${i + 1}`,
+          async (): Promise<{
+            sent: number;
+            failed: number;
+            sentId: string | null;
+          }> => {
+            try {
+              const { sendNotification } = await import('@/lib/notifications/send');
+              await sendNotification({
+                eventId,
+                personId: cert.personId,
+                channel: 'whatsapp',
+                templateKey: 'certificate_delivery',
+                triggerType: 'certificate.generated',
+                triggerEntityType: 'issued_certificate',
+                triggerEntityId: cert.id,
+                sendMode: 'manual',
+                idempotencyKey: `cert-send-${cert.id}-whatsapp`,
+                variables: {
+                  full_name: cert.personFullName,
+                  certificate_number: cert.certificateNumber,
+                  certificate_type: cert.certificateType.replace(/_/g, ' '),
+                  recipientEmail: cert.personEmail ?? '',
+                  recipientPhoneE164: cert.personPhone ?? '',
+                },
+                attachments: [
+                  {
+                    storageKey: cert.storageKey!,
+                    fileName: `${cert.certificateNumber}.pdf`,
+                  },
+                ],
+              });
+              return { sent: 1, failed: 0, sentId: cert.id };
+            } catch {
+              return { sent: 0, failed: 1, sentId: null };
+            }
+          },
+        );
 
         sent += msgResult.sent;
         failed += msgResult.failed;
@@ -586,13 +660,7 @@ export const bulkCertificateNotifyFn = inngest.createFunction(
         await db
           .update(issuedCertificates)
           .set({ lastSentAt: new Date(), updatedAt: new Date() })
-          .where(
-            withEventScope(
-              issuedCertificates.eventId,
-              eventId,
-              inArray(issuedCertificates.id, uniqueSentIds),
-            ),
-          );
+          .where(withEventScope(issuedCertificates.eventId, eventId, inArray(issuedCertificates.id, uniqueSentIds)));
       });
     }
 
@@ -649,11 +717,15 @@ export const archiveGenerateFn = inngest.createFunction(
       let fileCount = 0;
 
       // Add agenda
-      archive.append(Buffer.from(agendaBuffer, 'base64'), { name: 'agenda.xlsx' });
+      archive.append(Buffer.from(agendaBuffer, 'base64'), {
+        name: 'agenda.xlsx',
+      });
       fileCount++;
 
       // Add notification log
-      archive.append(Buffer.from(notifCsvBuffer, 'base64'), { name: 'notification-log.csv' });
+      archive.append(Buffer.from(notifCsvBuffer, 'base64'), {
+        name: 'notification-log.csv',
+      });
       fileCount++;
 
       // Add certificates
@@ -672,7 +744,10 @@ export const archiveGenerateFn = inngest.createFunction(
             const ext = dotIdx > 0 ? name.slice(dotIdx) : '';
             let counter = 2;
             let candidate = `${base}-${counter}${ext}`;
-            while (usedNames.has(candidate)) { counter++; candidate = `${base}-${counter}${ext}`; }
+            while (usedNames.has(candidate)) {
+              counter++;
+              candidate = `${base}-${counter}${ext}`;
+            }
             name = candidate;
           }
           usedNames.add(name);
@@ -715,8 +790,4 @@ export const archiveGenerateFn = inngest.createFunction(
 );
 
 /** All bulk operation Inngest functions */
-export const bulkInngestFunctions = [
-  bulkCertificateGenerateFn,
-  bulkCertificateNotifyFn,
-  archiveGenerateFn,
-];
+export const bulkInngestFunctions = [bulkCertificateGenerateFn, bulkCertificateNotifyFn, archiveGenerateFn];

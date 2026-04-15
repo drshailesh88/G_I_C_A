@@ -19,10 +19,14 @@ export type CascadeInngestEventData = {
 export type BulkCertificateGenerateData = {
   eventId: string;
   userId: string;
-  templateId: string;
-  recipientType: 'all_delegates' | 'all_faculty' | 'all_attendees' | 'custom';
+  batchId?: string;
+  lockKey?: string;
+  certificateType?: string;
+  scope?: 'all' | { ids: string[] };
+  templateId?: string;
+  recipientType?: 'all_delegates' | 'all_faculty' | 'all_attendees' | 'custom';
   personIds?: string[];
-  eligibilityBasisType: string;
+  eligibilityBasisType?: string;
 };
 
 export type BulkCertificateNotifyData = {
