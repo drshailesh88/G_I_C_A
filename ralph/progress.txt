@@ -13,10 +13,17 @@
 - API route pattern: type Params = Promise<{ eventId: string }>; await params to destructure; paramsSchema validates UUID; assertEventAccess for auth; safeParse body with Zod; catch errors and map to status codes per contract
 - Certificate endpoints require super_admin or event_coordinator (not ops) — need extra role check beyond assertEventAccess's WRITE_ROLES which includes ops
 - API request bodies use snake_case per contract; Zod .transform() maps to camelCase for internal action functions
+- Bulk endpoints with Redis locking: use SET NX EX with JSON metadata (lock_holder, started_at); store lockKey in Inngest payload so handler can DEL on completion; mock @upstash/redis constructor in tests
 
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T12:40:00Z — cert-api-010 — POST bulk with Redis lock
+- Implemented: Created POST /api/events/[eventId]/certificates/bulk route with Upstash Redis distributed lock. Lock key format: lock:certificates:generate:{eventId}:{type} with 5-min TTL via SET NX EX. Stores JSON metadata (lock_holder, started_at) in lock value. Returns 409 with holder info when lock held, 202 { batch_id, total, lock_expires_at } on success. Lock released via DEL on handler exception. Enqueues to Inngest for async bulk generation.
+- Files changed: src/app/api/events/[eventId]/certificates/bulk/route.ts (new), route.test.ts (new)
+- Tests added: 7 (lock acquired with NX+TTL, 409 when held, lock released on exception, 403 ops role, 400 invalid params, 202 response shape, 400 invalid body)
+- Learnings: Mock @upstash/redis by mocking the Redis constructor to return an object with mock set/get/ttl/del methods. Lock value stored as JSON.stringify so Upstash auto-parses on GET.
 
 ## 2026-04-15T12:30:00Z — cert-api-009 — POST revoke endpoint
 - Implemented: Created POST /api/events/[eventId]/certificates/[certId]/revoke route. Validates non-empty/non-whitespace reason via Zod refine. Looks up cert (must be 'issued' status), updates status='revoked', revokedAt, revokeReason, updatedAt. Returns 200 { id, status, revoked_at }. Already-revoked returns 400. Missing/empty/whitespace reason returns 400 { error: 'reason_required' }.

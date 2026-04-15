@@ -415,7 +415,7 @@
     "data_model": "issuedCertificates bulk-inserted; Upstash lock key. See BACKEND_ARCHITECTURE_MAP.md Redis section.",
     "priority": 10,
     "core": true,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {
