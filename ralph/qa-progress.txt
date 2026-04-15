@@ -82,3 +82,9 @@
 - Bugs: 2 (high: 1, low: 1)
 - Fix commits: e4dcdc0b98aed1d8c9c295a07f06e23193c01e0c
 - Notes: Fixed missing batch_id-retrievable summary persistence/API and corrected resume-path success accounting. Full Vitest and focused bulk suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-15T16:02:31Z — cert-api-012 — CME variable validation
+- Status: pass
+- Bugs: 0
+- Fix commits: none
+- Notes: Verified CME route validation requires all four CME fields, bounds credit hours by event duration, returns 400 with Zod field errors for invalid inputs, and preserves variables into issuance snapshots. Full Vitest and focused CME suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.

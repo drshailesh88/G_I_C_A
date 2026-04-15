@@ -581,7 +581,10 @@
           "expected": "both 400"
         }
       ]
-    }
+    },
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-15T16:02:31Z",
+    "qa_tested_by": "codex"
   },
   {
     "id": "cert-api-013",

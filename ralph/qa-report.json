@@ -314,5 +314,21 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused bulk worker plus bulk route suites passed (2 files, 23 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; a targeted grep of post-fix typecheck output found no errors in the touched bulk route, bulk worker, or bulk generation state helper. Manual review confirmed recipients and issued-certificate queries remain event-scoped, each new certificate insert/supersession update is inside a per-cert transaction, per-recipient exceptions are caught and logged while later recipients continue, issued_certificates has only issued/superseded/revoked terminal statuses with new rows defaulting to issued, existing current certificates are reused without duplicate inserts, and the worker now stores completed/failed batch summaries in Redis for GET /api/events/[eventId]/certificates/bulk?batch_id=... with auth, role, event, and batch_id validation."
+  },
+  {
+    "story_id": "cert-api-012",
+    "qa_timestamp": "2026-04-15T16:02:31Z",
+    "qa_model": "codex",
+    "status": "pass",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "skip",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [],
+    "notes": "Full Vitest passed (231 files, 4736 tests), and focused CME route/validation suites passed (3 files, 61 tests). An independent schema probe confirmed valid complete CME variables and credit_hours equal to event duration are accepted, while credit_hours above duration, zero, negative, string-valued, missing fields, and blank string fields are rejected. Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story. Manual review confirmed the route derives event duration from the URL eventId row, runs createCmeVariablesSchema before issueCertificate, returns flattened Zod field errors with 400 for invalid CME variables, and issueCertificate persists renderedVariablesJson from a snapshot that starts with caller variables before adding authoritative person fields. Direct DB persistence was not re-probed because the authenticated contract fixture is blocked."
   }
 ]
