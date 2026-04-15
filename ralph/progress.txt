@@ -19,10 +19,17 @@
 
 - issueCertificate select sequence order: event status → person exists → event_people attachment → template active → (inside tx) existing certs + cert numbers. All tests using chainedSelectSequence must include the event_people row after person row.
 - assertEventAccess throws EventNotFoundError (→ 404) for unmembered cross-event access; route handlers use instanceof check. Test mocks must export EventNotFoundError via vi.hoisted() to avoid "Cannot access before initialization" errors.
+- assertEventAccess throws ForbiddenError (→ 403, statusCode=403) for role-denial within an assigned event (e.g. read_only + requireWrite). Route handlers catch non-EventNotFoundError as 403. Tests mocking assertEventAccess for write-denial should throw new Error('forbidden') or ForbiddenError.
 
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T13:35:00Z — tenancy-019 — assertEventAccess returns 403 for role-denial within assigned event
+- Implemented: Added ForbiddenError class (statusCode=403) to event-access.ts. assertEventAccess now throws ForbiddenError (message 'forbidden') instead of generic Error when user has event assignment but lacks write authority (e.g. read_only + requireWrite). Route handlers already catch non-EventNotFoundError → 403, so no route changes needed. Updated 3 test files (event, branding, notifications.adversarial) to use the new error message.
+- Files changed: src/lib/auth/event-access.ts, src/lib/auth/event-access.test.ts, src/lib/actions/event.test.ts, src/lib/actions/branding.test.ts, src/lib/actions/notifications.adversarial.test.ts
+- Tests added: 1 (read_only + requireWrite → ForbiddenError with statusCode 403)
+- Learnings: Route handlers use catch-all for non-EventNotFoundError → 403, so ForbiddenError works without any route handler changes. The distinction is 404=not found/no assignment vs 403=assigned but insufficient role.
 
 ## 2026-04-15T13:25:00Z — tenancy-018 — assertEventAccess returns 404 for cross-event access
 - Implemented: Added EventNotFoundError class to event-access.ts. assertEventAccess now throws EventNotFoundError (generic 'Not found' message, no eventId leak) when a non-super-admin has no event_user_assignments row. Route handlers updated from string-matching ('do not have access') to instanceof EventNotFoundError → 404. 403 reserved for role-denial within an assigned event. Updated 7 route handlers (certificates issue/regenerate/revoke/bulk/download, exports archive/type) and 5 route test files with EventNotFoundError in vi.hoisted() mocks.

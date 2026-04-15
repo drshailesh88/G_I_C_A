@@ -13,6 +13,14 @@ export class EventNotFoundError extends Error {
   }
 }
 
+export class ForbiddenError extends Error {
+  readonly statusCode = 403;
+  constructor() {
+    super('forbidden');
+    this.name = 'ForbiddenError';
+  }
+}
+
 export type EventAccessResult = {
   authorized: boolean;
   userId: string;
@@ -117,7 +125,7 @@ export async function assertEventAccess(
   }
 
   if (options?.requireWrite && (!result.role || !WRITE_ROLES.has(result.role as string))) {
-    throw new Error('Forbidden: read-only users cannot perform write operations');
+    throw new ForbiddenError();
   }
 
   return { userId: result.userId, role: result.role };

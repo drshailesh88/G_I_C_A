@@ -191,12 +191,12 @@ describe('6B-1: Branding Configuration CRUD', () => {
 
     it('blocks read-only users from updating', async () => {
       mockAssertEventAccess.mockRejectedValue(
-        new Error('Forbidden: read-only users cannot perform write operations'),
+        new Error('forbidden'),
       );
 
       await expect(
         updateEventBranding(EVENT_ID, { primaryColor: '#FF0000' }),
-      ).rejects.toThrow('read-only');
+      ).rejects.toThrow('forbidden');
     });
   });
 

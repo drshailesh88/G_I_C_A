@@ -69,7 +69,7 @@ describe('notifications actions — adversarial review', () => {
     mockAssertEventAccess.mockImplementation(
       async (_eventId: string, options?: { requireWrite?: boolean }) => {
         if (options?.requireWrite) {
-          throw new Error('Forbidden: read-only users cannot perform write operations');
+          throw new Error('forbidden');
         }
 
         return {

@@ -15,7 +15,7 @@ vi.mock('@/lib/db', () => ({
   db: mockDb,
 }));
 
-import { checkEventAccess, assertEventAccess, getEventListContext, EventNotFoundError } from './event-access';
+import { checkEventAccess, assertEventAccess, getEventListContext, EventNotFoundError, ForbiddenError } from './event-access';
 
 function mockAssignmentQuery(result: unknown[]) {
   const limit = vi.fn().mockResolvedValue(result);
@@ -180,6 +180,22 @@ describe('assertEventAccess', () => {
     mockAssignmentQuery([{ id: 'a4', eventId: 'event-1', authUserId: 'readonly-1', isActive: true }]);
 
     await expect(assertEventAccess('event-1', { requireWrite: true })).rejects.toThrow(/read-only|forbidden/i);
+  });
+
+  it('read_only + requireWrite → ForbiddenError carrying 403', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'readonly-A',
+      has: ({ role }: { role: string }) => role === 'org:read_only',
+    });
+    mockAssignmentQuery([{ id: 'a-ro', eventId: 'event-A', authUserId: 'readonly-A', isActive: true }]);
+
+    try {
+      await assertEventAccess('event-A', { requireWrite: true });
+      expect.fail('should have thrown');
+    } catch (err) {
+      expect(err).toBeInstanceOf(ForbiddenError);
+      expect((err as ForbiddenError).statusCode).toBe(403);
+    }
   });
 
   it('allows coordinator for write operations', async () => {
