@@ -2,7 +2,7 @@
 
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
-import { eventUserAssignments } from '@/lib/db/schema';
+import { eventUserAssignments, events } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { ROLES } from './roles';
 
@@ -18,6 +18,14 @@ export class ForbiddenError extends Error {
   constructor() {
     super('forbidden');
     this.name = 'ForbiddenError';
+  }
+}
+
+export class EventArchivedError extends Error {
+  readonly statusCode = 400;
+  constructor() {
+    super('Event is archived — mutations are blocked');
+    this.name = 'EventArchivedError';
   }
 }
 
@@ -126,6 +134,17 @@ export async function assertEventAccess(
 
   if (options?.requireWrite && (!result.role || !WRITE_ROLES.has(result.role as string))) {
     throw new ForbiddenError();
+  }
+
+  if (options?.requireWrite) {
+    const [event] = await db
+      .select({ status: events.status })
+      .from(events)
+      .where(eq(events.id, eventId))
+      .limit(1);
+    if (event?.status === 'archived') {
+      throw new EventArchivedError();
+    }
   }
 
   return { userId: result.userId, role: result.role };
