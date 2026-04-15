@@ -46,3 +46,5 @@ yarn-error.log*
 node_modules
 adapters
 scripts/.env.test.local.fixtures
+ralph/ralph-*.log
+ralph/progress.txt
