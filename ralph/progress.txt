@@ -17,6 +17,8 @@
 - Bulk generation uses per-cert atomicity: each recipient gets its own try/catch + db.transaction(); failures reported in errors array, not thrown; no intermediate/pending status rows
 - CME validation uses createCmeVariablesSchema(maxHours) factory — event duration fetched in route handler, schema created at request time with runtime max; non-CME types skip this validation
 
+- notification_log upsert: upsertLogEntry uses INSERT...ON CONFLICT(idempotency_key) DO UPDATE with sql`${notificationLog.attempts} + 1` for atomic increment. Never creates a second row for same key. Status/error/timestamps updated on conflict.
+
 - issueCertificate select sequence order: event status → person exists → event_people attachment → template active → (inside tx) existing certs + cert numbers. All tests using chainedSelectSequence must include the event_people row after person row.
 - assertEventAccess throws EventNotFoundError (→ 404) for unmembered cross-event access; route handlers use instanceof check. Test mocks must export EventNotFoundError via vi.hoisted() to avoid "Cannot access before initialization" errors.
 - assertEventAccess throws ForbiddenError (→ 403, statusCode=403) for role-denial within an assigned event (e.g. read_only + requireWrite). Route handlers catch non-EventNotFoundError as 403. Tests mocking assertEventAccess for write-denial should throw new Error('forbidden') or ForbiddenError.
@@ -29,6 +31,12 @@
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T14:25:00Z — cascade-029 — Notification log upsert (one row per idempotency key)
+- Implemented: Added upsertLogEntry() to src/lib/notifications/log-queries.ts. Uses INSERT...ON CONFLICT(idempotency_key) DO UPDATE to enforce single-row-per-key invariant. On conflict: atomically increments attempts via SQL `attempts + 1`, updates status/lastErrorCode/lastErrorMessage/lastAttemptAt/updatedAt, conditionally sets sentAt (on sent) or failedAt (on failed). First insert creates row with attempts=1.
+- Files changed: src/lib/notifications/log-queries.ts, src/lib/notifications/log-upsert.test.ts (new), ralph/prd.json, ralph/progress.txt
+- Tests added: 6 (first attempt inserts with attempts=1, retry updates same row, atomic SQL increment, status/error fields on conflict, sentAt on sent, failedAt on failed)
+- Learnings: Drizzle's onConflictDoUpdate({ target, set }) maps to SQL ON CONFLICT DO UPDATE. Use sql`${column} + 1` for atomic increment — the tagged template puts the column ref in values array, not strings array. Conditional timestamp spreading ({...(status === 'sent' ? { sentAt: now } : {})}) keeps the set clause clean.
 
 ## 2026-04-15T14:20:00Z — cascade-028 — Notification idempotency key builder and enforcement
 - Implemented: Added buildIdempotencyKey({ userId, eventId, type, triggerId, channel }) to src/lib/notifications/idempotency.ts. Returns 'notification:{userId}:{eventId}:{type}:{triggerId}:{channel}'. Channel suffix is always :email or :whatsapp (typed via Channel). send.ts already enforces idempotency via Redis SET NX EX before every provider call.

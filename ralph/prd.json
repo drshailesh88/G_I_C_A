@@ -1240,7 +1240,7 @@
     "data_model": "notification_log schema in src/lib/db/schema/communications.ts — idempotencyKey already unique.",
     "priority": 29,
     "core": true,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {

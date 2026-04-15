@@ -6,7 +6,7 @@
 
 import { db } from '@/lib/db';
 import { notificationLog } from '@/lib/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import type {
   CreateLogEntryInput,
   UpdateLogStatusInput,
@@ -44,6 +44,65 @@ export async function createLogEntry(
       initiatedByUserId: input.initiatedByUserId ?? null,
       isResend: input.isResend ?? false,
       resendOfId: input.resendOfId ?? null,
+    })
+    .returning();
+
+  return rows[0];
+}
+
+/**
+ * Upsert a notification_log row keyed by idempotency_key.
+ * First attempt INSERTs with attempts=1. Retries UPDATE in place:
+ * attempts incremented atomically, status/error/timestamps refreshed.
+ * Never creates a second row for the same idempotency key.
+ */
+export async function upsertLogEntry(
+  input: CreateLogEntryInput & {
+    lastErrorCode?: string | null;
+    lastErrorMessage?: string | null;
+  },
+): Promise<NotificationLogRow> {
+  const status = input.status ?? 'queued';
+  const now = new Date();
+
+  const rows = await db
+    .insert(notificationLog)
+    .values({
+      eventId: input.eventId,
+      personId: input.personId,
+      templateId: input.templateId,
+      templateKeySnapshot: input.templateKeySnapshot,
+      templateVersionNo: input.templateVersionNo,
+      channel: input.channel,
+      provider: input.provider,
+      triggerType: input.triggerType ?? null,
+      triggerEntityType: input.triggerEntityType ?? null,
+      triggerEntityId: input.triggerEntityId ?? null,
+      sendMode: input.sendMode,
+      idempotencyKey: input.idempotencyKey,
+      recipientEmail: input.recipientEmail ?? null,
+      recipientPhoneE164: input.recipientPhoneE164 ?? null,
+      renderedSubject: input.renderedSubject ?? null,
+      renderedBody: input.renderedBody,
+      renderedVariablesJson: input.renderedVariablesJson ?? null,
+      attachmentManifestJson: input.attachmentManifestJson ?? null,
+      status,
+      initiatedByUserId: input.initiatedByUserId ?? null,
+      isResend: input.isResend ?? false,
+      resendOfId: input.resendOfId ?? null,
+    })
+    .onConflictDoUpdate({
+      target: notificationLog.idempotencyKey,
+      set: {
+        attempts: sql`${notificationLog.attempts} + 1`,
+        status,
+        lastErrorCode: input.lastErrorCode ?? null,
+        lastErrorMessage: input.lastErrorMessage ?? null,
+        lastAttemptAt: now,
+        updatedAt: now,
+        ...(status === 'sent' ? { sentAt: now } : {}),
+        ...(status === 'failed' ? { failedAt: now } : {}),
+      },
     })
     .returning();
 
