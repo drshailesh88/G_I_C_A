@@ -20,10 +20,17 @@
 - issueCertificate select sequence order: event status → person exists → event_people attachment → template active → (inside tx) existing certs + cert numbers. All tests using chainedSelectSequence must include the event_people row after person row.
 - assertEventAccess throws EventNotFoundError (→ 404) for unmembered cross-event access; route handlers use instanceof check. Test mocks must export EventNotFoundError via vi.hoisted() to avoid "Cannot access before initialization" errors.
 - assertEventAccess throws ForbiddenError (→ 403, statusCode=403) for role-denial within an assigned event (e.g. read_only + requireWrite). Route handlers catch non-EventNotFoundError as 403. Tests mocking assertEventAccess for write-denial should throw new Error('forbidden') or ForbiddenError.
+- eventId mismatch guard: import assertEventIdMatch from src/lib/auth/event-id-mismatch.ts. Call after body parse with { urlEventId, bodyEventId: body.eventId, userId, endpoint }. Catches EventIdMismatchError → 400 { error: 'eventId mismatch' }. Sentry event emitted with tags { module: 'tenancy', kind: 'eventId-mismatch' } and extra { urlEventId, bodyEventId, endpoint }.
 
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T13:40:00Z — tenancy-020 — URL vs body eventId mismatch returns 400 with Sentry breadcrumb
+- Implemented: Created assertEventIdMatch shared helper in src/lib/auth/event-id-mismatch.ts. Compares URL path eventId against body eventId; if different, emits Sentry event with { userId, urlEventId, bodyEventId, endpoint } and throws EventIdMismatchError. Body without eventId key is silently accepted (no mismatch). Route handlers catch EventIdMismatchError → 400 { error: 'eventId mismatch' }.
+- Files changed: src/lib/auth/event-id-mismatch.ts (new), src/lib/auth/event-id-mismatch.test.ts (new), ralph/prd.json, ralph/progress.txt
+- Tests added: 6 (mismatch throws, correct error message, Sentry event shape, undefined body eventId accepted, matching eventIds accepted, no Sentry on match)
+- Learnings: The helper is synchronous (no DB calls) — pure comparison + Sentry side-effect. Route handlers should call it after body parsing and before any DB mutations. Contract CE3 expects the helper to be wired into session routes.
 
 ## 2026-04-15T13:35:00Z — tenancy-019 — assertEventAccess returns 403 for role-denial within assigned event
 - Implemented: Added ForbiddenError class (statusCode=403) to event-access.ts. assertEventAccess now throws ForbiddenError (message 'forbidden') instead of generic Error when user has event assignment but lacks write authority (e.g. read_only + requireWrite). Route handlers already catch non-EventNotFoundError → 403, so no route changes needed. Updated 3 test files (event, branding, notifications.adversarial) to use the new error message.
