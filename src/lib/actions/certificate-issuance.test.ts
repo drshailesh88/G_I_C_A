@@ -140,6 +140,29 @@ describe('issueCertificate', () => {
     expect(mockRevalidatePath).toHaveBeenCalledWith(`/events/${EVENT_ID}/certificates`);
   });
 
+  it('returns id, certificateNumber, and verificationToken on success', async () => {
+    const VERIFICATION_TOKEN_ID = '550e8400-e29b-41d4-a716-446655440099';
+    const certWithToken = {
+      ...mockIssuedCert,
+      verificationToken: VERIFICATION_TOKEN_ID,
+    };
+    chainedSelectSequence([
+      [{ id: PERSON_ID }],
+      [mockTemplate],
+      [],
+      [],
+    ]);
+    chainedInsert([certWithToken]);
+
+    const result = await issueCertificate(EVENT_ID, validIssueInput);
+    expect(typeof result.id).toBe('string');
+    expect(result.id).toBe(CERT_ID);
+    expect(typeof result.certificateNumber).toBe('string');
+    expect(result.certificateNumber).toBe('GEM2026-ATT-00001');
+    expect(typeof result.verificationToken).toBe('string');
+    expect(result.verificationToken).toBe(VERIFICATION_TOKEN_ID);
+  });
+
   it('throws when person not found', async () => {
     chainedSelectSequence([[]]);
     await expect(issueCertificate(EVENT_ID, validIssueInput)).rejects.toThrow('Person not found');
