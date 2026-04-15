@@ -6,7 +6,17 @@
  */
 
 import { Redis } from '@upstash/redis';
-import type { IdempotencyService } from './types';
+import type { IdempotencyService, Channel } from './types';
+
+export function buildIdempotencyKey(params: {
+  userId: string;
+  eventId: string;
+  type: string;
+  triggerId: string;
+  channel: Channel;
+}): string {
+  return `notification:${params.userId}:${params.eventId}:${params.type}:${params.triggerId}:${params.channel}`;
+}
 
 const SEVEN_DAYS_SECONDS = 7 * 24 * 60 * 60;
 const KEY_PREFIX = 'notif:idem:';

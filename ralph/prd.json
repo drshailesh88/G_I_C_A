@@ -1191,7 +1191,7 @@
     "data_model": "No schema; Upstash Redis keys.",
     "priority": 28,
     "core": true,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {

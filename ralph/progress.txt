@@ -30,6 +30,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T14:20:00Z — cascade-028 — Notification idempotency key builder and enforcement
+- Implemented: Added buildIdempotencyKey({ userId, eventId, type, triggerId, channel }) to src/lib/notifications/idempotency.ts. Returns 'notification:{userId}:{eventId}:{type}:{triggerId}:{channel}'. Channel suffix is always :email or :whatsapp (typed via Channel). send.ts already enforces idempotency via Redis SET NX EX before every provider call.
+- Files changed: src/lib/notifications/idempotency.ts, src/lib/notifications/idempotency.test.ts, ralph/prd.json, ralph/progress.txt
+- Tests added: 3 (buildIdempotencyKey composition, email/whatsapp keys differ, cross-event keys differ)
+- Learnings: send.ts already had full idempotency enforcement (checkAndSet before provider call, duplicate detection with IDEMPOTENCY_DUPLICATE marker). This story only needed the key builder function. Replay no-op is covered by existing send.test.ts duplicate test.
+
 ## 2026-04-15T14:15:00Z — tenancy-027 — /register/[eventId] public registration page
 - Implemented: Created public registration page at /register/[eventId] (no auth). Server component fetches event by ID with UUID validation, checks published status, reads registrationSettings.open for registration state. Client component renders "Register" heading, core person fields form, submits to existing registerForEvent action. Closed registration shows disabled fieldset with "Registration closed" message.
 - Files changed: src/app/(public)/register/[eventId]/page.tsx (new), src/app/(public)/register/[eventId]/register-page-client.tsx (new), src/app/(public)/register/[eventId]/register-page-client.test.tsx (new), src/lib/actions/registration.test.ts

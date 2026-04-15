@@ -8,7 +8,7 @@ vi.mock('@upstash/redis', () => ({
   })),
 }));
 
-import { redisIdempotencyService, createIdempotencyService } from './idempotency';
+import { redisIdempotencyService, createIdempotencyService, buildIdempotencyKey } from './idempotency';
 
 describe('redisIdempotencyService', () => {
   beforeEach(() => {
@@ -55,6 +55,35 @@ describe('redisIdempotencyService', () => {
       '1',
       { nx: true, ex: 3600 },
     );
+  });
+});
+
+describe('buildIdempotencyKey', () => {
+  it('composition: values are positional; output matches exact format', () => {
+    const key = buildIdempotencyKey({
+      userId: 'u',
+      eventId: 'e',
+      type: 't',
+      triggerId: 'tr',
+      channel: 'email',
+    });
+    expect(key).toBe('notification:u:e:t:tr:email');
+  });
+
+  it('email and whatsapp keys differ for same inputs', () => {
+    const base = { userId: 'u1', eventId: 'e1', type: 'registration.created', triggerId: 'reg-1' };
+    const emailKey = buildIdempotencyKey({ ...base, channel: 'email' });
+    const whatsappKey = buildIdempotencyKey({ ...base, channel: 'whatsapp' });
+    expect(emailKey).not.toBe(whatsappKey);
+    expect(emailKey).toContain(':email');
+    expect(whatsappKey).toContain(':whatsapp');
+  });
+
+  it('keys across different events differ for same (userId, type, triggerId)', () => {
+    const base = { userId: 'u1', type: 'travel.saved', triggerId: 'trv-1', channel: 'email' as const };
+    const key1 = buildIdempotencyKey({ ...base, eventId: 'event-A' });
+    const key2 = buildIdempotencyKey({ ...base, eventId: 'event-B' });
+    expect(key1).not.toBe(key2);
   });
 });
 
