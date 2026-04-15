@@ -38,9 +38,17 @@
 
 - Cascade payload validation: All Inngest cascade functions call validateCascadePayload(eventName, event.data) as first step. Uses cascadeEventDataSchema (Zod: eventId string, actor {type, id}, payload record). On parse failure: throws NonRetriableError (from 'inngest' package) so Inngest makes exactly one attempt + dead-letters; emits Sentry event with tags.kind='cascade-payload-invalid' and extra containing rawPayload + zodIssues. No DB writes or notifications on malformed payload.
 
+- Cascade eventId audit: Static source analysis test in eventid-audit.test.ts reads handler .ts files at test time, extracts .from(<table>) calls, and verifies: event-scoped tables use withEventScope in surrounding 8-line block; people (global) table does NOT use withEventScope; notification-only handlers have no direct DB queries. Diff-audit pattern CASCADE_HANDLER_MISSING_EVENT_SCOPE (severity: reject) flags new .from() calls on non-global tables in cascade handler diffs that lack nearby withEventScope.
+
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T15:22:00Z — cascade-036 — Cascade handler eventId audit
+- Implemented: Static source analysis test audits all cascade handler files for eventId scoping. Every .from() on event-scoped tables must have withEventScope in surrounding context; people table (global) must NOT. Added diff-audit computed pattern CASCADE_HANDLER_MISSING_EVENT_SCOPE to reject future cascade handler diffs with unscoped DB queries.
+- Files changed: src/lib/cascade/handlers/eventid-audit.test.ts (new), qa/diff-audit/regex-patterns.ts, ralph/prd.json, ralph/progress.txt
+- Tests added: 15 (discovery, per-handler eventId checks, people global checks, notification-only handler checks)
+- Learnings: Static analysis via readFileSync in tests is a robust way to audit structural patterns across handler files without complex runtime mocks. The 8-line proximity window for withEventScope detection covers all current query patterns.
 
 ## 2026-04-15T15:17:00Z — cascade-035 — Red-flag upsert via ON CONFLICT partial unique index
 - Implemented: Rewrote upsertRedFlag to use INSERT...ON CONFLICT DO UPDATE on partial unique index uq_red_flag_active (event_id, target_entity_type, target_entity_id, flag_type) WHERE flag_status != 'resolved'. Atomic write eliminates race between SELECT and INSERT/UPDATE. Created migration 0005. Pre-check SELECT retained for action tracking.

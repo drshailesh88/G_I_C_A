@@ -215,6 +215,16 @@ export const ANTI_CHEAT_PATTERNS: RegexPattern[] = [
     computed: detectConditionalTestLogicComputed,
     paths: [testFileSuffixRegex()],
   },
+
+  // ── Cascade eventId scoping (CE9, CE19, Invariant 13) ──
+  {
+    id: "CASCADE_HANDLER_MISSING_EVENT_SCOPE",
+    severity: "reject",
+    description:
+      "Cascade handler DB query on event-scoped table without withEventScope",
+    computed: detectCascadeHandlerMissingEventScopeComputed,
+    paths: ["src/lib/cascade/handlers/.*-cascade\\.ts$"],
+  },
 ];
 
 // ─── Top-level audit function ─────────────────────────────────────────────────
@@ -470,6 +480,41 @@ function detectThresholdLoweredComputed(ctx: AuditContext): PatternFinding[] {
           });
           break;
         }
+      }
+    }
+  }
+  return results;
+}
+
+const GLOBAL_TABLES = new Set(["people"]);
+const FROM_TABLE_RE = /\.from\((\w+)\)/;
+
+function detectCascadeHandlerMissingEventScopeComputed(
+  ctx: AuditContext,
+): PatternFinding[] {
+  const results: PatternFinding[] = [];
+  for (const file of ctx.parsed.files) {
+    if (!/src\/lib\/cascade\/handlers\/.*-cascade\.ts$/.test(file.path)) continue;
+    if (/\.test\./.test(file.path)) continue;
+
+    for (const { line, text } of file.addedLines) {
+      const m = FROM_TABLE_RE.exec(text);
+      if (!m) continue;
+      const tableName = m[1]!;
+      if (GLOBAL_TABLES.has(tableName)) continue;
+
+      const nearby = file.addedLines
+        .filter((l) => Math.abs(l.line - line) <= 8)
+        .map((l) => l.text)
+        .join("\n");
+      if (!nearby.includes("withEventScope")) {
+        results.push({
+          patternId: "CASCADE_HANDLER_MISSING_EVENT_SCOPE",
+          severity: "reject",
+          file: file.path,
+          line,
+          matchedContent: `.from(${tableName}) without withEventScope in surrounding lines`,
+        });
       }
     }
   }

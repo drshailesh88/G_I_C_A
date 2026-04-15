@@ -1552,7 +1552,7 @@
     "data_model": "No schema; discipline in handler queries.",
     "priority": 36,
     "core": false,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {
