@@ -1,0 +1,1857 @@
+[
+  {
+    "id": "cert-code-001",
+    "category": "crud",
+    "description": "Add missing error-throw branches to issueCertificate so forbidden issuance conditions reject instead of resolving.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "issueCertificate must reject with a typed error when any of the following preconditions fail: the target template does not exist or is not status='active'; the event is in status='archived'; the person has no event_people row for the eventId; an existing current-valid issued cert already exists for (person, event, type) when the caller is not using the regenerate path; the prior certificate_number sequence could not be determined. Return shapes and error codes must match the mutation-kill tests in certificate-issuance.mutation-kill.test.ts; the 6 'promise resolved instead of rejecting' cases all flip to reject after this lands. No test file may be modified. Additionally return the new cert id on success so the 'expected undefined to be new-cert-id' case passes.",
+    "data_model": "certificates + certificate_templates + event_people + events in src/lib/db/schema — no schema changes; see .planning/data-requirements.md §18 for the Rules list.",
+    "priority": 1,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "issueCertificate rejects missing template",
+          "description": "Given no active template for (event, type), issuance must throw with a 'template_not_active' code.",
+          "input": "{ eventId, personId, certificateType, templateId: <archived or missing> }",
+          "expected_output": "throws; no row inserted"
+        },
+        {
+          "name": "issueCertificate rejects archived event",
+          "description": "Given event.status='archived', issuance must throw with an 'event_archived' code.",
+          "input": "{ eventId: <archived>, ... }",
+          "expected_output": "throws; no row inserted"
+        },
+        {
+          "name": "issueCertificate rejects person not attached to event",
+          "description": "Given no event_people row for (event, person), issuance must throw.",
+          "input": "{ eventId, personId: <only-in-other-event>, ... }",
+          "expected_output": "throws; no row inserted"
+        },
+        {
+          "name": "issueCertificate returns new cert id on success",
+          "description": "On valid input, returns the id of the inserted certificates row.",
+          "input": "{ eventId, personId, certificateType, templateId, variables }",
+          "expected_output": "{ id: string } where id is the new row's primary key"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "mutation-kill suite passes",
+          "steps": [
+            "Run: npm run test:run -- src/lib/actions/certificate-issuance.mutation-kill.test.ts"
+          ],
+          "expected": "0 failures across all 9 cases in that file"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "regenerate path bypasses one-current-valid guard",
+          "steps": [
+            "Existing issued cert present",
+            "Call through regenerate path (internal flag)"
+          ],
+          "expected": "new cert inserted; old becomes superseded; no throw"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-code-002",
+    "category": "crud",
+    "description": "Add single-retry-on-transaction-failure to issueCertificate so the retry mutation-kill test passes.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "On transaction failure during certificate issuance, issueCertificate must retry exactly once with the same input. The second attempt opens a new db.transaction() and redoes the full insert + number-sequence lookup. If the retry also fails, the original error is re-thrown. The mutation-kill test (`expected +0 to be 2`) asserts txCallCount === 2. Implementation must not retry more than once and must not alter the persisted state on the first failure.",
+    "data_model": "certificates insert inside db.transaction(); no schema changes.",
+    "priority": 2,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "transaction retried once on first failure",
+          "description": "Simulate first tx throw, second tx success — tx callback count equals 2.",
+          "input": "first-call-throws mock db",
+          "expected_output": "returns cert id; txCallCount === 2"
+        },
+        {
+          "name": "no retry when first attempt succeeds",
+          "description": "Happy path — single tx call.",
+          "input": "normal mock db",
+          "expected_output": "txCallCount === 1"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "mutation-kill retry test passes",
+          "steps": [
+            "Run certificate-issuance.mutation-kill.test.ts"
+          ],
+          "expected": "retry case green"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "second failure re-throws original error",
+          "steps": [
+            "Mock tx throws twice",
+            "Call issueCertificate"
+          ],
+          "expected": "throws; txCallCount === 2; no rows inserted"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-code-003",
+    "category": "crud",
+    "description": "Enforce transaction write-order in activateCertificateTemplate: archive existing active of same type, then activate target.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "activateCertificateTemplate must run inside a single db.transaction(). Inside the tx, it first UPDATEs any existing certificate_templates row matching (event_id, certificate_type, status='active') to status='archived', archivedAt=now(), updatedBy=<actor>. Only after that completes does it UPDATE the target template to status='active', updatedBy=<actor>. The mutation-kill tests assert this exact ordering via setCalls[0].status='archived' and setCalls[1].status='active'. Also assert mockDb.transaction was called. Data-requirements §17: 'One active template per (event_id, certificate_type) — prevents generation mistakes.'",
+    "data_model": "certificate_templates — no schema changes. See data-requirements.md §17.",
+    "priority": 3,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "archives existing active then activates target",
+          "description": "Transaction executes archive UPDATE first, then activate UPDATE, with correct fields on each.",
+          "input": "existing active template + target template ids",
+          "expected_output": "setCalls[0].status==='archived'; setCalls[1].status==='active'"
+        },
+        {
+          "name": "no existing active — just activates target",
+          "description": "When no sibling active template exists, only one UPDATE is issued to activate the target.",
+          "input": "no sibling active",
+          "expected_output": "setCalls.length===1; setCalls[0].status==='active'"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "mutation-kill activation suite passes",
+          "steps": [
+            "Run certificate.mutation-kill.test.ts"
+          ],
+          "expected": "all activation cases green"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "db.transaction is actually called",
+          "steps": [
+            "Spy mockDb.transaction",
+            "Call activateCertificateTemplate"
+          ],
+          "expected": "mockDb.transaction called at least once"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-code-004",
+    "category": "crud",
+    "description": "Return the inserted certificate id from issueCertificate so downstream consumers have the row reference.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "issueCertificate currently does not return the newly inserted row's id in all code paths, causing the mutation-kill 'expected undefined to be new-cert-id' failure. Update the function signature to return { id: string, certificateNumber: string, verificationToken: string } on success. All call sites in src/lib/actions/certificate*.ts and any route handlers must be updated to consume the return value.",
+    "data_model": "certificates — no schema changes; uses .returning({ id: certificates.id, certificateNumber, verificationToken }).",
+    "priority": 4,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "returns id, number, token on success",
+          "description": "Happy-path call returns the three fields; all are non-empty strings.",
+          "input": "valid issue input",
+          "expected_output": "{ id: uuid-string, certificateNumber: 'GEM2026-ATT-xxxxx', verificationToken: uuid-string }"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "new-cert-id test passes",
+          "steps": [
+            "Run certificate-issuance.mutation-kill.test.ts → 'returns new cert id'"
+          ],
+          "expected": "green"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "existing callers still compile and work",
+          "steps": [
+            "Run npx tsc --noEmit"
+          ],
+          "expected": "zero type errors"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-code-005",
+    "category": "data",
+    "description": "Confirm full Stryker baseline runs after cert code gaps close; produce per-module scores for 107 files.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "After stories 1–4 land, run DATABASE_URL=$DATABASE_URL_TEST npx tsx qa/controller.ts baseline. Stryker's dry-run must now succeed (vitest passes with 0 failures) and the full mutation run must complete, populating .quality/state.json with per-module mutation scores for all files matched by stryker.config.json's expanded mutate globs. Commit the resulting baseline snapshot to qa/baselines/. This story has no code to write; it is a verification gate before Block 2 begins.",
+    "data_model": ".quality/state.json — controller writes this automatically.",
+    "priority": 5,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "controller baseline command exits 0",
+          "description": "Verification step — no new unit tests.",
+          "input": "qa/controller.ts baseline",
+          "expected_output": "exitCode 0"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "full baseline populates state.json",
+          "steps": [
+            "Run the baseline command",
+            "Read .quality/state.json"
+          ],
+          "expected": "state.modules contains > 100 entries with mutation_baseline numbers"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "travel-flow baselines preserved",
+          "steps": [
+            "Check state.json for src/lib/actions/travel.ts, cascade/handlers/travel-cascade.ts, validations/travel.ts"
+          ],
+          "expected": "all three present with scores >= previous (99.48, 97.03, 77.55)"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-api-006",
+    "category": "crud",
+    "description": "POST /api/events/[eventId]/certificates — single-issue endpoint matching the frozen certificates contract.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Create the route handler at src/app/api/events/[eventId]/certificates/route.ts with a POST handler. It must: derive eventId from URL path only; reject body.eventId mismatches with 400 + Sentry; call assertEventAccess(eventId, { requireWrite: true }); validate body with Zod; invoke issueCertificate (see cert-code-001..004); return 201 { id, certificate_number, verification_token, status: 'issued' }. Status codes per api-contract.json: 400 for CME field missing/invalid, 400 for person-not-attached, 400 for archived event, 403 for ops/read_only, 404 for cross-event.",
+    "data_model": "certificates row inserted. See e2e/contracts/certificates/api-contract.json endpoint 'issue-single'.",
+    "priority": 6,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "Zod schema rejects missing required fields",
+          "description": "Validator rejects when person_id, certificate_type, or template_id are missing.",
+          "input": "{}",
+          "expected_output": "ZodError"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "certificates Example 1 passes",
+          "steps": [
+            "Sign in as coord_A",
+            "POST /api/events/A/certificates with valid body",
+            "Assert 201 + certificate_number format + verification_token UUID"
+          ],
+          "expected": "contract test Example 1 green"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "cross-event attempt returns 404",
+          "steps": [
+            "coord_A POSTs to /api/events/B/certificates"
+          ],
+          "expected": "404 with no body leak"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-api-007",
+    "category": "crud",
+    "description": "Capture template_snapshot_json and rendered_variables_json immutably at issuance time.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "On every issuance, serialize the template's current templateJson and the resolved variable values (with master-person fields substituted) into the new row's template_snapshot_json and rendered_variables_json columns. These columns must never be updated by any subsequent operation — not template edits, not person-master edits, not regeneration of siblings. Enforce immutability at the repository layer (no UPDATE set of these columns anywhere). The contract (CE11 + CE12) hashes the snapshots before and after a template edit and asserts they match.",
+    "data_model": "issuedCertificates.templateSnapshotJson, renderedVariablesJson — data-requirements.md §18 Rules line 'Regeneration creates a new row, supersedes the old one. Never overwrites.'",
+    "priority": 7,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "snapshot captured at issue time",
+          "description": "After issue, the row's snapshot equals the template at the moment of issue.",
+          "input": "issue then read row",
+          "expected_output": "templateSnapshotJson deep-equals template at issue"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE11+CE12 pass — snapshots immutable across edits",
+          "steps": [
+            "Issue cert v1",
+            "Edit template + update person master",
+            "Re-read cert v1"
+          ],
+          "expected": "templateSnapshotJson and renderedVariablesJson unchanged from v1"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "no code path UPDATEs snapshot columns",
+          "steps": [
+            "grep for .set({ templateSnapshotJson or renderedVariablesJson across src/"
+          ],
+          "expected": "zero matches outside the initial insert"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-api-008",
+    "category": "crud",
+    "description": "POST /api/events/[eventId]/certificates/[certId]/regenerate — supersession chain.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Create a new issued row with supersedes_id pointing at the existing cert, a fresh certificate_number (next in sequence), a fresh verification_token, and a fresh template_snapshot_json / rendered_variables_json captured from the current template + person. In the same transaction, UPDATE the prior row to status='superseded', superseded_by_id=<new id>, updatedAt=now(). Prior row must NOT be marked revoked. Return 201 { id, certificate_number, supersedes_id }. See certificates contract Example 2 + Example 8.",
+    "data_model": "issuedCertificates — uses supersedesId, supersededById columns. Data-requirements §18.",
+    "priority": 8,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "regenerate supersedes prior row",
+          "description": "After regenerate, prior.status='superseded', prior.superseded_by_id=new.id; new.supersedes_id=prior.id.",
+          "input": "valid prior issued cert",
+          "expected_output": "both rows in expected state"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "Example 2 passes",
+          "steps": [
+            "Issue cert v1",
+            "POST regenerate endpoint",
+            "Probe /api/test/cert for both rows"
+          ],
+          "expected": "v1 superseded; v2 issued; v1.revoked_at is null"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "only one current issued per (person, event, type) after regenerate",
+          "steps": [
+            "Probe /api/test/cert-count?status=issued for the tuple"
+          ],
+          "expected": "count===1"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-api-009",
+    "category": "crud",
+    "description": "POST /api/events/[eventId]/certificates/[certId]/revoke — revocation with mandatory reason.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Endpoint must require a non-empty, non-whitespace reason string in the body (Zod refine). On success: UPDATE target cert SET status='revoked', revoked_at=now(), revoked_by=<actor>, revoke_reason=<reason>. Prior row's superseded_by_id remains null (revoke is distinct from supersede). Return 200 { id, status: 'revoked', revoked_at }. Missing/empty/whitespace reason returns 400 with { error: 'reason_required' }. CE15 covers these three body cases.",
+    "data_model": "issuedCertificates.status, revokedAt, revokedBy, revokeReason.",
+    "priority": 9,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "revoke with reason sets row fields",
+          "description": "Valid reason succeeds and populates the 4 fields.",
+          "input": "{ reason: 'duplicate attendance' }",
+          "expected_output": "row updated; 200"
+        },
+        {
+          "name": "empty/whitespace reason rejected",
+          "description": "Three cases: {}, { reason: '' }, { reason: '   ' } all return 400.",
+          "input": "each of the three bodies",
+          "expected_output": "400 reason_required; row unchanged"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "Example 3 + CE15 pass",
+          "steps": [
+            "Issue cert; revoke with reason; call /verify"
+          ],
+          "expected": "verify shows status=revoked + revoke_reason + revoked_at"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "revoke an already-revoked cert",
+          "steps": [
+            "POST revoke twice"
+          ],
+          "expected": "second call 400 or 409; original revoked_at unchanged"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-api-010",
+    "category": "crud",
+    "description": "POST /api/events/[eventId]/certificates/bulk — Upstash-locked bulk generation with 409 on contention.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Body: { certificate_type, scope: 'all' | { ids: string[] } }. Before starting, acquire Redis lock 'lock:certificates:generate:{eventId}:{type}' with 5-minute TTL using SET NX. If NX fails, return 409 { error: 'generation in progress', lock_holder, started_at, expires_at } (read holder metadata from the lock value). On success, kick off the bulk run (sync or enqueued to Inngest — spec does not require sync). Release the lock on completion (both success and failure paths) via DEL, not TTL expiry. Per-cert atomicity: cert N failure leaves 1..N-1 issued and retryable; no rows remain in a non-terminal intermediate status. Return 202 { batch_id, total, lock_expires_at }.",
+    "data_model": "issuedCertificates bulk-inserted; Upstash lock key. See BACKEND_ARCHITECTURE_MAP.md Redis section.",
+    "priority": 10,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "lock acquired with NX + TTL",
+          "description": "Mock Redis — assert SET with NX+EX arguments.",
+          "input": "fresh event+type",
+          "expected_output": "SET lock_key {holder,started_at} EX 300 NX"
+        },
+        {
+          "name": "409 when lock held",
+          "description": "Mock Redis returns false on NX; handler returns 409.",
+          "input": "existing lock",
+          "expected_output": "409 with lock_holder in body"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "Example 5 passes",
+          "steps": [
+            "Hold lock via /api/test/cert-lock/hold",
+            "POST bulk",
+            "Expect 409"
+          ],
+          "expected": "contract test green"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "lock released on handler exception",
+          "steps": [
+            "Force an error mid-bulk",
+            "Retry bulk"
+          ],
+          "expected": "retry succeeds (not blocked by stale lock)"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-api-011",
+    "category": "crud",
+    "description": "Bulk generation is per-cert atomic; failure mid-batch leaves prior successes issued with no non-terminal rows.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Inside the bulk loop, each certificate is issued in its own transaction. On exception for cert N, log the failure, skip to the next cert, and continue. Do not abort the batch on a single failure. No row is ever left in a pending/intermediate status — rows are either status='issued' (success) or not present (not attempted or rolled back by its own tx). Failures are reported in a summary that can be retrieved via batch_id. Contract CE9 + CE20 enforce: 46 successes + 54 retryable absent rows when failure injected at cert 47/100.",
+    "data_model": "issuedCertificates; no intermediate pending status.",
+    "priority": 11,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "per-cert tx isolation",
+          "description": "Inject failure on cert 5 of 10; verify certs 1-4 committed, 5 absent, 6-10 committed.",
+          "input": "batch of 10 with 5 forced to throw",
+          "expected_output": "9 rows inserted; no row with non-terminal status"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE9 passes",
+          "steps": [
+            "Seed 100 eligible persons",
+            "Inject failure at 47",
+            "Run bulk"
+          ],
+          "expected": "46 issued; 54 absent; 0 intermediate"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "resume skips already-issued",
+          "steps": [
+            "Retry bulk on same (event, type)"
+          ],
+          "expected": "only previously-absent persons get new certs; duplicates not created"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-api-012",
+    "category": "crud",
+    "description": "CME certificate issuance — require all four CME fields with credit-hours bound by event duration.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "When certificate_type='cme_attendance', Zod schema for variables must require: cme_credit_hours (number, > 0, <= event duration hours); accrediting_body_name (non-empty string); accreditation_code (non-empty string); cme_claim_text (non-empty string). Event duration hours is derived from (event.endDate - event.startDate) in hours. Any missing or invalid field returns 400 with ZodError fields. Data-requirements §18 'CME certificate type' bullet is the spec anchor.",
+    "data_model": "issuedCertificates.renderedVariablesJson — the 4 CME fields persisted verbatim.",
+    "priority": 12,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "Zod schema accepts all four fields present and valid",
+          "description": "Happy path.",
+          "input": "complete CME variables",
+          "expected_output": "parse succeeds"
+        },
+        {
+          "name": "schema rejects credit_hours > event duration",
+          "description": "If event is 12h and claim is 13h, reject.",
+          "input": "{ cme_credit_hours: 13 } with 12h event",
+          "expected_output": "ZodError on cme_credit_hours"
+        },
+        {
+          "name": "schema rejects each missing field",
+          "description": "Omit each of the 4 fields in turn.",
+          "input": "4 variants",
+          "expected_output": "ZodError on the missing field"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "Example 6 + CE10 pass",
+          "steps": [
+            "POST cme cert with each invalid variant",
+            "Assert 400 per variant"
+          ],
+          "expected": "contract tests green"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "credit_hours = 0 or negative",
+          "steps": [
+            "POST with 0",
+            "POST with -1"
+          ],
+          "expected": "both 400"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-api-013",
+    "category": "crud",
+    "description": "GET /verify/[token] — public verify endpoint with strict response shape.",
+    "page": "/verify/[token]",
+    "ui_details": "Public route; may be a minimal page that also exposes JSON via Accept: application/json, OR a dedicated /api/verify/[token] endpoint called by a thin page. Either works; contract asserts JSON shape via Playwright page.request.get().",
+    "behavior": "No auth. Response body MUST be exactly: { status, certificate_number, certificate_type, person_name, event_name, issued_at } with optional { revoked_at, revoke_reason } when status='revoked' and { superseded_by_certificate_number } when status='superseded'. Forbidden fields: pdf_url, storage_key, download_url, email, phone, person_id, registration_id, postal_address. Increment verification_count and set last_verified_at atomically. Unknown token → 404. Revoked cert → status='revoked' transparently (CE5). Superseded cert → status='superseded' with superseded_by_certificate_number (CE6 + Example 2).",
+    "data_model": "issuedCertificates.verificationToken, verificationCount, lastVerifiedAt.",
+    "priority": 13,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "response shape whitelist enforced",
+          "description": "Helper that serializes the verify response must only emit whitelisted keys.",
+          "input": "full cert row",
+          "expected_output": "object with only allowed keys"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "Example 7 passes",
+          "steps": [
+            "Issue cert",
+            "GET /verify/<token>",
+            "Assert body keys subset of allowed set"
+          ],
+          "expected": "contract test green"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "revoked cert verify shows status + reason + no download",
+          "steps": [
+            "Revoke cert",
+            "GET /verify/<token>"
+          ],
+          "expected": "status='revoked'; revoke_reason present; no pdf_url string"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-api-014",
+    "category": "crud",
+    "description": "GET /api/events/[eventId]/certificates/[certId]/download — signed URL, revoked-cert super-admin-only.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Return { url: <signed R2 URL with short TTL, e.g. 5 minutes> } for issued/superseded certs to any authorized role. For revoked certs, only super_admin gets a working URL; coordinator/ops/read_only get 404 (not 403, per CE17 and to avoid disclosing the cert exists). Cross-event access returns 404. Signed URL generation uses the existing R2 client helper; no permanent public URLs are stored on the cert row.",
+    "data_model": "issuedCertificates.storageKey (private R2 path).",
+    "priority": 14,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "non-super-admin gets 404 for revoked",
+          "description": "Coord requests download for a revoked cert in their own event.",
+          "input": "revoked cert id + coord session",
+          "expected_output": "404"
+        },
+        {
+          "name": "super-admin gets signed URL for revoked",
+          "description": "Super admin can still download for audit.",
+          "input": "revoked cert id + super session",
+          "expected_output": "200 with https URL"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE17 passes",
+          "steps": [
+            "Issue, revoke, super download (success), coord download (404)"
+          ],
+          "expected": "contract test green"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "issued cert downloadable by coord",
+          "steps": [
+            "Coord requests download for an issued cert they own"
+          ],
+          "expected": "200 signed URL"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-api-015",
+    "category": "crud",
+    "description": "Ops + Read-only roles cannot mutate certificates; all mutation endpoints return 403 forbidden.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Every certificate mutation endpoint (issue, regenerate, revoke, bulk) must check the actor's Clerk role and reject with HTTP 403 { error: 'forbidden' } when role is 'org:ops' or 'org:read_only'. This is role-based denial within an assigned event; the user IS a member, just not authorized to write certs. Data-requirements §18 explicitly: 'Ops and Read-only: no certificate management.' Contract CE14.",
+    "data_model": "No schema; middleware-style check in each mutation route.",
+    "priority": 15,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "role-check rejects ops",
+          "description": "Given Clerk role=org:ops, the assertion helper returns forbidden.",
+          "input": "ops session",
+          "expected_output": "throws 403 or helper returns false"
+        },
+        {
+          "name": "role-check rejects read_only",
+          "description": "Given Clerk role=org:read_only, same result.",
+          "input": "read_only session",
+          "expected_output": "throws 403"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE14 passes for read_only",
+          "steps": [
+            "Sign in as read_only user; POST each cert mutation endpoint"
+          ],
+          "expected": "all return 403"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "coord still succeeds on their event",
+          "steps": [
+            "Coord POSTs issue on their event"
+          ],
+          "expected": "201"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-api-016",
+    "category": "crud",
+    "description": "Block certificate issuance on archived events.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "When the target event has status='archived', POST /api/events/[eventId]/certificates and its bulk variant return HTTP 400 (or 404 — either acceptable per CE19) with zero rows inserted. Existing issued certs on archived events remain verifiable (GET /verify/[token] continues to serve). Data-requirements §89: 'archived — fully read-only, preserved for reports and certificate verification.'",
+    "data_model": "Reads events.status inside the access layer; no new schema.",
+    "priority": 16,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "issuance short-circuits on archived event",
+          "description": "Given event.status='archived', issue throws before any DB insert.",
+          "input": "archived event id",
+          "expected_output": "throws; no insert"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE19 passes",
+          "steps": [
+            "Super admin POSTs issue on EVENT_ARCHIVED_ID"
+          ],
+          "expected": "400 or 404; no new cert"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "archived event verify still works",
+          "steps": [
+            "GET /verify/<existing-token-on-archived-event>"
+          ],
+          "expected": "200 with status='issued'"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cert-api-017",
+    "category": "crud",
+    "description": "Issuance rejects persons not attached to the target event.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Before inserting a cert row, confirm an event_people row exists for (eventId, personId). If not, return HTTP 400 { error: 'person not attached to event' } with zero rows inserted. Data-requirements §18: 'Only issuable to people already attached to the event.' Contract CE16.",
+    "data_model": "event_people — existence check before issuance.",
+    "priority": 17,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "rejects cross-event person",
+          "description": "Person exists in event B only; coord_A tries to issue on event A.",
+          "input": "personId from event B, eventId=A",
+          "expected_output": "400 person not attached"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE16 passes",
+          "steps": [
+            "Coord_A issues for E2E_PERSON_ONLY_B_ID in event A"
+          ],
+          "expected": "400; no cert row for that person in A"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "attached person succeeds",
+          "steps": [
+            "Coord_A issues for E2E_PERSON_ATTENDED_A_ID"
+          ],
+          "expected": "201"
+        }
+      ]
+    }
+  },
+  {
+    "id": "tenancy-018",
+    "category": "crud",
+    "description": "assertEventAccess returns 404 for cross-event access instead of throwing a generic Forbidden.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Refactor src/lib/auth/event-access.ts so that assertEventAccess, when called from an API route handler and the user has no Clerk super_admin role AND no active event_user_assignments row for the event, signals a 404 result to the caller (via throw-NotFound helper or structured return). Route handlers catch this and respond with HTTP 404 and a generic body containing no eventId or event-identifying strings. Server actions called from UI can keep throwing but the thrown error must carry a code the UI layer maps to a 404 page. Contract invariants 5 and 6 enforce the 404-vs-403 split: 404 for unmembered, 403 only for role-denial within an assigned event.",
+    "data_model": "No schema; refactors src/lib/auth/event-access.ts.",
+    "priority": 18,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "coord_A → event B returns 404 signal",
+          "description": "No super role, no assignment for B.",
+          "input": "coord_A session, eventId=B",
+          "expected_output": "NotFoundError or structured { ok: false, status: 404 }"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE1 + CE2 pass",
+          "steps": [
+            "coord_A GETs /events/B/people, POSTs /api/events/B/sessions"
+          ],
+          "expected": "both 404 with generic body"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "super admin crosses freely",
+          "steps": [
+            "super GETs /events/B/people"
+          ],
+          "expected": "200"
+        }
+      ]
+    }
+  },
+  {
+    "id": "tenancy-019",
+    "category": "crud",
+    "description": "assertEventAccess returns 403 for role-denial within an assigned event.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "When the user IS a member of the event (Clerk super_admin OR active event_user_assignments row) but their Clerk role is org:read_only and the caller requested requireWrite, assertEventAccess signals 403 with body { error: 'forbidden' }. Ops and read-only should not pass a write-required check on mutation endpoints; see CE14 (Ops denied certificate management). This is distinct from 404: 403 reveals that the user has read-level access but lacks write authority.",
+    "data_model": "No schema change; refactors src/lib/auth/event-access.ts.",
+    "priority": 19,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "read_only + requireWrite → 403",
+          "description": "Role-based write deny inside an assigned event.",
+          "input": "read_only_A session, eventId=A, requireWrite=true",
+          "expected_output": "ForbiddenError carrying 403"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "Invariant I5 spot check passes",
+          "steps": [
+            "read_only_A POSTs /api/events/A/sessions"
+          ],
+          "expected": "403 { error: 'forbidden' }"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "coordinator write still 2xx",
+          "steps": [
+            "coord_A POSTs /api/events/A/sessions"
+          ],
+          "expected": "200/201"
+        }
+      ]
+    }
+  },
+  {
+    "id": "tenancy-020",
+    "category": "crud",
+    "description": "URL vs body eventId mismatch returns 400 with Sentry breadcrumb.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "For every API route that accepts a JSON body containing an eventId field, compare to the URL path eventId. If different, return HTTP 400 { error: 'eventId mismatch' } and emit a Sentry event with { userId, urlEventId, bodyEventId, endpoint }. No row is inserted. Implement this as a shared helper invoked at the start of each route so the behavior is uniform. Contract CE3.",
+    "data_model": "No schema.",
+    "priority": 20,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "helper detects mismatch",
+          "description": "URL A, body B → throws/returns mismatch.",
+          "input": "{ urlEventId: 'A', bodyEventId: 'B' }",
+          "expected_output": "mismatch signal"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE3 passes",
+          "steps": [
+            "coord_AB POST /api/events/A/sessions with body.eventId=B",
+            "Assert 400 + Sentry event captured via /api/test/sentry-events"
+          ],
+          "expected": "contract test green"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "body without eventId is accepted",
+          "steps": [
+            "POST /api/events/A/sessions with body that has no eventId key"
+          ],
+          "expected": "200/201 (no mismatch because body omits it)"
+        }
+      ]
+    }
+  },
+  {
+    "id": "tenancy-021",
+    "category": "crud",
+    "description": "Cross-event 404 responses leak zero event-identifying information.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "The 404 body returned from the tenancy layer must not contain the requested eventId, the event name, or the words 'access', 'permission', 'forbidden'. Standardize the body to { error: 'Not Found' } or similar generic text. This is CE4. Add a response sanitizer helper so every cross-event 404 uses it.",
+    "data_model": "No schema.",
+    "priority": 21,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "sanitizer strips identifying substrings",
+          "description": "Pass a body containing an eventId and assert output has none of the forbidden tokens.",
+          "input": "{ error: 'Event abc-123 not accessible' }",
+          "expected_output": "{ error: 'Not Found' }"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE4 passes",
+          "steps": [
+            "coord_A GETs /events/B/people",
+            "Assert body does not contain B or forbidden words"
+          ],
+          "expected": "contract test green"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "non-tenancy 404s untouched",
+          "steps": [
+            "GET a malformed path"
+          ],
+          "expected": "Next.js default 404 unchanged"
+        }
+      ]
+    }
+  },
+  {
+    "id": "tenancy-022",
+    "category": "ui",
+    "description": "/events/[eventId]/people — list page renders event-scoped delegates/people.",
+    "page": "/events/[eventId]/people",
+    "ui_details": "Existing wireframe; reuse shell. Heading 'People' with role check 'heading'. List of delegate cards.",
+    "behavior": "Server component that calls assertEventAccess(eventId), then getPeople(eventId) scoped to event_people JOIN people. Renders a list of delegates for the event. Contract Example 1 asserts the heading is visible and /api/test/state?entity=delegates&eventId=A returns rows all scoped to A. Existing module boundary in src/app/(dashboard)/people/ — keep inside that module.",
+    "data_model": "event_people JOIN people — filter by event_id.",
+    "priority": 22,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "getPeople filters by eventId",
+          "description": "Server query includes WHERE event_people.event_id = :id.",
+          "input": "eventId",
+          "expected_output": "rows only where event_id matches"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "Example 1 passes",
+          "steps": [
+            "Sign in coord_A",
+            "GET /events/A/people",
+            "Probe /api/test/state"
+          ],
+          "expected": "heading visible; all rows scoped to A"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "cross-event attempt 404",
+          "steps": [
+            "coord_A GETs /events/B/people"
+          ],
+          "expected": "404"
+        }
+      ]
+    }
+  },
+  {
+    "id": "tenancy-023",
+    "category": "ui",
+    "description": "Super Admin can view any event without event_user_assignments row.",
+    "page": "/events/[eventId]/people",
+    "ui_details": "Same as 022.",
+    "behavior": "Already covered by the auth-layer changes (super-admin bypass is in src/lib/auth/event-access.ts). This story exists so the Playwright Example 2 test case can be verified end-to-end: super signs in, visits /events/B/people (where they have no assignments row), receives 200 + data. Ensure no other code path re-checks event_user_assignments after assertEventAccess returns authorized=true.",
+    "data_model": "Same as 022.",
+    "priority": 23,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "super bypasses assignment check",
+          "description": "resolveClerkRole returns isSuperAdmin=true → assertEventAccess returns authorized without hitting event_user_assignments.",
+          "input": "super session, eventId=B",
+          "expected_output": "authorized=true"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "Example 2 passes",
+          "steps": [
+            "Sign in super",
+            "GET /events/B/people"
+          ],
+          "expected": "200; delegates all scoped to B"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "super accessing non-existent event gets 404",
+          "steps": [
+            "super GETs /events/<random-uuid>/people"
+          ],
+          "expected": "404"
+        }
+      ]
+    }
+  },
+  {
+    "id": "tenancy-024",
+    "category": "ui",
+    "description": "Read-only users see write buttons disabled rather than hidden on their assigned events.",
+    "page": "/events/[eventId]/accommodation",
+    "ui_details": "Reuse accommodation list page; any 'Add', 'Edit', 'Delete' buttons rendered for coordinator role should be rendered for read_only role too, but with aria-disabled='true' and a disabled attribute. Visual: greyed-out button, no hover state, still announced by screen readers as disabled button.",
+    "behavior": "Use Clerk has({ role }) to detect read_only and pass a disabled prop into button components rather than null/undefined. Mutation API endpoints still return 403 independently (defense-in-depth). Contract Example 4 asserts the button is visible and disabled.",
+    "data_model": "No schema.",
+    "priority": 24,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "button component passes disabled prop for read_only",
+          "description": "Snapshot/RTL-style test — render with role=read_only, assert disabled attribute.",
+          "input": "role=org:read_only",
+          "expected_output": "button[disabled] aria-disabled='true'"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "Example 4 passes",
+          "steps": [
+            "Sign in read_only_A",
+            "GET /events/A/accommodation",
+            "getByRole('button',{name:/add/i}).toBeDisabled()"
+          ],
+          "expected": "contract test green"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "read_only mutation POST still 403",
+          "steps": [
+            "read_only_A POSTs the mutation endpoint via page.request"
+          ],
+          "expected": "403"
+        }
+      ]
+    }
+  },
+  {
+    "id": "tenancy-025",
+    "category": "crud",
+    "description": "POST /api/events/[eventId]/sessions — session-create endpoint that derives eventId from URL only.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Create the route at src/app/api/events/[eventId]/sessions/route.ts. POST creates a session row with event_id = <urlEventId>. Body fields: title (required), startsAt (ISO timestamp), endsAt (ISO timestamp), optional hallId, optional sessionType. Body.eventId if present triggers tenancy-020 (mismatch → 400). Validate with Zod. Insert uses createdBy/updatedBy from the session user. This endpoint is the probe used by eventid-scoping Example 7 and CE2 + CE3.",
+    "data_model": "sessions schema in src/lib/db/schema/program.ts.",
+    "priority": 25,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "Zod schema enforces required fields",
+          "description": "Missing title rejected.",
+          "input": "{}",
+          "expected_output": "ZodError"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "Example 7 passes",
+          "steps": [
+            "coord_AB POST /api/events/A/sessions with body.eventId=B"
+          ],
+          "expected": "400 eventId mismatch; no row inserted in A or B"
+        },
+        {
+          "name": "CE2 passes",
+          "steps": [
+            "coord_A POST /api/events/B/sessions"
+          ],
+          "expected": "404; no row inserted in B"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "valid create returns 201 with sessionId",
+          "steps": [
+            "coord_A POST /api/events/A/sessions with valid body"
+          ],
+          "expected": "201 { id }"
+        }
+      ]
+    }
+  },
+  {
+    "id": "tenancy-026",
+    "category": "crud",
+    "description": "GET /api/events/[eventId]/people/[personId] returns master person + only event-A-scoped attributes.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Return { person: {id, full_name, email, phone_e164, designation, ...master fields}, travel: <travel_records row for this event + person or null>, sessions: <session_assignments rows for this event + person>, registration: <event_registrations row or null> }. Every non-master field filtered by event_id = URL eventId. Contract CE14 enforces: person attached to both A and B returns only A-scoped attributes when called on /events/A/.",
+    "data_model": "people, travel_records, session_assignments, event_registrations — all scoped by eventId.",
+    "priority": 26,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "travel filtered by eventId",
+          "description": "Person has travel in A and B; request on A returns only A's row.",
+          "input": "person shared across A+B",
+          "expected_output": "travel.eventId === A"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE14 passes",
+          "steps": [
+            "coord_A GET /api/events/A/people/E2E_SHARED_PERSON_ID"
+          ],
+          "expected": "sessions + travel all eventId=A"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "person not in event returns 404",
+          "steps": [
+            "GET with person that has no event_people row for this event"
+          ],
+          "expected": "404"
+        }
+      ]
+    }
+  },
+  {
+    "id": "tenancy-027",
+    "category": "ui",
+    "description": "/register/[eventId] — public registration page that accepts URL eventId pre-auth.",
+    "page": "/register/[eventId]",
+    "ui_details": "Public page, no auth chrome. Heading 'Register'. Form fields per registration_settings on the event + core person fields (full_name, email, phone_e164, city, organization). Submit button posts to a server action. See FRONTEND_ARCHITECTURE.md §4 'URL state' and data-requirements §9 registration fields.",
+    "behavior": "Server component reads eventId from params, fetches event metadata (name, dates, venue, registration open status), and renders the form. No auth required. Submission creates a person (if not deduped) and an event_registrations row with event_id = URL. Contract Example 5 renders the form and asserts the heading is visible.",
+    "data_model": "events (read), people (insert or dedupe), event_registrations (insert).",
+    "priority": 27,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "dedupe matches existing person by email",
+          "description": "If email already in people, reuse id; do not create duplicate.",
+          "input": "existing email",
+          "expected_output": "existing person.id returned"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "Example 5 passes",
+          "steps": [
+            "GET /register/A anonymously",
+            "Assert heading 'register' visible"
+          ],
+          "expected": "200"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "registration closed event",
+          "steps": [
+            "Event with registration_settings.open=false",
+            "GET /register/X"
+          ],
+          "expected": "page renders but form disabled with 'Registration closed' message"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cascade-028",
+    "category": "data",
+    "description": "Notification idempotency key builder and enforcement.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Deep module src/lib/notifications/idempotency.ts exports buildIdempotencyKey({ userId, eventId, type, triggerId, channel }) returning 'notification:{userId}:{eventId}:{type}:{triggerId}:{channel}'. Before every send, lib/notifications/send.ts sets this key via Redis SET NX EX <ttl>; if NX fails, the send is skipped (already sent). The channel suffix is always :email or :whatsapp — never omitted, never shared across channels. Keys across different events differ even for the same (userId, type, triggerId). Contract Invariant 1, 2, 10 and CE1, CE12.",
+    "data_model": "No schema; Upstash Redis keys.",
+    "priority": 28,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "buildIdempotencyKey composition",
+          "description": "Values are positional; output matches exact format.",
+          "input": "{ userId: 'u', eventId: 'e', type: 't', triggerId: 'tr', channel: 'email' }",
+          "expected_output": "'notification:u:e:t:tr:email'"
+        },
+        {
+          "name": "email and whatsapp keys differ",
+          "description": "Two calls with same inputs but different channel produce different keys.",
+          "input": "both channels",
+          "expected_output": "keys not equal"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE1 passes",
+          "steps": [
+            "Fire same cascade 5 times",
+            "Probe /api/test/notification-log"
+          ],
+          "expected": "exactly 2 rows (one per channel), attempts=1 each"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "replay via /api/test/inngest-replay is no-op",
+          "steps": [
+            "Send once",
+            "Replay same event",
+            "Probe provider call count"
+          ],
+          "expected": "provider not called second time"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cascade-029",
+    "category": "data",
+    "description": "notification_log has exactly one row per idempotency key; retries UPDATE in place.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "On first send attempt, INSERT a notification_log row keyed by idempotency_key (unique constraint). On retry, UPDATE that same row: attempts++, last_error, lastErrorCode, sentAt (on success), status transitions (queued→sending→sent|failed). Never INSERT a second row for the same key. Attempts counter monotonically increases; never resets or decrements. Contract Invariants 3, 4 and CE4, CE18.",
+    "data_model": "notification_log schema in src/lib/db/schema/communications.ts — idempotencyKey already unique.",
+    "priority": 29,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "first attempt inserts row",
+          "description": "Send once → one row with attempts=1, status='sent'.",
+          "input": "single successful send",
+          "expected_output": "one row, attempts=1"
+        },
+        {
+          "name": "retry updates same row",
+          "description": "Fail twice then succeed → one row, attempts=3, status='sent'.",
+          "input": "providerMode=failN=2",
+          "expected_output": "row count stays 1; attempts=3"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE18 passes",
+          "steps": [
+            "Fail twice then succeed",
+            "Probe /api/test/notification-log-row-count"
+          ],
+          "expected": "rows=1"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "concurrent retries do not double-increment",
+          "steps": [
+            "Two simultaneous handler invocations for same key",
+            "Use ON CONFLICT DO UPDATE SET attempts = attempts + 1"
+          ],
+          "expected": "final attempts equals actual provider call count"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cascade-030",
+    "category": "data",
+    "description": "3-attempt retry then dead-letter: Sentry + notification_log.failed + system_dispatch_failure red flag.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Inngest function wrappers use retries=3 with exponential backoff. On final failure (exhausted retries) or on non-retriable Zod validation error (retries=0): (a) set notification_log.status='failed' with last_error populated; (b) emit Sentry event kind='cascade-dispatch-failure' with { cascadeEvent, payload, attempts, channel, triggerId }; (c) upsert a red_flags row of flag_type='system_dispatch_failure' scoped to (eventId, targetEntityType, targetEntityId). No end-user notification is sent about the failure. Contract Invariants 9, 10, and CE15, CE16.",
+    "data_model": "notification_log.status, red_flags (upsert by unique key).",
+    "priority": 30,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "final-failure path emits all 3 signals",
+          "description": "Given 3 exhausted attempts, the dead-letter helper runs the log update, Sentry call, and red-flag upsert.",
+          "input": "attempts=3, lastError",
+          "expected_output": "all three side-effects observed via spies"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE15 passes",
+          "steps": [
+            "providerMode=fail for email",
+            "Fire travel-create",
+            "Wait for 3 attempts",
+            "Probe /api/test/sentry-events + red-flags"
+          ],
+          "expected": "notification_log status=failed, attempts=3; sentry event present; red flag active"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "CE16 passes — no user-facing failure notification sent",
+          "steps": [
+            "After dead-letter, probe notification_log for recipient=<user>"
+          ],
+          "expected": "no row with type='dispatch_failure_user_notice'"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cascade-031",
+    "category": "data",
+    "description": "5-second cascade debounce keyed on (eventId, sourceEntityType, sourceEntityId).",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Deep module src/lib/cascade/debounce.ts wraps emitCascadeEvent. Before emitting, SETEX in Upstash with key 'cascade:debounce:{eventId}:{sourceEntityType}:{sourceEntityId}' and TTL 5s. If the key already exists, merge the new changes into the pending buffer (second key or hash) and do not emit a new Inngest event. When the debounce window expires (Inngest scheduled function or a worker-side timer), emit one event with the combined changeSummary. Different (sourceEntityType, sourceEntityId) tuples use distinct keys so they never coalesce. Contract Example 3, CE2, CE14.",
+    "data_model": "No DB schema; Upstash Redis keys.",
+    "priority": 31,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "second emit within 5s is swallowed",
+          "description": "Mock Redis; first emit sets key, second finds key present and skips Inngest.send.",
+          "input": "two emits 2s apart",
+          "expected_output": "one Inngest.send call"
+        },
+        {
+          "name": "merged changeSummary",
+          "description": "Buffer concats change diffs; final emitted event contains both.",
+          "input": "two changes",
+          "expected_output": "changeSummary has keys from both"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "Example 3 passes",
+          "steps": [
+            "Save same travel twice within 2s",
+            "Probe /api/test/inngest-events"
+          ],
+          "expected": "one event; changeSummary has both field diffs"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "CE14 passes — different travelIds not coalesced",
+          "steps": [
+            "Save two different travel records 2s apart"
+          ],
+          "expected": "two distinct inngest events"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cascade-032",
+    "category": "data",
+    "description": "Variable snapshot captured at emit time, reused on retries.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Cascade event payload includes a variables snapshot: all template variable values resolved from current DB state at the moment of emit. Retry attempts reuse this snapshot verbatim; they never re-query the DB for fresh values. Implementation: the emitter resolves variables once and embeds them in payload.variables. The handler passes payload.variables to the template renderer. Contract CE7, CE20 and Invariant 5.",
+    "data_model": "Payload only; no DB column.",
+    "priority": 32,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "snapshot frozen into payload",
+          "description": "Emit captures variable values; subsequent DB edits to source entity do not change payload.variables.",
+          "input": "emit then DB edit",
+          "expected_output": "payload.variables unchanged"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE7 passes",
+          "steps": [
+            "Emit with arrival=09:00",
+            "Silently update source to 11:00",
+            "Handler runs; probe /api/test/last-sent-body"
+          ],
+          "expected": "body contains 09:00, not 11:00"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "retry uses same snapshot",
+          "steps": [
+            "Force two retries",
+            "Compare rendered body across attempts"
+          ],
+          "expected": "identical variable values each attempt"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cascade-033",
+    "category": "data",
+    "description": "Wire all 7 cascade events to their handlers per the frozen contract.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Register Inngest functions so each cascade event fans out to its declared handlers: travel.created→notify-delegate-itinerary; travel.updated→flag-accommodation, recalculate-transport, notify-delegate-revised; accommodation.created→notify-delegate-accommodation; accommodation.updated→flag-transport, notify-delegate-accommodation-update; registration.created→send-confirmation, assign-qr; session.updated→notify-affected-faculty; certificate.generated→notify-recipient-certificate. Each function is an independent Inngest handler with its own retry budget; failure in one does not affect siblings. Each handler filters every DB query by eventId (except people master reads).",
+    "data_model": "Existing cascade handler tables + notification_log + red_flags.",
+    "priority": 33,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "7 handlers registered",
+          "description": "Introspect inngest.functions list — 7 cascade handlers + their declared events.",
+          "input": "inngest client after boot",
+          "expected_output": "each declared (event, handler) pair present"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "Example 2 passes — fan-out 3 handlers for travel.updated",
+          "steps": [
+            "Update travel",
+            "Wait",
+            "Verify flag created + transport recalc touched + notification sent"
+          ],
+          "expected": "all 3 side-effects observed"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "CE6 — one handler failure doesn't roll back upstream",
+          "steps": [
+            "Force flag-accommodation handler to throw",
+            "Verify travel row + transport recalc + notification still persisted"
+          ],
+          "expected": "upstream travel row unchanged by handler failure"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cascade-034",
+    "category": "data",
+    "description": "Zod-validate cascade payload at handler entry; dead-letter on malformed without retry.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Each cascade handler's first step is a Zod parse on its expected payload shape. On parse failure, throw a NonRetriableError (or Inngest's NonRetriableError) so Inngest makes exactly one attempt and dead-letters. Emit a Sentry event kind='cascade-payload-invalid' with the raw payload and the Zod issues. No DB writes, no notification sends. Contract Example 9 and CE10.",
+    "data_model": "No schema.",
+    "priority": 34,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "missing eventId yields NonRetriableError",
+          "description": "Handler receives payload without eventId → Zod fails → NonRetriableError thrown.",
+          "input": "{}",
+          "expected_output": "throws NonRetriableError"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE10 passes",
+          "steps": [
+            "POST /api/test/inngest-emit with malformed payload",
+            "Probe /api/test/inngest-attempts"
+          ],
+          "expected": "count=1; sentry event captured"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "valid payload proceeds normally",
+          "steps": [
+            "Emit well-formed event"
+          ],
+          "expected": "handler runs full workflow"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cascade-035",
+    "category": "data",
+    "description": "Red-flag creation is an upsert keyed on (event_id, target_entity_type, target_entity_id, flag_type).",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Deep module src/lib/cascade/red-flags.ts exports upsertRedFlag(input). Uses ON CONFLICT DO UPDATE on a partial unique index covering the 4 key columns WHERE flag_status != 'resolved'. The resolved-state filter is important: a previously-resolved flag of the same tuple should allow a new active row. Handlers call this instead of raw insert. Contract Invariant 17 and CE8. Data-requirements §19 defines the active-flag uniqueness rule.",
+    "data_model": "red_flags + partial unique index on (event_id, target_entity_type, target_entity_id, flag_type) WHERE flag_status != 'resolved'.",
+    "priority": 35,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "upsert updates existing unresolved flag",
+          "description": "Existing unresolved row → UPDATE; no second row inserted.",
+          "input": "two consecutive calls with same key",
+          "expected_output": "one row; updated flag_detail"
+        },
+        {
+          "name": "resolved flag does not block new one",
+          "description": "Previous flag resolved → new call inserts new unresolved row.",
+          "input": "resolved flag + new call",
+          "expected_output": "two rows total; new one unresolved"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE8 passes",
+          "steps": [
+            "Fire 3 accommodation.updated events 6s+ apart",
+            "Probe /api/test/red-flags"
+          ],
+          "expected": "exactly 1 active row"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "partial index migration exists",
+          "steps": [
+            "Check drizzle migration for the partial unique index"
+          ],
+          "expected": "migration file present"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cascade-036",
+    "category": "data",
+    "description": "Every cascade handler query filters by cascade's eventId; no writes to other events.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Audit existing and new cascade handlers. Every .select() / .update() / .delete() / .insert() on an event-scoped table must include .where(eq(table.eventId, cascadeEvent.eventId)) or its transactional equivalent. The only exception is src/lib/db/schema/people — the master table is global. Add an eslint rule or AST-level lint (qa/diff-audit already has similar tooling) to reject merges that violate this. Contract CE9, CE19 and Invariant 13.",
+    "data_model": "No schema; discipline in handler queries.",
+    "priority": 36,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "handler query includes eventId filter",
+          "description": "For each handler, spy on db.select calls and assert .where includes eventId.",
+          "input": "handler invocation",
+          "expected_output": "every query clause contains eq(table.eventId, ...)"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE9 + CE19 pass",
+          "steps": [
+            "Fire cascade for Event A",
+            "Take /api/test/full-snapshot of Event B before+after"
+          ],
+          "expected": "checksum unchanged"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "people read in handler still works (global)",
+          "steps": [
+            "Handler looks up person by personId"
+          ],
+          "expected": "returns master row regardless of event"
+        }
+      ]
+    }
+  },
+  {
+    "id": "cascade-037",
+    "category": "data",
+    "description": "In-flight cascades complete after event transitions to archived.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "When an event is archived, new mutations are blocked at the server-action level (assertEventAccess should reject writes on archived events). However, cascade events already emitted before the state transition should complete normally — handlers do not check event state on entry. Contract Example 10 and CE17: emit cascade at T=0, archive at T=1, handler runs at T=2 and sends the notification as if the event were still active. The archive restriction lives in mutation entry points, not in cascade handlers.",
+    "data_model": "No schema change; behavior lives in auth/event-access + mutation routes.",
+    "priority": 37,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "handler does not check archive state",
+          "description": "Call handler with archived event and valid payload — it proceeds normally.",
+          "input": "archived event + valid payload",
+          "expected_output": "handler runs; notification_log row inserted"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE17 passes",
+          "steps": [
+            "seed/travel-create with delayMs=2000",
+            "archive-event",
+            "wait for notification"
+          ],
+          "expected": "notification sent"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "new mutation on archived event blocked",
+          "steps": [
+            "POST /api/events/<archived>/sessions"
+          ],
+          "expected": "400 or 404"
+        }
+      ]
+    }
+  },
+  {
+    "id": "infra-038",
+    "category": "data",
+    "description": "Add audit_log table and write-on-every-mutation.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "New table audit_log with columns: id (uuid pk), event_id (nullable fk), actor_user_id (text, clerk_user_id), action (text: 'create'|'update'|'delete'|'read'), resource (text: 'certificate'|'session'|'travel'|'accommodation'|...), resource_id (uuid), timestamp (timestamptz), meta (jsonb). Add a src/lib/audit/write.ts helper writeAudit({...}) that inserts a row. Every mutation server action + API route calls writeAudit before returning success. Super Admin cross-event reads are also audited (resource='read', action='read'). Spec anchors: BACKEND_ARCHITECTURE_MAP.md audit log section; DB_DECISIONS.md §4 immutable audit fields.",
+    "data_model": "New table audit_log; Drizzle schema file src/lib/db/schema/audit-log.ts; migration.",
+    "priority": 38,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "writeAudit inserts a row",
+          "description": "Given inputs, one audit_log row persisted.",
+          "input": "{ actorUserId, eventId, action, resource, resourceId, meta }",
+          "expected_output": "row present in audit_log"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE12 (eventid-scoping) passes",
+          "steps": [
+            "Super admin GETs /events/B/people",
+            "Probe /api/test/audit-log?event_id=B&actor_username=e2e-super@..."
+          ],
+          "expected": "at least one row with action='read', resource='people'"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "mutation without audit fails CI",
+          "steps": [
+            "Add a new mutation server action without writeAudit()",
+            "Run a lint that greps for writeAudit in mutation files"
+          ],
+          "expected": "CI flags missing call (optional follow-up story)"
+        }
+      ]
+    }
+  },
+  {
+    "id": "infra-039",
+    "category": "data",
+    "description": "/api/test/audit-log probe returns rows matching filters.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Replace the current stub. Support query params: event_id, actor_username (JOIN Clerk via clerkClient.users.getUser email lookup, or accept actor_user_id directly), resource, cert_id (filter meta->>'cert_id' OR resource_id when resource='certificate'). Return array of audit_log rows with camelCase field names matching TypeScript conventions. Gate via guard() — already in place.",
+    "data_model": "audit_log reads; optional Clerk lookup for username→user_id translation.",
+    "priority": 39,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "filter by event_id",
+          "description": "Returns only rows where event_id matches.",
+          "input": "event_id=A",
+          "expected_output": "all rows have eventId=A"
+        },
+        {
+          "name": "filter by actor_username",
+          "description": "Clerk lookup translates username to user_id.",
+          "input": "actor_username=e2e-super@...",
+          "expected_output": "rows with actor_user_id resolved from that email"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE12 and certificates audit rows visible",
+          "steps": [
+            "Perform audited actions",
+            "GET /api/test/audit-log?event_id=<a>&resource=certificate"
+          ],
+          "expected": "rows present matching the actions just taken"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "no filters returns empty or all",
+          "steps": [
+            "GET /api/test/audit-log"
+          ],
+          "expected": "200 with a paginated or capped result (not full table dump)"
+        }
+      ]
+    }
+  },
+  {
+    "id": "infra-040",
+    "category": "data",
+    "description": "Provider-mode shim in lib/notifications that toggles transports between normal/fail/failN/flaky and records sent bodies.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "Intercept the Resend and Evolution API adapters. A state machine (backed by Upstash keys 'test:provider-mode:{channel}') decides whether to call the real transport or simulate a failure. Modes: 'normal' (real call), 'fail' (always throw), 'failN:<n>' (throw first n attempts then real call), 'flaky:<rate>' (random fail). The existing /api/test/provider-mode endpoint needs to be created to POST the mode. On every simulated or real send, persist the rendered body to 'test:last-sent:{triggerId}:{channel}' so /api/test/last-sent-body returns something. Fail modes throw the exact error shape the production code expects. Used by cascade-idempotency tests for retry / failure / flaky scenarios.",
+    "data_model": "Upstash keys; no DB changes.",
+    "priority": 40,
+    "core": true,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "normal mode calls real adapter",
+          "description": "With no mode key set, the real Resend client is invoked.",
+          "input": "mode=normal",
+          "expected_output": "resend.emails.send called once"
+        },
+        {
+          "name": "failN:2 throws twice then succeeds",
+          "description": "Three attempts: first two throw, third succeeds.",
+          "input": "mode=failN:2; 3 send calls",
+          "expected_output": "[throw, throw, success]"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "cascade-idempotency Example 4 passes",
+          "steps": [
+            "Set email failN=2",
+            "Trigger send",
+            "Wait for success"
+          ],
+          "expected": "attempts=3, status='sent', 1 row in notification_log"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "fail mode final-failure goes to dead-letter",
+          "steps": [
+            "Set email fail",
+            "Trigger send"
+          ],
+          "expected": "attempts=3, status='failed', dispatch-failure red flag + sentry event"
+        }
+      ]
+    }
+  },
+  {
+    "id": "infra-041",
+    "category": "data",
+    "description": "Captured Inngest events store + replay endpoint.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "On every Inngest emit, persist the full event (id, name, payload, timestamp) to an in-memory or Redis-backed store. On every handler invocation, record (eventId, attemptN, status). Replace stubs for /api/test/inngest-events (query by name/triggerId/window), /api/test/inngest-attempts (count invocations per inngest event id), /api/test/inngest-replay (re-send a captured event unchanged — uses the same event id so Inngest's own dedup / handler idempotency is exercised). Test-only; behind guard().",
+    "data_model": "Upstash key prefix 'test:inngest:events:<id>' and 'test:inngest:attempts:<id>'.",
+    "priority": 41,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "store records emit",
+          "description": "Emit → one record persisted with payload.",
+          "input": "inngest.send(...)",
+          "expected_output": "store.get(id) returns event"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE10 passes",
+          "steps": [
+            "Emit malformed",
+            "Probe /api/test/inngest-attempts"
+          ],
+          "expected": "count=1"
+        },
+        {
+          "name": "Example 5 passes",
+          "steps": [
+            "Emit; wait; replay same id",
+            "Assert notification attempts did not increment"
+          ],
+          "expected": "idempotency respected"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "store does not grow unbounded",
+          "steps": [
+            "TTL on test keys set to 1h"
+          ],
+          "expected": "keys auto-expire"
+        }
+      ]
+    }
+  },
+  {
+    "id": "infra-042",
+    "category": "data",
+    "description": "Sentry test transport: /api/test/sentry-events returns recently captured events.",
+    "page": "N/A — Backend",
+    "ui_details": "N/A",
+    "behavior": "In test mode, configure @sentry/nextjs with a custom transport that, instead of sending to Sentry, buffers events in an in-process array (or Redis list). Expose via /api/test/sentry-events (behind guard) with query params kind, triggerId, endpoint, inngestEventId. Return matching events as JSON. This unblocks CE3 (eventId-mismatch breadcrumb assertion), CE15 (cascade-dispatch-failure), CE10 (cascade-payload-invalid). In non-test mode, the normal Sentry transport is used; no test buffer is allocated.",
+    "data_model": "In-process buffer (or Redis list 'test:sentry:events') with TTL.",
+    "priority": 42,
+    "core": false,
+    "passes": false,
+    "tests": {
+      "unit": [
+        {
+          "name": "custom transport buffers events",
+          "description": "Sentry.captureException in test mode → event appears in buffer.",
+          "input": "Sentry.captureException(err)",
+          "expected_output": "buffer.length > 0"
+        }
+      ],
+      "e2e": [
+        {
+          "name": "CE3 passes",
+          "steps": [
+            "POST with body.eventId mismatch",
+            "Probe /api/test/sentry-events?kind=eventId-mismatch"
+          ],
+          "expected": "one event present with {urlEventId, bodyEventId}"
+        }
+      ],
+      "edge_cases": [
+        {
+          "name": "filter by kind works",
+          "steps": [
+            "Emit multiple kinds",
+            "Query with kind filter"
+          ],
+          "expected": "only matching kinds returned"
+        }
+      ]
+    }
+  }
+]
