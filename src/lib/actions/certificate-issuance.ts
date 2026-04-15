@@ -72,6 +72,7 @@ export async function issueCertificate(eventId: string, input: unknown) {
 
   // Retry loop for certificate number collisions (concurrent issuance for same event)
   const MAX_CERT_NUMBER_RETRIES = 3;
+  let originalTransactionFailure: Error | null = null;
 
   for (let attempt = 0; attempt < MAX_CERT_NUMBER_RETRIES; attempt++) {
     try {
@@ -157,6 +158,10 @@ export async function issueCertificate(eventId: string, input: unknown) {
       revalidatePath(`/events/${eventId}/certificates`);
       return issued;
     } catch (error) {
+      if (originalTransactionFailure) {
+        throw originalTransactionFailure;
+      }
+
       const isCertNumberCollision =
         error instanceof Error &&
         ('code' in error ? String((error as any).code) === '23505' : false) &&
@@ -172,6 +177,7 @@ export async function issueCertificate(eventId: string, input: unknown) {
         String((error as any).code).startsWith('40');
 
       if (isTransactionFailure && attempt === 0) {
+        originalTransactionFailure = error;
         continue;
       }
 
