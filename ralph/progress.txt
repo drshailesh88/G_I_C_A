@@ -21,6 +21,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T13:10:00Z — cert-api-015 — Ops + read_only RBAC denial on all cert mutations
+- Implemented: Added missing RBAC test coverage for ops and read_only role rejection across all 4 certificate mutation endpoints (issue, regenerate, revoke, bulk). Implementation already correct via CERTIFICATE_WRITE_ROLES constant; this story adds the explicit test assertions for both denied roles. Also added coordinator-succeeds confirmatory test on issue route.
+- Files changed: src/app/api/events/[eventId]/certificates/route.test.ts, src/app/api/events/[eventId]/certificates/[certificateId]/regenerate/route.test.ts, src/app/api/events/[eventId]/certificates/[certificateId]/revoke/route.test.ts, src/app/api/events/[eventId]/certificates/bulk/route.test.ts
+- Tests added: 7 (issue: ops 403 + read_only 403 + coordinator 201; regenerate: read_only 403; revoke: read_only 403; bulk: read_only 403)
+- Learnings: All 4 cert mutation routes already had CERTIFICATE_WRITE_ROLES enforcement from their original stories; this story closes the test coverage gap for read_only role which was never tested.
+
 ## 2026-04-15T13:05:00Z — cert-api-014 — GET download endpoint with signed URL
 - Implemented: Created GET /api/events/[eventId]/certificates/[certId]/download route. Returns { url } with 5-min TTL signed R2 URL for issued/superseded certs to any authorized role. Revoked certs return 404 for all non-super_admin roles (per CE17). Uses createR2Provider().getSignedUrl() with 300s expiry. Cross-event access returns 404.
 - Files changed: src/app/api/events/[eventId]/certificates/[certificateId]/download/route.ts (new), route.test.ts (new)

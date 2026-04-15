@@ -103,6 +103,17 @@ describe('POST /api/events/[eventId]/certificates/bulk', () => {
     expect(res.status).toBe(403);
   });
 
+  it('rejects read_only role with 403', async () => {
+    const { assertEventAccess } = await import('@/lib/auth/event-access');
+    vi.mocked(assertEventAccess).mockResolvedValueOnce({ userId: 'u', role: 'org:read_only' } as never);
+
+    const body = { certificate_type: 'delegate_attendance', scope: 'all' };
+    const res = await POST(makeRequest(body), makeParams());
+    expect(res.status).toBe(403);
+    const json = await res.json();
+    expect(json.error).toBe('forbidden');
+  });
+
   it('rejects invalid event ID with 400', async () => {
     const body = { certificate_type: 'delegate_attendance', scope: 'all' };
     const res = await POST(makeRequest(body), makeParams('not-uuid'));

@@ -155,6 +155,15 @@ describe('POST /api/events/[eventId]/certificates/[certificateId]/regenerate', (
     expect(res.status).toBe(403);
   });
 
+  it('returns 403 for read_only role', async () => {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:read_only' });
+
+    const res = await POST(makeRequest(), makeParams(EVENT_ID, CERT_ID));
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('forbidden');
+  });
+
   it('returns 400 for invalid eventId', async () => {
     const res = await POST(makeRequest(), makeParams('not-a-uuid', CERT_ID));
     expect(res.status).toBe(400);
