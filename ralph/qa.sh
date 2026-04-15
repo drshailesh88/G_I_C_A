@@ -1,28 +1,17 @@
 #!/usr/bin/env bash
-# Ralph QA loop — independent grader (Codex + Gemini fallback chain).
+# Ralph QA loop — OpenCode / GLM-5.1 as sole independent grader.
 #
 # Builder ≠ grader principle: Claude built the code, a DIFFERENT model
-# family grades it. For each passes:true story in prd.json, the grader
-# verifies the feature, probes edge cases, and fixes bugs in production
-# code. Findings → ralph/qa-report.json. Progress → ralph/qa-progress.txt.
+# family (GLM-5.1 via z.ai coding plan, through the OpenCode CLI) grades
+# it. For each passes:true story in prd.json, OpenCode verifies the
+# feature, probes edge cases, and fixes bugs in production code.
+# Findings → ralph/qa-report.json. Progress → ralph/qa-progress.txt.
 #
-# Provider fallback chain (5 layers, auto-recover every iteration):
-#   1. Codex CODEX_ACC1        (default $HOME/.codex-acc1, GPT-5.4)
-#   2. Codex CODEX_ACC2        (default $HOME/.codex-acc2, GPT-5.4)
-#   3. Gemini gemini-3.1-pro-preview
-#   4. Gemini gemini-3-pro-preview
-#   5. On all-exhausted: sleep 5 min then retry from the top.
-#   6. If still all exhausted: emit synthetic ABORT.
-# Next iteration always starts from layer 1 — auto-recovery when upper
-# layers' quota windows refill.
+# No fallback providers. If OpenCode fails, the loop aborts cleanly.
+# This is intentional — we're proving GLM-5.1 can carry QA end to end.
 #
 # Env overrides:
-#   CODEX_ACC1=<path>            primary codex account dir
-#   CODEX_ACC2=<path>            fallback codex account dir
-#   CODEX_SINGLE_ACCOUNT=1       disable codex acc2 layer
-#   QA_NO_GEMINI=1               disable both gemini layers
-#   GEMINI_MODEL_1=<id>          override primary gemini model
-#   GEMINI_MODEL_2=<id>          override fallback gemini model
+#   OPENCODE_MODEL=<id>   override model (default zai-coding-plan/glm-5.1)
 #
 # Usage: ./ralph/qa.sh [max_iterations=999]
 
@@ -36,34 +25,20 @@ QA_PROGRESS=ralph/qa-progress.txt
 ITER_TIMEOUT=1800
 SLEEP_BETWEEN=3
 
-# Provider config
-CODEX_ACC1="${CODEX_ACC1:-$HOME/.codex-acc1}"
-CODEX_ACC2="${CODEX_ACC2:-$HOME/.codex-acc2}"
-CODEX_SINGLE_ACCOUNT="${CODEX_SINGLE_ACCOUNT:-0}"
-QA_NO_OPENCODE="${QA_NO_OPENCODE:-0}"
 OPENCODE_MODEL="${OPENCODE_MODEL:-zai-coding-plan/glm-5.1}"
-QA_NO_GEMINI="${QA_NO_GEMINI:-0}"
-GEMINI_MODEL_1="${GEMINI_MODEL_1:-gemini-3.1-pro-preview}"
-GEMINI_MODEL_2="${GEMINI_MODEL_2:-gemini-3-pro-preview}"
 
-# Quota detection — regex is OR'd across patterns seen in the wild
-QUOTA_REGEX='429|rate.?limit|rate_limit|quota.?exceeded|quota_exceeded|usage.?limit|insufficient_quota|retry.?after|RESOURCE_EXHAUSTED|5h limit|weekly limit|hit your usage limit|try again at'
-BOTH_EXHAUSTED_SLEEP=300   # 5 min
+# Quota / auth / transport detection
+QUOTA_REGEX='429|rate.?limit|rate_limit|quota.?exceeded|quota_exceeded|usage.?limit|insufficient_quota|retry.?after|RESOURCE_EXHAUSTED|hit your usage limit|try again at|unauthorized|invalid.?api.?key|401|402|403'
 
 if [ ! -f "$PRD" ]; then
   echo "ERROR: $PRD not found. Cannot QA without a PRD." >&2
   exit 1
 fi
 
-if ! command -v codex >/dev/null 2>&1; then
-  echo "ERROR: codex CLI not found. Install Codex before running QA." >&2
+if ! command -v opencode >/dev/null 2>&1; then
+  echo "ERROR: opencode CLI not found. Install via 'npm i -g opencode-ai' or equivalent." >&2
   exit 1
 fi
-
-HAS_GEMINI=0
-if command -v gemini >/dev/null 2>&1; then HAS_GEMINI=1; fi
-HAS_OPENCODE=0
-if command -v opencode >/dev/null 2>&1; then HAS_OPENCODE=1; fi
 
 # Resolve timeout command (macOS ships without `timeout`).
 if command -v timeout >/dev/null 2>&1; then
@@ -101,19 +76,12 @@ count_built() {
 count_qad() {
   python3 -c "import json; d=json.load(open('$QA_REPORT')); print(len({x['story_id'] for x in d if x.get('story_id')}))"
 }
-validate_account() {
-  local dir="$1"
-  [ -d "$dir" ] && [ -s "$dir/auth.json" ]
-}
 
 BUILT=$(count_built)
 QAD=$(count_qad)
 
-ACC1_OK=$(validate_account "$CODEX_ACC1" && echo yes || echo no)
-ACC2_OK=$(validate_account "$CODEX_ACC2" && echo yes || echo no)
-
 echo "───────────────────────────────────────────────────────────────"
-echo "Ralph QA loop — multi-provider grader with fallback chain"
+echo "Ralph QA loop — OpenCode / GLM-5.1 sole grader"
 echo "  prd:        $PRD  ($BUILT features built, $QAD already QA'd)"
 echo "  report:     $QA_REPORT"
 echo "  progress:   $QA_PROGRESS"
@@ -123,208 +91,47 @@ if [ ${#TIMEOUT_CMD[@]} -gt 0 ]; then
 else
   echo "  timeout:    (none available — install coreutils)"
 fi
-echo ""
-echo "  Fallback chain:"
-echo "    1. codex/acc1    $CODEX_ACC1  (authed: $ACC1_OK)"
-if [ "$CODEX_SINGLE_ACCOUNT" = "1" ]; then
-  echo "    2. codex/acc2    (disabled — CODEX_SINGLE_ACCOUNT=1)"
-else
-  echo "    2. codex/acc2    $CODEX_ACC2  (authed: $ACC2_OK)"
-fi
-if [ "$QA_NO_OPENCODE" = "1" ]; then
-  echo "    3. opencode/*    (disabled — QA_NO_OPENCODE=1)"
-elif [ "$HAS_OPENCODE" -eq 0 ]; then
-  echo "    3. opencode/*    (opencode CLI not found)"
-else
-  echo "    3. opencode/$OPENCODE_MODEL"
-fi
-if [ "$QA_NO_GEMINI" = "1" ]; then
-  echo "    4. gemini/*      (disabled — QA_NO_GEMINI=1)"
-elif [ "$HAS_GEMINI" -eq 0 ]; then
-  echo "    4. gemini/*      (gemini CLI not found)"
-else
-  echo "    4. gemini/$GEMINI_MODEL_1"
-  echo "    5. gemini/$GEMINI_MODEL_2"
-fi
+echo "  grader:     opencode/$OPENCODE_MODEL"
 echo "───────────────────────────────────────────────────────────────"
-
-if [ "$ACC1_OK" = "no" ] && { [ "$CODEX_SINGLE_ACCOUNT" = "1" ] || [ "$ACC2_OK" = "no" ]; } && { [ "$QA_NO_GEMINI" = "1" ] || [ "$HAS_GEMINI" -eq 0 ]; }; then
-  echo "ERROR: no working grader provider. Fix at least one." >&2
-  exit 1
-fi
 
 if [ "$BUILT" -eq 0 ]; then
   echo "No features built yet (passes:true count = 0). Nothing to QA. Exiting."
   exit 0
 fi
 
-# ── Provider attempt functions ─────────────────────────────────────
-# Each returns:
-#   0  success; output printed to stdout; LAST_PROVIDER set
-#   1  quota exhausted (try next layer)
-#   N  non-quota failure (exit code N); output printed to stdout
-# Silent "exit=2 + empty output" from codex is treated as a quota
-# signal (OpenAI's rate-limit display path in headless mode).
-
-try_codex() {
-  local prompt="$1" label="$2" dir="$3"
-  if [ ! -s "$dir/auth.json" ]; then
-    echo "[grader] skipping codex/$label (not authed: $dir)" >&2
-    return 1
-  fi
-  echo "[grader] trying codex/$label ($dir)..." >&2
+# ── OpenCode invocation ────────────────────────────────────────────
+# Returns:
+#   0  success; output printed to stdout
+#   1  quota / auth / transport failure
+#   N  other non-zero exit; output printed to stdout
+run_grader() {
+  local prompt="$1"
+  echo "[grader] trying opencode/$OPENCODE_MODEL..." >&2
   local output exitcode
-  output=$(CODEX_HOME="$dir" "${TIMEOUT_CMD[@]}" codex exec --dangerously-bypass-approvals-and-sandbox "$prompt" 2>&1) || true
+  output=$("${TIMEOUT_CMD[@]}" opencode run --model "$OPENCODE_MODEL" "$prompt" 2>&1) || true
   exitcode=$?
 
-  # Check for quota in the LAST 30 lines of output (rate-limit messages
-  # appear at the end of the transcript). Do this BEFORE declaring
-  # success, because Codex CLI exits 0 even when its only output is
-  # "ERROR: You've hit your usage limit..." — a pattern that would
-  # otherwise be mistaken for a valid agent response.
   local output_tail
   output_tail=$(printf '%s\n' "$output" | tail -n 30)
+
+  # Quota / auth / transport patterns in response tail
   if echo "$output_tail" | grep -qiE "$QUOTA_REGEX"; then
-    echo "[grader] codex/$label quota pattern matched in response tail" >&2
+    echo "[grader] opencode/$OPENCODE_MODEL quota/auth pattern matched in response tail" >&2
     return 1
   fi
-
-  # Success: exit 0 AND non-empty output AND no quota markers in tail.
+  # Success
   if [ "$exitcode" -eq 0 ] && [ -n "${output// }" ]; then
-    LAST_PROVIDER="codex/$label"
     printf '%s' "$output"
     return 0
   fi
-  # Silent quota signal: exit=2 + empty output
-  if [ "$exitcode" -eq 2 ] && [ -z "${output// }" ]; then
-    echo "[grader] codex/$label silent exit 2 — treating as quota" >&2
-    return 1
-  fi
-  # Non-quota failure — propagate
-  LAST_PROVIDER="codex/$label"
-  printf '%s' "$output"
-  return "$exitcode"
-}
-
-try_opencode() {
-  local prompt="$1"
-  local model="${2:-$OPENCODE_MODEL}"
-  if [ "$HAS_OPENCODE" -eq 0 ] || [ "$QA_NO_OPENCODE" = "1" ]; then return 1; fi
-  echo "[grader] trying opencode/$model..." >&2
-  local output exitcode
-  # opencode run: headless mode, takes a message string; --model selects provider/model
-  output=$("${TIMEOUT_CMD[@]}" opencode run --model "$model" "$prompt" 2>&1) || true
-  exitcode=$?
-
-  local output_tail
-  output_tail=$(printf '%s\n' "$output" | tail -n 30)
-
-  # Quota / auth / transport patterns
-  if echo "$output_tail" | grep -qiE "$QUOTA_REGEX|unauthorized|invalid.?api.?key|401|402|403"; then
-    echo "[grader] opencode/$model quota/auth pattern matched in response tail" >&2
-    return 1
-  fi
-  if [ "$exitcode" -eq 0 ] && [ -n "${output// }" ]; then
-    LAST_PROVIDER="opencode/$model"
-    printf '%s' "$output"
-    return 0
-  fi
+  # Silent failure
   if [ "$exitcode" -ne 0 ] && [ -z "${output// }" ]; then
-    echo "[grader] opencode/$model silent non-zero exit — treating as quota" >&2
+    echo "[grader] opencode/$OPENCODE_MODEL silent non-zero exit" >&2
     return 1
   fi
-  LAST_PROVIDER="opencode/$model"
+  # Non-quota failure — propagate output + exitcode
   printf '%s' "$output"
   return "$exitcode"
-}
-
-try_gemini() {
-  local prompt="$1" model="$2"
-  if [ "$HAS_GEMINI" -eq 0 ] || [ "$QA_NO_GEMINI" = "1" ]; then return 1; fi
-  echo "[grader] trying gemini/$model..." >&2
-  local output exitcode
-  output=$("${TIMEOUT_CMD[@]}" gemini -m "$model" --yolo -p "$prompt" 2>&1) || true
-  exitcode=$?
-
-  # Check the tail for quota/transport patterns. Gemini's CLI also
-  # occasionally emits rate-limit messages at the end of a successful
-  # transcript (some retries succeed mid-attempt). The tail check is more
-  # reliable than greping the entire transcript which may contain transient
-  # retry noise near the start.
-  local output_tail
-  output_tail=$(printf '%s\n' "$output" | tail -n 30)
-
-  # Terminal quota: regex hits in the TAIL (where final errors land)
-  if echo "$output_tail" | grep -qiE "$QUOTA_REGEX|ERR_SSL_|TLS.?ALERT|UNAVAILABLE|overloaded"; then
-    echo "[grader] gemini/$model quota/transport pattern matched in response tail" >&2
-    return 1
-  fi
-
-  # Success first: Gemini often prints transient 429/TLS noise earlier in
-  # stderr even on successful calls because the CLI retries internally.
-  # Trust the exit code + output presence once tail is clean.
-  if [ "$exitcode" -eq 0 ] && [ -n "${output// }" ]; then
-    LAST_PROVIDER="gemini/$model"
-    printf '%s' "$output"
-    return 0
-  fi
-  # Silent failure signals quota
-  if [ "$exitcode" -ne 0 ] && [ -z "${output// }" ]; then
-    echo "[grader] gemini/$model silent non-zero exit — treating as quota" >&2
-    return 1
-  fi
-  # Non-quota failure — propagate
-  LAST_PROVIDER="gemini/$model"
-  printf '%s' "$output"
-  return "$exitcode"
-}
-
-# ── Main failover chain ────────────────────────────────────────────
-# Uses `|| rc=$?` idiom so `set -e` doesn't abort the function on a
-# non-zero return from a layer attempt. This is critical — without it,
-# the first layer's quota signal (return 1) would exit the function
-# immediately and the subsequent layers never get tried.
-run_grader_with_failover() {
-  local prompt="$1"
-  LAST_PROVIDER=""
-  local rc=0
-
-  # Layer 1: codex acc1
-  rc=0; try_codex "$prompt" "acc1" "$CODEX_ACC1" || rc=$?
-  if [ "$rc" -eq 0 ]; then return 0; fi
-  if [ "$rc" -ne 1 ]; then return "$rc"; fi
-
-  # Layer 2: codex acc2 (if enabled)
-  if [ "$CODEX_SINGLE_ACCOUNT" != "1" ]; then
-    rc=0; try_codex "$prompt" "acc2" "$CODEX_ACC2" || rc=$?
-    if [ "$rc" -eq 0 ]; then return 0; fi
-    if [ "$rc" -ne 1 ]; then return "$rc"; fi
-  fi
-
-  # Layer 3: opencode (z.ai GLM, separate quota pool)
-  rc=0; try_opencode "$prompt" || rc=$?
-  if [ "$rc" -eq 0 ]; then return 0; fi
-  if [ "$rc" -ne 1 ]; then return "$rc"; fi
-
-  # Layer 4: gemini primary
-  rc=0; try_gemini "$prompt" "$GEMINI_MODEL_1" || rc=$?
-  if [ "$rc" -eq 0 ]; then return 0; fi
-  if [ "$rc" -ne 1 ]; then return "$rc"; fi
-
-  # Layer 5: gemini fallback
-  rc=0; try_gemini "$prompt" "$GEMINI_MODEL_2" || rc=$?
-  if [ "$rc" -eq 0 ]; then return 0; fi
-  if [ "$rc" -ne 1 ]; then return "$rc"; fi
-
-  # All four layers exhausted. Sleep, try acc1 once more, then give up.
-  echo "[grader] ALL layers exhausted. Sleeping ${BOTH_EXHAUSTED_SLEEP}s before retrying acc1 once..." >&2
-  sleep "$BOTH_EXHAUSTED_SLEEP"
-  rc=0; try_codex "$prompt" "acc1" "$CODEX_ACC1" || rc=$?
-  if [ "$rc" -eq 0 ]; then return 0; fi
-
-  echo "<promise>ABORT</promise>"
-  echo "All grader providers exhausted (codex/acc1, codex/acc2, opencode/$OPENCODE_MODEL, gemini/$GEMINI_MODEL_1, gemini/$GEMINI_MODEL_2) after 5-min wait. Rate-limit windows need time to reset." >&2
-  return 2
 }
 
 for i in $(seq 1 "$MAX_ITER"); do
@@ -360,28 +167,24 @@ Output <promise>QA_COMPLETE</promise> only if every passes:true story has a qa-r
 Output <promise>ABORT</promise> if blocked (explain why above the tag)."
 
   set +e
-  result=$(run_grader_with_failover "$PROMPT")
+  result=$(run_grader "$PROMPT")
   RC=$?
   set -e
 
   echo "$result"
-  if [ -n "${LAST_PROVIDER:-}" ]; then
-    echo "[grader] iteration used: $LAST_PROVIDER"
+
+  if [ "$RC" -eq 1 ]; then
+    echo ""
+    echo "[grader] opencode failed (quota/auth/transport). No fallback configured. Exiting." >&2
+    exit 1
   fi
 
-  # Only grep the LAST 40 lines — promise tags are emitted at the end of
-  # the agent's response. Greeping the whole output falsely matches prompt
-  # text that the CLI echoed back early in its transcript (the prompt
-  # contains all three tag strings as instructions to the agent).
+  # Only grep the LAST 40 lines for promise tags — prompt-echo substrings
+  # elsewhere in the output would cause false matches.
   result_tail=$(printf '%s\n' "$result" | tail -n 40)
-
-  # Cross-check: if we got a quota error from ALL layers, the final line
-  # tends to be the provider's rate-limit message and NOT a promise tag.
-  # Treat that as a fake signal and NOT QA_COMPLETE.
-  quota_tail=$(printf '%s' "$result_tail" | grep -ciE "$QUOTA_REGEX|hit your usage limit|try again at")
+  quota_tail=$(printf '%s' "$result_tail" | grep -ciE "$QUOTA_REGEX")
 
   if echo "$result_tail" | grep -q '<promise>QA_COMPLETE</promise>' && [ "$quota_tail" -eq 0 ]; then
-    # Cross-verify by counting unQA'd stories. Only celebrate if truly 0.
     unqad=$(python3 -c "import json; d=json.load(open('$PRD')); r=json.load(open('$QA_REPORT')); done={e['story_id'] for e in r if e.get('story_id')}; print(sum(1 for x in d if x.get('passes') and x.get('id') not in done))")
     if [ "$unqad" -eq 0 ]; then
       echo ""
