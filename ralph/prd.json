@@ -1773,7 +1773,7 @@
     "data_model": "Upstash key prefix 'test:inngest:events:<id>' and 'test:inngest:attempts:<id>'.",
     "priority": 41,
     "core": false,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {

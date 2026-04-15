@@ -10,6 +10,7 @@
 import type { CascadeActor, CascadeEventName } from './events';
 import { inngest } from '../inngest/client';
 import { captureCascadeError } from '../sentry';
+import { captureInngestEvent } from '../inngest/captured-events';
 
 type CascadeHandler = (params: {
   eventId: string;
@@ -66,10 +67,14 @@ export async function emitCascadeEvent(
 
   // Production mode: send event to Inngest
   try {
+    const inngestEventId = crypto.randomUUID();
+    const eventData = { eventId, actor, payload };
     await inngest.send({
+      id: inngestEventId,
       name: eventName,
-      data: { eventId, actor, payload },
+      data: eventData,
     });
+    await captureInngestEvent({ id: inngestEventId, name: eventName, data: eventData as Record<string, unknown> }).catch(() => {});
     return { handlersRun: 1, errors: [] };
   } catch (err) {
     const error = err instanceof Error ? err : new Error(String(err));

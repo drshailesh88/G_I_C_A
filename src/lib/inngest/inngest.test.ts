@@ -23,6 +23,11 @@ vi.mock('./client', () => ({
   },
 }));
 
+vi.mock('./captured-events', () => ({
+  captureInngestEvent: vi.fn().mockResolvedValue(undefined),
+  recordInngestAttempt: vi.fn().mockResolvedValue(undefined),
+}));
+
 // Mock cascade handler dependencies
 vi.mock('@/lib/db', () => ({ db: { select: vi.fn() } }));
 vi.mock('@/lib/db/schema', () => ({
@@ -76,14 +81,14 @@ describe('Inngest cascade integration', () => {
     );
 
     expect(mockSend).toHaveBeenCalledOnce();
-    expect(mockSend).toHaveBeenCalledWith({
+    expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({
       name: 'conference/travel.updated',
       data: {
         eventId: 'evt-100',
         actor: { type: 'user', id: 'user_1' },
         payload: { travelRecordId: 'tr-1', personId: 'p-1', changeSummary: { city: { from: 'A', to: 'B' } } },
       },
-    });
+    }));
     expect(result.handlersRun).toBe(1);
     expect(result.errors).toHaveLength(0);
   });
@@ -97,14 +102,14 @@ describe('Inngest cascade integration', () => {
       { accommodationRecordId: 'accom-1', personId: 'p-2', cancelledAt: '2026-04-09', reason: 'Overbooked' },
     );
 
-    expect(mockSend).toHaveBeenCalledWith({
+    expect(mockSend).toHaveBeenCalledWith(expect.objectContaining({
       name: 'conference/accommodation.cancelled',
       data: {
         eventId: 'evt-200',
         actor: { type: 'system', id: 'system:cascade' },
         payload: { accommodationRecordId: 'accom-1', personId: 'p-2', cancelledAt: '2026-04-09', reason: 'Overbooked' },
       },
-    });
+    }));
   });
 
   // Test 3: Inngest send failure is caught, reported to Sentry, does not throw
