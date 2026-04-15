@@ -43,6 +43,9 @@ export type InngestEvents = {
   'conference/accommodation.saved': { data: CascadeInngestEventData };
   'conference/accommodation.updated': { data: CascadeInngestEventData };
   'conference/accommodation.cancelled': { data: CascadeInngestEventData };
+  'conference/registration.created': { data: CascadeInngestEventData };
+  'conference/session.updated': { data: CascadeInngestEventData };
+  'conference/certificate.generated': { data: CascadeInngestEventData };
   'bulk/certificates.generate': { data: BulkCertificateGenerateData };
   'bulk/certificates.notify': { data: BulkCertificateNotifyData };
   'bulk/archive.generate': { data: ArchiveGenerateData };

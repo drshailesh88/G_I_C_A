@@ -32,9 +32,17 @@
 - Variable snapshot: resolveVariablesSnapshot() in src/lib/cascade/variables-snapshot.ts resolves person contact + domain vars at emit time and returns Object.freeze(snapshot). Handlers check payload.variables: if present, use directly (no DB re-query); if absent, fall back to resolvePersonContact per-notification. This preserves existing test mock ordering (vi.clearAllMocks doesn't clear mockReturnValueOnce queue, so DB call count must stay consistent).
 - GET person-detail pattern: check event_people attachment first (404 if not found), then fetch person master data, then event-scoped attributes (travel, sessions, registration) all filtered by eventId+personId. Response uses snake_case for person fields. No requireWrite needed for read endpoints.
 
+- Inngest function wiring: 7 cascade events mapped to 7 independent Inngest functions (cascade-{event} id pattern). Each has retries:3 and triggers on its respective conference/* event. New handlers (registration, session, certificate) follow the same catch-and-log-never-throw notification pattern as travel/accommodation handlers.
+
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T15:05:00Z — cascade-033 — Wire all 7 cascade events to handlers
+- Implemented: Registered 7 cascade Inngest functions (travel.saved, travel.updated, accommodation.saved, accommodation.updated, registration.created, session.updated, certificate.generated). Added 3 new event types to CASCADE_EVENTS. Created 3 new handler files (registration-cascade.ts, session-cascade.ts, certificate-cascade.ts) and added handleTravelSaved/handleAccommodationSaved to existing handlers. Updated handler registry, InngestEvents type map, and inngestFunctions array.
+- Files changed: src/lib/cascade/events.ts, src/lib/inngest/events.ts, src/lib/inngest/functions.ts, src/lib/inngest/functions.test.ts (new), src/lib/inngest/inngest.test.ts, src/lib/cascade/handlers/index.ts, src/lib/cascade/handlers/travel-cascade.ts, src/lib/cascade/handlers/accommodation-cascade.ts, src/lib/cascade/handlers/registration-cascade.ts (new), src/lib/cascade/handlers/session-cascade.ts (new), src/lib/cascade/handlers/certificate-cascade.ts (new), src/lib/notifications/types.ts, ralph/prd.json, ralph/progress.txt
+- Tests added: 2 (7 handlers registered with correct event triggers, CE6 independent function isolation) + updated 3 existing tests in inngest.test.ts
+- Learnings: Accommodation handler uses safeSendNotification (not sendCascadeNotification as in travel). triggerType union in accommodation must be extended when adding new trigger types. Inngest mock in tests uses createFunction → { _config, _handler } pattern; test introspects _config.triggers for event verification.
 
 ## 2026-04-15T14:55:00Z — cascade-032 — Variable snapshot captured at emit time
 - Implemented: Created resolveVariablesSnapshot() in src/lib/cascade/variables-snapshot.ts. Resolves person contact info (email, phoneE164, fullName) from DB at emit time, merges with domain variables, and returns Object.freeze(snapshot). Modified travel and accommodation cascade handlers to accept payload.variables as snapshot override — when present, handlers use it directly without re-querying DB; when absent, fall back to original resolvePersonContact flow.

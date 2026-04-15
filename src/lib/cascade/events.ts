@@ -75,6 +75,29 @@ export type AccommodationCancelledPayload = {
   reason: string | null;
 };
 
+// ── Registration Events ──────────────────────────────────────
+export type RegistrationCreatedPayload = {
+  registrationId: string;
+  personId: string;
+  eventId: string;
+};
+
+// ── Session Events ───────────────────────────────────────────
+export type SessionUpdatedPayload = {
+  sessionId: string;
+  previous: Record<string, unknown>;
+  current: Record<string, unknown>;
+  changeSummary: Record<string, { from: unknown; to: unknown }>;
+  affectedFacultyIds: string[];
+};
+
+// ── Certificate Events ───────────────────────────────────────
+export type CertificateGeneratedPayload = {
+  certificateId: string;
+  personId: string;
+  templateId: string;
+};
+
 // ── Event Names ───────────────────────────────────────────────
 export const CASCADE_EVENTS = {
   TRAVEL_SAVED: 'conference/travel.saved',
@@ -83,6 +106,9 @@ export const CASCADE_EVENTS = {
   ACCOMMODATION_SAVED: 'conference/accommodation.saved',
   ACCOMMODATION_UPDATED: 'conference/accommodation.updated',
   ACCOMMODATION_CANCELLED: 'conference/accommodation.cancelled',
+  REGISTRATION_CREATED: 'conference/registration.created',
+  SESSION_UPDATED: 'conference/session.updated',
+  CERTIFICATE_GENERATED: 'conference/certificate.generated',
 } as const;
 
 export type CascadeEventName = (typeof CASCADE_EVENTS)[keyof typeof CASCADE_EVENTS];
@@ -96,4 +122,7 @@ export const CASCADE_DIRECTION = {
   'conference/accommodation.updated': ['transport_flag', 'delegate_notification', 'shared_room_flags'],
   'conference/accommodation.cancelled': ['transport_flag', 'delegate_notification'],
   'conference/travel.saved': ['transport_suggestions'],
+  'conference/registration.created': ['send_confirmation', 'assign_qr'],
+  'conference/session.updated': ['notify_affected_faculty'],
+  'conference/certificate.generated': ['notify_recipient_certificate'],
 } as const;

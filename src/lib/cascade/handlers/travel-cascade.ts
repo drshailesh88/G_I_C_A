@@ -17,7 +17,7 @@ import { upsertRedFlag } from '../red-flags';
 import { sendNotification } from '@/lib/notifications/send';
 import { onCascadeEvent } from '../emit';
 import { CASCADE_EVENTS } from '../events';
-import type { TravelUpdatedPayload, TravelCancelledPayload } from '../events';
+import type { TravelSavedPayload, TravelUpdatedPayload, TravelCancelledPayload } from '../events';
 import { captureCascadeError } from '@/lib/sentry';
 import type { NotificationTriggerType } from '@/lib/notifications/types';
 
@@ -115,6 +115,57 @@ async function sendCascadeNotification(params: {
       cascadeEvent: `travel:${params.templateKey}`,
     });
   }
+}
+
+// ── Travel Saved (Created) Handler ───────────────────────────
+export async function handleTravelSaved(params: {
+  eventId: string;
+  actor: { type: string; id: string };
+  payload: Record<string, unknown>;
+}) {
+  const { eventId, payload } = params;
+  const data = payload as unknown as TravelSavedPayload;
+  const snapshotVars = payload.variables as Record<string, unknown> | undefined;
+  const ts = Date.now();
+
+  await sendCascadeNotification({
+    eventId,
+    personId: data.personId,
+    channel: 'email',
+    templateKey: 'travel_itinerary',
+    triggerType: 'travel.saved',
+    triggerEntityType: 'travel_record',
+    triggerEntityId: data.travelRecordId,
+    variables: {
+      direction: data.direction,
+      travelMode: data.travelMode,
+      fromCity: data.fromCity,
+      toCity: data.toCity,
+      departureAtUtc: data.departureAtUtc,
+      arrivalAtUtc: data.arrivalAtUtc,
+    },
+    snapshotVars,
+    idempotencyKey: `notify:travel-itinerary:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:email`,
+  });
+  await sendCascadeNotification({
+    eventId,
+    personId: data.personId,
+    channel: 'whatsapp',
+    templateKey: 'travel_itinerary',
+    triggerType: 'travel.saved',
+    triggerEntityType: 'travel_record',
+    triggerEntityId: data.travelRecordId,
+    variables: {
+      direction: data.direction,
+      travelMode: data.travelMode,
+      fromCity: data.fromCity,
+      toCity: data.toCity,
+      departureAtUtc: data.departureAtUtc,
+      arrivalAtUtc: data.arrivalAtUtc,
+    },
+    snapshotVars,
+    idempotencyKey: `notify:travel-itinerary:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:whatsapp`,
+  });
 }
 
 // ── Travel Updated Handler ────────────────────────────────────
@@ -299,6 +350,7 @@ export async function handleTravelCancelled(params: {
 
 // ── Register handlers ─────────────────────────────────────────
 export function registerTravelCascadeHandlers() {
+  onCascadeEvent(CASCADE_EVENTS.TRAVEL_SAVED, handleTravelSaved);
   onCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, handleTravelUpdated);
   onCascadeEvent(CASCADE_EVENTS.TRAVEL_CANCELLED, handleTravelCancelled);
 }

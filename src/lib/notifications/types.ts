@@ -20,6 +20,7 @@ export type NotificationTriggerType =
   | 'accommodation.updated'
   | 'accommodation.cancelled'
   | 'transport.updated'
+  | 'session.updated'
   | 'certificate.generated';
 
 export type SendMode = 'automatic' | 'manual';

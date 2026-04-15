@@ -23,6 +23,7 @@ import type { Channel } from '@/lib/notifications/types';
 import { onCascadeEvent } from '../emit';
 import { CASCADE_EVENTS } from '../events';
 import type {
+  AccommodationSavedPayload,
   AccommodationUpdatedPayload,
   AccommodationCancelledPayload,
 } from '../events';
@@ -48,7 +49,7 @@ async function safeSendNotification(params: {
   personId: string;
   channel: Channel;
   templateKey: string;
-  triggerType: 'accommodation.updated' | 'accommodation.cancelled';
+  triggerType: 'accommodation.saved' | 'accommodation.updated' | 'accommodation.cancelled';
   triggerEntityType: string;
   triggerEntityId: string;
   idempotencyKey: string;
@@ -77,6 +78,37 @@ async function safeSendNotification(params: {
       handler: 'accommodation-cascade',
       eventId: params.eventId,
       cascadeEvent: `accommodation:${params.templateKey}`,
+    });
+  }
+}
+
+// ── Accommodation Saved (Created) Handler ────────────────────
+export async function handleAccommodationSaved(params: {
+  eventId: string;
+  actor: { type: string; id: string };
+  payload: Record<string, unknown>;
+}) {
+  const { eventId, payload } = params;
+  const data = payload as unknown as AccommodationSavedPayload;
+  const snapshotVars = payload.variables as Record<string, unknown> | undefined;
+  const ts = Date.now();
+
+  for (const channel of ['email', 'whatsapp'] as const) {
+    await safeSendNotification({
+      eventId,
+      personId: data.personId,
+      channel,
+      templateKey: 'accommodation_confirmation',
+      triggerType: 'accommodation.saved',
+      triggerEntityType: 'accommodation_record',
+      triggerEntityId: data.accommodationRecordId,
+      variables: {
+        hotelName: data.hotelName,
+        checkInDate: data.checkInDate,
+        checkOutDate: data.checkOutDate,
+        googleMapsUrl: data.googleMapsUrl,
+      },
+      idempotencyKey: `notify:accommodation-confirmation:${eventId}:${data.personId}:${data.accommodationRecordId}:${ts}:${channel}`,
     });
   }
 }
@@ -279,6 +311,7 @@ export async function handleAccommodationCancelled(params: {
 
 // ── Register handlers ─────────────────────────────────────────
 export function registerAccommodationCascadeHandlers() {
+  onCascadeEvent(CASCADE_EVENTS.ACCOMMODATION_SAVED, handleAccommodationSaved);
   onCascadeEvent(
     CASCADE_EVENTS.ACCOMMODATION_UPDATED,
     handleAccommodationUpdated,

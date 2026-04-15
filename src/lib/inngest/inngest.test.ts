@@ -33,7 +33,7 @@ vi.mock('@/lib/db/schema/people', () => ({
   people: { id: 'id', email: 'email', phoneE164: 'phone', fullName: 'name' },
 }));
 vi.mock('drizzle-orm', () => ({
-  eq: vi.fn(), ne: vi.fn(), and: vi.fn(), relations: vi.fn(),
+  eq: vi.fn(), ne: vi.fn(), and: vi.fn(), inArray: vi.fn(), relations: vi.fn(),
 }));
 vi.mock('@/lib/db/with-event-scope', () => ({
   withEventScope: vi.fn((...args: unknown[]) => args),
@@ -136,18 +136,22 @@ describe('Inngest cascade integration', () => {
     consoleSpy.mockRestore();
   });
 
-  // Test 4: All 8 Inngest functions are registered (4 cascade + 3 bulk + 1 scheduled)
-  it('registers all 8 Inngest functions', () => {
-    expect(inngestFunctions).toHaveLength(8);
+  // Test 4: All 13 Inngest functions are registered (9 cascade + 3 bulk + 1 scheduled)
+  it('registers all 13 Inngest functions', () => {
+    expect(inngestFunctions).toHaveLength(13);
 
-    // Since createFunction is mocked, we get { _config, _handler } objects
     const configs = inngestFunctions.map((fn: unknown) => (fn as { _config: { id: string } })._config);
     const ids = configs.map(c => c.id);
     // Cascade functions
+    expect(ids).toContain('cascade-travel-saved');
     expect(ids).toContain('cascade-travel-updated');
     expect(ids).toContain('cascade-travel-cancelled');
+    expect(ids).toContain('cascade-accommodation-saved');
     expect(ids).toContain('cascade-accommodation-updated');
     expect(ids).toContain('cascade-accommodation-cancelled');
+    expect(ids).toContain('cascade-registration-created');
+    expect(ids).toContain('cascade-session-updated');
+    expect(ids).toContain('cascade-certificate-generated');
     // Bulk operation functions (8A-2)
     expect(ids).toContain('bulk-certificate-generate');
     expect(ids).toContain('bulk-certificate-notify');
@@ -159,8 +163,9 @@ describe('Inngest cascade integration', () => {
   // Test 5: Functions configured with correct retry counts
   it('cascade and bulk functions have 3 retries, scheduled functions have 2 retries', () => {
     const threeRetryIds = [
-      'cascade-travel-updated', 'cascade-travel-cancelled',
-      'cascade-accommodation-updated', 'cascade-accommodation-cancelled',
+      'cascade-travel-saved', 'cascade-travel-updated', 'cascade-travel-cancelled',
+      'cascade-accommodation-saved', 'cascade-accommodation-updated', 'cascade-accommodation-cancelled',
+      'cascade-registration-created', 'cascade-session-updated', 'cascade-certificate-generated',
       'bulk-certificate-generate', 'bulk-certificate-notify', 'bulk-archive-generate',
     ];
     for (const fn of inngestFunctions) {
@@ -180,10 +185,15 @@ describe('Inngest cascade integration', () => {
       return config.triggers[0];
     });
     const eventTriggers = triggers.filter((t) => 'event' in t).map((t) => t.event);
+    expect(eventTriggers).toContain('conference/travel.saved');
     expect(eventTriggers).toContain('conference/travel.updated');
     expect(eventTriggers).toContain('conference/travel.cancelled');
+    expect(eventTriggers).toContain('conference/accommodation.saved');
     expect(eventTriggers).toContain('conference/accommodation.updated');
     expect(eventTriggers).toContain('conference/accommodation.cancelled');
+    expect(eventTriggers).toContain('conference/registration.created');
+    expect(eventTriggers).toContain('conference/session.updated');
+    expect(eventTriggers).toContain('conference/certificate.generated');
 
     // Verify cron trigger for pre-event backup
     const cronTriggers = triggers.filter((t) => 'cron' in t);
