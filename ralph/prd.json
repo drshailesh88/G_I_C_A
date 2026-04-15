@@ -1109,7 +1109,7 @@
     "data_model": "people, travel_records, session_assignments, event_registrations — all scoped by eventId.",
     "priority": 26,
     "core": false,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {

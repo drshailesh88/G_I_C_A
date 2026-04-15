@@ -24,10 +24,17 @@
 - Cross-event 404 sanitizer: import crossEvent404Response from src/lib/auth/sanitize-cross-event-404.ts. Use instead of NextResponse.json(null, { status: 404 }) in EventNotFoundError catch blocks. Returns { error: 'Not Found' } with no event-identifying info. sanitize404Body(body) available for custom sanitization.
 
 - Read-only disabled buttons: import useRole() in client component, use canWrite to conditionally render Link (writable) vs disabled button with aria-disabled="true" + disabled attribute + opacity-50 + cursor-not-allowed. Cancel buttons add !canWrite to existing disabled condition. Pattern applies to any module needing read_only UI gating.
+- GET person-detail pattern: check event_people attachment first (404 if not found), then fetch person master data, then event-scoped attributes (travel, sessions, registration) all filtered by eventId+personId. Response uses snake_case for person fields. No requireWrite needed for read endpoints.
 
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T14:10:00Z — tenancy-026 — GET /api/events/[eventId]/people/[personId] endpoint
+- Implemented: Created GET route returning master person fields (snake_case) plus event-scoped travel, sessions, registration. event_people check ensures person is attached to the event (404 if not). All sub-queries filter by eventId + personId. assertEventAccess for auth (read-only allowed). Cross-event access returns sanitized 404.
+- Files changed: src/app/api/events/[eventId]/people/[personId]/route.ts (new), src/app/api/events/[eventId]/people/[personId]/route.test.ts (new), ralph/prd.json, ralph/progress.txt
+- Tests added: 7 (400 invalid eventId, 400 invalid personId, 404 cross-event, 403 auth denial, 404 person not in event, travel eventId filtering, full 200 response shape)
+- Learnings: GET routes use assertEventAccess without requireWrite (read access for all roles). Mock chain for multiple sequential selects works best with vi.hoisted() closure holding a selectResults array and call index, where .where() increments the index and returns a thenable chain.
 
 ## 2026-04-15T14:05:00Z — tenancy-025 — POST /api/events/[eventId]/sessions endpoint
 - Implemented: Created POST route at src/app/api/events/[eventId]/sessions/route.ts. Derives eventId from URL path only. Zod validates body (title required, optional starts_at/ends_at/hall_id/session_type). Integrates assertEventIdMatch for body.event_id mismatch → 400. assertEventAccess with requireWrite for auth. SESSION_WRITE_ROLES = super_admin + event_coordinator. Direct DB insert into sessions table with createdBy/updatedBy from auth context.
