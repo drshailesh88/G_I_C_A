@@ -371,5 +371,21 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), including focused public verify route/serializer suites (11 tests). Certificate Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; visible failures remain in QA/test, Sentry, people, tab-bar, notification, and cascade files rather than the public verify production paths. Manual verification confirmed /verify/[token] now has a public JSON route, invalid tokens return 400 JSON, response serialization emits only allowed public fields, revoked and superseded optional fields are conditionally emitted, verification_count/last_verified_at are updated with an awaited atomic increment, and superseded number lookup is event-scoped. Live DB re-query was not performed because the authenticated contract fixture is blocked and no seeded public verification token was available in this loop."
+  },
+  {
+    "story_id": "cert-api-014",
+    "qa_timestamp": "2026-04-15T16:14:40Z",
+    "qa_model": "codex",
+    "status": "pass",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [],
+    "notes": "Full Vitest passed (231 files, 4736 tests), and the focused download route suite passed (10 tests). Certificate Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; a targeted grep of the typecheck output found no errors in the certificate download route or immediate production dependencies. Manual verification confirmed params are Zod-validated before processing, assertEventAccess gates the event, the certificate lookup is event-scoped with withEventScope, missing and cross-event certificates return 404, revoked certificates return 404 for coordinator/ops/read_only while super_admin receives a signed URL, issued and superseded certificates receive signed URLs, the R2 provider helper is called with the private storageKey and 300-second TTL, and the issued_certificates schema stores a private storage_key with no permanent public download URL column."
   }
 ]

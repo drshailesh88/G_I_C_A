@@ -95,3 +95,9 @@
 - Bugs: 3 (high: 2, medium: 1)
 - Fix commits: bd821525fe1e6ef1045380fb6b8c43f5c4d1fe0c
 - Notes: Fixed the missing `/verify/[token]` JSON route, awaited verification counter persistence, and event-scoped the superseded certificate lookup. Full Vitest and focused verify suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-15T16:14:40Z — cert-api-014 — signed certificate download API
+- Status: pass
+- Bugs: 0
+- Fix commits: none
+- Notes: Verified the download route returns short-lived R2 signed URLs for issued/superseded certs, hides revoked certs from non-super-admin roles with 404, preserves cross-event 404 scoping, and stores only private storage keys. Full Vitest and focused download route suite passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.

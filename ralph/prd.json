@@ -676,7 +676,10 @@
           "expected": "200 signed URL"
         }
       ]
-    }
+    },
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-15T16:14:40Z",
+    "qa_tested_by": "codex"
   },
   {
     "id": "cert-api-015",
