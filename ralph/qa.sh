@@ -163,10 +163,8 @@ try_codex() {
   fi
   echo "[grader] trying codex/$label ($dir)..." >&2
   local output exitcode
-  set +e
-  output=$(CODEX_HOME="$dir" "${TIMEOUT_CMD[@]}" codex exec --dangerously-bypass-approvals-and-sandbox "$prompt" 2>&1)
+  output=$(CODEX_HOME="$dir" "${TIMEOUT_CMD[@]}" codex exec --dangerously-bypass-approvals-and-sandbox "$prompt" 2>&1) || true
   exitcode=$?
-  set -e
 
   # Success: exit 0 AND non-empty output. Any quota-looking strings inside
   # the output are probably just transient retry noise that Codex already
@@ -197,10 +195,8 @@ try_gemini() {
   if [ "$HAS_GEMINI" -eq 0 ] || [ "$QA_NO_GEMINI" = "1" ]; then return 1; fi
   echo "[grader] trying gemini/$model..." >&2
   local output exitcode
-  set +e
-  output=$("${TIMEOUT_CMD[@]}" gemini -m "$model" --yolo -p "$prompt" 2>&1)
+  output=$("${TIMEOUT_CMD[@]}" gemini -m "$model" --yolo -p "$prompt" 2>&1) || true
   exitcode=$?
-  set -e
 
   # Success first: Gemini often prints transient 429/TLS noise to stderr even
   # on successful calls because the CLI retries internally. Trust the exit
@@ -227,42 +223,41 @@ try_gemini() {
 }
 
 # ── Main failover chain ────────────────────────────────────────────
+# Uses `|| rc=$?` idiom so `set -e` doesn't abort the function on a
+# non-zero return from a layer attempt. This is critical — without it,
+# the first layer's quota signal (return 1) would exit the function
+# immediately and the subsequent layers never get tried.
 run_grader_with_failover() {
   local prompt="$1"
   LAST_PROVIDER=""
-  local rc
+  local rc=0
 
   # Layer 1: codex acc1
-  try_codex "$prompt" "acc1" "$CODEX_ACC1"
-  rc=$?
+  rc=0; try_codex "$prompt" "acc1" "$CODEX_ACC1" || rc=$?
   if [ "$rc" -eq 0 ]; then return 0; fi
   if [ "$rc" -ne 1 ]; then return "$rc"; fi
 
   # Layer 2: codex acc2 (if enabled)
   if [ "$CODEX_SINGLE_ACCOUNT" != "1" ]; then
-    try_codex "$prompt" "acc2" "$CODEX_ACC2"
-    rc=$?
+    rc=0; try_codex "$prompt" "acc2" "$CODEX_ACC2" || rc=$?
     if [ "$rc" -eq 0 ]; then return 0; fi
     if [ "$rc" -ne 1 ]; then return "$rc"; fi
   fi
 
   # Layer 3: gemini primary
-  try_gemini "$prompt" "$GEMINI_MODEL_1"
-  rc=$?
+  rc=0; try_gemini "$prompt" "$GEMINI_MODEL_1" || rc=$?
   if [ "$rc" -eq 0 ]; then return 0; fi
   if [ "$rc" -ne 1 ]; then return "$rc"; fi
 
   # Layer 4: gemini fallback
-  try_gemini "$prompt" "$GEMINI_MODEL_2"
-  rc=$?
+  rc=0; try_gemini "$prompt" "$GEMINI_MODEL_2" || rc=$?
   if [ "$rc" -eq 0 ]; then return 0; fi
   if [ "$rc" -ne 1 ]; then return "$rc"; fi
 
   # All four layers exhausted. Sleep, try acc1 once more, then give up.
   echo "[grader] ALL layers exhausted. Sleeping ${BOTH_EXHAUSTED_SLEEP}s before retrying acc1 once..." >&2
   sleep "$BOTH_EXHAUSTED_SLEEP"
-  try_codex "$prompt" "acc1" "$CODEX_ACC1"
-  rc=$?
+  rc=0; try_codex "$prompt" "acc1" "$CODEX_ACC1" || rc=$?
   if [ "$rc" -eq 0 ]; then return 0; fi
 
   echo "<promise>ABORT</promise>"
