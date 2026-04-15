@@ -21,6 +21,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T13:05:00Z — cert-api-014 — GET download endpoint with signed URL
+- Implemented: Created GET /api/events/[eventId]/certificates/[certId]/download route. Returns { url } with 5-min TTL signed R2 URL for issued/superseded certs to any authorized role. Revoked certs return 404 for all non-super_admin roles (per CE17). Uses createR2Provider().getSignedUrl() with 300s expiry. Cross-event access returns 404.
+- Files changed: src/app/api/events/[eventId]/certificates/[certificateId]/download/route.ts (new), route.test.ts (new)
+- Tests added: 10 (revoked-404 for coord/ops/read_only, revoked-200 for super_admin, issued-200 for coord, superseded-200 for ops, 404 not found, 404 cross-event, 400 invalid params, signed URL TTL assertion)
+- Learnings: Download is a read-only GET endpoint; uses requireWrite:false in assertEventAccess. The revoked-cert gate is role-based (super_admin only), not write-role-based.
+
 ## 2026-04-15T13:00:00Z — cert-api-013 — Public verify endpoint with strict response shape
 - Implemented: Created GET /api/verify/[token] public endpoint (no auth). Serializer whitelist enforces only allowed keys (status, certificate_number, certificate_type, person_name, event_name, issued_at, plus optional revoked_at/revoke_reason/superseded_by_certificate_number). lookupAndVerify joins issuedCertificates+people+events, increments verification_count atomically, returns null for unknown token. Superseded certs look up the newer cert's number.
 - Files changed: src/lib/actions/certificate-verify-serializer.ts (new), src/lib/actions/certificate-verify.ts (new), src/lib/actions/certificate-verify.test.ts (new), src/app/api/verify/[token]/route.ts (new), src/app/api/verify/[token]/route.test.ts (new)

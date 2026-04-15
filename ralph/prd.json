@@ -603,7 +603,7 @@
     "data_model": "issuedCertificates.storageKey (private R2 path).",
     "priority": 14,
     "core": false,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {
