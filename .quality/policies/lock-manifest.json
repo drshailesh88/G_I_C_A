@@ -1,10 +1,11 @@
 {
   "schema_version": 1,
-  "last_updated": "2026-04-14T16:07:53.727Z",
+  "last_updated": "2026-04-15T01:31:44.351Z",
   "files": {
     "vitest.config.ts": "sha256:e311540f039a7a05af4aaf5808ba446f84d14b9ccd863e81d645362c042ca211",
     "playwright.config.ts": "sha256:c99ae69c79e824b3fafd852016ef14f125e0ceb972126b428d8e57e8c22ecdfe",
     "tsconfig.json": "sha256:55134881a23efd2a1f9266d2d0752731ff9c40d0e867136cd8863ea679560a09",
-    ".quality/policies/tiers.yaml": "sha256:be530e28d92297e991f2c2cd477e5e04bd2c5de389389c066b02d7b02dd870cb"
+    ".quality/policies/tiers.yaml": "sha256:be530e28d92297e991f2c2cd477e5e04bd2c5de389389c066b02d7b02dd870cb",
+    "stryker.config.json": "sha256:5852dc74318a8dadcb97f68c08cd35165805cb8bb6ef01b6ba473bf384261401"
   }
 }
