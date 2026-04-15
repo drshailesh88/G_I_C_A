@@ -342,6 +342,44 @@ describe('issueCertificate', () => {
     await expect(issueCertificate(EVENT_ID, validIssueInput)).rejects.toThrow();
     expect(insertCallCount).toBe(1);
   });
+
+  it('captures templateSnapshotJson from template at issue time', async () => {
+    const templateWithRichJson = {
+      ...mockTemplate,
+      templateJson: { layout: 'formal', fields: ['name', 'date'], version: 42 },
+    };
+    chainedSelectSequence([
+      [{ id: PERSON_ID }],
+      [templateWithRichJson],
+      [],
+      [],
+    ]);
+    const insertChain = chainedInsert([mockIssuedCert]);
+
+    await issueCertificate(EVENT_ID, validIssueInput);
+
+    const insertCall = insertChain.values.mock.calls[0][0];
+    expect(insertCall.templateSnapshotJson).toEqual(templateWithRichJson.templateJson);
+  });
+
+  it('captures renderedVariablesJson from validated input at issue time', async () => {
+    const inputWithVars = {
+      ...validIssueInput,
+      renderedVariablesJson: { full_name: 'Dr. Priya', designation: 'Professor' },
+    };
+    chainedSelectSequence([
+      [{ id: PERSON_ID }],
+      [mockTemplate],
+      [],
+      [],
+    ]);
+    const insertChain = chainedInsert([mockIssuedCert]);
+
+    await issueCertificate(EVENT_ID, inputWithVars);
+
+    const insertCall = insertChain.values.mock.calls[0][0];
+    expect(insertCall.renderedVariablesJson).toEqual({ full_name: 'Dr. Priya', designation: 'Professor' });
+  });
 });
 
 // ── Transaction retry (cert-code-002) ───────────────────────
@@ -952,5 +990,28 @@ describe('listIssuedCertificates — enhanced with joins', () => {
     // Verify joins were called
     expect(chain.innerJoin).toHaveBeenCalledTimes(1);
     expect(chain.leftJoin).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Snapshot immutability (cert-api-007) ─────────────────────
+describe('snapshot immutability — no UPDATE of snapshot columns', () => {
+  it('no code path sets templateSnapshotJson or renderedVariablesJson in an update', async () => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const srcDir = path.resolve(__dirname, '..');
+    const files = [
+      path.join(srcDir, 'actions', 'certificate-issuance.ts'),
+      path.join(srcDir, 'inngest', 'bulk-functions.ts'),
+    ];
+
+    for (const filePath of files) {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const setBlocks = content.match(/\.set\(\{[^}]*\}\)/gs) ?? [];
+
+      for (const block of setBlocks) {
+        expect(block).not.toContain('templateSnapshotJson');
+        expect(block).not.toContain('renderedVariablesJson');
+      }
+    }
   });
 });

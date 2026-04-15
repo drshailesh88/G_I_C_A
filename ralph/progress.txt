@@ -18,6 +18,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T12:10:00Z — cert-api-007 — Snapshot immutability at issuance time
+- Implemented: Verified existing issueCertificate already captures templateSnapshotJson (from template.templateJson) and renderedVariablesJson (from validated input) at insert time. Added 3 unit tests: snapshot capture from template, rendered variables capture from input, and static analysis verifying no UPDATE path touches snapshot columns across certificate-issuance.ts and bulk-functions.ts.
+- Files changed: src/lib/actions/certificate-issuance.test.ts
+- Tests added: 3 (captures templateSnapshotJson from template, captures renderedVariablesJson from input, no code path updates snapshot columns)
+- Learnings: Implementation was already correct from cert-code-001 which set templateSnapshotJson: template.templateJson in the insert. The immutability guarantee holds because all .set() calls on issuedCertificates only update status/timestamps/counters — never snapshot columns.
+
 ## 2026-04-15T12:00:00Z — cert-api-006 — POST /api/events/[eventId]/certificates endpoint
 - Implemented: Created route handler with Zod request schema (snake_case → camelCase transform), eventId path validation, assertEventAccess + certificate-specific role guard (super_admin/event_coordinator only), body validation, issueCertificate call, and error mapping to contract status codes (400/403/404/201)
 - Files changed: src/app/api/events/[eventId]/certificates/route.ts (new), src/app/api/events/[eventId]/certificates/route.test.ts (new)

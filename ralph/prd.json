@@ -285,7 +285,7 @@
     "data_model": "issuedCertificates.templateSnapshotJson, renderedVariablesJson — data-requirements.md §18 Rules line 'Regeneration creates a new row, supersedes the old one. Never overwrites.'",
     "priority": 7,
     "core": true,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {
