@@ -979,7 +979,7 @@
     "data_model": "Same as 022.",
     "priority": 23,
     "core": false,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {

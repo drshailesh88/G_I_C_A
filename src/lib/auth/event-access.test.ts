@@ -220,6 +220,18 @@ describe('assertEventAccess', () => {
     expect(result.role).toBe('org:super_admin');
   });
 
+  it('super bypasses assignment check — does not query event_user_assignments', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'super-1',
+      has: ({ role }: { role: string }) => role === 'org:super_admin',
+    });
+
+    const result = await assertEventAccess('event-B');
+    expect(result.userId).toBe('super-1');
+    expect(result.role).toBe('org:super_admin');
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
   it('allows assigned owners without Clerk roles to write via fallback role', async () => {
     mockAuth.mockResolvedValue({
       userId: 'owner-without-role',
