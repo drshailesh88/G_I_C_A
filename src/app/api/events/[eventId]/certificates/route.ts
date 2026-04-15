@@ -3,7 +3,15 @@ import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { events } from '@/lib/db/schema';
-import { assertEventAccess, EventNotFoundError } from '@/lib/auth/event-access';
+import {
+  assertEventAccess,
+  EventArchivedError,
+  EventNotFoundError,
+} from '@/lib/auth/event-access';
+import {
+  assertEventIdMatch,
+  EventIdMismatchError,
+} from '@/lib/auth/event-id-mismatch';
 import { crossEvent404Response } from '@/lib/auth/sanitize-cross-event-404';
 import { ROLES } from '@/lib/auth/roles';
 import { issueCertificate } from '@/lib/actions/certificate-issuance';
@@ -19,6 +27,21 @@ const CERTIFICATE_WRITE_ROLES: ReadonlySet<string> = new Set([
   ROLES.SUPER_ADMIN,
   ROLES.EVENT_COORDINATOR,
 ]);
+
+function getSubmittedEventId(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return undefined;
+  }
+
+  const candidate = body as { eventId?: unknown; event_id?: unknown };
+  if (typeof candidate.eventId === 'string') {
+    return candidate.eventId;
+  }
+  if (typeof candidate.event_id === 'string') {
+    return candidate.event_id;
+  }
+  return undefined;
+}
 
 export const issueCertificateRequestSchema = z
   .object({
@@ -51,12 +74,17 @@ export async function POST(
   const { eventId } = parsed.data;
 
   let role: string | null;
+  let userId: string;
   try {
     const access = await assertEventAccess(eventId, { requireWrite: true });
     role = access.role;
+    userId = access.userId;
   } catch (err) {
     if (err instanceof EventNotFoundError) {
       return crossEvent404Response();
+    }
+    if (err instanceof EventArchivedError) {
+      return NextResponse.json({ error: 'event archived' }, { status: 400 });
     }
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
@@ -78,6 +106,20 @@ export async function POST(
       { error: 'validation_failed', fields: bodyResult.error.flatten().fieldErrors },
       { status: 400 },
     );
+  }
+
+  try {
+    assertEventIdMatch({
+      urlEventId: eventId,
+      bodyEventId: getSubmittedEventId(body),
+      userId,
+      endpoint: 'POST /api/events/[eventId]/certificates',
+    });
+  } catch (err) {
+    if (err instanceof EventIdMismatchError) {
+      return NextResponse.json({ error: 'eventId mismatch' }, { status: 400 });
+    }
+    throw err;
   }
 
   if (bodyResult.data.certificateType === 'cme_attendance') {
