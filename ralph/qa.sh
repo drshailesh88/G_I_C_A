@@ -25,7 +25,7 @@ QA_PROGRESS=ralph/qa-progress.txt
 ITER_TIMEOUT=1800
 SLEEP_BETWEEN=3
 
-OPENCODE_MODEL="${OPENCODE_MODEL:-zai-coding-plan/glm-5.1}"
+OPENCODE_MODEL="${OPENCODE_MODEL:-opencode/minimax-m2.5-free}"
 
 # Quota / auth / transport detection
 QUOTA_REGEX='429|rate.?limit|rate_limit|quota.?exceeded|quota_exceeded|usage.?limit|insufficient_quota|retry.?after|RESOURCE_EXHAUSTED|hit your usage limit|try again at|unauthorized|invalid.?api.?key|401|402|403'
