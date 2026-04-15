@@ -26,6 +26,10 @@ import {
 import { resendEmailProvider } from './email';
 import { evolutionWhatsAppProvider } from './whatsapp';
 import { redisIdempotencyService } from './idempotency';
+import {
+  createShimmedEmailProvider,
+  createShimmedWhatsAppProvider,
+} from './provider-mode';
 import type { CircuitBreakerService } from './circuit-breaker';
 import { ProviderTimeoutError } from './timeout';
 import { CircuitOpenError } from './circuit-breaker';
@@ -47,8 +51,8 @@ export type NotificationServiceDeps = {
 };
 
 const defaultDeps: NotificationServiceDeps = {
-  emailProvider: resendEmailProvider,
-  whatsAppProvider: evolutionWhatsAppProvider,
+  emailProvider: createShimmedEmailProvider(resendEmailProvider),
+  whatsAppProvider: createShimmedWhatsAppProvider(evolutionWhatsAppProvider),
   idempotencyService: redisIdempotencyService,
   circuitBreaker: null, // Set via getDefaultCircuitBreaker() in production wiring
   renderTemplateFn: renderTemplate,
@@ -248,6 +252,9 @@ export async function sendNotification(
         htmlBody: rendered.body,
         fromDisplayName: rendered.brandingVars?.emailSenderName || undefined,
         attachments: input.attachments,
+        metadata: input.triggerEntityId
+          ? { 'x-trigger-id': input.triggerEntityId }
+          : undefined,
       });
     } else {
       providerResult = await whatsAppProvider.sendText({
@@ -255,6 +262,9 @@ export async function sendNotification(
         toPhoneE164: input.variables['recipientPhoneE164'] as string,
         body: rendered.body,
         mediaAttachments: input.attachments,
+        metadata: input.triggerEntityId
+          ? { 'x-trigger-id': input.triggerEntityId }
+          : undefined,
       });
     }
   } catch (error) {

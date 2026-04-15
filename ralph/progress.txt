@@ -44,6 +44,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T15:42:00Z — infra-040 — Provider-mode shim for notification adapters
+- Implemented: Created provider-mode shim that wraps EmailProvider and WhatsAppProvider with Redis-backed mode state machine. Modes: normal (real call), fail (always throw), failN:N (throw first N then succeed), flaky:rate (random fail). POST /api/test/provider-mode endpoint sets mode per channel. On successful sends, persists rendered body to `test:last-sent:{triggerId}:{channel}` for e2e verification via /api/test/last-sent-body. Shimmed providers wired into sendNotification defaultDeps. Trigger IDs passed via metadata field.
+- Files changed: src/lib/notifications/provider-mode.ts (new), src/lib/notifications/provider-mode.test.ts (new), src/app/api/test/provider-mode/route.ts (new), src/app/api/test/provider-mode/route.test.ts (new), src/lib/notifications/send.ts (metadata pass-through + shim wiring), ralph/prd.json, ralph/progress.txt
+- Tests added: 16 (10 shim unit + 6 route tests)
+- Learnings: Provider shim uses x-trigger-id metadata field to pass triggerId from sendNotification to provider layer for body recording. failN mode uses Redis INCR for atomic attempt counting, resets on success past threshold.
+
 ## 2026-04-15T15:35:00Z — infra-039 — Audit-log test probe endpoint
 - Implemented: Replaced stub GET /api/test/audit-log with real implementation. Supports query params: event_id, actor_user_id, actor_username (Clerk email lookup via getUserList), resource, cert_id (matches resource_id OR meta->>'cert_id'). Returns camelCase fields. Capped at 200 rows. Guard-gated for test/dev only.
 - Files changed: src/app/api/test/audit-log/route.ts, src/app/api/test/audit-log/route.test.ts (new), ralph/prd.json, ralph/progress.txt

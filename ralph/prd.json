@@ -1724,7 +1724,7 @@
     "data_model": "Upstash keys; no DB changes.",
     "priority": 40,
     "core": true,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {
