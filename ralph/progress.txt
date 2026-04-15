@@ -29,6 +29,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T14:05:00Z — tenancy-025 — POST /api/events/[eventId]/sessions endpoint
+- Implemented: Created POST route at src/app/api/events/[eventId]/sessions/route.ts. Derives eventId from URL path only. Zod validates body (title required, optional starts_at/ends_at/hall_id/session_type). Integrates assertEventIdMatch for body.event_id mismatch → 400. assertEventAccess with requireWrite for auth. SESSION_WRITE_ROLES = super_admin + event_coordinator. Direct DB insert into sessions table with createdBy/updatedBy from auth context.
+- Files changed: src/app/api/events/[eventId]/sessions/route.ts (new), src/app/api/events/[eventId]/sessions/route.test.ts (new), ralph/prd.json, ralph/progress.txt
+- Tests added: 7 (Zod missing title 400, valid create 201, eventId mismatch 400, cross-event 404, invalid param 400, unauthorized 403, createdBy/updatedBy verification)
+- Learnings: vi.resetAllMocks() needed instead of vi.clearAllMocks() when tests set mockImplementation that should be cleared between tests. The sessions API body uses snake_case (starts_at, ends_at, hall_id, session_type, event_id) per API contract convention; the existing createSession action uses a different form-oriented schema (sessionDate, startTime, endTime), so the route handler inserts directly rather than calling the action.
+
 ## 2026-04-15T14:00:00Z — tenancy-024 — Read-only users see write buttons disabled
 - Implemented: Added useRole() hook to AccommodationListClient. Header "Add" link and empty-state "Add Accommodation" link conditionally render as disabled buttons (aria-disabled="true", disabled attribute, opacity-50) for read_only role. Cancel buttons in both AccommodationTable and AccommodationCard add !canWrite to their disabled condition with aria-disabled. Writable roles see the original Link/button behavior unchanged.
 - Files changed: src/app/(app)/events/[eventId]/accommodation/accommodation-list-client.tsx, src/app/(app)/events/[eventId]/accommodation/accommodation-list-client.test.tsx

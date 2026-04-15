@@ -1062,7 +1062,7 @@
     "data_model": "sessions schema in src/lib/db/schema/program.ts.",
     "priority": 25,
     "core": true,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {
