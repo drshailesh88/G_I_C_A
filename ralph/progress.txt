@@ -44,6 +44,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T15:26:00Z — cascade-037 — In-flight cascades complete after event archived
+- Implemented: Added EventArchivedError to assertEventAccess — blocks writes (requireWrite:true) on archived events with statusCode 400. Cascade handlers remain archive-agnostic; in-flight cascades emitted before archival complete normally (CE10, CE17).
+- Files changed: src/lib/auth/event-access.ts, src/lib/auth/event-archived.test.ts (new), src/lib/cascade/handlers/archive-bypass.test.ts (new), ralph/prd.json, ralph/progress.txt
+- Tests added: 5 (handler runs on archived event, assertEventAccess blocks writes on archived, allows writes on published, skips check for reads, EventArchivedError shape)
+- Learnings: Archive restriction lives in assertEventAccess (auth layer), not in cascade handlers. This ensures in-flight cascades complete while new mutations are blocked.
+
 ## 2026-04-15T15:22:00Z — cascade-036 — Cascade handler eventId audit
 - Implemented: Static source analysis test audits all cascade handler files for eventId scoping. Every .from() on event-scoped tables must have withEventScope in surrounding context; people table (global) must NOT. Added diff-audit computed pattern CASCADE_HANDLER_MISSING_EVENT_SCOPE to reject future cascade handler diffs with unscoped DB queries.
 - Files changed: src/lib/cascade/handlers/eventid-audit.test.ts (new), qa/diff-audit/regex-patterns.ts, ralph/prd.json, ralph/progress.txt

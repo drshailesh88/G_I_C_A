@@ -1593,7 +1593,7 @@
     "data_model": "No schema change; behavior lives in auth/event-access + mutation routes.",
     "priority": 37,
     "core": false,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {
