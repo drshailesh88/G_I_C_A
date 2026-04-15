@@ -14,6 +14,10 @@ const isPublicRoute = createRouteMatcher([
   '/api/inngest',
   '/api/health',
   '/maintenance',
+  // Test probes — handlers self-guard against production
+  '/api/test/(.*)',
+  '/verify/(.*)',
+  '/register/(.*)',
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
