@@ -28,11 +28,19 @@
 - Cross-event 404 sanitizer: import crossEvent404Response from src/lib/auth/sanitize-cross-event-404.ts. Use instead of NextResponse.json(null, { status: 404 }) in EventNotFoundError catch blocks. Returns { error: 'Not Found' } with no event-identifying info. sanitize404Body(body) available for custom sanitization.
 
 - Read-only disabled buttons: import useRole() in client component, use canWrite to conditionally render Link (writable) vs disabled button with aria-disabled="true" + disabled attribute + opacity-50 + cursor-not-allowed. Cancel buttons add !canWrite to existing disabled condition. Pattern applies to any module needing read_only UI gating.
+
+- Variable snapshot: resolveVariablesSnapshot() in src/lib/cascade/variables-snapshot.ts resolves person contact + domain vars at emit time and returns Object.freeze(snapshot). Handlers check payload.variables: if present, use directly (no DB re-query); if absent, fall back to resolvePersonContact per-notification. This preserves existing test mock ordering (vi.clearAllMocks doesn't clear mockReturnValueOnce queue, so DB call count must stay consistent).
 - GET person-detail pattern: check event_people attachment first (404 if not found), then fetch person master data, then event-scoped attributes (travel, sessions, registration) all filtered by eventId+personId. Response uses snake_case for person fields. No requireWrite needed for read endpoints.
 
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T14:55:00Z — cascade-032 — Variable snapshot captured at emit time
+- Implemented: Created resolveVariablesSnapshot() in src/lib/cascade/variables-snapshot.ts. Resolves person contact info (email, phoneE164, fullName) from DB at emit time, merges with domain variables, and returns Object.freeze(snapshot). Modified travel and accommodation cascade handlers to accept payload.variables as snapshot override — when present, handlers use it directly without re-querying DB; when absent, fall back to original resolvePersonContact flow.
+- Files changed: src/lib/cascade/variables-snapshot.ts (new), src/lib/cascade/variables-snapshot.test.ts (new), src/lib/cascade/handlers/travel-cascade.ts, src/lib/cascade/handlers/accommodation-cascade.ts, ralph/prd.json, ralph/progress.txt
+- Tests added: 3 (snapshot frozen into payload, retry uses same snapshot with single DB call, null contact fields for missing person)
+- Learnings: vi.clearAllMocks() does NOT clear mockReturnValueOnce queue. Changing DB call count in handlers breaks existing tests via mock leakage. Solution: keep same call count for legacy path (no payload.variables), add snapshot path as an override only when present.
 
 ## 2026-04-15T14:35:00Z — cascade-031 — 5-second cascade debounce
 - Implemented: Created debouncedEmitCascadeEvent() in src/lib/cascade/debounce.ts. Wraps emitCascadeEvent with Redis-backed debounce keyed on (eventId, sourceEntityType, sourceEntityId). Uses SET NX EX 5 for debounce lock and a separate buffer key for merged changeSummary. First call in window merges into buffer and emits; subsequent calls within 5s merge into buffer and skip Inngest.send. Different source entity tuples use distinct keys so they never coalesce (CE14).
