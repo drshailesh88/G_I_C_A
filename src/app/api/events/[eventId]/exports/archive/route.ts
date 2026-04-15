@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { assertEventAccess, EventNotFoundError } from '@/lib/auth/event-access';
+import { crossEvent404Response } from '@/lib/auth/sanitize-cross-event-404';
 import { generateEventArchive } from '@/lib/exports/archive';
 import { createR2Provider } from '@/lib/certificates/storage';
 import { z } from 'zod';
@@ -28,7 +29,7 @@ export async function POST(
     await assertEventAccess(eventId, { requireWrite: true });
   } catch (err) {
     if (err instanceof EventNotFoundError) {
-      return NextResponse.json(null, { status: 404 });
+      return crossEvent404Response();
     }
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

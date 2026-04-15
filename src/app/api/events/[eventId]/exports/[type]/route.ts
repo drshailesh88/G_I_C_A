@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { assertEventAccess, EventNotFoundError } from '@/lib/auth/event-access';
+import { crossEvent404Response } from '@/lib/auth/sanitize-cross-event-404';
 import { generateExport, EXPORT_TYPES, type ExportType } from '@/lib/exports/excel';
 
 type Params = Promise<{ eventId: string; type: string }>;
@@ -23,7 +24,7 @@ export async function GET(
     await assertEventAccess(eventId);
   } catch (err) {
     if (err instanceof EventNotFoundError) {
-      return NextResponse.json(null, { status: 404 });
+      return crossEvent404Response();
     }
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

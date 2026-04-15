@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { events } from '@/lib/db/schema';
 import { assertEventAccess, EventNotFoundError } from '@/lib/auth/event-access';
+import { crossEvent404Response } from '@/lib/auth/sanitize-cross-event-404';
 import { ROLES } from '@/lib/auth/roles';
 import { CERTIFICATE_TYPES } from '@/lib/validations/certificate';
 import { Redis } from '@upstash/redis';
@@ -54,7 +55,7 @@ export async function POST(
     userId = access.userId;
   } catch (err) {
     if (err instanceof EventNotFoundError) {
-      return NextResponse.json(null, { status: 404 });
+      return crossEvent404Response();
     }
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }

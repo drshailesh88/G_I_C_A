@@ -21,10 +21,17 @@
 - assertEventAccess throws EventNotFoundError (→ 404) for unmembered cross-event access; route handlers use instanceof check. Test mocks must export EventNotFoundError via vi.hoisted() to avoid "Cannot access before initialization" errors.
 - assertEventAccess throws ForbiddenError (→ 403, statusCode=403) for role-denial within an assigned event (e.g. read_only + requireWrite). Route handlers catch non-EventNotFoundError as 403. Tests mocking assertEventAccess for write-denial should throw new Error('forbidden') or ForbiddenError.
 - eventId mismatch guard: import assertEventIdMatch from src/lib/auth/event-id-mismatch.ts. Call after body parse with { urlEventId, bodyEventId: body.eventId, userId, endpoint }. Catches EventIdMismatchError → 400 { error: 'eventId mismatch' }. Sentry event emitted with tags { module: 'tenancy', kind: 'eventId-mismatch' } and extra { urlEventId, bodyEventId, endpoint }.
+- Cross-event 404 sanitizer: import crossEvent404Response from src/lib/auth/sanitize-cross-event-404.ts. Use instead of NextResponse.json(null, { status: 404 }) in EventNotFoundError catch blocks. Returns { error: 'Not Found' } with no event-identifying info. sanitize404Body(body) available for custom sanitization.
 
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T13:45:00Z — tenancy-021 — Cross-event 404 responses leak zero event-identifying info
+- Implemented: Created sanitize-cross-event-404.ts with crossEvent404Response() helper returning { error: 'Not Found' } and sanitize404Body() that strips UUIDs and forbidden tokens (access, permission, forbidden). Updated 7 route handlers from NextResponse.json(null, { status: 404 }) to crossEvent404Response() in EventNotFoundError catch blocks.
+- Files changed: src/lib/auth/sanitize-cross-event-404.ts (new), src/lib/auth/sanitize-cross-event-404.test.ts (new), src/app/api/events/[eventId]/certificates/route.ts, src/app/api/events/[eventId]/certificates/[certificateId]/regenerate/route.ts, src/app/api/events/[eventId]/certificates/[certificateId]/revoke/route.ts, src/app/api/events/[eventId]/certificates/[certificateId]/download/route.ts, src/app/api/events/[eventId]/certificates/bulk/route.ts, src/app/api/events/[eventId]/exports/archive/route.ts, src/app/api/events/[eventId]/exports/[type]/route.ts, ralph/prd.json, ralph/progress.txt
+- Tests added: 8 (6 sanitize404Body tests + 2 crossEvent404Response tests)
+- Learnings: Existing route tests only assert status code for 404, not body, so changing from null to { error: 'Not Found' } required no test updates. The helper is a thin wrapper — pure function + NextResponse.json.
 
 ## 2026-04-15T13:40:00Z — tenancy-020 — URL vs body eventId mismatch returns 400 with Sentry breadcrumb
 - Implemented: Created assertEventIdMatch shared helper in src/lib/auth/event-id-mismatch.ts. Compares URL path eventId against body eventId; if different, emits Sentry event with { userId, urlEventId, bodyEventId, endpoint } and throws EventIdMismatchError. Body without eventId key is silently accepted (no mismatch). Route handlers catch EventIdMismatchError → 400 { error: 'eventId mismatch' }.

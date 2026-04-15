@@ -896,7 +896,7 @@
     "data_model": "No schema.",
     "priority": 21,
     "core": false,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {

@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { events } from '@/lib/db/schema';
 import { assertEventAccess, EventNotFoundError } from '@/lib/auth/event-access';
+import { crossEvent404Response } from '@/lib/auth/sanitize-cross-event-404';
 import { ROLES } from '@/lib/auth/roles';
 import { issueCertificate } from '@/lib/actions/certificate-issuance';
 import { CERTIFICATE_TYPES, ELIGIBILITY_BASIS_TYPES, createCmeVariablesSchema } from '@/lib/validations/certificate';
@@ -55,7 +56,7 @@ export async function POST(
     role = access.role;
   } catch (err) {
     if (err instanceof EventNotFoundError) {
-      return NextResponse.json(null, { status: 404 });
+      return crossEvent404Response();
     }
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }

@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { issuedCertificates } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { crossEvent404Response } from '@/lib/auth/sanitize-cross-event-404';
 import { ROLES } from '@/lib/auth/roles';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { createR2Provider } from '@/lib/certificates/storage';
@@ -34,7 +35,7 @@ export async function GET(
     const access = await assertEventAccess(eventId, { requireWrite: false });
     role = access.role;
   } catch {
-    return NextResponse.json(null, { status: 404 });
+    return crossEvent404Response();
   }
 
   const [cert] = await db
