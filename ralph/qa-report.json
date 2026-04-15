@@ -21,5 +21,30 @@
       }
     ],
     "notes": "Automated vitest passed. The required Playwright certificate contract command is blocked before product assertions by Clerk auth setup redirect loops; a diagnostic --no-deps run then fails because certificate fixture env vars such as EVENT_A_ID are absent. Typecheck fails with broad pre-existing repo errors outside the certificate issuance module. Manual code/spec review found a production behavior gap, but fixing it safely would require reconciling existing non-contract tests that currently assert the conflicting supersession behavior."
+  },
+  {
+    "story_id": "cert-code-002",
+    "qa_timestamp": "2026-04-15T14:12:52Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "skip",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "After a transaction failure retry was consumed, issueCertificate could throw the retry error or continue into an unintended third attempt instead of re-throwing the original transaction failure.",
+        "severity": "medium",
+        "fix_commit": "a603c56",
+        "files_changed": [
+          "src/lib/actions/certificate-issuance.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), including focused certificate issuance unit and mutation-kill suites (126 tests). Playwright certificate contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this certificate issuance change. Manual verification confirmed the transaction retry state now stops after one retry and preserves the original transaction error on retry failure; persistence was not re-probed because the available contract browser fixture is blocked."
   }
 ]

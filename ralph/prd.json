@@ -63,6 +63,9 @@
   },
   {
     "id": "cert-code-002",
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-15T14:12:52Z",
+    "qa_tested_by": "codex",
     "category": "crud",
     "description": "Add single-retry-on-transaction-failure to issueCertificate so the retry mutation-kill test passes.",
     "page": "N/A — Backend",

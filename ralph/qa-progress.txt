@@ -1,0 +1,23 @@
+# Ralph QA Progress — GEM India
+
+## QA Patterns
+
+<!-- Cross-feature QA findings: common bug classes, edge cases worth re-checking. Codex writes here. -->
+- Certificate Playwright contracts are currently blocked before product assertions by Clerk auth setup redirecting `/events` with `ERR_TOO_MANY_REDIRECTS`; record this as a harness blocker when it recurs rather than treating it as certificate product behavior.
+- Repo-level `npx tsc --noEmit` currently fails on broad existing errors across QA/test, Sentry, people, navigation, notification, and cascade files; distinguish those from story-local production type regressions.
+
+## Iteration log
+
+<!-- Dated entries per QA'd feature. -->
+
+## 2026-04-15T14:07:17Z — cert-code-001 — issueCertificate rejection branches
+- Status: fail
+- Bugs: 1 (high: 1)
+- Fix commits: none
+- Notes: Vitest passed, but Playwright contracts and typecheck are blocked by repo/harness issues; manual review found normal issue calls supersede existing issued certs despite the story requiring rejection outside the regenerate path.
+
+## 2026-04-15T14:12:52Z — cert-code-002 — issueCertificate transaction retry
+- Status: fixed
+- Bugs: 1 (medium: 1)
+- Fix commits: a603c56
+- Notes: Fixed retry-failure handling so the original transaction error is re-thrown after the single retry is consumed; Vitest passed, while certificate Playwright contracts and repo typecheck remain blocked by pre-existing harness/repo issues.
