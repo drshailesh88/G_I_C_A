@@ -153,6 +153,43 @@ The file must remain valid JSON (top-level array). Validate with
 `python3 -c "import json; json.load(open('ralph/qa-report.json'))"` before
 writing.
 
+### 9b. Flip qa_tested:true in prd.json
+After the qa-report entry is written, edit `ralph/prd.json`:
+- Find the entry whose `id` matches the story you just evaluated.
+- Set `"qa_tested": true` on that entry.
+- Set `"qa_tested_at": "<ISO 8601 UTC>"` and `"qa_tested_by": "codex"`.
+- Do NOT touch any other entry. Do NOT touch `passes`, `behavior`,
+  `tests`, or any other field on this entry. Only the three qa_* fields.
+
+Validate the file remains parseable JSON:
+`python3 -c "import json; json.load(open('ralph/prd.json'))"`
+
+This flip is what watch.sh / dashboards / progress counters read to know
+that QA has been done. Skipping it leaves the story permanently stuck at
+✅ built but never 🟢 QA-tested, even though a qa-report entry exists.
+
+Example single-entry edit (conceptual — apply to the one matching id):
+```json
+{
+  "id": "cert-api-006",
+  "passes": true,
+  "qa_tested": true,
+  "qa_tested_at": "2026-04-15T18:42:00Z",
+  "qa_tested_by": "codex",
+  ...
+}
+```
+
+Commit this prd.json change ONLY IF no bug-fix commit already committed
+it. If you made a `QA: <story-id> — fixed N bug(s)` commit in step 8,
+include `ralph/prd.json` in that commit. If no bugs were found and no
+step-8 commit exists, make a dedicated commit:
+```
+QA: <story-id> — verified, no bugs
+
+All checks passed; feature matches behavior spec; qa_tested flipped.
+```
+
 ### 10. Update qa-progress.txt
 Append a dated section:
 ```
