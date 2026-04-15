@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 # Ralph QA loop — independent Codex evaluation of every feature Ralph built.
 #
-# Codex is a DIFFERENT model from Claude. That's the point: the builder cannot
-# be the grader. For each story where prd.json has passes:true, Codex verifies
-# the feature independently — runs the test suites, manually exercises
-# acceptance criteria, probes edge cases, and fixes any bugs it finds in the
-# PRODUCTION code (never the tests). Findings are recorded in
-# ralph/qa-report.json; progress tracked in ralph/qa-progress.txt.
+# Codex is a DIFFERENT model from Claude. For each passes:true story in
+# prd.json, Codex verifies the feature, probes edge cases, and fixes bugs
+# in production code. Findings → ralph/qa-report.json. Progress →
+# ralph/qa-progress.txt.
 #
 # Usage: ./ralph/qa.sh [max_iterations=999]
 
@@ -15,10 +13,9 @@ cd "$(dirname "$0")/.."
 
 MAX_ITER="${1:-999}"
 PRD=ralph/prd.json
-QA_PROMPT=ralph/qa-prompt.md
 QA_REPORT=ralph/qa-report.json
 QA_PROGRESS=ralph/qa-progress.txt
-ITER_TIMEOUT=1800   # 30 min per iteration — QA involves more reads than writes
+ITER_TIMEOUT=1800
 SLEEP_BETWEEN=3
 
 if [ ! -f "$PRD" ]; then
@@ -31,13 +28,21 @@ if ! command -v codex >/dev/null 2>&1; then
   exit 1
 fi
 
-# Initialize qa-report.json if missing (empty array; Codex appends entries)
+# Resolve timeout command (macOS ships without `timeout`).
+if command -v timeout >/dev/null 2>&1; then
+  TIMEOUT_CMD=(timeout "$ITER_TIMEOUT")
+elif command -v gtimeout >/dev/null 2>&1; then
+  TIMEOUT_CMD=(gtimeout "$ITER_TIMEOUT")
+else
+  echo "WARNING: no timeout command found (install coreutils for gtimeout). Iterations will run without time limit — Ctrl-C if hung." >&2
+  TIMEOUT_CMD=()
+fi
+
 if [ ! -f "$QA_REPORT" ]; then
   echo "[]" > "$QA_REPORT"
   echo "Initialized $QA_REPORT"
 fi
 
-# Initialize qa-progress.txt if missing
 if [ ! -f "$QA_PROGRESS" ]; then
   cat > "$QA_PROGRESS" <<'EOF'
 # Ralph QA Progress — GEM India
@@ -69,7 +74,11 @@ echo "  prd:        $PRD  ($BUILT features built, $QAD already QA'd)"
 echo "  report:     $QA_REPORT"
 echo "  progress:   $QA_PROGRESS"
 echo "  max iter:   $MAX_ITER"
-echo "  timeout:    ${ITER_TIMEOUT}s per iter"
+if [ ${#TIMEOUT_CMD[@]} -gt 0 ]; then
+  echo "  timeout:    ${ITER_TIMEOUT}s per iter (${TIMEOUT_CMD[0]})"
+else
+  echo "  timeout:    (none available)"
+fi
 echo "───────────────────────────────────────────────────────────────"
 
 if [ "$BUILT" -eq 0 ]; then
@@ -90,54 +99,40 @@ for i in $(seq 1 "$MAX_ITER"); do
     break
   fi
 
-  # Last 10 QA: commits inline for trajectory context
   RECENT_QA_COMMITS=$(git log --grep='^QA:' -n 10 --format='%H%n%ad%n%B---' --date=short 2>/dev/null || echo '(no QA commits yet)')
 
-  PROMPT=$(cat <<EOF
-You are the QA evaluator for the Ralph build. You are a DIFFERENT agent from
-the builder — do not trust passes:true just because the builder said so.
-Verify every feature independently.
-
-Read these files in the repo:
-  - ralph/qa-prompt.md (your full instructions)
-  - CLAUDE.md (project rules)
-  - ralph/prd.json (the build PRD — passes:true entries are candidates for QA)
-  - ralph/qa-report.json (your prior findings — do NOT re-QA entries already present)
-  - ralph/qa-progress.txt (cross-iteration patterns)
-
-## Recent QA commits (last 10)
-
-\`\`\`
-$RECENT_QA_COMMITS
-\`\`\`
-
-## Iteration
-
-QA iteration $i. $QAD of $BUILT built features already QA'd.
-Pick the first story in prd.json where passes:true AND no entry in
-qa-report.json has story_id equal to that story's id.
-Follow ralph/qa-prompt.md. Emit a promise tag at the end.
-EOF
-)
-
+  # Huntley-style single-string prompt argument — no intermediate heredoc.
   set +e
-  OUTPUT=$(timeout "$ITER_TIMEOUT" codex exec \
-    --dangerously-bypass-approvals-and-sandbox \
-    "$PROMPT" 2>&1)
+  result=$("${TIMEOUT_CMD[@]}" codex exec --dangerously-bypass-approvals-and-sandbox \
+"You are a DIFFERENT agent from the builder. Do not trust passes:true just because the builder said so.
+Read ralph/qa-prompt.md for your full instructions. Also read CLAUDE.md, $PRD, $QA_REPORT, and $QA_PROGRESS.
+
+ITERATION: $i of $MAX_ITER
+PROGRESS: $QAD of $BUILT built features already QA'd
+Previous QA commits:
+$RECENT_QA_COMMITS
+
+Pick the FIRST story in $PRD where passes:true AND no entry in $QA_REPORT has a matching story_id.
+Verify it independently per ralph/qa-prompt.md: automated checks, manual acceptance, edge cases.
+Fix any bugs you find in PRODUCTION code only — never tests, never locked files.
+Append a structured entry to $QA_REPORT. Update $QA_PROGRESS.
+Output <promise>NEXT</promise> when done.
+Output <promise>QA_COMPLETE</promise> only if every passes:true story has a qa-report entry.
+Output <promise>ABORT</promise> if blocked (explain why above the tag).")
   CODEX_EXIT=$?
   set -e
 
-  echo "$OUTPUT" | tail -20
+  echo "$result"
 
-  if echo "$OUTPUT" | grep -q '<promise>QA_COMPLETE</promise>'; then
+  if echo "$result" | grep -q '<promise>QA_COMPLETE</promise>'; then
     echo ""
     echo "Codex signaled QA_COMPLETE."
     break
-  elif echo "$OUTPUT" | grep -q '<promise>ABORT</promise>'; then
+  elif echo "$result" | grep -q '<promise>ABORT</promise>'; then
     echo ""
     echo "Codex signaled ABORT — QA blocked. Stopping." >&2
     exit 2
-  elif echo "$OUTPUT" | grep -q '<promise>NEXT</promise>'; then
+  elif echo "$result" | grep -q '<promise>NEXT</promise>'; then
     :
   else
     echo ""
@@ -150,7 +145,6 @@ done
 FINAL_QAD=$(count_qad)
 BUILT=$(count_built)
 
-# Summarize bug counts from qa-report.json
 python3 - <<PY
 import json
 d = json.load(open('$QA_REPORT'))
@@ -161,7 +155,7 @@ for x in d:
     by_status[x.get('status','?')] = by_status.get(x.get('status','?'), 0) + 1
 print('')
 print('───────────────────────────────────────────────────────────────')
-print(f'QA summary: {$FINAL_QAD}/{$BUILT} features QA\\'d')
+print(f"QA summary: {$FINAL_QAD}/{$BUILT} features QA'd")
 print(f'  bugs found:   {total_bugs}')
 print(f'  bugs fixed:   {fixed}')
 print(f'  status tally: {by_status}')
