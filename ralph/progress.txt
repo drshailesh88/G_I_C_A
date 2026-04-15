@@ -19,6 +19,8 @@
 
 - notification_log upsert: upsertLogEntry uses INSERT...ON CONFLICT(idempotency_key) DO UPDATE with sql`${notificationLog.attempts} + 1` for atomic increment. Never creates a second row for same key. Status/error/timestamps updated on conflict.
 
+- Cascade debounce: debouncedEmitCascadeEvent uses two Redis keys per (eventId, sourceEntityType, sourceEntityId): debounce lock key with SET NX EX 5 and buffer key for merged changeSummary. First call in window emits via emitCascadeEvent with merged payload + _bufferKey; subsequent calls merge into buffer and skip emit. Different source entities use distinct keys so never coalesce.
+
 - issueCertificate select sequence order: event status → person exists → event_people attachment → template active → (inside tx) existing certs + cert numbers. All tests using chainedSelectSequence must include the event_people row after person row.
 - assertEventAccess throws EventNotFoundError (→ 404) for unmembered cross-event access; route handlers use instanceof check. Test mocks must export EventNotFoundError via vi.hoisted() to avoid "Cannot access before initialization" errors.
 - assertEventAccess throws ForbiddenError (→ 403, statusCode=403) for role-denial within an assigned event (e.g. read_only + requireWrite). Route handlers catch non-EventNotFoundError as 403. Tests mocking assertEventAccess for write-denial should throw new Error('forbidden') or ForbiddenError.
@@ -31,6 +33,12 @@
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T14:35:00Z — cascade-031 — 5-second cascade debounce
+- Implemented: Created debouncedEmitCascadeEvent() in src/lib/cascade/debounce.ts. Wraps emitCascadeEvent with Redis-backed debounce keyed on (eventId, sourceEntityType, sourceEntityId). Uses SET NX EX 5 for debounce lock and a separate buffer key for merged changeSummary. First call in window merges into buffer and emits; subsequent calls within 5s merge into buffer and skip Inngest.send. Different source entity tuples use distinct keys so they never coalesce (CE14).
+- Files changed: src/lib/cascade/debounce.ts (new), src/lib/cascade/debounce.test.ts (new), ralph/prd.json, ralph/progress.txt
+- Tests added: 3 (second emit swallowed, merged changeSummary has both keys, CE14 different travelIds not coalesced)
+- Learnings: vi.stubEnv needed for env var checks in getRedisClient. Redis mock uses shared Map for store state, allowing tests to inspect buffer contents directly. The _bufferKey in payload allows handlers to re-read buffer for latest merged state if processing is delayed.
 
 ## 2026-04-15T14:30:00Z — cascade-030 — 3-attempt retry then dead-letter
 - Implemented: Created handleDeadLetter() in src/lib/cascade/dead-letter.ts. On final failure: (a) updates notification_log status='failed' via updateLogStatus with error code/message, (b) captures Sentry event with kind='cascade-dispatch-failure' tag and { cascadeEvent, payload, attempts, channel, triggerId } in extra, (c) upserts red_flags row with flag_type='system_dispatch_failure' scoped to (eventId, targetEntityType, targetEntityId). No user-facing notification sent. Added 'system_dispatch_failure' to FLAG_TYPES, 'notification_log' to TARGET_ENTITY_TYPES, 'cascade_dispatch' to SOURCE_ENTITY_TYPES.
