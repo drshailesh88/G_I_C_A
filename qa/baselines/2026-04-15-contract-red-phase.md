@@ -58,7 +58,39 @@ mapping in `assertEventAccess`). QA pipeline harden-pass follows.
 
 ## Stryker baseline
 
-Running separately via `npx tsx qa/controller.ts baseline`. Populates
-`.quality/baselines/*` with per-module mutation scores against the existing
-unit test suite. Contract tests are Playwright-only and do not contribute
-mutation-kill signal until the features exist.
+### Config expansion (committed `3acd0ff`)
+Globs expanded from 3 travel files → full critical_75 + business_60 tier
+coverage. Stryker now discovers **107 files / 10,337 mutants** (up from 3
+files / 442 mutants).
+
+### Baseline run: BLOCKED before mutation phase
+
+Stryker's dry-run sanity check fails because **10 pre-existing vitest
+failures** in:
+- `src/lib/actions/certificate-issuance.mutation-kill.test.ts` (9 fails)
+- `src/lib/actions/certificate.mutation-kill.test.ts` (1 fail)
+
+Failure pattern: production code missing error-throw branches, retry
+mechanism, and transaction-write ordering that the mutation-kill tests
+assert. **These are real prod-code gaps, not test bugs.**
+
+Vitest overall: **196 files, 4491 pass, 10 fail.**
+
+### Handoff
+
+Ralph must fix the cert-issuance + cert-activate production code (so those
+10 tests pass) before a true full Stryker baseline can run. After Ralph's
+first cert pass:
+```bash
+npx tsx qa/controller.ts baseline
+```
+will produce per-module scores across all 107 files.
+
+### Confirmed modules with baselines (from prior 3-file config, still valid)
+| File | Tier | Score | Floor |
+|---|---|---|---|
+| `src/lib/actions/travel.ts` | critical_75 | 99.48% | ✓ |
+| `src/lib/cascade/handlers/travel-cascade.ts` | critical_75 | 97.03% | ✓ |
+| `src/lib/validations/travel.ts` | critical_75 | 77.55% | ✓ |
+
+Travel flow has strong mutation-kill signal. Everything else awaits Ralph.
