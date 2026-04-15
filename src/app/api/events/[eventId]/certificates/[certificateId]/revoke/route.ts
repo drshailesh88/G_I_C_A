@@ -3,7 +3,15 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { issuedCertificates } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
-import { assertEventAccess, EventNotFoundError } from '@/lib/auth/event-access';
+import {
+  assertEventAccess,
+  EventArchivedError,
+  EventNotFoundError,
+} from '@/lib/auth/event-access';
+import {
+  assertEventIdMatch,
+  EventIdMismatchError,
+} from '@/lib/auth/event-id-mismatch';
 import { crossEvent404Response } from '@/lib/auth/sanitize-cross-event-404';
 import { ROLES } from '@/lib/auth/roles';
 import { withEventScope } from '@/lib/db/with-event-scope';
@@ -16,15 +24,35 @@ const paramsSchema = z.object({
 });
 
 const bodySchema = z.object({
-  reason: z.string().refine((val) => val.trim().length > 0, {
-    message: 'reason_required',
-  }),
+  reason: z.string().trim().min(1, 'reason_required'),
 });
 
 const CERTIFICATE_WRITE_ROLES: ReadonlySet<string> = new Set([
   ROLES.SUPER_ADMIN,
   ROLES.EVENT_COORDINATOR,
 ]);
+
+function getSubmittedEventId(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return undefined;
+  }
+
+  const candidate = body as { eventId?: unknown; event_id?: unknown };
+  if (typeof candidate.eventId === 'string') {
+    return candidate.eventId;
+  }
+  if (typeof candidate.event_id === 'string') {
+    return candidate.event_id;
+  }
+  return undefined;
+}
+
+function isEventArchivedError(err: unknown): boolean {
+  return (
+    (typeof EventArchivedError === 'function' && err instanceof EventArchivedError) ||
+    (err instanceof Error && err.name === 'EventArchivedError')
+  );
+}
 
 export async function POST(
   request: Request,
@@ -39,12 +67,17 @@ export async function POST(
   const { eventId, certificateId } = parsed.data;
 
   let role: string | null;
+  let userId: string;
   try {
     const access = await assertEventAccess(eventId, { requireWrite: true });
     role = access.role;
+    userId = access.userId;
   } catch (err) {
     if (err instanceof EventNotFoundError) {
       return crossEvent404Response();
+    }
+    if (isEventArchivedError(err)) {
+      return NextResponse.json({ error: 'event archived' }, { status: 400 });
     }
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
@@ -59,6 +92,20 @@ export async function POST(
     return NextResponse.json({ error: 'reason_required' }, { status: 400 });
   }
   const { reason } = bodyResult.data;
+
+  try {
+    assertEventIdMatch({
+      urlEventId: eventId,
+      bodyEventId: getSubmittedEventId(rawBody),
+      userId,
+      endpoint: 'POST /api/events/[eventId]/certificates/[certificateId]/revoke',
+    });
+  } catch (err) {
+    if (err instanceof EventIdMismatchError) {
+      return NextResponse.json({ error: 'eventId mismatch' }, { status: 400 });
+    }
+    throw err;
+  }
 
   const [cert] = await db
     .select()
