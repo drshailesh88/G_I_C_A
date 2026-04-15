@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { eq } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import { events } from '@/lib/db/schema';
 import { assertEventAccess } from '@/lib/auth/event-access';
 import { ROLES } from '@/lib/auth/roles';
 import { issueCertificate } from '@/lib/actions/certificate-issuance';
-import { CERTIFICATE_TYPES, ELIGIBILITY_BASIS_TYPES } from '@/lib/validations/certificate';
+import { CERTIFICATE_TYPES, ELIGIBILITY_BASIS_TYPES, createCmeVariablesSchema } from '@/lib/validations/certificate';
 
 type Params = Promise<{ eventId: string }>;
 
@@ -75,6 +78,29 @@ export async function POST(
       { error: 'validation_failed', fields: bodyResult.error.flatten().fieldErrors },
       { status: 400 },
     );
+  }
+
+  if (bodyResult.data.certificateType === 'cme_attendance') {
+    const [event] = await db
+      .select({ startDate: events.startDate, endDate: events.endDate })
+      .from(events)
+      .where(eq(events.id, eventId))
+      .limit(1);
+
+    if (!event) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
+    }
+
+    const durationHours =
+      (event.endDate.getTime() - event.startDate.getTime()) / (1000 * 60 * 60);
+    const cmeSchema = createCmeVariablesSchema(durationHours);
+    const cmeResult = cmeSchema.safeParse(bodyResult.data.renderedVariablesJson);
+    if (!cmeResult.success) {
+      return NextResponse.json(
+        { error: 'validation_failed', fields: cmeResult.error.flatten().fieldErrors },
+        { status: 400 },
+      );
+    }
   }
 
   try {

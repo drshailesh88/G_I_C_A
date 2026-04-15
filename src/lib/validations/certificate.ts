@@ -137,3 +137,16 @@ export const bulkGenerateSchema = z.object({
 });
 
 export type BulkGenerateInput = z.infer<typeof bulkGenerateSchema>;
+
+// ── CME variables validation (requires event duration) ──────
+export function createCmeVariablesSchema(maxCreditHours: number) {
+  return z.object({
+    cme_credit_hours: z
+      .number()
+      .gt(0, 'cme_credit_hours must be greater than 0')
+      .max(maxCreditHours, `cme_credit_hours must not exceed event duration (${maxCreditHours}h)`),
+    accrediting_body_name: z.string().trim().min(1, 'accrediting_body_name is required'),
+    accreditation_code: z.string().trim().min(1, 'accreditation_code is required'),
+    cme_claim_text: z.string().trim().min(1, 'cme_claim_text is required'),
+  });
+}

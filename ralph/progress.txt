@@ -15,10 +15,17 @@
 - API request bodies use snake_case per contract; Zod .transform() maps to camelCase for internal action functions
 - Bulk endpoints with Redis locking: use SET NX EX with JSON metadata (lock_holder, started_at); store lockKey in Inngest payload so handler can DEL on completion; mock @upstash/redis constructor in tests
 - Bulk generation uses per-cert atomicity: each recipient gets its own try/catch + db.transaction(); failures reported in errors array, not thrown; no intermediate/pending status rows
+- CME validation uses createCmeVariablesSchema(maxHours) factory — event duration fetched in route handler, schema created at request time with runtime max; non-CME types skip this validation
 
 ## Iteration log
 
 <!-- Dated entries per completed story, appended by build agent. -->
+
+## 2026-04-15T12:55:00Z — cert-api-012 — CME certificate issuance validation
+- Implemented: Added createCmeVariablesSchema(maxHours) factory to certificate validations. When certificate_type='cme_attendance', route handler fetches event dates, computes duration hours, and validates variables against CME schema requiring cme_credit_hours (>0, <=duration), accrediting_body_name, accreditation_code, cme_claim_text. Returns 400 with ZodError fields on failure.
+- Files changed: src/lib/validations/certificate.ts, src/app/api/events/[eventId]/certificates/route.ts, src/app/api/events/[eventId]/certificates/route.test.ts, src/lib/validations/certificate-cme.test.ts (new)
+- Tests added: 18 (13 schema-level in certificate-cme.test.ts, 5 route-level CME integration in route.test.ts)
+- Learnings: CME validation requires event duration from DB so it must happen in the route handler after body parsing, not in the static Zod schema. Use createCmeVariablesSchema factory pattern to create schema with runtime max hours.
 
 ## 2026-04-15T07:05:00Z — cert-code-005 — Stryker baseline (reopened, outcome b)
 - Implemented: Re-ran Stryker baseline using locked stryker.config.json (no shadow configs). Run exited 143 (SIGTERM) because without ignoreStatic, static mutants (~2612) exceed the 60-min controller timeout on laptop hardware. Existing state.json has 72 scored modules (>= 60 threshold for acceptable outcome b). Created fresh baseline snapshot with plain-English explanatory note. Travel baselines preserved: travel.ts=99.48%, travel-cascade.ts=97.03%, validations/travel.ts=100%.
