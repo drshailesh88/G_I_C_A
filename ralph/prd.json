@@ -937,7 +937,7 @@
     "data_model": "event_people JOIN people — filter by event_id.",
     "priority": 22,
     "core": false,
-    "passes": false,
+    "passes": true,
     "tests": {
       "unit": [
         {

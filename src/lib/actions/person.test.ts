@@ -447,6 +447,25 @@ describe('getEventPeople', () => {
     expect(result).toEqual(rows);
   });
 
+  it('filters by eventId in where clause', async () => {
+    const selectChain = {
+      from: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue([]),
+    };
+    mockDb.select.mockReturnValue(selectChain);
+
+    await getEventPeople('event-A');
+    expect(selectChain.where).toHaveBeenCalledTimes(1);
+
+    await getEventPeople('event-B');
+    expect(selectChain.where).toHaveBeenCalledTimes(2);
+
+    const callA = selectChain.where.mock.calls[0][0];
+    const callB = selectChain.where.mock.calls[1][0];
+    expect(callA).not.toEqual(callB);
+  });
+
   it('throws when unauthenticated', async () => {
     mockAuth.mockResolvedValue({ userId: null });
     await expect(getEventPeople('event-1')).rejects.toThrow('Unauthorized');

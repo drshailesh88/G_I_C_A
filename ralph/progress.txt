@@ -27,6 +27,12 @@
 
 <!-- Dated entries per completed story, appended by build agent. -->
 
+## 2026-04-15T13:50:00Z — tenancy-022 — Event-scoped people list page
+- Implemented: Created event-scoped people page at /events/[eventId]/people using assertEventAccess + getEventPeople (already existed). Server component calls assertEventAccess, redirects to /login on failure, then fetches event-scoped people via getEventPeople (event_people JOIN people WHERE event_id = :id). Client component renders "People" heading with role="heading" and delegate cards.
+- Files changed: src/app/(app)/events/[eventId]/people/page.tsx (new), src/app/(app)/events/[eventId]/people/event-people-client.tsx (new), src/app/(app)/events/[eventId]/people/event-people-client.test.tsx (new), src/lib/actions/person.test.ts, ralph/prd.json, ralph/progress.txt
+- Tests added: 4 (1 eventId-filtering unit test in person.test.ts, 3 client component tests: heading role, delegate cards, empty state)
+- Learnings: Existing getEventPeople already correctly filters by eventId with innerJoin. The (app) route group (not (dashboard)) is the actual layout group used in this codebase.
+
 ## 2026-04-15T13:45:00Z — tenancy-021 — Cross-event 404 responses leak zero event-identifying info
 - Implemented: Created sanitize-cross-event-404.ts with crossEvent404Response() helper returning { error: 'Not Found' } and sanitize404Body() that strips UUIDs and forbidden tokens (access, permission, forbidden). Updated 7 route handlers from NextResponse.json(null, { status: 404 }) to crossEvent404Response() in EventNotFoundError catch blocks.
 - Files changed: src/lib/auth/sanitize-cross-event-404.ts (new), src/lib/auth/sanitize-cross-event-404.test.ts (new), src/app/api/events/[eventId]/certificates/route.ts, src/app/api/events/[eventId]/certificates/[certificateId]/regenerate/route.ts, src/app/api/events/[eventId]/certificates/[certificateId]/revoke/route.ts, src/app/api/events/[eventId]/certificates/[certificateId]/download/route.ts, src/app/api/events/[eventId]/certificates/bulk/route.ts, src/app/api/events/[eventId]/exports/archive/route.ts, src/app/api/events/[eventId]/exports/[type]/route.ts, ralph/prd.json, ralph/progress.txt
