@@ -113,6 +113,9 @@
   },
   {
     "id": "cert-code-003",
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-15T14:19:57Z",
+    "qa_tested_by": "codex",
     "category": "crud",
     "description": "Enforce transaction write-order in activateCertificateTemplate: archive existing active of same type, then activate target.",
     "page": "N/A — Backend",
