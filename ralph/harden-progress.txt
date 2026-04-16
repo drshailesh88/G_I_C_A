@@ -104,7 +104,25 @@
 
 - **Fuse empty-results boundary (L199 EqualityOperator)**: `nameResults.length > 0` → `>= 0`. For a completely unrecognizable name (e.g. 'Xyzzy Qqqqqq'), Fuse returns empty array with threshold:0.3. The mutation tries `nameResults[0].score` on undefined → TypeError → test fails → mutant killed.
 
+- **Archiver mock passThrough coordination**: To cover `build-and-upload-archive` step internals, update the archiver mock so `pipe()` captures the PassThrough reference and `finalize()` calls `capturedStream.end()`. This triggers the real Node.js PassThrough 'end' event without needing to mock the `stream` module. All NoCoverage lines in the archiver step (appends, fileCount++, stream setup, upload, getSignedUrl, return) become covered and testable.
+
+- **certKeys fetch coverage**: Provide `getCertificateStorageKeys` returning one entry and `vi.stubGlobal('fetch', ...)` returning `{ok:true, arrayBuffer:...}` to cover the cert-loop body (L770-793). Use `ok:false` to cover the `continue` branch. Always call `vi.unstubAllGlobals()` in the same test.
+
 ## Iteration log
+
+## 2026-04-17T01:06:00Z — src/lib/inngest/bulk-functions.ts — kill surviving mutants, score 57.21% → 78.90%
+- Tier: critical_75
+- Score: 57.21% → 78.90% (above 75% floor)
+- Mutants killed this iter: 35+ (299 → 326+3T killed out of 417)
+- Tests added: 14 new tests in src/lib/inngest/bulk-functions.mutation-kill.test.ts (total 62)
+- Real bugs fixed: none
+- Key findings:
+  - Archiver mock's `pipe` wasn't capturing the PassThrough → all build-and-upload-archive internals (65 lines) were NoCoverage. Fixed by capturing stream in `pipe()` and calling `stream.end()` in `finalize()`.
+  - L665/L666 LogicalOperator ??→&& survived because all null-contact tests used channel:'email'; added whatsapp channel tests
+  - L684 ConditionalExpression `if(msgResult.sentId)→false` survived because no test verified whatsapp sentId added to sentCertIds
+  - L516 ArrayDeclaration `certificateIds:[]` survived because failure test didn't assert `certificate_ids:[]`
+  - Remaining 63 survived: ObjectLiteral select shapes (equivalent mocked), 'issued'/'confirmed' StringLiterals in mocked where clauses (equivalent), L102/L103 error handler in null-redis path (catch block catches null.del error — equivalent), L143 isBulkScope guards (equivalent in practice), L203/L214/L316 conditional equivalents (same path results), supersedesId || null LogicalOperator (both branches ultimately null when no chain), many ObjectLiteral select fields (equivalent in mocked context)
+  - Remaining 25 NoCoverage: mostly cert-loop error-handling paths (try/catch around getSignedUrl failure), duplicate-name dedup loop, passThrough error-path in archive
 
 ## 2026-04-17T00:26:00Z — src/lib/import/csv-import.ts — kill surviving mutants, score 58.82% → 83.16%
 - Tier: business_60
