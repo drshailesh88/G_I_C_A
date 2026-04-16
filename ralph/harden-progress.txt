@@ -64,7 +64,25 @@
 
 - **sanitizeKeyField exact-value assertion**: The existing colon-injection test only checked `key1 !== key2`. That inequality holds even when `:` is removed entirely (`''` mutant). Add an exact-value assertion like `toContain('ev_001')` to pin the replacement to `'_'`.
 
+- **S3Client config ObjectLiteral/StringLiteral mutants**: In a mocked AWS SDK context, the mock ignores constructor args. Assert `MockS3Client.toHaveBeenCalledWith({ region: 'auto', endpoint, credentials: { accessKeyId, secretAccessKey } })` after each operation call. This kills region StringLiteral, outer config ObjectLiteral, and credentials ObjectLiteral in one assertion per method.
+
+- **async catch block NoCoverage via constructor throw**: If a function's `try` block has no `await` on the final return (e.g. `return presigner(...)`), async rejections bypass `catch`. To cover the catch block, throw synchronously from the constructor mock (`MockS3Client.mockImplementationOnce(() => { throw err; })`). For operations WITH `await` (upload, delete), `mockSend.mockRejectedValueOnce(err)` reaches the catch block normally.
+
+- **Hex checksum format test**: Assert `result.fileChecksumSha256.toMatch(/^[0-9a-f]{64}$/)` to kill both the join-delimiter StringLiteral (`''` → `"Stryker was here!"`, makes output much longer) and the padStart pad-char StringLiteral (`'0'` → `''`, causes short bytes to lose leading zero and total length < 64).
+
 ## Iteration log
+
+## 2026-04-16T22:20:00Z — src/lib/certificates/storage.ts — kill all surviving mutants, score 71.93% → 100%
+- Tier: critical_75
+- Score: 71.93% (covered) / 59.42% (total) → 100%
+- Mutants killed this iter: 28 (16 survived + 12 NoCoverage)
+- Tests added: 11 tests in src/lib/certificates/storage.mutation-kill.test.ts
+- Real bugs fixed: none
+- Key findings:
+  - All 4 catch blocks were NoCoverage — triggered by mockSend rejection (upload/delete), Upload.done() rejection (uploadStream), and S3Client constructor throw (getSignedUrl)
+  - getSignedUrl has `return s3GetSignedUrl(...)` without await — presigner rejection bypasses catch; must trigger catch via constructor throw
+  - S3Client config mutations killable by asserting toHaveBeenCalledWith full config object
+  - Stub checksum padStart/join mutations killed by /^[0-9a-f]{64}$/ format assertion
 
 ## 2026-04-16T22:15:00Z — src/lib/cascade/automation-utils.ts — kill surviving mutants, score 73.63% → 83.87%
 - Tier: critical_75
