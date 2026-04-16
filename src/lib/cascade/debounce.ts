@@ -1,6 +1,7 @@
 import { Redis } from '@upstash/redis';
 import type { CascadeActor, CascadeEventName } from './events';
 import { emitCascadeEvent } from './emit';
+import { attachVariablesSnapshotIfNeeded } from './variables-snapshot';
 
 const DEBOUNCE_TTL = 5;
 const BUFFER_TTL = DEBOUNCE_TTL + 5;
@@ -87,6 +88,8 @@ export async function debouncedEmitCascadeEvent(
     return { ...result, debounced: false };
   }
 
+  const payloadWithSnapshot = await attachVariablesSnapshotIfNeeded(eventName, payload);
+
   const debounceKey = `cascade:debounce:${eventId}:${sourceEntityType}:${sourceEntityId}`;
   const bufferKey = `cascade:debounce:buffer:${eventId}:${sourceEntityType}:${sourceEntityId}`;
   const metadataKey = `cascade:debounce:metadata:${eventId}:${sourceEntityType}:${sourceEntityId}`;
@@ -106,8 +109,11 @@ export async function debouncedEmitCascadeEvent(
       actor,
       payload: {
         ...(existingMetadata.payload as Record<string, unknown> | undefined),
-        ...payload,
+        ...payloadWithSnapshot,
         changeSummary: merged,
+        variables:
+          (existingMetadata.payload as Record<string, unknown> | undefined)?.variables ??
+          payloadWithSnapshot.variables,
       },
     } satisfies DebounceMetadata),
     { ex: BUFFER_TTL },

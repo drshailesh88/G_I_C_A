@@ -11,6 +11,7 @@ import type { CascadeActor, CascadeEventName } from './events';
 import { inngest } from '../inngest/client';
 import { captureCascadeError } from '../sentry';
 import { captureInngestEvent } from '../inngest/captured-events';
+import { attachVariablesSnapshotIfNeeded } from './variables-snapshot';
 
 type CascadeHandler = (params: {
   eventId: string;
@@ -68,7 +69,11 @@ export async function emitCascadeEvent(
   // Production mode: send event to Inngest
   try {
     const inngestEventId = crypto.randomUUID();
-    const eventData = { eventId, actor, payload };
+    const eventData = {
+      eventId,
+      actor,
+      payload: await attachVariablesSnapshotIfNeeded(eventName, payload),
+    };
     await inngest.send({
       id: inngestEventId,
       name: eventName,
