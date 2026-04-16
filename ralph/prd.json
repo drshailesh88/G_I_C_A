@@ -1732,7 +1732,10 @@
           "expected": "400 or 404"
         }
       ]
-    }
+    },
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-16T08:39:50Z",
+    "qa_tested_by": "codex"
   },
   {
     "id": "infra-038",

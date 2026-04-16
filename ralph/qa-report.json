@@ -902,5 +902,21 @@
     },
     "bugs": [],
     "notes": "Full Vitest passed (231 files, 4736 tests), including the focused cascade handler eventId audit. The cascade-idempotency Playwright contract remains blocked before product assertions by Clerk auth global setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on known broad existing QA/test, Sentry, people/navigation, notification, and cascade test errors. Static audit found that direct cascade handler DB reads are either global people reads or event-scoped accommodation/transport reads using withEventScope, and a synthetic diff-audit probe confirmed CASCADE_HANDLER_MISSING_EVENT_SCOPE rejects a new unscoped handler query. Manual DATABASE_URL_TEST verification seeded Event A and Event B accommodation/transport records sharing the same person and upstream travel id; handleTravelUpdated for Event A wrote exactly two Event A red flags and zero Event B rows, while the same handler invoked for Event B wrote the expected Event B rows, proving the handler uses the cascade eventId boundary."
+  },
+  {
+    "story_id": "cascade-037",
+    "qa_timestamp": "2026-04-16T08:39:50Z",
+    "qa_model": "codex",
+    "status": "pass",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [],
+    "notes": "Full Vitest passed (231 files, 4736 tests), and focused archive-bypass/event-archived/session route tests passed (3 files, 12 tests). The cascade-idempotency Playwright contract remains blocked before product assertions by Clerk auth global setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on known broad existing QA/test, Sentry, people/navigation, notification, and cascade test errors. Static audit found no assertEventAccess/EventArchivedError/event status checks in cascade handlers or Inngest cascade entrypoints. Manual DATABASE_URL_TEST verification invoked the real handleTravelSaved production handler before and after archiving the same event; with test Redis notification channels disabled to avoid external provider calls, the archived-event invocation still persisted exactly two event-scoped notification_log rows (email and WhatsApp) with status sent, triggerType travel.saved, triggerEntityType travel_record, and the archived travel trigger id. The test Redis flags were restored to default after the probe."
   }
 ]

@@ -34,6 +34,12 @@
 
 <!-- Dated entries per QA'd feature. -->
 
+## 2026-04-16T08:39:50Z — cascade-037 — archived-event in-flight cascade completion
+- Status: pass
+- Bugs: 0
+- Fix commits: none
+- Notes: Full Vitest passed; focused archive-bypass/event-archived/session route tests passed; DATABASE_URL_TEST probe confirmed the real travel saved handler still persisted two event-scoped notification_log rows after the event status changed to archived. Playwright remains blocked by Clerk `/events` redirect setup and repo typecheck remains blocked by known broad errors.
+
 ## 2026-04-16T07:47:13Z — cascade-036 — cascade handler eventId scoping
 - Status: pass
 - Bugs: 0
