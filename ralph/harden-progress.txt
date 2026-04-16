@@ -118,6 +118,19 @@
 
 ## Iteration log
 
+## 2026-04-17T01:25:00Z — src/lib/actions/checkin-search.ts — kill 8 mutants, score 54.55% → 90.91%
+- Tier: critical_75
+- Score: 54.55% → 90.91%
+- Mutants killed this iter: 8 (10 survived → 2 remaining)
+- Tests added: 5 in src/lib/actions/checkin-search.test.ts (total 16)
+- Real bugs fixed: none
+- Key findings:
+  - assertEventAccess options assertion kills both ObjectLiteral {} and BooleanLiteral false on requireWrite in one test
+  - ilike pattern test: assert `patterns.every((p) => p === '%Gupta%')` AND `patterns.toHaveLength(3)` — kills all 3 StringLiteral '' mutations on fullName/email/registrationNumber ilike calls at once
+  - LogicalOperator ??→&& on `sessionId ?? null`: killed by passing a non-null UUID sessionId and asserting `mockIsNull.not.toHaveBeenCalled()` AND that `mockEq` was called with the sessionId value
+  - ArrowFunction mutations on `rows.map(r => r.personId)` and `personIds.map(pid => eq(..., pid))`: killed by asserting `mockEq` was called with the actual PERSON_ID value
+  - Remaining 2 survived are L35:13 and L74:15 `.select({})` ObjectLiterals — equivalent in mocked context (mock ignores select shape)
+
 ## 2026-04-17T01:19:00Z — src/middleware.ts — add tests, score 18.52% → 100%
 - Tier: critical_75
 - Score: 18.52% → 100%
