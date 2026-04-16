@@ -33,10 +33,10 @@
   },
   {
     "module": "src/lib/exports/emergency-kit.ts",
-    "attempts": 2,
+    "attempts": 3,
     "plateau_buffer": [],
     "status": "GREEN",
-    "last_iter_at": "2026-04-16T17:21:30.000000Z",
+    "last_iter_at": "2026-04-16T17:53:10.686080Z",
     "signature": ""
   }
 ]
