@@ -1,5 +1,3 @@
-'use server';
-
 import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
 import { eventUserAssignments, events } from '@/lib/db/schema';
