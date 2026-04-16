@@ -486,5 +486,30 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused event-access, event-archived, and sessions API suites passed (3 files, 32 tests). Event-id Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story. Manual verification confirmed assigned read_only users are authorized for the event but assertEventAccess(eventId, { requireWrite: true }) throws ForbiddenError with statusCode 403, the sessions POST maps write-denied assigned users to { error: 'forbidden' }, coordinator writes still return 201 and insert rows with URL-derived eventId and session user IDs, cross-event access stays sanitized 404, and archived-event write attempts now preserve the documented 400 response. Direct live DB persistence was not re-probed because the authenticated Playwright fixture is blocked; the focused route test asserts the inserted payload shape."
+  },
+  {
+    "story_id": "tenancy-020",
+    "qa_timestamp": "2026-04-16T01:54:49Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "POST /api/events/[eventId]/sessions ignored camelCase body.eventId, so URL/body mismatches using the CE3 contract field were not rejected before insert.",
+        "severity": "high",
+        "fix_commit": "29ef4ebb32e55daffede2cd53d4d9b5f9ba010a6",
+        "files_changed": [
+          "src/app/api/events/[eventId]/sessions/route.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused sessions API plus event-id mismatch helper suites passed (2 files, 13 tests). Event-id Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story. Manual verification found the sessions route previously validated only event_id, while the PRD/CE3 contract submits body.eventId; the route now accepts both body.eventId and body.event_id, forwards whichever submitted value differs from the URL eventId into assertEventIdMatch, returns { error: 'eventId mismatch' } on EventIdMismatchError, and reaches db.insert only after the mismatch guard. Body omissions still pass no mismatch value to the helper, preserving the documented 201 create path. The other event-scoped JSON body routes were checked and already preserve raw-body camel/snake eventId mismatch detection."
   }
 ]

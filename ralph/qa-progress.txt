@@ -10,6 +10,7 @@
 - Stryker baseline story cert-code-005 is accepted only under outcome b: verify the committed snapshot has >=60 scored modules, a plain-English partial-baseline note, preserved travel scores, and no `stryker.conf.mjs` shadow config in the working tree.
 - API routes that call `assertEventAccess(eventId, { requireWrite: true })` can accidentally collapse `EventArchivedError` into a generic 403 catch-all; archived-event contract checks need a separate 400 assertion.
 - Backend event-scoped POST routes can validate the main body while silently stripping submitted `eventId`/`event_id`; explicitly probe path-vs-body event ID mismatches and Sentry mismatch capture.
+- Probe both camelCase `eventId` and snake_case `event_id` mismatch bodies; a route can reject one while Zod strips the other before the mismatch helper sees it.
 - Certificate rendered-variable snapshots must be resolved from authoritative DB state at issuance time, not trusted from caller-provided variables; stale master-person values become permanent once inserted.
 - Bulk APIs that return `batch_id` need a durable retrievable summary keyed by that id; an Inngest handler return value alone is not an operator-visible batch report.
 - Public certificate verification must satisfy the frozen `/verify/{token}` contract, not only `/api/verify/{token}`; also verify counter persistence is awaited and any follow-up cert lookup is event-scoped.
@@ -131,3 +132,9 @@
 - Bugs: 1 (medium: 1)
 - Fix commits: 430c58f83d419038f85f9d28c664ddcb4813d41f
 - Notes: Verified assigned read_only write denial returns 403 `{ error: 'forbidden' }` and coordinator writes still create sessions; fixed the sessions API archived-event edge case so EventArchivedError returns 400 instead of collapsing to generic 403. Full Vitest and focused auth/sessions suites passed; event-id Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-16T01:54:49Z — tenancy-020 — URL/body eventId mismatch
+- Status: fixed
+- Bugs: 1 (high: 1)
+- Fix commits: 29ef4ebb32e55daffede2cd53d4d9b5f9ba010a6
+- Notes: Fixed the sessions API so CE3's camelCase `body.eventId` mismatch is rejected before insert, while omitted body event IDs still create normally. Full Vitest and focused tenancy suites passed; event-id Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
