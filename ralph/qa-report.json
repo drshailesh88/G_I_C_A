@@ -602,5 +602,38 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused accommodation-list tests passed. Event-id Playwright contracts remain blocked in auth setup by Clerk /events ERR_TOO_MANY_REDIRECTS before product assertions. Repo typecheck remains blocked by broad existing errors in qa/test, Sentry, people/navigation, notifications, and cascade files; a filtered typecheck rerun found no accommodation production errors. Manual review verified Add/empty-state Add, Cancel, Mark Reviewed, and Resolve render visible disabled buttons for read_only, while create/update/cancel/review/resolve server actions still call assertEventAccess(eventId, { requireWrite: true }) for 403 defense-in-depth."
+  },
+  {
+    "story_id": "tenancy-025",
+    "qa_timestamp": "2026-04-16T02:52:23Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "skip",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "The sessions API ignored the contract camelCase startsAt, endsAt, hallId, and sessionType fields, so valid contract requests persisted null/default scheduling data.",
+        "severity": "high",
+        "fix_commit": "b1ea28d",
+        "files_changed": [
+          "src/app/api/events/[eventId]/sessions/route.ts"
+        ]
+      },
+      {
+        "description": "The sessions API recorded eventId mismatch Sentry metadata with the template endpoint instead of the concrete endpoint path that the event-id contract probe filters on.",
+        "severity": "medium",
+        "fix_commit": "b1ea28d",
+        "files_changed": [
+          "src/app/api/events/[eventId]/sessions/route.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), including the focused sessions route and event-id mismatch suites. The eventid-scoping Playwright contract remains blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on known broad existing errors outside this story; targeted post-fix typecheck grep found no sessions route, program validation, or event-id mismatch errors. Manual review confirmed URL-derived eventId inserts, concrete Sentry endpoint metadata for CE3, 404 cross-event access, 403 read-only/unauthorized role denial, Zod title/ISO timestamp/hall/sessionType validation, camelCase and snake_case field support, and no insert on validation or mismatch failures. Live DB re-query was not performed because the authenticated contract fixture is blocked."
   }
 ]

@@ -22,6 +22,12 @@
 
 <!-- Dated entries per QA'd feature. -->
 
+## 2026-04-16T02:52:23Z — tenancy-025 — session create URL eventId
+- Status: fixed
+- Bugs: 2 (high: 1, medium: 1)
+- Fix commits: b1ea28d
+- Notes: Fixed the sessions API to accept contract camelCase timing/location/type fields, validate ISO timestamps before insert, and record concrete eventId mismatch Sentry endpoint metadata; full Vitest and focused sessions/event-id suites passed, while event-id Playwright contracts and repo typecheck remain blocked by known harness/repo issues.
+
 ## 2026-04-16T02:21:42Z — tenancy-023 — super-admin event people access
 - Status: fixed
 - Bugs: 1 (high: 1)
