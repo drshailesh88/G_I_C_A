@@ -40,7 +40,25 @@
   Also add a test where the person query returns `[]` to verify the optional-chaining fallback
   produces a synced record (not an error) with personName 'Unknown'.
 
+- **Optional-field null coalescing**: For `field || null` patterns in DB inserts, add TWO tests: one with the field absent (expect null) and one with a value provided (expect the actual value). This kills both `||→&&` (LogicalOperator) and `ConditionalExpression→true/false` mutants in one pair.
+
+- **Slug prefix extraction**: To test slugify truncation/separator behavior through a higher-level function, strip the timestamp suffix with `slug.slice(0, slug.lastIndexOf('-'))` since base36 timestamps contain no dashes.
+
+- **Terminal-state transition error message**: For event status machine tests, assert the error message contains `'none (terminal state)'` when transitioning from archived/cancelled. This kills StringLiteral, ConditionalExpression, and LogicalOperator mutants on the fallback string in one assertion.
+
 ## Iteration log
+
+## 2026-04-16T21:40:00Z — src/lib/actions/event.ts — kill 35 mutants, score 73.08% → 95.12%
+- Tier: critical_75
+- Score: 73.08% → 95.12%
+- Mutants killed this iter: 35 (from 42+8 → 7+1 remaining)
+- Tests added: 19 tests in src/lib/actions/event.test.ts
+- Real bugs fixed: none
+- Key findings:
+  - Optional `|| null` patterns need two-test coverage (absent→null AND provided→value) to kill all ConditionalExpression and LogicalOperator mutants
+  - Terminal-state transition error message needs "none (terminal state)" assertion to kill 4+ mutants on that line
+  - archivedAt/cancelledAt tests need cross-verification (archived→no cancelledAt, cancelled→no archivedAt)
+  - Equivalent mutants: L28 ObjectLiteral (returning shape), L37 'custom' code ignored by flatten(), L57 NoCoverage (server action static coverage gap), L61 Conditional (only ZodError thrown), L147/L212 select-shape in mocked context, L180 isActive in mocked innerJoin
 
 ## 2026-04-16T21:15:00Z — src/lib/actions/batch-sync.ts — iter 4 confirmation (score verified 96.61%)
 - Tier: critical_75
