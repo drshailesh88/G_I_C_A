@@ -1556,6 +1556,9 @@
   },
   {
     "id": "cascade-034",
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-16T06:52:15Z",
+    "qa_tested_by": "codex",
     "category": "data",
     "description": "Zod-validate cascade payload at handler entry; dead-letter on malformed without retry.",
     "page": "N/A — Backend",

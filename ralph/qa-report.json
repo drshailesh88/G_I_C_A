@@ -835,5 +835,31 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused Inngest registration tests passed (8/8). The cascade-idempotency Playwright contract remains blocked before product assertions by Clerk auth global setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on known broad existing QA/test, Sentry, people/navigation, notification, and cascade test errors outside this story. Manual verification confirmed the cascade registry now exposes both legacy saved triggers and frozen created aliases for travel and accommodation while preserving the existing retry budgets and handler ids."
+  },
+  {
+    "story_id": "cascade-034",
+    "qa_timestamp": "2026-04-16T06:52:15Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "skip",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "Malformed cascade payloads were captured in Sentry without the Inngest event id, so CE10's `inngestEventId` lookup could not find the dead-lettered validation failure even though the handler correctly threw a NonRetriableError.",
+        "severity": "high",
+        "fix_commit": "e8abd66",
+        "files_changed": [
+          "src/lib/cascade/payload-validation.ts",
+          "src/lib/inngest/functions.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), including the focused payload-validation and Inngest function suites. The cascade-idempotency Playwright contract remains blocked before product assertions by Clerk auth global setup redirecting /events with ERR_TOO_MANY_REDIRECTS. A direct local probe of /api/test/inngest-emit also 500s in this environment because INNGEST_EVENT_KEY is unset before the handler runs, so manual verification used an in-process call to the real cascade-travel-updated Inngest function. That check confirmed a malformed payload throws NonRetriableError, records exactly one failed attempt, and now emits a `cascade-payload-invalid` Sentry event queryable by the same Inngest event id; a valid payload still parses cleanly with no Sentry capture. Repo-level typecheck still fails on known broad existing QA/test, Sentry, people/navigation, notification, and cascade test errors; targeted grep found no errors in src/lib/cascade/payload-validation.ts or src/lib/inngest/functions.ts."
   }
 ]
