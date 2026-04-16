@@ -24,6 +24,14 @@ const SESSION_WRITE_ROLES: ReadonlySet<string> = new Set([
   ROLES.EVENT_COORDINATOR,
 ]);
 
+function isEventArchivedError(err: unknown): boolean {
+  return (
+    err instanceof Error &&
+    err.name === 'EventArchivedError' &&
+    (err as { statusCode?: unknown }).statusCode === 400
+  );
+}
+
 const requestSchema = z.object({
   title: z.string().trim().min(1, 'Title is required'),
   starts_at: z.string().optional(),
@@ -55,6 +63,9 @@ export async function POST(
   } catch (err) {
     if (err instanceof EventNotFoundError) {
       return crossEvent404Response();
+    }
+    if (isEventArchivedError(err)) {
+      return NextResponse.json({ error: 'event archived' }, { status: 400 });
     }
     return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
