@@ -404,4 +404,352 @@ describe('processBatchSync', () => {
     expect(result.results).toHaveLength(2);
     expect(insertChain.values).toHaveBeenCalledTimes(1);
   });
+
+  // ── buildAttendanceRecordId ──────────────────────────────────────────────────
+
+  it('generates a UUID-v5-format id for the attendance record', async () => {
+    // Kills: BlockStatement→{}, ArrayDeclaration→[], all MethodExpression (slice→hash),
+    // StringLiteral L35:5 (removes '5' prefix), StringLiteral L40 (join separator '-'→'')
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+    ]);
+    const insertChain = chainedInsert([{ id: 'new-id' }]);
+
+    await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput()],
+    });
+
+    expect(insertChain.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/),
+      }),
+    );
+  });
+
+  it('generates different ids for records with and without sessionId', async () => {
+    const SESSION_ID = '660e8400-e29b-41d4-a716-446655440003';
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+    ]);
+    const insertedIds: string[] = [];
+    mockDb.insert.mockImplementation(() => ({
+      values: vi.fn().mockImplementation((vals: { id: string }) => {
+        insertedIds.push(vals.id);
+        return Promise.resolve([{ id: vals.id }]);
+      }),
+    }));
+
+    await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [
+        makeSyncInput({ sessionId: null }),
+        makeSyncInput({ sessionId: SESSION_ID }),
+      ],
+    });
+
+    expect(insertedIds).toHaveLength(2);
+    expect(insertedIds[0]).not.toBe(insertedIds[1]);
+    // Both must be valid UUID format
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    expect(insertedIds[0]).toMatch(uuidPattern);
+    expect(insertedIds[1]).toMatch(uuidPattern);
+  });
+
+  it('generates different ids for records with two distinct non-null sessionIds', async () => {
+    // Kills: LogicalOperator L29:39 (sessionId ?? 'event' → sessionId && 'event'):
+    // with &&, ALL non-null sessionIds collapse to 'event', producing identical hashes.
+    const SESSION_ID_1 = '660e8400-e29b-41d4-a716-446655440003';
+    const SESSION_ID_2 = '770e8400-e29b-41d4-a716-446655440004';
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+    ]);
+    const insertedIds: string[] = [];
+    mockDb.insert.mockImplementation(() => ({
+      values: vi.fn().mockImplementation((vals: { id: string }) => {
+        insertedIds.push(vals.id);
+        return Promise.resolve([{ id: vals.id }]);
+      }),
+    }));
+
+    await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [
+        makeSyncInput({ sessionId: SESSION_ID_1 }),
+        makeSyncInput({ sessionId: SESSION_ID_2 }),
+      ],
+    });
+
+    expect(insertedIds).toHaveLength(2);
+    expect(insertedIds[0]).not.toBe(insertedIds[1]);
+  });
+
+  // ── isDuplicateError ──────────────────────────────────────────────────────────
+
+  it('treats error with duplicate key message (no 23505 code) as duplicate', async () => {
+    // Kills: LogicalOperator L46:10 (||→&&), ConditionalExpression L46:10 (→false),
+    //        StringLiteral L46:19 ('23505'→''), ConditionalExpression L44:7 (instanceof→false)
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+    ]);
+    mockDb.insert.mockReturnValue({
+      values: vi.fn().mockRejectedValue(new Error('duplicate key value violates unique constraint')),
+    });
+
+    const result = await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput()],
+    });
+
+    expect(result.duplicates).toBe(1);
+    expect(result.errors).toBe(0);
+    expect(result.results[0].result.type).toBe('duplicate');
+    expect(result.results[0].result.message).toBeTruthy();
+  });
+
+  it('treats error with code 23505 and no duplicate key message as duplicate', async () => {
+    // Kills: LogicalOperator L46:10 (||→&&), StringLiteral L45:16 ('code'→'')
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+    ]);
+    mockDb.insert.mockReturnValue({
+      values: vi.fn().mockRejectedValue(
+        Object.assign(new Error('unique_violation'), { code: '23505' }),
+      ),
+    });
+
+    const result = await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput()],
+    });
+
+    expect(result.duplicates).toBe(1);
+    expect(result.errors).toBe(0);
+  });
+
+  it('performs case-insensitive match on duplicate key message', async () => {
+    // Kills: MethodExpression L46:30 (toLowerCase→toUpperCase):
+    // 'DUPLICATE KEY...'.toUpperCase() = 'DUPLICATE KEY...' which does NOT include 'duplicate key'.
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+    ]);
+    mockDb.insert.mockReturnValue({
+      values: vi.fn().mockRejectedValue(new Error('DUPLICATE KEY VALUE VIOLATES CONSTRAINT')),
+    });
+
+    const result = await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput()],
+    });
+
+    expect(result.duplicates).toBe(1);
+    expect(result.errors).toBe(0);
+  });
+
+  it('does not treat a non-Error throw as a duplicate', async () => {
+    // Kills: ConditionalExpression L44:7 (instanceof→false):
+    // non-Error objects would bypass the check and potentially be treated as duplicates.
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+    ]);
+    mockDb.insert.mockReturnValue({
+      values: vi.fn().mockRejectedValue({ code: '23505', message: 'duplicate key' }),
+    });
+
+    const result = await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput()],
+    });
+
+    expect(result.errors).toBe(1);
+    expect(result.duplicates).toBe(0);
+  });
+
+  // ── processBatchSync call-site correctness ──────────────────────────────────
+
+  it('calls assertEventAccess with requireWrite: true', async () => {
+    // Kills: ObjectLiteral L53:55 (→{}), BooleanLiteral L53:71 (true→false)
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+    ]);
+    chainedInsert([{ id: 'new-id' }]);
+
+    await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput()],
+    });
+
+    expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_ID, { requireWrite: true });
+  });
+
+  it('passes a non-null sessionId through to the attendance record insert', async () => {
+    // Kills: LogicalOperator L67:23 (record.sessionId ?? null → record.sessionId && null):
+    // with &&, truthy sessionId is nulled out instead of preserved.
+    const SESSION_ID = '660e8400-e29b-41d4-a716-446655440003';
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+    ]);
+    const insertChain = chainedInsert([{ id: 'new-id' }]);
+
+    await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput({ sessionId: SESSION_ID })],
+    });
+
+    expect(insertChain.values).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: SESSION_ID }),
+    );
+  });
+
+  it('reports wrong-event QR with type invalid', async () => {
+    // Kills: StringLiteral L85:25 ('invalid'→''): existing test checks message but not type.
+    const wrongEventId = '550e8400-e29b-41d4-a716-446655440099';
+    const result = await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput({ qrPayload: `${wrongEventId}:${TOKEN}` })],
+    });
+
+    expect(result.results[0].result.type).toBe('invalid');
+  });
+
+  it('includes a meaningful message when registration is not found', async () => {
+    // Kills: ConditionalExpression L113:11 (→false), BlockStatement L113:26 (→{}),
+    //        StringLiteral L117:47 (message→'').
+    // With mutant →false the not-found block is skipped; outer catch fires with a
+    // generic 'Database error' message instead of the specific 'not recognized' text.
+    chainedSelectSequence([[]]);
+
+    const result = await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput()],
+    });
+
+    expect(result.errors).toBe(1);
+    expect(result.results[0].result.type).toBe('invalid');
+    expect(result.results[0].result.message).toContain('not recognized');
+  });
+
+  it('uses the real person name from the database in the scan result', async () => {
+    // Kills: LogicalOperator L130:26 (person?.fullName ?? 'Unknown' → person?.fullName && 'Unknown'):
+    // with &&, truthy fullName is replaced by 'Unknown' instead of preserved.
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+    ]);
+    chainedInsert([{ id: 'new-id' }]);
+
+    const result = await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput()],
+    });
+
+    expect(result.results[0].result.personName).toBe('Dr. Sharma');
+  });
+
+  it('falls back to Unknown when person record is missing', async () => {
+    // Kills: OptionalChaining L130:26 (person?.fullName → person.fullName):
+    // without optional chaining, undefined.fullName throws and the outer catch
+    // counts it as an error instead of a successful check-in with 'Unknown' name.
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [], // person lookup returns nothing
+    ]);
+    chainedInsert([{ id: 'new-id' }]);
+
+    const result = await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput()],
+    });
+
+    expect(result.synced).toBe(1);
+    expect(result.errors).toBe(0);
+    expect(result.results[0].result.personName).toBe('Unknown');
+  });
+
+  it('records checkInMethod as qr_scan in the attendance insert', async () => {
+    // Kills: StringLiteral L166:26 ('qr_scan'→'')
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+    ]);
+    const insertChain = chainedInsert([{ id: 'new-id' }]);
+
+    await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput()],
+    });
+
+    expect(insertChain.values).toHaveBeenCalledWith(
+      expect.objectContaining({ checkInMethod: 'qr_scan' }),
+    );
+  });
+
+  it('includes a non-empty message in the duplicate result', async () => {
+    // Kills: StringLiteral L186:24 (duplicate message→'')
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+    ]);
+    const duplicateError = Object.assign(new Error('duplicate key'), { code: '23505' });
+    mockDb.insert.mockReturnValue({
+      values: vi.fn().mockRejectedValue(duplicateError),
+    });
+
+    const result = await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput()],
+    });
+
+    expect(result.results[0].result.message).toBeTruthy();
+    expect(result.results[0].result.message).toContain('checked in');
+  });
+
+  it('includes a non-empty message when a non-duplicate DB error occurs during insert', async () => {
+    // Kills: StringLiteral L197:29 (non-dup error message→'')
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+    ]);
+    mockDb.insert.mockReturnValue({
+      values: vi.fn().mockRejectedValue(new Error('Connection timeout')),
+    });
+
+    const result = await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput()],
+    });
+
+    expect(result.results[0].result.type).toBe('invalid');
+    expect(result.results[0].result.message).toBeTruthy();
+  });
+
+  it('outer DB lookup failure produces a typed invalid result with non-empty message', async () => {
+    // Kills: ObjectLiteral L205:32/L207:17 (→{}), StringLiteral L207:25 (type→''),
+    //        StringLiteral L207:45 (message→'')
+    chainedSelectOutcomes([
+      new Error('registration query failed'),
+    ]);
+
+    const result = await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput()],
+    });
+
+    expect(result.errors).toBe(1);
+    expect(result.results[0].result.type).toBe('invalid');
+    expect(result.results[0].result.message).toBeTruthy();
+  });
 });
