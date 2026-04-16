@@ -13,6 +13,29 @@ import { redFlags } from '@/lib/db/schema';
 import { eq, and, ne, sql } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 
+let ensureRedFlagActiveIndexPromise: Promise<void> | null = null;
+
+async function ensureRedFlagActiveIndex() {
+  if (typeof (db as { execute?: unknown }).execute !== 'function') {
+    return;
+  }
+
+  if (!ensureRedFlagActiveIndexPromise) {
+    ensureRedFlagActiveIndexPromise = (async () => {
+      await db.execute(sql.raw(`
+        CREATE UNIQUE INDEX IF NOT EXISTS "uq_red_flag_active"
+          ON "red_flags" ("event_id", "target_entity_type", "target_entity_id", "flag_type")
+          WHERE "flag_status" != 'resolved'
+      `));
+    })().catch((error) => {
+      ensureRedFlagActiveIndexPromise = null;
+      throw error;
+    });
+  }
+
+  await ensureRedFlagActiveIndexPromise;
+}
+
 // ── Flag Types ────────────────────────────────────────────────
 export const FLAG_TYPES = [
   'travel_change',
@@ -77,6 +100,8 @@ export async function upsertRedFlag(params: {
     sourceEntityId,
     sourceChangeSummaryJson,
   } = params;
+
+  await ensureRedFlagActiveIndex();
 
   // Pre-check for action tracking (the write itself is atomic via ON CONFLICT)
   const [existing] = await db
