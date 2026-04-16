@@ -125,3 +125,9 @@
 - Bugs: 1 (high: 1)
 - Fix commits: 64d71ebca5ff1c8b1415723ecd60a41c894d5c8d
 - Notes: Fixed authenticated cross-event `/events/[eventId]/people` access so EventNotFoundError maps to Next 404 instead of login redirect, and added 404 code metadata to EventNotFoundError. Full Vitest and focused tenancy/API/page suites passed; event-id Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-16T01:48:57Z — tenancy-019 — role-denial returns 403
+- Status: fixed
+- Bugs: 1 (medium: 1)
+- Fix commits: 430c58f83d419038f85f9d28c664ddcb4813d41f
+- Notes: Verified assigned read_only write denial returns 403 `{ error: 'forbidden' }` and coordinator writes still create sessions; fixed the sessions API archived-event edge case so EventArchivedError returns 400 instead of collapsing to generic 403. Full Vitest and focused auth/sessions suites passed; event-id Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.

@@ -461,5 +461,30 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused event-access, sanitized 404, people page, people API, and sessions API suites passed (6 files, 53 tests). Event-id Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story. Manual verification confirmed assertEventAccess returns EventNotFoundError for unassigned non-super users, ForbiddenError with 403 for assigned read_only writes, super_admin bypasses event_user_assignments, API routes catch EventNotFoundError and return the sanitized { error: 'Not Found' } body, the sessions POST performs access before validation/insert so cross-event attempts cannot persist, and the people page now maps the 404-coded access failure to notFound() while preserving generic auth failure redirects."
+  },
+  {
+    "story_id": "tenancy-019",
+    "qa_timestamp": "2026-04-16T01:48:57Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "skip",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "POST /api/events/[eventId]/sessions collapsed archived-event write denials into 403 instead of preserving the archived-event 400 response.",
+        "severity": "medium",
+        "fix_commit": "430c58f83d419038f85f9d28c664ddcb4813d41f",
+        "files_changed": [
+          "src/app/api/events/[eventId]/sessions/route.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused event-access, event-archived, and sessions API suites passed (3 files, 32 tests). Event-id Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story. Manual verification confirmed assigned read_only users are authorized for the event but assertEventAccess(eventId, { requireWrite: true }) throws ForbiddenError with statusCode 403, the sessions POST maps write-denied assigned users to { error: 'forbidden' }, coordinator writes still return 201 and insert rows with URL-derived eventId and session user IDs, cross-event access stays sanitized 404, and archived-event write attempts now preserve the documented 400 response. Direct live DB persistence was not re-probed because the authenticated Playwright fixture is blocked; the focused route test asserts the inserted payload shape."
   }
 ]
