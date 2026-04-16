@@ -361,6 +361,22 @@ describe('event actions — hardening tests', () => {
     expect(slugPart).toBe('hello-world');
   });
 
+  // ── slugify: strips leading/trailing dashes from special-char names ─────────
+
+  it('slugify strips leading and trailing dashes from names starting/ending with special chars', async () => {
+    let insertedSlug = '';
+    mockCreateEventSuccess((v) => { insertedSlug = v.slug as string; });
+
+    // Name starts and ends with chars that become dashes after first replace
+    const formData = buildFormData({ name: '---hello world---' });
+    await createEvent(formData);
+
+    const slugPart = insertedSlug.slice(0, insertedSlug.lastIndexOf('-'));
+    expect(slugPart).toBe('hello-world');
+    expect(slugPart).not.toMatch(/^-/);
+    expect(slugPart).not.toMatch(/-$/);
+  });
+
   // ── slugify: name > 80 chars truncates ─────────────────────────────────────
 
   it('slugify truncates the slug prefix to 80 chars for a long name', async () => {
