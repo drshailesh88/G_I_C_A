@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   if (certId) {
     conds.push(
       or(
-        eq(auditLog.resourceId, certId),
+        and(eq(auditLog.resource, 'certificate'), eq(auditLog.resourceId, certId)),
         sql`${auditLog.meta}->>'cert_id' = ${certId}`,
       )!,
     );
