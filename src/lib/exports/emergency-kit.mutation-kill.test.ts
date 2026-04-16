@@ -295,6 +295,14 @@ describe('emergency-kit mutation-kill', () => {
       expect(csv).toContain('Dr Rao');
       expect(csv).not.toContain('"Dr Rao"');
     });
+
+    it('null passed directly without ?? guard → empty string not "null" (L70:13 ConditionalExpression, L70:29 NoCoverage)', async () => {
+      // r.fullName has no ?? '' guard — null reaches escapeCsv directly
+      setupDb([row({ fullName: null })]);
+      const csv = (await generateAttendeeCsv(EID)).toString();
+      const parts = csv.split('\n')[1].split(',');
+      expect(parts[1]).toBe('');  // fullName null → '' not 'null' or 'Stryker was here!'
+    });
   });
 
   // ── formatDateTime (L81-83) ────────────────────────────────────
@@ -357,6 +365,7 @@ describe('emergency-kit mutation-kill', () => {
       expect(parts[0]).toBe('');  // regNumber
       expect(parts[2]).toBe('');  // email
       expect(parts[3]).toBe('');  // phone
+      expect(parts[4]).toBe('');  // category (kills L119:21 StringLiteral ?? fallback)
       expect(parts[6]).toBe('');  // designation
       expect(parts[7]).toBe('');  // specialty
       expect(parts[8]).toBe('');  // organization
@@ -520,10 +529,14 @@ describe('emergency-kit mutation-kill', () => {
       const lines = csv.split('\n');
       expect(lines).toHaveLength(2);
       const parts = lines[1].split(',');
+      expect(parts[2]).toBe('Airport');  // pickupHub non-null → actual value (kills L241:9 ??→&&)
+      expect(parts[3]).toBe('HICC');     // dropHub non-null → actual value (kills L241:32 ??→&&)
       expect(parts[4]).toBe('planned');
       expect(parts[5]).toBe('');  // vehicle label empty
       expect(parts[6]).toBe('');  // vehicle type empty
       expect(parts[7]).toBe('');  // passenger name empty
+      expect(parts[8]).toBe('');  // phone empty (kills L242:21 StringLiteral)
+      expect(parts[9]).toBe('');  // assignment status empty (kills L242:25 StringLiteral)
     });
 
     it('null pickupHub/dropHub on batch-only row → empty string (L241 LogicalOperator)', async () => {
@@ -548,6 +561,8 @@ describe('emergency-kit mutation-kill', () => {
       const lines = csv.split('\n');
       expect(lines).toHaveLength(2);
       const parts = lines[1].split(',');
+      expect(parts[2]).toBe('Airport');  // pickupHub non-null → actual value (kills L254:13 ??→&&)
+      expect(parts[3]).toBe('HICC');     // dropHub non-null → actual value (kills L254:36 ??→&&)
       expect(parts[5]).toBe('Van-1');
       expect(parts[6]).toBe('van');
       expect(parts[7]).toBe('');
@@ -563,6 +578,8 @@ describe('emergency-kit mutation-kill', () => {
       );
       const csv = (await generateTransportCsv(EID)).toString();
       const parts = csv.split('\n')[1].split(',');
+      expect(parts[2]).toBe('');  // pickupHub null → '' (kills L254:32 StringLiteral)
+      expect(parts[3]).toBe('');  // dropHub null → '' (kills L254:53 StringLiteral)
       expect(parts[5]).toBe('');  // vehicleLabel
       expect(parts[6]).toBe('');  // vehicleType
     });
@@ -579,11 +596,27 @@ describe('emergency-kit mutation-kill', () => {
       const csv = (await generateTransportCsv(EID)).toString();
       const lines = csv.split('\n');
       expect(lines).toHaveLength(3);  // header + 2 passenger rows
+      const partsRow1 = lines[1].split(',');
+      expect(partsRow1[2]).toBe('Airport');  // pickupHub non-null (kills L262:15 ??→&&)
+      expect(partsRow1[3]).toBe('Hotel');    // dropHub non-null (kills L262:38 ??→&&)
+      expect(partsRow1[6]).toBe('bus');      // vehicleType non-null (kills L263:43 ??→&&)
       expect(lines[1]).toContain('Dr. Alpha');
       expect(lines[1]).toContain('+91111');
       expect(lines[1]).toContain('assigned');
       expect(lines[2]).toContain('Dr. Beta');
       expect(lines[2]).toContain('standby');
+    });
+
+    it('null vehicleLabel/vehicleType in passenger branch → empty string (L263:39/66 NoCoverage)', async () => {
+      setupDb(
+        [{ batchId: 'b1', serviceDate: null, movementType: 'arrival_pickup', pickupHub: null, dropHub: null, batchStatus: 'planned' }],
+        [{ vehicleId: 'v1', batchId: 'b1', vehicleLabel: null, vehicleType: null }],
+        [{ batchId: 'b1', vehicleAssignmentId: 'v1', fullName: 'Dr. P', phone: '+91999', assignmentStatus: 'assigned' }],
+      );
+      const csv = (await generateTransportCsv(EID)).toString();
+      const parts = csv.split('\n')[1].split(',');
+      expect(parts[5]).toBe('');  // vehicleLabel null → '' (kills L263:39)
+      expect(parts[6]).toBe('');  // vehicleType null → '' (kills L263:66)
     });
 
     it('null passenger phone → empty string (L264 LogicalOperator ??→&&)', async () => {
@@ -724,6 +757,20 @@ describe('emergency-kit mutation-kill', () => {
       );
       const data = JSON.parse((await generateProgramJson(EID)).toString());
       expect(data.sessions[0].faculty).toEqual([]);
+    });
+
+    it('same-date: null startUtc sorts before non-null (L338:20 LogicalOperator, L338:34/L339:34 NoCoverage)', async () => {
+      setupDb(
+        [
+          { id: 'sess-timed', title: 'T', sessionType: 'talk', sessionDate: new Date('2026-04-10'), startAtUtc: new Date('2026-04-10T09:00:00Z'), endAtUtc: null, hallName: null, track: null, status: 'scheduled', cmeCredits: null, parentSessionId: null },
+          { id: 'sess-notime', title: 'NT', sessionType: 'talk', sessionDate: new Date('2026-04-10'), startAtUtc: null, endAtUtc: null, hallName: null, track: null, status: 'scheduled', cmeCredits: null, parentSessionId: null },
+        ],
+        [],
+      );
+      const data = JSON.parse((await generateProgramJson(EID)).toString());
+      // null startUtc → '' sorts before ISO timestamp string
+      expect(data.sessions[0].id).toBe('sess-notime');
+      expect(data.sessions[1].id).toBe('sess-timed');
     });
 
     it('program.sort called (L334 MethodExpression kill)', async () => {
