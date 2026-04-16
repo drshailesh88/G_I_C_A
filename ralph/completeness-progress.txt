@@ -191,3 +191,53 @@ Patterns noticed:
 - Only 2 genuine gaps remain across all P3 items; all other previously tracked items
   are confirmed either implemented or already in prd.json.
 
+## 2026-04-17T04:00:00Z — iter 4
+Per-phase coverage:
+
+| Phase | OUGHT (count) | IS (found) | Gap | Appended |
+|-------|---------------|------------|-----|----------|
+| P1    | 6             | 4          | 0   | 0        |
+| P2    | 24            | 21         | 0   | 0        |
+| P3    | 12            | 10         | 1   | 1        |
+| P4    | 6             | 5          | 0   | 0        |
+| P5    | 9             | 9          | 0   | 0        |
+| P6    | 12            | 12         | 0   | 0        |
+| Total | 69            | 61         | 1   | 1        |
+
+Note: P3 OUGHT count corrected from 9→12; prior iterations undercounted P3 by
+grouping CSV import as one story and missing US 47 (resend logistics) entirely.
+P1/P2 IS counts reflect that all prior-iteration gaps are tracked in prd.json
+(not yet implemented in IS, but story entries exist).
+
+Sources consulted:
+- .planning/prd.md ✓
+- .planning/REQUIREMENTS.md ✓
+- research-hub/PROJECT_HANDOFF.md ✓
+- research-hub/CLICK_MAP_AND_TRACEABILITY.md ✓
+- research-hub/BACKEND_ARCHITECTURE_MAP.md ✓
+- research-hub/DEFERRED_TICKETS.md ✓
+- research-hub/COMPLETE_GAP_ANALYSIS.md ✓
+
+feature-census runs: fresh Layer 1 walk for all 14 modules — events, people, program,
+sessions, travel, accommodation, transport, communications, certificates, qr, attendance,
+reports, branding, settings — via route tree enumeration + action-file function scan.
+Layer 3 runtime deferred (server not running).
+
+Appended story IDs (priority 77):
+- P3 (1): p3-ops-resend-logistics-notification
+
+Confirmed NOT gaps (newly verified this iteration):
+- US 10 anonymizePerson → confirmed in src/lib/actions/person.ts:269.
+- US 17 Halls CRUD → confirmed in src/lib/actions/program.ts (createHall/updateHall/deleteHall/getHalls).
+- US 26 Faculty invite status display → confirmed in faculty-invite-client.tsx (sent/opened/accepted/declined/expired filter tabs).
+- US 38 Accommodation form travel filter → confirmed in accommodation-form-client.tsx (peopleWithTravel filter).
+- US 12 Global notification templates → confirmed as code-seeded via seed-system-templates.ts; REQUIREMENTS.md marks [x].
+- D6 issued-certificates-list → confirmed in certificates-client.tsx; REQUIREMENTS.md Req 7A-3 [x].
+- Phase 6 item 28 pre-event backup → confirmed in src/lib/inngest/functions.ts:214 (pre-event-backup Inngest function).
+
+Patterns noticed:
+- Scanning PRD user stories directly (not just REQUIREMENTS.md unchecked items) surfaced US 47
+  which was not in REQUIREMENTS.md unchecked items but was a genuine PRD commitment.
+- blocked_on_spec=true appropriate: no wireframe M## defines the 'Resend from logistics view' UX.
+- P3 OUGHT count was understated in prior iterations; correct count is 12 PRD user stories.
+

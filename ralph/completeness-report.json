@@ -32,13 +32,48 @@
       "p9-client-uat-pilot"
     ],
     "per_phase_gaps": {
-      "P1": { "ought": 6, "is": 6, "gap": 0, "appended": 0 },
-      "P2": { "ought": 24, "is": 13, "gap": 11, "appended": 11 },
-      "P3": { "ought": 9, "is": 7, "gap": 2, "appended": 2 },
-      "P4": { "ought": 6, "is": 4, "gap": 2, "appended": 2 },
-      "P5": { "ought": 9, "is": 7, "gap": 2, "appended": 2 },
-      "P6": { "ought": 12, "is": 3, "gap": 9, "appended": 9 },
-      "Total": { "ought": 66, "is": 40, "gap": 26, "appended": 26 }
+      "P1": {
+        "ought": 6,
+        "is": 6,
+        "gap": 0,
+        "appended": 0
+      },
+      "P2": {
+        "ought": 24,
+        "is": 13,
+        "gap": 11,
+        "appended": 11
+      },
+      "P3": {
+        "ought": 9,
+        "is": 7,
+        "gap": 2,
+        "appended": 2
+      },
+      "P4": {
+        "ought": 6,
+        "is": 4,
+        "gap": 2,
+        "appended": 2
+      },
+      "P5": {
+        "ought": 9,
+        "is": 7,
+        "gap": 2,
+        "appended": 2
+      },
+      "P6": {
+        "ought": 12,
+        "is": 3,
+        "gap": 9,
+        "appended": 9
+      },
+      "Total": {
+        "ought": 66,
+        "is": 40,
+        "gap": 26,
+        "appended": 26
+      }
     },
     "sources_consulted": [
       ".planning/prd.md",
@@ -64,9 +99,9 @@
     "feature_census_modules_fresh": [],
     "patterns": [
       "Prior run narrowed OUGHT to hardening-only; authoritative OUGHT is .planning/prd.md + REQUIREMENTS.md + PROJECT_HANDOFF.md across all 6 phases.",
-      "REQUIREMENTS.md checkbox state is stale in 3 places (faculty upsert, accommodation send, rooming list export) — already in src/.",
+      "REQUIREMENTS.md checkbox state is stale in 3 places (faculty upsert, accommodation send, rooming list export) \u2014 already in src/.",
       "Majority of gaps are UI-only pages (9) atop existing schema; next biggest bucket is cascade/notification (5); 3 are deployment/test gaps.",
-      "All DEFERRED_TICKETS.md D1–D9 items audited; D2 renamed as p2-m30-conflict-fix-action and D6 as p5-d6-issued-certificates-list so they enter the build queue."
+      "All DEFERRED_TICKETS.md D1\u2013D9 items audited; D2 renamed as p2-m30-conflict-fix-action and D6 as p5-d6-issued-certificates-list so they enter the build queue."
     ],
     "promise": "NEXT"
   },
@@ -83,13 +118,48 @@
       "p2-registration-settings-ui"
     ],
     "per_phase_gaps": {
-      "P1": { "ought": 6, "is": 4, "gap": 2, "appended": 2 },
-      "P2": { "ought": 24, "is": 11, "gap": 3, "appended": 3 },
-      "P3": { "ought": 9, "is": 7, "gap": 0, "appended": 0 },
-      "P4": { "ought": 6, "is": 4, "gap": 1, "appended": 1 },
-      "P5": { "ought": 9, "is": 7, "gap": 0, "appended": 0 },
-      "P6": { "ought": 12, "is": 3, "gap": 0, "appended": 0 },
-      "Total": { "ought": 66, "is": 36, "gap": 6, "appended": 6 }
+      "P1": {
+        "ought": 6,
+        "is": 4,
+        "gap": 2,
+        "appended": 2
+      },
+      "P2": {
+        "ought": 24,
+        "is": 11,
+        "gap": 3,
+        "appended": 3
+      },
+      "P3": {
+        "ought": 9,
+        "is": 7,
+        "gap": 0,
+        "appended": 0
+      },
+      "P4": {
+        "ought": 6,
+        "is": 4,
+        "gap": 1,
+        "appended": 1
+      },
+      "P5": {
+        "ought": 9,
+        "is": 7,
+        "gap": 0,
+        "appended": 0
+      },
+      "P6": {
+        "ought": 12,
+        "is": 3,
+        "gap": 0,
+        "appended": 0
+      },
+      "Total": {
+        "ought": 66,
+        "is": 36,
+        "gap": 6,
+        "appended": 6
+      }
     },
     "sources_consulted": [
       ".planning/prd.md",
@@ -102,13 +172,24 @@
     ],
     "feature_census_modules_reused": [],
     "feature_census_modules_fresh": [
-      "events", "people", "program", "sessions", "travel", "accommodation",
-      "transport", "communications", "certificates", "qr", "attendance",
-      "reports", "branding", "settings"
+      "events",
+      "people",
+      "program",
+      "sessions",
+      "travel",
+      "accommodation",
+      "transport",
+      "communications",
+      "certificates",
+      "qr",
+      "attendance",
+      "reports",
+      "branding",
+      "settings"
     ],
     "patterns": [
-      "Tile-href audit: diffing event-workspace-client.tsx hrefs against app directory tree found /templates (→404) and /settings (→404) — systematic dead-link audit is a reliable gap-detection method.",
-      "REQUIREMENTS.md false [x]: 'Super Admin can archive, cancel, or transfer ownership' — archive/cancel implemented, transfer ownership is NOT in event.ts.",
+      "Tile-href audit: diffing event-workspace-client.tsx hrefs against app directory tree found /templates (\u2192404) and /settings (\u2192404) \u2014 systematic dead-link audit is a reliable gap-detection method.",
+      "REQUIREMENTS.md false [x]: 'Super Admin can archive, cancel, or transfer ownership' \u2014 archive/cancel implemented, transfer ownership is NOT in event.ts.",
       "Faculty invite accept is a cascade gap: updateFacultyInviteStatus updates invite only, no registration creation or event_people upsert.",
       "event_user_assignments table + auth check exist but no write UI/action for assigning non-creator users to events.",
       "H5/H6/H7 from DEFERRED_TICKETS.md are all confirmed FIXED in src/ (circuit-breaker.ts, timeout.ts, automation.ts:sendNotification, email.ts R2 attachments)."
@@ -124,13 +205,48 @@
       "p3-accommodation-csv-import"
     ],
     "per_phase_gaps": {
-      "P1": { "ought": 6, "is": 4, "gap": 0, "appended": 0 },
-      "P2": { "ought": 24, "is": 21, "gap": 0, "appended": 0 },
-      "P3": { "ought": 9, "is": 7, "gap": 2, "appended": 2 },
-      "P4": { "ought": 6, "is": 5, "gap": 0, "appended": 0 },
-      "P5": { "ought": 9, "is": 9, "gap": 0, "appended": 0 },
-      "P6": { "ought": 12, "is": 12, "gap": 0, "appended": 0 },
-      "Total": { "ought": 66, "is": 58, "gap": 2, "appended": 2 }
+      "P1": {
+        "ought": 6,
+        "is": 4,
+        "gap": 0,
+        "appended": 0
+      },
+      "P2": {
+        "ought": 24,
+        "is": 21,
+        "gap": 0,
+        "appended": 0
+      },
+      "P3": {
+        "ought": 9,
+        "is": 7,
+        "gap": 2,
+        "appended": 2
+      },
+      "P4": {
+        "ought": 6,
+        "is": 5,
+        "gap": 0,
+        "appended": 0
+      },
+      "P5": {
+        "ought": 9,
+        "is": 9,
+        "gap": 0,
+        "appended": 0
+      },
+      "P6": {
+        "ought": 12,
+        "is": 12,
+        "gap": 0,
+        "appended": 0
+      },
+      "Total": {
+        "ought": 66,
+        "is": 58,
+        "gap": 2,
+        "appended": 2
+      }
     },
     "sources_consulted": [
       ".planning/prd.md",
@@ -143,16 +259,118 @@
     ],
     "feature_census_modules_reused": [],
     "feature_census_modules_fresh": [
-      "events", "people", "program", "sessions", "travel", "accommodation",
-      "transport", "communications", "certificates", "qr", "attendance",
-      "reports", "branding", "settings"
+      "events",
+      "people",
+      "program",
+      "sessions",
+      "travel",
+      "accommodation",
+      "transport",
+      "communications",
+      "certificates",
+      "qr",
+      "attendance",
+      "reports",
+      "branding",
+      "settings"
     ],
     "patterns": [
       "User Story 46 covers BOTH travel and accommodation CSV import; prior iterations missed the action-file gap because focus was on UI routes.",
-      "D4 (Invite Member modal) is implemented as an inline form in team-management-client.tsx — not a design gap.",
+      "D4 (Invite Member modal) is implemented as an inline form in team-management-client.tsx \u2014 not a design gap.",
       "Accommodation save-on-notify confirmed implemented in accommodation-cascade.ts.",
-      "Feature flags UI confirmed at /events/[eventId]/flags/ — workspace tile href correctly resolved.",
+      "Feature flags UI confirmed at /events/[eventId]/flags/ \u2014 workspace tile href correctly resolved.",
       "All P1/P2/P4/P5/P6 gaps from prior iterations are now fully tracked in prd.json."
+    ],
+    "promise": "NEXT"
+  },
+  {
+    "iteration": 4,
+    "timestamp": "2026-04-17T04:00:00Z",
+    "appended_count": 1,
+    "appended_ids": [
+      "p3-ops-resend-logistics-notification"
+    ],
+    "per_phase_gaps": {
+      "P1": {
+        "ought": 6,
+        "is": 4,
+        "gap": 0,
+        "appended": 0
+      },
+      "P2": {
+        "ought": 24,
+        "is": 21,
+        "gap": 0,
+        "appended": 0
+      },
+      "P3": {
+        "ought": 12,
+        "is": 10,
+        "gap": 1,
+        "appended": 1
+      },
+      "P4": {
+        "ought": 6,
+        "is": 5,
+        "gap": 0,
+        "appended": 0
+      },
+      "P5": {
+        "ought": 9,
+        "is": 9,
+        "gap": 0,
+        "appended": 0
+      },
+      "P6": {
+        "ought": 12,
+        "is": 12,
+        "gap": 0,
+        "appended": 0
+      },
+      "Total": {
+        "ought": 69,
+        "is": 61,
+        "gap": 1,
+        "appended": 1
+      }
+    },
+    "sources_consulted": [
+      ".planning/prd.md",
+      ".planning/REQUIREMENTS.md",
+      "research-hub/PROJECT_HANDOFF.md",
+      "research-hub/CLICK_MAP_AND_TRACEABILITY.md",
+      "research-hub/BACKEND_ARCHITECTURE_MAP.md",
+      "research-hub/DEFERRED_TICKETS.md",
+      "research-hub/COMPLETE_GAP_ANALYSIS.md"
+    ],
+    "feature_census_modules_reused": [],
+    "feature_census_modules_fresh": [
+      "events",
+      "people",
+      "program",
+      "sessions",
+      "travel",
+      "accommodation",
+      "transport",
+      "communications",
+      "certificates",
+      "qr",
+      "attendance",
+      "reports",
+      "branding",
+      "settings"
+    ],
+    "patterns": [
+      "US 47 (resend logistics notifications) was in the PRD but not in REQUIREMENTS.md unchecked items \u2014 scanning PRD user stories directly found this gap that prior iterations missed.",
+      "P3 OUGHT count is higher than previously counted (12 vs 9): earlier iterations undercounted by grouping US 46 as one story and missing US 47 entirely.",
+      "anonymizePerson (US 10) confirmed implemented in person.ts:269.",
+      "Halls CRUD (US 17, Phase 1) confirmed implemented in program.ts (createHall, updateHall, deleteHall, getHalls).",
+      "Faculty invite status display (US 26) confirmed implemented in faculty-invite-client.tsx with sent/opened/accepted/declined/expired filter tabs.",
+      "Pre-event backup Inngest job (Phase 6 item 28) confirmed implemented in src/lib/inngest/functions.ts:214.",
+      "Global notification templates (US 12) confirmed as code-seeded (seed-system-templates.ts) + is_system_template schema \u2014 REQUIREMENTS.md marks [x].",
+      "Accommodation auto-filter to travel records (US 38) confirmed implemented in accommodation-form-client.tsx with peopleWithTravel filter.",
+      "p5-d6-issued-certificates-list confirmed implemented within certificates-client.tsx; REQUIREMENTS.md Req 7A-3 marked [x].",
+      "blocked_on_spec=true: no wireframe M## covers 'Resend from logistics view' UX \u2014 design must define placement before build."
     ],
     "promise": "NEXT"
   }
