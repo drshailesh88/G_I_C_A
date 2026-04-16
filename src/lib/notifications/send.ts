@@ -25,7 +25,10 @@ import {
 } from './log-queries';
 import { resendEmailProvider } from './email';
 import { evolutionWhatsAppProvider } from './whatsapp';
-import { redisIdempotencyService } from './idempotency';
+import {
+  buildIdempotencyKey,
+  redisIdempotencyService,
+} from './idempotency';
 import {
   createShimmedEmailProvider,
   createShimmedWhatsAppProvider,
@@ -68,6 +71,39 @@ function providerNameForChannel(channel: Channel): 'resend' | 'evolution_api' {
   return channel === 'email' ? 'resend' : 'evolution_api';
 }
 
+const CANONICAL_TRIGGER_TYPES: Partial<Record<string, string>> = {
+  'travel.saved': 'travel_confirmed',
+  'travel.updated': 'travel_updated',
+  'travel.cancelled': 'travel_cancelled',
+  'accommodation.saved': 'accommodation_confirmed',
+  'accommodation.updated': 'accommodation_updated',
+  'accommodation.cancelled': 'accommodation_cancelled',
+  'registration.created': 'registration_confirmed',
+  'session.updated': 'session_updated',
+  'certificate.generated': 'certificate_ready',
+};
+
+function canonicalNotificationType(triggerType: string): string {
+  return CANONICAL_TRIGGER_TYPES[triggerType] ?? triggerType.replace(/\./g, '_');
+}
+
+function normalizeIdempotencyKey(input: SendNotificationInput): string {
+  if (
+    !input.idempotencyKey.startsWith('notify:') &&
+    !input.idempotencyKey.startsWith('notify|')
+  ) {
+    return input.idempotencyKey;
+  }
+
+  return buildIdempotencyKey({
+    userId: input.personId,
+    eventId: input.eventId,
+    type: canonicalNotificationType(input.triggerType),
+    triggerId: input.triggerEntityId ?? input.idempotencyKey,
+    channel: input.channel,
+  });
+}
+
 // ── Main Send ─────────────────────────────────────────────────
 
 export async function sendNotification(
@@ -82,6 +118,7 @@ export async function sendNotification(
     createLogEntryFn,
     updateLogStatusFn,
   } = deps;
+  const idempotencyKey = normalizeIdempotencyKey(input);
 
   // 0. Feature flag check — skip with audit log if channel is disabled
   try {
@@ -103,7 +140,7 @@ export async function sendNotification(
         triggerEntityType: input.triggerEntityType ?? null,
         triggerEntityId: input.triggerEntityId ?? null,
         sendMode: input.sendMode,
-        idempotencyKey: input.idempotencyKey,
+        idempotencyKey,
         recipientEmail: input.channel === 'email' ? (input.variables['recipientEmail'] as string ?? null) : null,
         recipientPhoneE164: input.channel === 'whatsapp' ? (input.variables['recipientPhoneE164'] as string ?? null) : null,
         renderedSubject: null,
@@ -155,7 +192,7 @@ export async function sendNotification(
       triggerEntityType: input.triggerEntityType ?? null,
       triggerEntityId: input.triggerEntityId ?? null,
       sendMode: input.sendMode,
-      idempotencyKey: input.idempotencyKey,
+      idempotencyKey,
       recipientEmail: input.channel === 'email' ? (input.variables['recipientEmail'] as string ?? null) : null,
       recipientPhoneE164: input.channel === 'whatsapp' ? (input.variables['recipientPhoneE164'] as string ?? null) : null,
       renderedSubject: null,
@@ -186,7 +223,7 @@ export async function sendNotification(
     triggerEntityType: input.triggerEntityType ?? null,
     triggerEntityId: input.triggerEntityId ?? null,
     sendMode: input.sendMode,
-    idempotencyKey: input.idempotencyKey,
+    idempotencyKey,
     recipientEmail: input.channel === 'email' ? (input.variables['recipientEmail'] as string ?? null) : null,
     recipientPhoneE164: input.channel === 'whatsapp' ? (input.variables['recipientPhoneE164'] as string ?? null) : null,
     renderedSubject: rendered.subject,
@@ -200,7 +237,7 @@ export async function sendNotification(
   // 3. Idempotency check — AFTER log creation so we have an audit trail
   // FIX #1: If process dies after Redis SET but before provider call,
   // the queued log row exists and ops can see + retry it.
-  const isDuplicate = await idempotencyService.checkAndSet(input.idempotencyKey);
+  const isDuplicate = await idempotencyService.checkAndSet(idempotencyKey);
   if (isDuplicate) {
     // Already sent — update our log as a duplicate detection record
     await updateLogStatusFn(logRow.id, input.eventId, {
