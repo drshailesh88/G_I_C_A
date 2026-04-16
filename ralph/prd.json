@@ -1317,6 +1317,9 @@
   },
   {
     "id": "cascade-029",
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-16T04:28:03Z",
+    "qa_tested_by": "codex",
     "category": "data",
     "description": "notification_log has exactly one row per idempotency key; retries UPDATE in place.",
     "page": "N/A — Backend",
