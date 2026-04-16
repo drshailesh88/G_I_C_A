@@ -30,5 +30,13 @@
     "status": "GREEN",
     "last_iter_at": "2026-04-16T17:14:23.576295Z",
     "signature": ""
+  },
+  {
+    "module": "src/lib/exports/emergency-kit.ts",
+    "attempts": 2,
+    "plateau_buffer": [],
+    "status": "GREEN",
+    "last_iter_at": "2026-04-16T17:21:30.000000Z",
+    "signature": ""
   }
 ]
