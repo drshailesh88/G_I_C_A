@@ -14,10 +14,17 @@
 - Certificate rendered-variable snapshots must be resolved from authoritative DB state at issuance time, not trusted from caller-provided variables; stale master-person values become permanent once inserted.
 - Bulk APIs that return `batch_id` need a durable retrievable summary keyed by that id; an Inngest handler return value alone is not an operator-visible batch report.
 - Public certificate verification must satisfy the frozen `/verify/{token}` contract, not only `/api/verify/{token}`; also verify counter persistence is awaited and any follow-up cert lookup is event-scoped.
+- Event-scoped routes outside the currently focused module can still catch `EventNotFoundError` as generic forbidden; audit every `assertEventAccess()` route for `crossEvent404Response()` before accepting CE4-style no-leak stories.
 
 ## Iteration log
 
 <!-- Dated entries per QA'd feature. -->
+
+## 2026-04-16T02:06:10Z — tenancy-021 — cross-event 404 body sanitization
+- Status: fixed
+- Bugs: 1 (medium: 1)
+- Fix commits: d53b6e2062cf368c871d6a4dc11ea71cfe91226b
+- Notes: Fixed emergency-kit export cross-event access to return the sanitized `{ error: 'Not Found' }` 404 instead of leaking `Forbidden`; full Vitest and focused tenancy suites passed, while event-id Playwright contracts and repo typecheck remain blocked by known harness/repo issues.
 
 ## 2026-04-15T14:07:17Z — cert-code-001 — issueCertificate rejection branches
 - Status: fail

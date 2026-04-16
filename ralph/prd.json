@@ -985,7 +985,10 @@
           "expected": "Next.js default 404 unchanged"
         }
       ]
-    }
+    },
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-16T02:06:10Z",
+    "qa_tested_by": "codex"
   },
   {
     "id": "tenancy-022",

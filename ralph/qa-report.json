@@ -511,5 +511,30 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused sessions API plus event-id mismatch helper suites passed (2 files, 13 tests). Event-id Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story. Manual verification found the sessions route previously validated only event_id, while the PRD/CE3 contract submits body.eventId; the route now accepts both body.eventId and body.event_id, forwards whichever submitted value differs from the URL eventId into assertEventIdMatch, returns { error: 'eventId mismatch' } on EventIdMismatchError, and reaches db.insert only after the mismatch guard. Body omissions still pass no mismatch value to the helper, preserving the documented 201 create path. The other event-scoped JSON body routes were checked and already preserve raw-body camel/snake eventId mismatch detection."
+  },
+  {
+    "story_id": "tenancy-021",
+    "qa_timestamp": "2026-04-16T02:06:10Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "skip",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "POST /api/events/[eventId]/exports/emergency-kit mapped EventNotFoundError to 403 { error: 'Forbidden' }, leaking authorization wording instead of the generic cross-event 404 body.",
+        "severity": "medium",
+        "fix_commit": "d53b6e2062cf368c871d6a4dc11ea71cfe91226b",
+        "files_changed": [
+          "src/app/api/events/[eventId]/exports/emergency-kit/route.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused sanitized 404, sessions API, and people API suites passed (3 files, 22 tests). Event-id Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; a targeted typecheck grep found no emergency-kit or sanitizer-local errors. Manual verification confirmed crossEvent404Response returns exactly { error: 'Not Found' } with no event ID or access/permission/forbidden wording, all event-scoped API routes using assertEventAccess have a sanitized cross-event response path, and the emergency-kit route now preserves true role denial as 403 while mapping EventNotFoundError to the generic 404. Persistence was skipped because this story only controls cross-event error response shape; no authorized mutation path was exercised while the authenticated browser fixture is blocked."
   }
 ]
