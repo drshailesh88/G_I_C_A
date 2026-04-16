@@ -62,5 +62,13 @@
     "status": "GREEN",
     "last_iter_at": "2026-04-16T19:38:16.950715Z",
     "signature": ""
+  },
+  {
+    "module": "src/lib/sentry.ts",
+    "attempts": 1,
+    "plateau_buffer": [],
+    "status": "GREEN",
+    "last_iter_at": "2026-04-16T19:41:52.598135Z",
+    "signature": ""
   }
 ]
