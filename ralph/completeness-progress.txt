@@ -144,3 +144,50 @@ Patterns noticed:
 - Registration settings JSONB is read-enforced but never written by any admin
   action — silent default behaviour masks the missing admin configuration flow.
 
+## 2026-04-17T03:00:00Z — iter 3
+Per-phase coverage:
+
+| Phase | OUGHT (count) | IS (found) | Gap | Appended |
+|-------|---------------|------------|-----|----------|
+| P1    | 6             | 4          | 0   | 0        |
+| P2    | 24            | 21         | 0   | 0        |
+| P3    | 9             | 7          | 2   | 2        |
+| P4    | 6             | 5          | 0   | 0        |
+| P5    | 9             | 9          | 0   | 0        |
+| P6    | 12            | 12         | 0   | 0        |
+| Total | 66            | 58         | 2   | 2        |
+
+Note: P1 and P2 gaps from iter 2 are all now tracked in prd.json; no new P1/P2/P4/P5/P6
+gaps found this iteration. New P3 gaps: travel CSV import and accommodation CSV import
+(User Story 46 — both halves of "import travel and accommodation records from CSV").
+
+Sources consulted:
+- .planning/prd.md ✓
+- .planning/REQUIREMENTS.md ✓
+- research-hub/PROJECT_HANDOFF.md ✓
+- research-hub/CLICK_MAP_AND_TRACEABILITY.md ✓
+- research-hub/BACKEND_ARCHITECTURE_MAP.md ✓
+- research-hub/DEFERRED_TICKETS.md ✓
+- research-hub/COMPLETE_GAP_ANALYSIS.md ✓
+
+feature-census runs: fresh Layer 1 walk for all 14 modules — events, people, program,
+sessions, travel, accommodation, transport, communications, certificates, qr, attendance,
+reports, branding, settings — via direct src/ tree read and action-file function enumeration.
+Layer 3 runtime crawl deferred (server not running); Layer 1 sufficient given all new gaps
+confirmed by absence of functions in action files and absence of import routes.
+
+Appended story IDs (priorities 75–76):
+- P3 (2): p3-travel-csv-import, p3-accommodation-csv-import
+
+Patterns noticed:
+- User Story 46 covers BOTH travel and accommodation CSV import; prior iterations missed
+  this because the focus was on UI routes — but the gap is in action functions and routes,
+  not just pages.
+- D4 (Invite Member modal) is effectively implemented as an inline form in
+  team-management-client.tsx (not a bottom sheet, but functional). Not a gap.
+- Accommodation save-on-notify is confirmed implemented in accommodation-cascade.ts:65+.
+- Feature flags UI confirmed at /events/[eventId]/flags/ — tile href is built correctly
+  via `href={/events/${event.id}${tile.href}}` pattern.
+- Only 2 genuine gaps remain across all P3 items; all other previously tracked items
+  are confirmed either implemented or already in prd.json.
+

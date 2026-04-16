@@ -2898,5 +2898,71 @@
     "completeness_discovered_at": "2026-04-17T00:00:00Z",
     "ought_citation": ".planning/prd.md §User Story 28; .planning/REQUIREMENTS.md §Registration ('configure registration settings per event')",
     "blocked_on_spec": false
+  },
+  {
+    "id": "p3-travel-csv-import",
+    "category": "crud",
+    "description": "CSV bulk import for travel records — Ops staff can upload a travel-agent CSV instead of entering records one-by-one.",
+    "phase": 3,
+    "priority": 75,
+    "behavior": "User Story 46: 'As an Ops staff member, I want to import travel records and accommodation records from CSV, so that bulk data from travel agents and hotels can be loaded.' Travel records currently require manual entry via /events/[eventId]/travel/new. No bulk import path exists. Required: /events/[eventId]/travel/import route using react-spreadsheet-import (same pattern as /people/import) with column auto-mapping to travel_records fields. Lookup person by email or phone (E.164) against master people DB; reject rows with no match. Each imported row: INSERT travel_records scoped to eventId, upsert event_people, write audit_log, emit conference/travel.saved Inngest event. Duplicate guard: rows with same PNR for same person/event are skipped with a warning.",
+    "ui_details": "Route /events/[eventId]/travel/import — 6-step react-spreadsheet-import flow. Required columns: person_identifier (email or phone), direction (inbound|outbound), mode (flight|train|bus|car), from_location, to_location, departure_at, arrival_at, pnr, carrier. Optional: terminal. Result screen shows imported/skipped/failed row counts with error detail per row.",
+    "data_model": "travel_records INSERT (eventId, personId, direction, mode, fromLocation, toLocation, departureAtUtc, arrivalAtUtc, pnr, carrier, terminal); event_people upsert; audit_log row per imported record.",
+    "tests": {
+      "unit": [
+        "Valid row with matching person email → travel_records row created scoped to eventId",
+        "Row with unknown email → skipped with 'person not found' error",
+        "Duplicate PNR for same person in same event → skipped with 'already exists' warning",
+        "eventId mismatch on any row → entire import rejected with 403"
+      ],
+      "e2e": [
+        "Upload CSV with 10 valid rows → 10 travel records created, cascade fires for each, audit_log has 10 entries",
+        "CSV with 3 unknown people → 3 skipped, 7 imported, result screen shows correct counts"
+      ],
+      "edge_cases": [
+        "Empty CSV → error: no rows to import",
+        "Column names don't match → auto-mapping UI prompts user to remap before import",
+        "Person exists in master DB but not yet in this event → event_people upserted automatically"
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T03:00:00Z",
+    "ought_citation": ".planning/prd.md §User Story 46; .planning/REQUIREMENTS.md §Travel ('Travel records created by admin or Ops (manual entry or CSV import)')",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p3-accommodation-csv-import",
+    "category": "crud",
+    "description": "CSV bulk import for accommodation records — Ops staff can upload a hotel rooming-list CSV instead of entering records one-by-one.",
+    "phase": 3,
+    "priority": 76,
+    "behavior": "User Story 46 (accommodation half): Accommodation records currently require manual entry via /events/[eventId]/accommodation/new. No bulk import path exists. Required: /events/[eventId]/accommodation/import route using react-spreadsheet-import. Lookup person by email or phone; reject rows with no match. Enforce the existing travel-first rule: rows where the person has no travel_record for this event are skipped with a warning (consistent with the accommodation form's auto-filter). Each imported row: INSERT accommodation_records scoped to eventId, write audit_log, emit conference/accommodation.saved Inngest event. Shared_room_group populated if the CSV column is present — all occupants in the group receive a cascade flag on any subsequent change.",
+    "ui_details": "Route /events/[eventId]/accommodation/import — same react-spreadsheet-import pattern. Columns: person_identifier (email or phone), hotel_name, address, city, room_type, room_number, check_in_date, check_out_date, google_maps_url (optional), shared_room_group (optional). Result screen shows imported/skipped/failed counts with per-row error detail.",
+    "data_model": "accommodation_records INSERT (eventId, personId, hotelName, address, city, roomType, roomNumber, checkInDate, checkOutDate, googleMapsUrl, sharedRoomGroup); event_people upsert; audit_log row per imported record.",
+    "tests": {
+      "unit": [
+        "Valid row with person who has a travel_record for this event → accommodation_records row created",
+        "Row with person who has no travel_record for this event → skipped with warning (filter rule)",
+        "Row with unknown person email → skipped with 'person not found' error",
+        "eventId mismatch → entire import rejected with 403"
+      ],
+      "e2e": [
+        "Upload CSV with 10 rows (all have travel records) → 10 accommodation records created, cascade fires, notification_log entries appear",
+        "Upload CSV where 3 people have no travel_record → 3 skipped, 7 imported, result screen shows correct counts"
+      ],
+      "edge_cases": [
+        "Shared_room_group populated → verify all group occupants get a red flag when one record updates",
+        "Duplicate import (same person + same hotel + same dates) → warn user, offer skip or overwrite",
+        "CSV where check_out before check_in → row-level validation error, row skipped"
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T03:00:00Z",
+    "ought_citation": ".planning/prd.md §User Story 46; .planning/REQUIREMENTS.md §Accommodation (Story 46 covers both travel and accommodation CSV import)",
+    "blocked_on_spec": false
   }
 ]
