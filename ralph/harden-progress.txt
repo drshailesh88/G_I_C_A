@@ -116,7 +116,23 @@
 
 - **auth-as-function mock**: `const authFn = Object.assign(vi.fn(async () => ({ userId: 'xyz' })), { protect: vi.fn() })`. Pass to middleware callback. The `typeof authFn === 'function'` path is taken, authFn() is awaited, userId extracted. Kills EqualityOperator `===→!==`, ConditionalExpression→false/true, and StringLiteral `'function'→''` on the typeof check.
 
+- **Mock drizzle-orm eq/and to kill filter/branch mutants**: When a utility wraps `eq`/`and` from drizzle-orm and tests can't use a real DB, use `vi.mock('drizzle-orm', async (importOriginal) => ({ ...actual, eq: vi.fn(actual.eq), and: vi.fn(actual.and) }))`. Then assert `vi.mocked(and).not.toHaveBeenCalled()` for single-condition path and `vi.mocked(and).toHaveBeenCalledOnce()` for multi-condition path. Also assert `vi.mocked(and).mock.calls[0].toHaveLength(N)` to verify the right number of args passed. Always `vi.mocked(eq).mockClear()` and `vi.mocked(and).mockClear()` after setup to isolate internal calls from test-setup calls.
+
 ## Iteration log
+
+## 2026-04-17T02:05:00Z — src/lib/db/with-event-scope.ts — kill 8 mutants, score 46.67% → 100%
+- Tier: critical_75
+- Score: 46.67% → 100% (15/15 killed)
+- Mutants killed this iter: 8
+- Tests added: 5 in src/lib/db/with-event-scope.mutation-kill.test.ts
+- Real bugs fixed: none
+- Key findings:
+  - All existing tests only asserted toBeDefined() — the filter predicate and branch selection were untestable without spying
+  - Mocked drizzle-orm's eq/and via vi.mock to track which branch the function takes
+  - L26 `=== 1` → true/false/!== 1: killed by asserting and() NOT called for no-extras, and() called once for one-extra
+  - L23 filter `→ false`, `() => undefined`, `=== undefined`: all filter out real SQL → and() not called → killed by one-extra test
+  - L23 MethodExpression (skip filter), `→ true`: keep undefined → and() called in undefined-only case → killed by not.toHaveBeenCalled assertion
+  - toHaveLength(2) on and() call args confirms both eventId eq and extra SQL pass through filter
 
 ## 2026-04-17T01:28:00Z — src/lib/actions/dashboard.ts — kill 20 mutants, score 49.33% → 76%
 - Tier: critical_75

@@ -94,5 +94,21 @@
     "status": "GREEN",
     "last_iter_at": "2026-04-16T19:59:05.107455Z",
     "signature": ""
+  },
+  {
+    "module": "src/lib/actions/registration.ts",
+    "attempts": 1,
+    "plateau_buffer": [],
+    "status": "GREEN",
+    "last_iter_at": "2026-04-17T02:00:00.000000Z",
+    "signature": ""
+  },
+  {
+    "module": "src/lib/db/with-event-scope.ts",
+    "attempts": 1,
+    "plateau_buffer": [],
+    "status": "GREEN",
+    "last_iter_at": "2026-04-17T02:05:00.000000Z",
+    "signature": ""
   }
 ]
