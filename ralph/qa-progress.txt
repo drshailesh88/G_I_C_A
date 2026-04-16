@@ -3,6 +3,7 @@
 ## QA Patterns
 
 <!-- Cross-feature QA findings: common bug classes, edge cases worth re-checking. Codex writes here. -->
+- Event-scoped API response-shape QA should compare visible unit expectations against the frozen contract text; stale route tests can pass while a contract like CE14 expects a singular row/null shape and reads properties directly.
 - Read-only UI QA should check every mutation control on the surface, including secondary lifecycle controls like red-flag review/resolve buttons, not just primary Add/Create buttons.
 - Bulk generation QA must follow the lock across the async worker boundary: route-level SET NX is insufficient unless the queued worker receives the same lock key and deletes it in success and failure paths.
 - Certificate Playwright contracts are currently blocked before product assertions by Clerk auth setup redirecting `/events` with `ERR_TOO_MANY_REDIRECTS`; record this as a harness blocker when it recurs rather than treating it as certificate product behavior.
@@ -21,6 +22,12 @@
 ## Iteration log
 
 <!-- Dated entries per QA'd feature. -->
+
+## 2026-04-16T02:59:55Z — tenancy-026 — event-scoped people detail
+- Status: fail
+- Bugs: 1 (high: 1)
+- Fix commits: none
+- Notes: Full Vitest and the focused people-detail route suite passed, but manual contract review found the route returns `travel` as an array/empty array while the PRD and CE14 expect a single event-scoped row object or null; event-id Playwright contracts and repo typecheck remain blocked by known harness/repo issues.
 
 ## 2026-04-16T02:52:23Z — tenancy-025 — session create URL eventId
 - Status: fixed
