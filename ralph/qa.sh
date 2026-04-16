@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
-# Ralph QA loop — Gemini 3 pro preview as sole independent grader.
+# Ralph QA loop — Codex (ChatGPT) as sole independent grader, dual-account failover.
 #
-# Builder ≠ grader principle: Claude built the code, Google Gemini 3
-# grades it independently. For each passes:true story in prd.json,
-# Gemini verifies, probes edge cases, fixes bugs in production code.
+# Builder ≠ grader principle: Claude Code built the features; Codex/GPT-5.4
+# grades them. For each passes:true story in prd.json, Codex verifies the
+# feature, probes edge cases, and fixes bugs in production code.
 # Findings → ralph/qa-report.json. Progress → ralph/qa-progress.txt.
 #
-# No fallback providers. If Gemini fails, the loop aborts cleanly.
+# Dual-account failover: tries CODEX_ACC1 first, falls back to CODEX_ACC2
+# on quota exhaustion. Auto-recover: every iteration starts from acc1
+# again, so when acc1's 5h window refills it picks up automatically.
 #
 # Env overrides:
-#   GEMINI_MODEL=<id>    override model (default gemini-3-pro-preview)
+#   CODEX_ACC1=<path>            primary codex account (default $HOME/.codex-acc1)
+#   CODEX_ACC2=<path>            fallback codex account (default $HOME/.codex-acc2)
+#   CODEX_SINGLE_ACCOUNT=1       disable fallback layer
 #
 # Usage: ./ralph/qa.sh [max_iterations=999]
 
@@ -23,19 +27,21 @@ QA_PROGRESS=ralph/qa-progress.txt
 ITER_TIMEOUT=1800
 SLEEP_BETWEEN=3
 
-GEMINI_MODEL="${GEMINI_MODEL:-gemini-3-pro-preview}"
+CODEX_ACC1="${CODEX_ACC1:-$HOME/.codex-acc1}"
+CODEX_ACC2="${CODEX_ACC2:-$HOME/.codex-acc2}"
+CODEX_SINGLE_ACCOUNT="${CODEX_SINGLE_ACCOUNT:-0}"
 
-# Quota / auth / transport detection (only applied to FAILED calls — gemini's
-# internal retries sometimes print 429/TLS noise even on successful runs)
-QUOTA_REGEX='429|rate.?limit|rate_limit|quota.?exceeded|quota_exceeded|usage.?limit|insufficient_quota|retry.?after|RESOURCE_EXHAUSTED|hit your usage limit|try again at|unauthorized|invalid.?api.?key|401|402|403|ERR_SSL_|TLS.?ALERT|UNAVAILABLE|overloaded'
+# Quota / auth / transport detection
+QUOTA_REGEX='429|rate.?limit|rate_limit|quota.?exceeded|quota_exceeded|usage.?limit|insufficient_quota|retry.?after|RESOURCE_EXHAUSTED|hit your usage limit|try again at|unauthorized|invalid.?api.?key|401|402|403'
+BOTH_EXHAUSTED_SLEEP=300   # 5 min
 
 if [ ! -f "$PRD" ]; then
   echo "ERROR: $PRD not found." >&2
   exit 1
 fi
 
-if ! command -v gemini >/dev/null 2>&1; then
-  echo "ERROR: gemini CLI not found. Install via 'npm i -g @google/gemini-cli'." >&2
+if ! command -v codex >/dev/null 2>&1; then
+  echo "ERROR: codex CLI not found." >&2
   exit 1
 fi
 
@@ -52,7 +58,6 @@ fi
 if [ ! -f "$QA_REPORT" ]; then
   echo "[]" > "$QA_REPORT"
 fi
-
 if [ ! -f "$QA_PROGRESS" ]; then
   cat > "$QA_PROGRESS" <<'EOF'
 # Ralph QA Progress
@@ -70,12 +75,19 @@ count_built() {
 count_qad() {
   python3 -c "import json; d=json.load(open('$QA_REPORT')); print(len({x['story_id'] for x in d if x.get('story_id')}))"
 }
+validate_account() {
+  local dir="$1"
+  [ -d "$dir" ] && [ -s "$dir/auth.json" ]
+}
 
 BUILT=$(count_built)
 QAD=$(count_qad)
 
+ACC1_OK=$(validate_account "$CODEX_ACC1" && echo yes || echo no)
+ACC2_OK=$(validate_account "$CODEX_ACC2" && echo yes || echo no)
+
 echo "───────────────────────────────────────────────────────────────"
-echo "Ralph QA loop — Gemini sole grader"
+echo "Ralph QA loop — Codex independent evaluator"
 echo "  prd:        $PRD  ($BUILT features built, $QAD already QA'd)"
 echo "  report:     $QA_REPORT"
 echo "  progress:   $QA_PROGRESS"
@@ -85,44 +97,101 @@ if [ ${#TIMEOUT_CMD[@]} -gt 0 ]; then
 else
   echo "  timeout:    (none available)"
 fi
-echo "  grader:     gemini/$GEMINI_MODEL"
+echo "  acc1:       $CODEX_ACC1  (authed: $ACC1_OK)"
+if [ "$CODEX_SINGLE_ACCOUNT" = "1" ]; then
+  echo "  acc2:       (disabled — CODEX_SINGLE_ACCOUNT=1)"
+else
+  echo "  acc2:       $CODEX_ACC2  (authed: $ACC2_OK)"
+fi
 echo "───────────────────────────────────────────────────────────────"
+
+if [ "$ACC1_OK" = "no" ]; then
+  echo "ERROR: primary account $CODEX_ACC1 missing or not logged in." >&2
+  echo "Run: CODEX_HOME=$CODEX_ACC1 codex login" >&2
+  exit 1
+fi
 
 if [ "$BUILT" -eq 0 ]; then
   echo "No features built yet. Nothing to QA. Exiting."
   exit 0
 fi
 
-run_grader() {
-  local prompt="$1"
-  echo "[grader] trying gemini/$GEMINI_MODEL..." >&2
+# Try a single codex account. Returns:
+#   0 success (output printed to stdout, LAST_PROVIDER set)
+#   1 quota/auth failure (try next layer)
+#   N other non-zero exit (output printed, caller decides)
+try_codex() {
+  local prompt="$1" label="$2" dir="$3"
+  if [ ! -s "$dir/auth.json" ]; then
+    echo "[grader] skipping codex/$label (not authed: $dir)" >&2
+    return 1
+  fi
+  echo "[grader] trying codex/$label ($dir)..." >&2
   local output exitcode
-  output=$("${TIMEOUT_CMD[@]}" gemini -m "$GEMINI_MODEL" --yolo -p "$prompt" 2>&1) || true
+  output=$(CODEX_HOME="$dir" "${TIMEOUT_CMD[@]}" codex exec --dangerously-bypass-approvals-and-sandbox "$prompt" 2>&1) || true
   exitcode=$?
 
   local output_tail
   output_tail=$(printf '%s\n' "$output" | tail -n 30)
 
-  # Success first: Gemini internal retries emit 429 noise even on success
+  # Codex CLI exits 0 even when returning a rate-limit error message.
+  # Check response tail for quota markers BEFORE trusting exit code.
+  if echo "$output_tail" | grep -qiE "$QUOTA_REGEX"; then
+    echo "[grader] codex/$label quota pattern matched in response tail" >&2
+    return 1
+  fi
+  # Success
   if [ "$exitcode" -eq 0 ] && [ -n "${output// }" ]; then
-    # Check tail for quota markers that actually indicate failure
-    if echo "$output_tail" | grep -qiE "$QUOTA_REGEX"; then
-      echo "[grader] gemini/$GEMINI_MODEL quota/transport pattern in tail of exit-0 response — treating as failure" >&2
-      return 1
-    fi
+    LAST_PROVIDER="codex/$label"
     printf '%s' "$output"
     return 0
   fi
-  if [ "$exitcode" -ne 0 ] && [ -z "${output// }" ]; then
-    echo "[grader] gemini/$GEMINI_MODEL silent non-zero exit — treating as quota" >&2
+  # Silent rate-limit path
+  if [ "$exitcode" -eq 2 ] && [ -z "${output// }" ]; then
+    echo "[grader] codex/$label silent exit 2 — treating as quota" >&2
     return 1
   fi
-  if [ "$exitcode" -ne 0 ] && echo "$output_tail" | grep -qiE "$QUOTA_REGEX"; then
-    echo "[grader] gemini/$GEMINI_MODEL quota/transport failure" >&2
-    return 1
-  fi
+  # Non-quota failure
+  LAST_PROVIDER="codex/$label"
   printf '%s' "$output"
   return "$exitcode"
+}
+
+# Main failover chain. Uses `|| rc=$?` to prevent set -e from aborting the
+# chain on a non-zero return from a layer.
+run_grader_with_failover() {
+  local prompt="$1"
+  LAST_PROVIDER=""
+  local rc
+
+  rc=0; try_codex "$prompt" "acc1" "$CODEX_ACC1" || rc=$?
+  if [ "$rc" -eq 0 ]; then return 0; fi
+  if [ "$rc" -ne 1 ]; then return "$rc"; fi
+
+  if [ "$CODEX_SINGLE_ACCOUNT" = "1" ]; then
+    echo "[grader] acc1 exhausted and acc2 disabled. Sleeping ${BOTH_EXHAUSTED_SLEEP}s then retrying acc1..." >&2
+    sleep "$BOTH_EXHAUSTED_SLEEP"
+    rc=0; try_codex "$prompt" "acc1" "$CODEX_ACC1" || rc=$?
+    if [ "$rc" -eq 0 ]; then return 0; fi
+    echo "<promise>ABORT</promise>"
+    echo "codex/acc1 still quota-exhausted after 5-min wait. Wait for rate-limit window to clear." >&2
+    return 2
+  fi
+
+  rc=0; try_codex "$prompt" "acc2" "$CODEX_ACC2" || rc=$?
+  if [ "$rc" -eq 0 ]; then return 0; fi
+  if [ "$rc" -ne 1 ]; then return "$rc"; fi
+
+  echo "[grader] both codex accounts exhausted. Sleeping ${BOTH_EXHAUSTED_SLEEP}s before retry..." >&2
+  sleep "$BOTH_EXHAUSTED_SLEEP"
+  rc=0; try_codex "$prompt" "acc1" "$CODEX_ACC1" || rc=$?
+  if [ "$rc" -eq 0 ]; then return 0; fi
+  rc=0; try_codex "$prompt" "acc2" "$CODEX_ACC2" || rc=$?
+  if [ "$rc" -eq 0 ]; then return 0; fi
+
+  echo "<promise>ABORT</promise>"
+  echo "Both Codex accounts exhausted after sleep+retry. Wait for rate-limit windows to reset (~5h for ChatGPT Plus)." >&2
+  return 2
 }
 
 for i in $(seq 1 "$MAX_ITER"); do
@@ -151,7 +220,7 @@ $RECENT_QA_COMMITS
 Pick the FIRST story in $PRD where passes:true AND no entry in $QA_REPORT has a matching story_id.
 Verify it independently per ralph/qa-prompt.md: automated checks, manual acceptance, edge cases.
 Fix any bugs you find in PRODUCTION code only — never tests, never locked files.
-Append a structured entry to $QA_REPORT with qa_model set to \"gemini-3-pro-preview\".
+Append a structured entry to $QA_REPORT with qa_model set to \"codex\".
 Also flip qa_tested:true in $PRD for that story (per qa-prompt.md step 9b).
 Update $QA_PROGRESS.
 Commit your changes with a 'QA: <story-id> — ...' prefix before finishing.
@@ -160,19 +229,16 @@ Output <promise>QA_COMPLETE</promise> only if every passes:true story has a qa-r
 Output <promise>ABORT</promise> if blocked (explain why above the tag)."
 
   set +e
-  result=$(run_grader "$PROMPT")
+  result=$(run_grader_with_failover "$PROMPT")
   RC=$?
   set -e
 
   echo "$result"
-
-  if [ "$RC" -eq 1 ]; then
-    echo ""
-    echo "[grader] gemini failed (quota/auth/transport). No fallback configured. Exiting." >&2
-    exit 1
+  if [ -n "${LAST_PROVIDER:-}" ]; then
+    echo "[grader] iteration used: $LAST_PROVIDER"
   fi
 
-  # Grep only the last 40 lines for promise tags to avoid prompt-echo false matches.
+  # Grep only the last 40 lines for promise tags to avoid prompt-echo false matches
   result_tail=$(printf '%s\n' "$result" | tail -n 40)
   quota_tail=$(printf '%s' "$result_tail" | grep -ciE "$QUOTA_REGEX")
 
