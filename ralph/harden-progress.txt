@@ -42,6 +42,21 @@
 
 ## Iteration log
 
+## 2026-04-16T21:15:00Z — src/lib/actions/batch-sync.ts — iter 4 confirmation (score verified 96.61%)
+- Tier: critical_75
+- Score: 96.61% (state.json stale baseline shows 65.22% — orchestrator re-measure needed)
+- Mutants killed this iter: 0 (no new tests added — already above floor)
+- Tests added: 0
+- Real bugs fixed: none
+- Key findings:
+  - Fresh Stryker run confirms 96.61% (114 killed, 3 survived, 1 NoCoverage).
+  - All 3 survived + 1 NoCoverage confirmed equivalent: L36:31 (hash[16] always defined),
+    L95/L125 ObjectLiteral (select shape irrelevant in mocked context), L147:13 (only
+    'success'|'ineligible' ever returned by determineScanResult in this path).
+  - state.json mutation_baseline=65.22 is the pre-hardening snapshot; it has not been
+    updated by the orchestrator yet. Score is well above the 75% floor.
+  - No action needed on this module — signal NEXT so orchestrator re-measures.
+
 ## 2026-04-16T21:09:00Z — src/lib/actions/batch-sync.ts — kill L29:52 + L36:19 exact-UUID test
 - Tier: critical_75
 - Score: 94.92% → 96.61%
