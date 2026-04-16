@@ -1180,8 +1180,8 @@
     "description": "GET /api/events/[eventId]/people/[personId] returns master person + only event-A-scoped attributes.",
     "page": "N/A — Backend",
     "ui_details": "N/A",
-    "behavior": "Return { person: {id, full_name, email, phone_e164, designation, ...master fields}, travel: <travel_records row for this event + person or null>, sessions: <session_assignments rows for this event + person>, registration: <event_registrations row or null> }. Every non-master field filtered by event_id = URL eventId. Contract CE14 enforces: person attached to both A and B returns only A-scoped attributes when called on /events/A/.",
-    "data_model": "people, travel_records, session_assignments, event_registrations — all scoped by eventId.",
+    "behavior": "Return { person: {id, full_name, email, phone_e164, designation, ...master fields}, travel: <array of travel_records rows for this (event, person); may be empty; each row is a travel leg — inbound, outbound, ground transfer, or rebooking>, sessions: <session_assignments rows for this event + person>, registration: <event_registrations row or null> }. Every non-master field filtered by event_id = URL eventId. Contract CE14 (v3) enforces: person attached to both A and B returns travel as an array where every row has event_id=A; no row leaks from B.",
+    "data_model": "people, travel_records, session_assignments, event_registrations — all scoped by eventId. travel_records has no unique constraint on (eventId, personId); multiple legs per person per event are expected.",
     "priority": 26,
     "core": false,
     "passes": true,
@@ -1189,9 +1189,9 @@
       "unit": [
         {
           "name": "travel filtered by eventId",
-          "description": "Person has travel in A and B; request on A returns only A's row.",
-          "input": "person shared across A+B",
-          "expected_output": "travel.eventId === A"
+          "description": "Person has travel rows in A and B; request on A returns an array where every row has eventId=A.",
+          "input": "person shared across A+B with travel legs in both events",
+          "expected_output": "Array.isArray(travel) === true && travel.every(t => t.eventId === A)"
         }
       ],
       "e2e": [
@@ -1200,7 +1200,7 @@
           "steps": [
             "coord_A GET /api/events/A/people/E2E_SHARED_PERSON_ID"
           ],
-          "expected": "sessions + travel all eventId=A"
+          "expected": "travel is an array; every row eventId=A; sessions all eventId=A"
         }
       ],
       "edge_cases": [
@@ -1213,9 +1213,8 @@
         }
       ]
     },
-    "qa_tested": true,
-    "qa_tested_at": "2026-04-16T02:59:55Z",
-    "qa_tested_by": "codex"
+    "qa_tested": false,
+    "qa_tested_note": "Prior ABORT superseded by contract eventid-scoping v3 (travel = array). Needs re-QA."
   },
   {
     "id": "tenancy-027",

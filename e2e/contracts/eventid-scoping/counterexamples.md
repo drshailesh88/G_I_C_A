@@ -1,6 +1,12 @@
 # Counterexamples — eventid-scoping
 # Approved by: Shailesh Singh on 2026-04-14
 # Status: FROZEN
+#
+# Version history:
+#   v1 — 2026-04-14 — Initial contract.
+#   v2 — 2026-04-14 — Schema alignment.
+#   v3 — 2026-04-16 — CE14 restated for array-shaped travel: every row in the
+#        travel array must be event-scoped; none may leak from another event.
 
 ## Counterexample 1: Cross-event GET returns data
 **Never:** A user without any role row for Event B fetches `/events/B/*` and receives any data, or any status other than 404.
@@ -70,4 +76,4 @@
 ## Counterexample 14: People global data leaks event-scoped attributes
 **Never:** Fetching a person from `/events/A/people/p1` returns fields like that person's travel/accommodation from Event B.
 **Why:** Master person is global, but per-event attributes are scoped.
-**Test:** Person `p1` has travel in both A and B; GET `/events/A/people/p1` → response contains only A's travel.
+**Test:** Person `p1` has travel rows in both A and B; GET `/events/A/people/p1` → `body.travel` is an array; every row has `event_id=A`; no row has `event_id=B`. Same assertion for `body.sessions`.

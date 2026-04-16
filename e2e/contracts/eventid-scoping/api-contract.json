@@ -1,9 +1,10 @@
 {
   "feature": "eventid-scoping",
-  "version": 2,
+  "version": 3,
   "versionHistory": [
     { "version": 1, "date": "2026-04-14", "note": "Initial contract." },
-    { "version": 2, "date": "2026-04-14", "note": "Schema alignment — renamed event_user_roles references to match actual Clerk + event_user_assignments model." }
+    { "version": 2, "date": "2026-04-14", "note": "Schema alignment — renamed event_user_roles references to match actual Clerk + event_user_assignments model." },
+    { "version": 3, "date": "2026-04-16", "note": "People-detail response: travel is an array of legs (inbound, outbound, ground, rebookings) scoped to the URL eventId. No unique constraint on (eventId, personId) in travel_records. Aligns contract with real-world ops data entry + transport kanban + red-flag-per-leg model." }
   ],
   "frozen": true,
   "approvedBy": "Shailesh Singh",

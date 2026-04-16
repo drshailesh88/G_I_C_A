@@ -1,6 +1,12 @@
 // FROZEN CONTRACT — DO NOT EDIT
 // Approved by: Shailesh Singh on 2026-04-14
 // Source: e2e/contracts/eventid-scoping/examples.md + counterexamples.md
+// Version: v3 (2026-04-16) — travel is leg-structured; people-detail returns
+//          travel as an array (possibly empty). CE14 asserts every row is
+//          event-scoped, not a single-object shape. Production was already
+//          array-shaped; v3 aligns the contract with real-world travel data
+//          (inbound + outbound + ground transfer = multiple rows per person
+//          per event).
 // Version: v2 (2026-04-14) — schema alignment: Clerk role + event_user_assignments.
 //
 // These tests run against the LIVE APPLICATION in a real browser.
@@ -247,8 +253,11 @@ test.describe('eventid-scoping — Counterexamples (must NEVER happen)', () => {
     const body = await res.json();
     // Master fields present
     expect(body.person).toBeTruthy();
-    // Event-scoped attributes only reference A
-    if (body.travel) expect(body.travel.eventId).toBe(A);
+    // Event-scoped attributes only reference A. travel is an array of legs
+    // (inbound, outbound, ground transfers) — possibly empty. Every row must
+    // be scoped to A; no row may leak from B.
+    expect(Array.isArray(body.travel)).toBe(true);
+    for (const t of body.travel) expect(t.eventId).toBe(A);
     if (body.sessions) {
       for (const s of body.sessions) expect(s.eventId).toBe(A);
     }

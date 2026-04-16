@@ -7,6 +7,14 @@
 #   v2 — 2026-04-14 — Schema alignment. Renamed `event_user_roles` references to
 #        match actual model: Clerk global role + `event_user_assignments`.
 #        Behavioral intent unchanged; only storage names differ.
+#   v3 — 2026-04-16 — Travel is leg-structured. A person's travel for an event
+#        is a list of legs (inbound flight, outbound flight, ground transfer,
+#        rebookings). People-detail response returns travel as an array
+#        (possibly empty). No unique constraint on (eventId, personId) in
+#        travel_records. Approved by Shailesh Singh after real-world ops walk
+#        through: separate rows per leg match how Ops enters data, match how
+#        the transport kanban consumes arrivals, preserve history on
+#        reschedule, and match the red-flag-per-leg model.
 
 Cross-cutting tenancy invariant: every event-scoped surface filters by the
 active event; `people` is the only global table.
@@ -80,12 +88,14 @@ Role model (authoritative as of v2):
 - Replaying either trigger is a no-op (existing key blocks).
 
 ## Example 9: People table is global; junction is scoped
-**Given:** Person `p1` exists globally and has `event_people(event_id=A, person_id=p1)` and `event_people(event_id=B, person_id=p1)`.
+**Given:** Person `p1` exists globally and has `event_people(event_id=A, person_id=p1)` and `event_people(event_id=B, person_id=p1)`. Person may have N travel rows per event (one per leg — inbound, outbound, ground transfer, rebookings).
 **When:** Coordinator of A opens `/events/A/people/p1`.
 **Then:**
 - Person master fields (name, email, phone) are shown.
-- Event-specific attributes (registration, travel, sessions) come only from Event A's scoped tables.
-- Event B attributes of the same person are NOT visible.
+- `travel` is an array of travel_records rows, each with `event_id=A` (possibly empty if no travel entered yet).
+- `sessions` is an array; every row has `event_id=A`.
+- `registration` is a single row or null.
+- Event B attributes of the same person are NOT visible — no row in `travel` or `sessions` may have `event_id=B`.
 
 ## Example 10: Cross-event reporting is super-admin labeled
 **Given:** Super Admin opens a cross-event report.
