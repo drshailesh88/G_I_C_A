@@ -154,6 +154,18 @@ extract_harden_module() {
   echo "$1" | sed -E 's/^HARDEN:[[:space:]]+([^ —]+).*/\1/' | head -1
 }
 
+# Extract story ID from a RALPH:/QA:/etc. commit subject.
+# Format: "PREFIX: <story-id> — <rest>" — returns "<story-id>" or "".
+extract_story_id() {
+  echo "$1" | sed -E 's/^[A-Z]+:[[:space:]]+([A-Za-z0-9_-]+).*/\1/' | head -1
+}
+
+# Detect harden safety-net "auto-snapshot" commits — internal book-keeping,
+# not a real score-moving iteration. Keep them in Slack but mark with ⚙️.
+is_auto_snapshot() {
+  [[ "$1" == *"auto-snapshot"* ]] || [[ "$1" == *"update harden-progress"* ]]
+}
+
 # Count adversarial-report entries (one per feature red-teamed).
 count_red_done() {
   python3 -c "
@@ -311,94 +323,100 @@ while true; do
   CURRENT_QA=$(count_qa_done)
 
   if [ "$CURRENT_COMMIT" != "$LAST_COMMIT" ]; then
-    COMMIT_MSG="${CURRENT_COMMIT#*|}"
+    LAST_HASH="${LAST_COMMIT%%|*}"
 
-    # Route by commit prefix. Build/QA retain their PRD-counter-based semantics
-    # (proven). New loops are dispatched by prefix match on the commit subject.
-    if [[ "$COMMIT_MSG" == RALPH:* ]] && [ "$CURRENT_PASSES" -gt "$LAST_PASSES" ]; then
-      STORY_ID=$(latest_passed_id)
-      LABEL=$(story_label "$STORY_ID")
+    # Walk EVERY new commit since last poll, oldest → newest, so Slack order
+    # matches git order. Previous implementation only posted the single latest
+    # commit per poll, which hid important HARDEN kills behind auto-snapshots.
+    while IFS='|' read -r COMMIT_HASH COMMIT_MSG; do
+      [ -z "$COMMIT_HASH" ] && continue
 
-      slack_post "✅ *Built:* $STORY_ID — $LABEL
+      if [[ "$COMMIT_MSG" == RALPH:* ]]; then
+        STORY_ID=$(extract_story_id "$COMMIT_MSG")
+        LABEL=$(story_label "$STORY_ID")
+
+        slack_post "✅ *Built:* $STORY_ID — $LABEL
 Progress: $CURRENT_PASSES/$TOTAL built, $CURRENT_QA/$TOTAL QA'd
 Commit: \`$COMMIT_MSG\`"
 
-      ISSUE_ID=$(get_linear_issue_id "$STORY_ID")
-      if [ -n "$ISSUE_ID" ]; then
-        linear_update_status "$ISSUE_ID" "In Review"
-        linear_add_comment "$ISSUE_ID" "✅ Built by Ralph build agent.
+        ISSUE_ID=$(get_linear_issue_id "$STORY_ID")
+        if [ -n "$ISSUE_ID" ]; then
+          linear_update_status "$ISSUE_ID" "In Review"
+          linear_add_comment "$ISSUE_ID" "✅ Built by Ralph build agent.
 
 Commit: $COMMIT_MSG"
-      fi
-
-      NEXT_ID=$(next_pending_id)
-      if [ -n "$NEXT_ID" ]; then
-        NEXT_ISSUE=$(get_linear_issue_id "$NEXT_ID")
-        if [ -n "$NEXT_ISSUE" ]; then
-          linear_update_status "$NEXT_ISSUE" "In Progress"
         fi
-      fi
 
-    elif [[ "$COMMIT_MSG" == QA:* ]] && [ "$CURRENT_QA" -gt "$LAST_QA" ]; then
-      QA_ID=$(python3 -c "
-import json
-d = json.load(open('$PRD_FILE'))
-qa_done = [s for s in d if s.get('qa_tested')]
-if qa_done:
-    last = qa_done[-1]
-    print(last.get('id', ''))
-" 2>/dev/null)
-      LABEL=$(story_label "$QA_ID")
+        NEXT_ID=$(next_pending_id)
+        if [ -n "$NEXT_ID" ]; then
+          NEXT_ISSUE=$(get_linear_issue_id "$NEXT_ID")
+          if [ -n "$NEXT_ISSUE" ]; then
+            linear_update_status "$NEXT_ISSUE" "In Progress"
+          fi
+        fi
 
-      slack_post "🟢 *QA'd:* $QA_ID — $LABEL
+      elif [[ "$COMMIT_MSG" == QA:* ]]; then
+        QA_ID=$(extract_story_id "$COMMIT_MSG")
+        LABEL=$(story_label "$QA_ID")
+
+        slack_post "🟢 *QA'd:* $QA_ID — $LABEL
 Progress: $CURRENT_PASSES/$TOTAL built, $CURRENT_QA/$TOTAL QA'd
 Commit: \`$COMMIT_MSG\`"
 
-      ISSUE_ID=$(get_linear_issue_id "$QA_ID")
-      if [ -n "$ISSUE_ID" ]; then
-        linear_update_status "$ISSUE_ID" "Done"
-        linear_add_comment "$ISSUE_ID" "🟢 QA'd by Codex independent evaluator.
+        ISSUE_ID=$(get_linear_issue_id "$QA_ID")
+        if [ -n "$ISSUE_ID" ]; then
+          linear_update_status "$ISSUE_ID" "Done"
+          linear_add_comment "$ISSUE_ID" "🟢 QA'd by Codex independent evaluator.
 
 Commit: $COMMIT_MSG"
-      fi
+        fi
 
-    elif [[ "$COMMIT_MSG" == HARDEN:* ]]; then
-      MODULE=$(extract_harden_module "$COMMIT_MSG")
-      BELOW_RATIO=$(count_below_floor)
-      slack_post "🛡️ *Hardened:* \`$MODULE\`
-Modules at floor: $BELOW_RATIO (fewer below = better)
+      elif [[ "$COMMIT_MSG" == HARDEN:* ]]; then
+        MODULE=$(extract_harden_module "$COMMIT_MSG")
+        BELOW_RATIO=$(count_below_floor)
+        if is_auto_snapshot "$COMMIT_MSG"; then
+          # Book-keeping commit — low-signal, mark with ⚙️ so signal commits stand out.
+          slack_post "⚙️ _Snapshot:_ \`$MODULE\`
+Modules below floor: $BELOW_RATIO (closer to 0 = better)
 Commit: \`$COMMIT_MSG\`"
+        else
+          # Real kill commit (score moved) — high-signal.
+          slack_post "🛡️ *Hardened:* \`$MODULE\`
+Modules below floor: $BELOW_RATIO (closer to 0 = better)
+Commit: \`$COMMIT_MSG\`"
+        fi
 
-    elif [[ "$COMMIT_MSG" == COMPLETENESS:* ]]; then
-      NEW_TOTAL=$(total_tasks)
-      slack_post "📋 *Completeness:* missing features appended
+      elif [[ "$COMMIT_MSG" == COMPLETENESS:* ]]; then
+        NEW_TOTAL=$(total_tasks)
+        slack_post "📋 *Completeness:* missing features appended
 PRD now has $NEW_TOTAL entries ($CURRENT_PASSES built, $CURRENT_QA QA'd)
 Commit: \`$COMMIT_MSG\`"
 
-    elif [[ "$COMMIT_MSG" == RED:* ]]; then
-      RED_DONE=$(count_red_done)
-      slack_post "🎯 *Red-team:* feature attacked
+      elif [[ "$COMMIT_MSG" == RED:* ]]; then
+        RED_DONE=$(count_red_done)
+        slack_post "🎯 *Red-team:* feature attacked
 Features red-teamed so far: $RED_DONE
 Commit: \`$COMMIT_MSG\`"
 
-    elif [[ "$COMMIT_MSG" == DRIFT:* ]]; then
-      DRIFT_DONE=$(count_drift_green)
-      slack_post "🔀 *Drift fixed:* contract now matches runtime
+      elif [[ "$COMMIT_MSG" == DRIFT:* ]]; then
+        DRIFT_DONE=$(count_drift_green)
+        slack_post "🔀 *Drift fixed:* contract now matches runtime
 Contracts cleared so far: $DRIFT_DONE
 Commit: \`$COMMIT_MSG\`"
 
-    elif [[ "$COMMIT_MSG" == SEC:* ]]; then
-      SEC_DONE=$(count_sec_green)
-      slack_post "🔒 *Security:* OWASP category audited
+      elif [[ "$COMMIT_MSG" == SEC:* ]]; then
+        SEC_DONE=$(count_sec_green)
+        slack_post "🔒 *Security:* OWASP category audited
 Categories GREEN so far: $SEC_DONE/10
 Commit: \`$COMMIT_MSG\`"
 
-    else
-      slack_post "🔧 *Commit:* \`$COMMIT_MSG\`
+      else
+        slack_post "🔧 *Commit:* \`$COMMIT_MSG\`
 Progress: $CURRENT_PASSES/$TOTAL built, $CURRENT_QA/$TOTAL QA'd"
-    fi
+      fi
+    done < <(git log --format='%H|%s' --reverse "${LAST_HASH}..HEAD" 2>/dev/null)
 
-    # Build+QA 100%? Announce once — but only exit if user opts in.
+    # Build+QA 100%? Announce once per poll (not per commit) when crossing threshold.
     if [ "$CURRENT_QA" -ge "$TOTAL" ] && [ "$TOTAL" -gt 0 ] && [ "$LAST_QA" -lt "$TOTAL" ]; then
       slack_post "🎉 *Build + QA COMPLETE!*
 All $TOTAL features built AND QA'd.
