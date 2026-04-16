@@ -1739,6 +1739,9 @@
   },
   {
     "id": "infra-038",
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-16T08:51:35Z",
+    "qa_tested_by": "codex",
     "category": "data",
     "description": "Add audit_log table and write-on-every-mutation.",
     "page": "N/A — Backend",

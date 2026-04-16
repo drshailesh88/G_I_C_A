@@ -918,5 +918,38 @@
     },
     "bugs": [],
     "notes": "Full Vitest passed (231 files, 4736 tests), and focused archive-bypass/event-archived/session route tests passed (3 files, 12 tests). The cascade-idempotency Playwright contract remains blocked before product assertions by Clerk auth global setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on known broad existing QA/test, Sentry, people/navigation, notification, and cascade test errors. Static audit found no assertEventAccess/EventArchivedError/event status checks in cascade handlers or Inngest cascade entrypoints. Manual DATABASE_URL_TEST verification invoked the real handleTravelSaved production handler before and after archiving the same event; with test Redis notification channels disabled to avoid external provider calls, the archived-event invocation still persisted exactly two event-scoped notification_log rows (email and WhatsApp) with status sent, triggerType travel.saved, triggerEntityType travel_record, and the archived travel trigger id. The test Redis flags were restored to default after the probe."
+  },
+  {
+    "story_id": "infra-038",
+    "qa_timestamp": "2026-04-16T08:51:35Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "writeAudit failed on a live stale DATABASE_URL_TEST database with Postgres 42P01 because the audit_log table migration had not been applied, so the helper could not actually persist audit rows.",
+        "severity": "high",
+        "fix_commit": "8d6bd4c",
+        "files_changed": [
+          "src/lib/audit/write.ts"
+        ]
+      },
+      {
+        "description": "Super-admin reads of the event people page were not audited at all, so CE12 could not find an action='read', resource='people' audit_log row for cross-event access.",
+        "severity": "high",
+        "fix_commit": "8d6bd4c",
+        "files_changed": [
+          "src/lib/actions/person.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), plus focused person/audit tests passed (4 files, 42 tests). The eventid-scoping Playwright contract remains blocked before product assertions by Clerk auth global setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on known broad existing QA/test, Sentry, people/navigation, notification, and cascade test errors; a full typecheck grep found no errors in src/lib/audit/write.ts or src/lib/actions/person.ts. Manual DATABASE_URL_TEST verification called the real writeAudit helper, confirmed it self-created audit_log/indexes on the stale database, and re-read the inserted nullable-event audit row with the expected actor/action/resource/meta shape. A mocked super-admin getEventPeople probe confirmed the production action records one audit call with action=read, resource=people, eventId/resourceId set to the event, and meta.scope=event_people."
   }
 ]

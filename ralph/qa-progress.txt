@@ -29,10 +29,17 @@
 - Malformed cascade payload QA must verify the captured Sentry event carries the real Inngest event id; a handler can correctly dead-letter once yet still fail CE10 if the validation capture is not queryable by `inngestEventId`.
 - Partial-index upsert stories need a live DB probe: mocked `onConflictDoUpdate` tests can pass while a provisioned database is missing the partial unique index and every real write fails with Postgres `42P10`.
 - Cascade handler event-scope QA should seed cross-event downstream rows that share the same person and upstream id; same-event fixtures alone do not prove every handler query includes `eventId`.
+- Audit-log infra QA needs a live `DATABASE_URL_TEST` insert probe and a production call-site probe; mocked helper tests can pass while stale databases lack `audit_log` and contract routes never call `writeAudit`.
 
 ## Iteration log
 
 <!-- Dated entries per QA'd feature. -->
+
+## 2026-04-16T08:51:35Z — infra-038 — audit log table and super-admin read audit
+- Status: fixed
+- Bugs: 2 (high: 2)
+- Fix commits: 8d6bd4c
+- Notes: Full Vitest and focused person/audit suites passed; live DATABASE_URL_TEST writeAudit probe now self-heals a missing audit_log table and persists the row; mocked super-admin getEventPeople probe records CE12-compatible read/people audit metadata. Playwright remains blocked by Clerk `/events` redirect setup and repo typecheck remains blocked by known broad errors.
 
 ## 2026-04-16T08:39:50Z — cascade-037 — archived-event in-flight cascade completion
 - Status: pass
