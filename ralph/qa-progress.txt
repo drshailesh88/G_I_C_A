@@ -3,6 +3,7 @@
 ## QA Patterns
 
 <!-- Cross-feature QA findings: common bug classes, edge cases worth re-checking. Codex writes here. -->
+- Read-only UI QA should check every mutation control on the surface, including secondary lifecycle controls like red-flag review/resolve buttons, not just primary Add/Create buttons.
 - Bulk generation QA must follow the lock across the async worker boundary: route-level SET NX is insufficient unless the queued worker receives the same lock key and deletes it in success and failure paths.
 - Certificate Playwright contracts are currently blocked before product assertions by Clerk auth setup redirecting `/events` with `ERR_TOO_MANY_REDIRECTS`; record this as a harness blocker when it recurs rather than treating it as certificate product behavior.
 - Repo-level `npx tsc --noEmit` currently fails on broad existing errors across QA/test, Sentry, people, navigation, notification, and cascade files; distinguish those from story-local production type regressions.
@@ -158,3 +159,9 @@
 - Bugs: 1 (high: 1)
 - Fix commits: 29ef4ebb32e55daffede2cd53d4d9b5f9ba010a6
 - Notes: Fixed the sessions API so CE3's camelCase `body.eventId` mismatch is rejected before insert, while omitted body event IDs still create normally. Full Vitest and focused tenancy suites passed; event-id Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-16T02:32:12Z — tenancy-024 — read-only accommodation write buttons
+- Status: fixed
+- Bugs: 1 (medium: 1)
+- Fix commits: b77a88d690ceef57865a70eb050f18bd7c8a44ee
+- Notes: Fixed read-only disabled handling for accommodation red-flag review/resolve buttons; full Vitest and focused accommodation-list tests passed, while event-id Playwright contracts and repo typecheck remain blocked by known harness/repo issues.

@@ -577,5 +577,30 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused event-access, people page, person action, and people detail API suites passed (5 files, 68 tests before the fix; focused post-fix rerun covered 4 files, 61 tests). The frozen event-id Playwright contract still fails in global Clerk setup at /events with ERR_TOO_MANY_REDIRECTS; a targeted no-deps Example 2 run before the fix exposed the Next runtime compile error, and the post-fix full contract no longer reports the event-access compile error before hitting the known setup blocker. Repo-level typecheck still fails on broad existing QA/test, Sentry, people-list, navigation, notification, and cascade errors; a targeted grep of the post-fix typecheck output found no event-access or people-page errors. Manual verification confirmed checkEventAccess and assertEventAccess return super-admin authorization without querying event_user_assignments, EventPeoplePage calls assertEventAccess before loading event data, nonexistent events map to notFound, and getEventPeople scopes rows through event_people.event_id. Direct DB verification against the test database confirmed Event B exists, has 2 event_people rows all scoped to B, and the configured super user has 0 active event_user_assignments rows on B."
+  },
+  {
+    "story_id": "tenancy-024",
+    "qa_timestamp": "2026-04-16T02:32:12Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "skip",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "Accommodation red-flag review and resolve mutation buttons remained enabled for read-only users even though Add and Cancel were disabled.",
+        "severity": "medium",
+        "fix_commit": "b77a88d690ceef57865a70eb050f18bd7c8a44ee",
+        "files_changed": [
+          "src/app/(app)/events/[eventId]/accommodation/accommodation-list-client.tsx"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused accommodation-list tests passed. Event-id Playwright contracts remain blocked in auth setup by Clerk /events ERR_TOO_MANY_REDIRECTS before product assertions. Repo typecheck remains blocked by broad existing errors in qa/test, Sentry, people/navigation, notifications, and cascade files; a filtered typecheck rerun found no accommodation production errors. Manual review verified Add/empty-state Add, Cancel, Mark Reviewed, and Resolve render visible disabled buttons for read_only, while create/update/cancel/review/resolve server actions still call assertEventAccess(eventId, { requireWrite: true }) for 403 defense-in-depth."
   }
 ]
