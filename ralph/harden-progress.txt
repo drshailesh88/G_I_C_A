@@ -108,7 +108,29 @@
 
 - **certKeys fetch coverage**: Provide `getCertificateStorageKeys` returning one entry and `vi.stubGlobal('fetch', ...)` returning `{ok:true, arrayBuffer:...}` to cover the cert-loop body (L770-793). Use `ok:false` to cover the `continue` branch. Always call `vi.unstubAllGlobals()` in the same test.
 
+- **Maintenance-exempt mock pattern**: To test route middleware that skips an async check for exempt paths, assert `isMaintenanceMock.not.toHaveBeenCalled()` for exempt paths (/maintenance, /api/*) and `toHaveBeenCalledOnce()` for non-exempt paths. This kills all the `pathname === '/maintenance'`, `startsWith('/api/')`, LogicalOperator `||→&&`, EqualityOperator `===→!==`, and ConditionalExpression mutants on the exemption logic.
+
+- **NextResponse.rewrite URL assertion**: To kill the StringLiteral mutant on the rewrite target path (e.g. `'/maintenance'`→`""`), use `expect(mock).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/maintenance' }))` — `new URL('', req.url)` produces the original path, not `/maintenance`.
+
+- **Sentry.setUser test pattern for clerk middleware**: Mock `@sentry/nextjs` with `{ setUser: (arg) => shared.sentrySetUser(arg) }`. Test: (1) auth object with userId → `setUser({ id: userId })`, (2) no userId → `setUser(null)`, (3) auth as function → auth() called + userId extracted, (4) null authState → optional chaining prevents throw + `setUser(null)`. These 4 tests kill all ConditionalExpression, BlockStatement, ObjectLiteral, OptionalChaining, and EqualityOperator mutants in the Sentry block.
+
+- **auth-as-function mock**: `const authFn = Object.assign(vi.fn(async () => ({ userId: 'xyz' })), { protect: vi.fn() })`. Pass to middleware callback. The `typeof authFn === 'function'` path is taken, authFn() is awaited, userId extracted. Kills EqualityOperator `===→!==`, ConditionalExpression→false/true, and StringLiteral `'function'→''` on the typeof check.
+
 ## Iteration log
+
+## 2026-04-17T01:19:00Z — src/middleware.ts — add tests, score 18.52% → 100%
+- Tier: critical_75
+- Score: 18.52% → 100%
+- Mutants killed this iter: 33 (27 survived + 6 NoCoverage → 0 remaining)
+- Tests added: 20 tests in src/middleware.mutation-kill.test.ts
+- Real bugs fixed: none
+- Key findings:
+  - Module had no tests for maintenance mode logic, Sentry user context, or 4 public route patterns (/maintenance, /api/test/.*, /verify/.*, /register/.*)
+  - Mock @/lib/flags isMaintenanceMode and assert not-called for exempt paths (/maintenance, /api/*) and called-once for non-exempt (kills all L27-28 + L30 mutants)
+  - Mock next/server NextResponse.rewrite and assert pathname='/maintenance' to kill StringLiteral on L34 rewrite target
+  - Auth-as-function test (Object.assign(vi.fn(async () => ({userId})), {protect})) kills typeof EqualityOperator/ConditionalExpression/StringLiteral mutants at L48
+  - Optional-chain null authState test kills OptionalChaining L49 (null.userId would throw without ?.)
+  - Sentry.setUser mock kills all BlockStatement, ObjectLiteral, ConditionalExpression mutants in L47-55 block
 
 ## 2026-04-17T01:15:00Z — src/lib/sentry.ts — add tests, score 0% → 100%
 - Tier: business_60
