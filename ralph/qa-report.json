@@ -635,5 +635,21 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), including the focused sessions route and event-id mismatch suites. The eventid-scoping Playwright contract remains blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on known broad existing errors outside this story; targeted post-fix typecheck grep found no sessions route, program validation, or event-id mismatch errors. Manual review confirmed URL-derived eventId inserts, concrete Sentry endpoint metadata for CE3, 404 cross-event access, 403 read-only/unauthorized role denial, Zod title/ISO timestamp/hall/sessionType validation, camelCase and snake_case field support, and no insert on validation or mismatch failures. Live DB re-query was not performed because the authenticated contract fixture is blocked."
+  },
+  {
+    "story_id": "tenancy-026",
+    "qa_timestamp": "2026-04-16T03:45:25Z",
+    "qa_model": "codex",
+    "status": "pass",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [],
+    "notes": "Full Vitest passed (231 files, 4736 tests), including the focused people-detail route suite. The frozen eventid-scoping Playwright contract remains blocked in Clerk global setup at /events with ERR_TOO_MANY_REDIRECTS before CE14 can execute. Repo-level typecheck still fails on broad pre-existing QA/test, Sentry, people-list, navigation, notification, and cascade errors outside this story. Manual verification used a temporary live-DB route probe with assertEventAccess mocked open because the auth harness is currently blocked: the shared person is attached to both Event A and Event B, the route returns the master person plus EVENT_A-only travel/sessions/registration collections (empty-array/null branch in current fixtures), and an outsider person with no event_people row for Event A returns a JSON 404."
   }
 ]

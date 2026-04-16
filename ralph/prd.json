@@ -1213,7 +1213,9 @@
         }
       ]
     },
-    "qa_tested": false,
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-16T03:45:25Z",
+    "qa_tested_by": "codex",
     "qa_tested_note": "Prior ABORT superseded by contract eventid-scoping v3 (travel = array). Needs re-QA."
   },
   {
