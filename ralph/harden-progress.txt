@@ -110,6 +110,25 @@
 
 ## Iteration log
 
+## 2026-04-17T01:15:00Z — src/lib/sentry.ts — add tests, score 0% → 100%
+- Tier: business_60
+- Score: 0% → 100%
+- Mutants killed this iter: 26 (18 survived + 8 NoCoverage → 0)
+- Tests added: 23 tests in src/lib/sentry.test.ts
+- Real bugs fixed: none
+- Key findings:
+  - Module had zero coverage (no test file existed at all)
+  - Mock `@sentry/nextjs` with `vi.mock` and `vi.mocked` — both setUser and captureException are stubs
+  - ConditionalExpression→true/false on `if (userId)` killed by (1) no-userId test asserting setUser NOT called,
+    (2) userId-present test asserting setUser called with exact `{ id: userId }`
+  - ObjectLiteral mutants on tags/extra objects killed by asserting specific key/value pairs in captureException args
+  - LogicalOperator `??`→`&&` on `context.provider ?? 'unknown'` killed by testing absent-provider → 'unknown'
+  - StringLiteral `'unknown'`→`''` killed by same test (asserts exact value 'unknown')
+  - captureStorageError NoCoverage mutants all killed by adding 3 basic tests (module tag, op tag, extra storageKey)
+  - captureNotificationError `error_code` ObjectLiteral mutant killed by "errorCode provided → error_code in tags" test
+  - All 4 wrapper functions (captureNotificationError, captureStorageError, captureCascadeError) delegate to captureError
+    so module/tags/extra ObjectLiteral mutants in wrappers are killed by asserting the values propagate to captureException
+
 ## 2026-04-17T01:06:00Z — src/lib/inngest/bulk-functions.ts — kill surviving mutants, score 57.21% → 78.90%
 - Tier: critical_75
 - Score: 57.21% → 78.90% (above 75% floor)
