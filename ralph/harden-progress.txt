@@ -48,7 +48,29 @@
 
 - **Slug leading/trailing dash strip**: To kill the StringLiteral mutant on `.replace(/(^-|-$)/g, '')` ('' → "Stryker was here!"), use a name like `'---hello world---'` and assert the slug prefix equals `'hello-world'` with no leading/trailing dashes.
 
+- **Delegate-arg ObjectLiteral kill**: For server actions that call a service function with `{eventId, notificationLogId, initiatedByUserId}`, assert the exact call args with `toHaveBeenCalledWith({...})`. This kills ObjectLiteral `{}` mutants on the args object. Also assert `assertEventAccess` was called with `{ requireWrite: true }` — this kills both ObjectLiteral and BooleanLiteral mutants on the options object.
+
+- **Schema mutants in 'use server' files**: When a module has `'use server'`, the local-replica schema in the existing test file only tests the replica, not the actual source schema. To kill schema mutants in the source, call the actual exported function with invalid inputs (e.g. non-UUID eventId, invalid enum value, out-of-range limit/offset) and expect them to throw. The mutated schema (e.g. `z.object({})`) will silently accept the invalid input, causing the function to proceed and the test to fail (kills the mutant).
+
+- **Enum boundary pair**: To kill both ArrayDeclaration (`[]`) and StringLiteral (`""`) mutants on a z.enum, add BOTH a success test (valid enum value succeeds) AND a rejection test (invalid value throws). The empty-array mutant is killed by the success test; the wrong-string mutant is killed by the rejection test.
+
+- **MethodExpression min→max kill**: For `z.number().int().min(N)` mutant to `max(N)`, test with `N+1` — it passes `min(N)` but fails `max(N)`. For offset `min(0)`, test `offset=1`.
+
 ## Iteration log
+
+## 2026-04-16T22:00:00Z — src/lib/actions/notifications.ts — kill all mutants, score 41.67% → 100%
+- Tier: critical_75
+- Score: 41.67% → 100%
+- Mutants killed this iter: 18 (12 survived + 6 NoCoverage)
+- Tests added: 17 tests in src/lib/actions/notifications.mutation-kill.test.ts
+- Real bugs fixed: none
+- Key findings:
+  - All existing tests only tested local-replica schemas, not actual source schemas or functions
+  - getNotificationDetail had zero coverage — all 6 mutants were NoCoverage
+  - assertEventAccess requireWrite:true was never verified — 4 ObjectLiteral+BooleanLiteral mutants survived
+  - resendNotification and retryFailedNotification args were never asserted — 2 ObjectLiteral mutants survived
+  - listFailedLogs filter args were never asserted — 1 ObjectLiteral mutant survived
+  - Schema mutants killed by calling actual exported functions with invalid inputs (not replica schemas)
 
 ## 2026-04-16T21:45:00Z — src/lib/actions/event.ts — kill L17 slug-strip mutant, score 95.12% → 95.73%
 - Tier: critical_75
