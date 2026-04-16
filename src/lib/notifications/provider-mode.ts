@@ -75,11 +75,11 @@ export function createShimmedEmailProvider(
     async send(input: SendEmailInput): Promise<ProviderSendResult> {
       const redis = getTestRedis();
       if (redis) {
-        await checkModeAndMaybeThrow(redis, 'email');
         const triggerId = input.metadata?.['x-trigger-id'];
         if (triggerId) {
           await recordSentBody(redis, triggerId, 'email', input.htmlBody);
         }
+        await checkModeAndMaybeThrow(redis, 'email');
       }
       return realProvider.send(input);
     },
@@ -93,11 +93,11 @@ export function createShimmedWhatsAppProvider(
     async sendText(input: SendWhatsAppInput): Promise<ProviderSendResult> {
       const redis = getTestRedis();
       if (redis) {
-        await checkModeAndMaybeThrow(redis, 'whatsapp');
         const triggerId = input.metadata?.['x-trigger-id'];
         if (triggerId) {
           await recordSentBody(redis, triggerId, 'whatsapp', input.body);
         }
+        await checkModeAndMaybeThrow(redis, 'whatsapp');
       }
       return realProvider.sendText(input);
     },
