@@ -113,3 +113,9 @@
 - Bugs: 0
 - Fix commits: none
 - Notes: Verified archived events return 400 before certificate issuance or bulk-generation side effects, while existing archived-event certificates remain verifiable through the public verify routes. Full Vitest and focused archived-event certificate suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-16T01:32:42Z — cert-api-017 — reject persons not attached to event
+- Status: pass
+- Bugs: 0
+- Fix commits: none
+- Notes: Verified single certificate issuance checks event_people for the target event before any certificate insert, returns 400 person-not-attached through the API route, and preserves the attached-person 201 path. Full Vitest and focused certificate issuance/API suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
