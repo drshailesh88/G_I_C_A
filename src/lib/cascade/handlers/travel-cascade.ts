@@ -20,6 +20,10 @@ import { CASCADE_EVENTS } from '../events';
 import type { TravelSavedPayload, TravelUpdatedPayload, TravelCancelledPayload } from '../events';
 import { captureCascadeError } from '@/lib/sentry';
 import type { NotificationTriggerType } from '@/lib/notifications/types';
+import {
+  CascadeNotificationRetryError,
+  handleCascadeNotificationResult,
+} from '../dead-letter';
 
 /** Resolve person email and phone for notification variables */
 async function resolvePersonContact(personId: string): Promise<{
@@ -47,6 +51,8 @@ async function sendCascadeNotification(params: {
   variables: Record<string, unknown>;
   snapshotVars: Record<string, unknown> | undefined;
   idempotencyKey: string;
+  cascadeEvent: string;
+  payload: Record<string, unknown>;
 }): Promise<void> {
   try {
     let vars: Record<string, unknown>;
@@ -94,7 +100,7 @@ async function sendCascadeNotification(params: {
       return;
     }
 
-    await sendNotification({
+    const result = await sendNotification({
       eventId: params.eventId,
       personId: params.personId,
       channel: params.channel,
@@ -106,8 +112,21 @@ async function sendCascadeNotification(params: {
       idempotencyKey: params.idempotencyKey,
       variables: vars,
     });
+    await handleCascadeNotificationResult({
+      eventId: params.eventId,
+      cascadeEvent: params.cascadeEvent,
+      payload: params.payload,
+      channel: params.channel,
+      triggerId: params.triggerEntityId,
+      targetEntityType: 'notification_log',
+      targetEntityId: params.triggerEntityId,
+      result,
+    });
   } catch (error) {
-    // Cascade must never fail due to notification failure
+    if (error instanceof CascadeNotificationRetryError) {
+      throw error;
+    }
+
     console.error('[cascade:travel] notification send failed:', error);
     captureCascadeError(error, {
       handler: 'travel-cascade',
@@ -146,6 +165,8 @@ export async function handleTravelSaved(params: {
     },
     snapshotVars,
     idempotencyKey: `notify:travel-itinerary:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:email`,
+    cascadeEvent: 'conference/travel.saved',
+    payload,
   });
   await sendCascadeNotification({
     eventId,
@@ -165,6 +186,8 @@ export async function handleTravelSaved(params: {
     },
     snapshotVars,
     idempotencyKey: `notify:travel-itinerary:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:whatsapp`,
+    cascadeEvent: 'conference/travel.saved',
+    payload,
   });
 }
 
@@ -245,6 +268,8 @@ export async function handleTravelUpdated(params: {
     variables: { changeSummary: data.changeSummary },
     snapshotVars,
     idempotencyKey: `notify:travel-updated:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:email`,
+    cascadeEvent: 'conference/travel.updated',
+    payload,
   });
   await sendCascadeNotification({
     eventId,
@@ -257,6 +282,8 @@ export async function handleTravelUpdated(params: {
     variables: { changeSummary: data.changeSummary },
     snapshotVars,
     idempotencyKey: `notify:travel-updated:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:whatsapp`,
+    cascadeEvent: 'conference/travel.updated',
+    payload,
   });
 }
 
@@ -333,6 +360,8 @@ export async function handleTravelCancelled(params: {
     variables: { cancelledAt: data.cancelledAt, reason: data.reason },
     snapshotVars,
     idempotencyKey: `notify:travel-cancelled:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:email`,
+    cascadeEvent: 'conference/travel.cancelled',
+    payload,
   });
   await sendCascadeNotification({
     eventId,
@@ -345,6 +374,8 @@ export async function handleTravelCancelled(params: {
     variables: { cancelledAt: data.cancelledAt, reason: data.reason },
     snapshotVars,
     idempotencyKey: `notify:travel-cancelled:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:whatsapp`,
+    cascadeEvent: 'conference/travel.cancelled',
+    payload,
   });
 }
 

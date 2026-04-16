@@ -28,6 +28,10 @@ import type {
   AccommodationCancelledPayload,
 } from '../events';
 import { captureCascadeError } from '@/lib/sentry';
+import {
+  CascadeNotificationRetryError,
+  handleCascadeNotificationResult,
+} from '../dead-letter';
 
 // ── Helper: resolve person contact info ──────────────────────
 async function resolvePersonContact(personId: string) {
@@ -54,9 +58,11 @@ async function safeSendNotification(params: {
   triggerEntityId: string;
   idempotencyKey: string;
   variables: Record<string, unknown>;
+  cascadeEvent: string;
+  payload: Record<string, unknown>;
 }) {
   try {
-    await sendNotification({
+    const result = await sendNotification({
       eventId: params.eventId,
       personId: params.personId,
       channel: params.channel,
@@ -68,8 +74,21 @@ async function safeSendNotification(params: {
       idempotencyKey: params.idempotencyKey,
       variables: params.variables,
     });
+    await handleCascadeNotificationResult({
+      eventId: params.eventId,
+      cascadeEvent: params.cascadeEvent,
+      payload: params.payload,
+      channel: params.channel,
+      triggerId: params.triggerEntityId,
+      targetEntityType: 'accommodation_record',
+      targetEntityId: params.triggerEntityId,
+      result,
+    });
   } catch (error) {
-    // Cascade must never fail because of notification failure
+    if (error instanceof CascadeNotificationRetryError) {
+      throw error;
+    }
+
     console.error(
       `[cascade:accommodation] Notification send failed for ${params.channel}:`,
       error instanceof Error ? error.message : error,
@@ -109,6 +128,8 @@ export async function handleAccommodationSaved(params: {
         googleMapsUrl: data.googleMapsUrl,
       },
       idempotencyKey: `notify:accommodation-confirmation:${eventId}:${data.personId}:${data.accommodationRecordId}:${ts}:${channel}`,
+      cascadeEvent: 'conference/accommodation.saved',
+      payload,
     });
   }
 }
@@ -209,6 +230,8 @@ export async function handleAccommodationUpdated(params: {
       triggerEntityId: data.accommodationRecordId,
       idempotencyKey: `notify:accom-updated:${eventId}:${data.personId}:${data.accommodationRecordId}:${ts}:email`,
       variables: baseVars,
+      cascadeEvent: 'conference/accommodation.updated',
+      payload,
     });
   }
 
@@ -223,6 +246,8 @@ export async function handleAccommodationUpdated(params: {
       triggerEntityId: data.accommodationRecordId,
       idempotencyKey: `notify:accom-updated:${eventId}:${data.personId}:${data.accommodationRecordId}:${ts}:whatsapp`,
       variables: baseVars,
+      cascadeEvent: 'conference/accommodation.updated',
+      payload,
     });
   }
 }
@@ -291,6 +316,8 @@ export async function handleAccommodationCancelled(params: {
       triggerEntityId: data.accommodationRecordId,
       idempotencyKey: `notify:accom-cancelled:${eventId}:${data.personId}:${data.accommodationRecordId}:${ts}:email`,
       variables: baseVars,
+      cascadeEvent: 'conference/accommodation.cancelled',
+      payload,
     });
   }
 
@@ -305,6 +332,8 @@ export async function handleAccommodationCancelled(params: {
       triggerEntityId: data.accommodationRecordId,
       idempotencyKey: `notify:accom-cancelled:${eventId}:${data.personId}:${data.accommodationRecordId}:${ts}:whatsapp`,
       variables: baseVars,
+      cascadeEvent: 'conference/accommodation.cancelled',
+      payload,
     });
   }
 }

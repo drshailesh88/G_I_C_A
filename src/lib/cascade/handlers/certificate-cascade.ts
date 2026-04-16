@@ -3,6 +3,10 @@ import { CASCADE_EVENTS } from '../events';
 import type { CertificateGeneratedPayload } from '../events';
 import { captureCascadeError } from '@/lib/sentry';
 import { sendNotification } from '@/lib/notifications/send';
+import {
+  CascadeNotificationRetryError,
+  handleCascadeNotificationResult,
+} from '../dead-letter';
 
 export async function handleCertificateGenerated(params: {
   eventId: string;
@@ -14,7 +18,7 @@ export async function handleCertificateGenerated(params: {
   const ts = Date.now();
 
   try {
-    await sendNotification({
+    const result = await sendNotification({
       eventId,
       personId: data.personId,
       channel: 'email',
@@ -29,7 +33,21 @@ export async function handleCertificateGenerated(params: {
         templateId: data.templateId,
       },
     });
+    await handleCascadeNotificationResult({
+      eventId,
+      cascadeEvent: 'conference/certificate.generated',
+      payload,
+      channel: 'email',
+      triggerId: data.certificateId,
+      targetEntityType: 'notification_log',
+      targetEntityId: data.certificateId,
+      result,
+    });
   } catch (error) {
+    if (error instanceof CascadeNotificationRetryError) {
+      throw error;
+    }
+
     console.error('[cascade:certificate] recipient notification failed:', error);
     captureCascadeError(error, {
       handler: 'certificate-cascade',

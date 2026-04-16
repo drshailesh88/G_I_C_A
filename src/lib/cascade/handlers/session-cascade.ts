@@ -6,6 +6,10 @@ import { CASCADE_EVENTS } from '../events';
 import type { SessionUpdatedPayload } from '../events';
 import { captureCascadeError } from '@/lib/sentry';
 import { sendNotification } from '@/lib/notifications/send';
+import {
+  CascadeNotificationRetryError,
+  handleCascadeNotificationResult,
+} from '../dead-letter';
 
 export async function handleSessionUpdated(params: {
   eventId: string;
@@ -25,7 +29,7 @@ export async function handleSessionUpdated(params: {
 
   for (const faculty of facultyRows) {
     try {
-      await sendNotification({
+      const result = await sendNotification({
         eventId,
         personId: faculty.id,
         channel: 'email',
@@ -40,7 +44,21 @@ export async function handleSessionUpdated(params: {
           sessionId: data.sessionId,
         },
       });
+      await handleCascadeNotificationResult({
+        eventId,
+        cascadeEvent: 'conference/session.updated',
+        payload,
+        channel: 'email',
+        triggerId: data.sessionId,
+        targetEntityType: 'notification_log',
+        targetEntityId: data.sessionId,
+        result,
+      });
     } catch (error) {
+      if (error instanceof CascadeNotificationRetryError) {
+        throw error;
+      }
+
       console.error('[cascade:session] faculty notification failed:', error);
       captureCascadeError(error, {
         handler: 'session-cascade',

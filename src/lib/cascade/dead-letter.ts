@@ -1,7 +1,17 @@
-import { updateLogStatus } from '@/lib/notifications/log-queries';
+import { getLogById, updateLogStatus } from '@/lib/notifications/log-queries';
 import { captureError } from '@/lib/sentry';
 import { upsertRedFlag } from '@/lib/cascade/red-flags';
 import type { TargetEntityType, SourceEntityType } from '@/lib/cascade/red-flags';
+import type { Channel, SendNotificationResult } from '@/lib/notifications/types';
+
+const CASCADE_NOTIFICATION_MAX_ATTEMPTS = 3;
+
+export class CascadeNotificationRetryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CascadeNotificationRetryError';
+  }
+}
 
 export type DeadLetterInput = {
   eventId: string;
@@ -69,4 +79,45 @@ export async function handleDeadLetter(input: DeadLetterInput): Promise<void> {
       lastErrorCode: lastError.code ?? null,
     },
   });
+}
+
+export async function handleCascadeNotificationResult(input: {
+  eventId: string;
+  cascadeEvent: string;
+  payload: Record<string, unknown>;
+  channel: Channel;
+  triggerId: string;
+  targetEntityType: TargetEntityType;
+  targetEntityId: string;
+  result: SendNotificationResult | undefined;
+  maxAttempts?: number;
+}): Promise<void> {
+  if (!input.result || input.result.status !== 'failed') return;
+
+  const log = await getLogById(input.result.notificationLogId, input.eventId);
+  const attempts = log?.attempts ?? 1;
+  const lastError = {
+    code: log?.lastErrorCode ?? undefined,
+    message: log?.lastErrorMessage ?? 'Cascade notification dispatch failed',
+  };
+
+  if (attempts >= (input.maxAttempts ?? CASCADE_NOTIFICATION_MAX_ATTEMPTS)) {
+    await handleDeadLetter({
+      eventId: input.eventId,
+      cascadeEvent: input.cascadeEvent,
+      payload: input.payload,
+      attempts,
+      channel: input.channel,
+      triggerId: input.triggerId,
+      lastError,
+      targetEntityType: input.targetEntityType,
+      targetEntityId: input.targetEntityId,
+      notificationLogId: input.result.notificationLogId,
+    });
+    return;
+  }
+
+  throw new CascadeNotificationRetryError(
+    `Cascade notification ${input.result.notificationLogId} failed on attempt ${attempts}`,
+  );
 }

@@ -3,6 +3,10 @@ import { CASCADE_EVENTS } from '../events';
 import type { RegistrationCreatedPayload } from '../events';
 import { captureCascadeError } from '@/lib/sentry';
 import { sendNotification } from '@/lib/notifications/send';
+import {
+  CascadeNotificationRetryError,
+  handleCascadeNotificationResult,
+} from '../dead-letter';
 
 export async function handleRegistrationCreated(params: {
   eventId: string;
@@ -14,7 +18,7 @@ export async function handleRegistrationCreated(params: {
   const ts = Date.now();
 
   try {
-    await sendNotification({
+    const result = await sendNotification({
       eventId,
       personId: data.personId,
       channel: 'email',
@@ -26,7 +30,21 @@ export async function handleRegistrationCreated(params: {
       idempotencyKey: `notify:registration-confirmation:${eventId}:${data.personId}:${data.registrationId}:${ts}:email`,
       variables: { registrationId: data.registrationId },
     });
+    await handleCascadeNotificationResult({
+      eventId,
+      cascadeEvent: 'conference/registration.created',
+      payload,
+      channel: 'email',
+      triggerId: data.registrationId,
+      targetEntityType: 'notification_log',
+      targetEntityId: data.registrationId,
+      result,
+    });
   } catch (error) {
+    if (error instanceof CascadeNotificationRetryError) {
+      throw error;
+    }
+
     console.error('[cascade:registration] confirmation notification failed:', error);
     captureCascadeError(error, {
       handler: 'registration-cascade',
