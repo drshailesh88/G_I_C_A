@@ -240,7 +240,7 @@ Output <promise>ABORT</promise> if blocked (explain why above the tag)."
 
   # Grep only the last 40 lines for promise tags to avoid prompt-echo false matches
   result_tail=$(printf '%s\n' "$result" | tail -n 40)
-  quota_tail=$(printf '%s' "$result_tail" | grep -ciE "$QUOTA_REGEX")
+  quota_tail=$(printf '%s' "$result_tail" | grep -ciE "$QUOTA_REGEX" || true)
 
   if echo "$result_tail" | grep -q '<promise>QA_COMPLETE</promise>' && [ "$quota_tail" -eq 0 ]; then
     unqad=$(python3 -c "import json; d=json.load(open('$PRD')); r=json.load(open('$QA_REPORT')); done={e['story_id'] for e in r if e.get('story_id')}; print(sum(1 for x in d if x.get('passes') and x.get('id') not in done))")
