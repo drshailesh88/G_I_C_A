@@ -30,10 +30,17 @@
 - Partial-index upsert stories need a live DB probe: mocked `onConflictDoUpdate` tests can pass while a provisioned database is missing the partial unique index and every real write fails with Postgres `42P10`.
 - Cascade handler event-scope QA should seed cross-event downstream rows that share the same person and upstream id; same-event fixtures alone do not prove every handler query includes `eventId`.
 - Audit-log infra QA needs a live `DATABASE_URL_TEST` insert probe and a production call-site probe; mocked helper tests can pass while stale databases lack `audit_log` and contract routes never call `writeAudit`.
+- Certificate audit-log probe QA should include a non-certificate trap row whose `resource_id` equals the certificate id; `cert_id` may match `meta.cert_id` broadly, but direct `resource_id` matches must be scoped to `resource='certificate'`.
 
 ## Iteration log
 
 <!-- Dated entries per QA'd feature. -->
+
+## 2026-04-16T09:09:52Z — infra-039 — audit-log probe filters
+- Status: fixed
+- Bugs: 1 (medium: 1)
+- Fix commits: 5c2a21c3332ecde3583ab82b05888ebdf76994a2
+- Notes: Full Vitest and focused audit-log route tests passed; live DATABASE_URL_TEST probe verified event_id, actor_user_id, actor_username, resource, cert_id meta/resource_id, no-filter cap, camelCase fields, and the same-resource_id non-certificate trap row exclusion. Playwright remains blocked by Clerk `/events` redirect setup and repo typecheck remains blocked by known broad errors.
 
 ## 2026-04-16T08:51:35Z — infra-038 — audit log table and super-admin read audit
 - Status: fixed

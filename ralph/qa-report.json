@@ -951,5 +951,30 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), plus focused person/audit tests passed (4 files, 42 tests). The eventid-scoping Playwright contract remains blocked before product assertions by Clerk auth global setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on known broad existing QA/test, Sentry, people/navigation, notification, and cascade test errors; a full typecheck grep found no errors in src/lib/audit/write.ts or src/lib/actions/person.ts. Manual DATABASE_URL_TEST verification called the real writeAudit helper, confirmed it self-created audit_log/indexes on the stale database, and re-read the inserted nullable-event audit row with the expected actor/action/resource/meta shape. A mocked super-admin getEventPeople probe confirmed the production action records one audit call with action=read, resource=people, eventId/resourceId set to the event, and meta.scope=event_people."
+  },
+  {
+    "story_id": "infra-039",
+    "qa_timestamp": "2026-04-16T09:09:52Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "The audit-log cert_id probe matched any row whose resource_id equaled the certificate id, so a non-certificate audit row with the same UUID leaked into certificate audit results.",
+        "severity": "medium",
+        "fix_commit": "5c2a21c3332ecde3583ab82b05888ebdf76994a2",
+        "files_changed": [
+          "src/app/api/test/audit-log/route.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), plus focused audit-log route tests passed. The eventid-scoping Playwright contract still fails before product assertions in global auth setup with ERR_TOO_MANY_REDIRECTS at /events, and repo typecheck remains blocked by known broad unrelated errors; a narrow typecheck grep found no audit-log route errors. Manual DATABASE_URL_TEST probing seeded event A/B audit rows, verified event_id, actor_user_id, actor_username, resource, cert_id meta, no-filter capped, and camelCase response behavior, and confirmed the cert_id trap travel row was excluded after the fix."
   }
 ]

@@ -1827,7 +1827,10 @@
           "expected": "200 with a paginated or capped result (not full table dump)"
         }
       ]
-    }
+    },
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-16T09:09:52Z",
+    "qa_tested_by": "codex"
   },
   {
     "id": "infra-040",
