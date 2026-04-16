@@ -92,3 +92,55 @@ Patterns noticed:
 - 1 gap (p2-m04-public-attendee-program) is a public route with no
   schema impact — small but missed.
 
+## 2026-04-17T01:00:00Z — iter 2
+Per-phase coverage:
+
+| Phase | OUGHT (count) | IS (found) | Gap | Appended |
+|-------|---------------|------------|-----|----------|
+| P1    | 6             | 4          | 2   | 2        |
+| P2    | 24            | 11         | 3   | 3        |
+| P3    | 9             | 7          | 0   | 0        |
+| P4    | 6             | 4          | 1   | 1        |
+| P5    | 9             | 7          | 0   | 0        |
+| P6    | 12            | 3          | 0   | 0        |
+| Total | 66            | 36         | 6   | 6        |
+
+Note: P1 gains 2 new gaps (event edit/settings page + transfer ownership). P2
+gains 3 new gaps (faculty-accept-creates-registration, per-event-user-assignment,
+registration-settings-ui). P4 gains 1 new gap (M13 template list hub).
+
+Sources consulted:
+- .planning/prd.md ✓
+- .planning/REQUIREMENTS.md ✓
+- research-hub/PROJECT_HANDOFF.md ✓
+- research-hub/CLICK_MAP_AND_TRACEABILITY.md ✓
+- research-hub/BACKEND_ARCHITECTURE_MAP.md ✓
+- research-hub/DEFERRED_TICKETS.md ✓
+- research-hub/COMPLETE_GAP_ANALYSIS.md ✓
+
+feature-census runs: fresh Layer 1 extraction for all 14 modules via Glob+find;
+cross-validated against src/lib/actions/**, src/app/(app)/**, src/app/(public)/**,
+src/app/api/**. Layer 3 runtime crawl deferred (server not running); Layer 1+2
+sufficient given known route gaps confirmed from workspace navigation hrefs.
+
+Appended story IDs (priorities 69–74):
+- P1 (2): p1-event-edit-settings, p1-transfer-event-ownership
+- P2 (3): p2-faculty-accept-creates-registration, p2-per-event-user-assignment,
+  p2-registration-settings-ui
+- P4 (1): p4-m13-template-list-hub
+
+Key method: diffed event-workspace-client.tsx tile hrefs against actual app
+directory tree — found /templates and /settings tiles going to 404 routes.
+Cross-checked REQUIREMENTS.md unchecked items against src/ to confirm genuine
+gaps vs stale checkboxes. Confirmed H5/H6/H7 (from DEFERRED_TICKETS.md) are
+actually FIXED in src/ (circuit-breaker.ts, timeout.ts, automation.ts:113,
+email.ts R2 attachments).
+
+Patterns noticed:
+- 2 of 6 new gaps are dead nav links in event-workspace-client.tsx — systematic
+  tile-href audit against directory tree is a reliable gap-finding method.
+- Faculty accept flow is a pure cascade gap (invite → registration not wired).
+- Per-event user assignment is a CRUD gap: table + auth check exist, no write UI.
+- Registration settings JSONB is read-enforced but never written by any admin
+  action — silent default behaviour masks the missing admin configuration flow.
+

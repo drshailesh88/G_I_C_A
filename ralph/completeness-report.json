@@ -69,5 +69,50 @@
       "All DEFERRED_TICKETS.md D1–D9 items audited; D2 renamed as p2-m30-conflict-fix-action and D6 as p5-d6-issued-certificates-list so they enter the build queue."
     ],
     "promise": "NEXT"
+  },
+  {
+    "iteration": 2,
+    "timestamp": "2026-04-17T01:00:00Z",
+    "appended_count": 6,
+    "appended_ids": [
+      "p1-event-edit-settings",
+      "p2-faculty-accept-creates-registration",
+      "p4-m13-template-list-hub",
+      "p2-per-event-user-assignment",
+      "p1-transfer-event-ownership",
+      "p2-registration-settings-ui"
+    ],
+    "per_phase_gaps": {
+      "P1": { "ought": 6, "is": 4, "gap": 2, "appended": 2 },
+      "P2": { "ought": 24, "is": 11, "gap": 3, "appended": 3 },
+      "P3": { "ought": 9, "is": 7, "gap": 0, "appended": 0 },
+      "P4": { "ought": 6, "is": 4, "gap": 1, "appended": 1 },
+      "P5": { "ought": 9, "is": 7, "gap": 0, "appended": 0 },
+      "P6": { "ought": 12, "is": 3, "gap": 0, "appended": 0 },
+      "Total": { "ought": 66, "is": 36, "gap": 6, "appended": 6 }
+    },
+    "sources_consulted": [
+      ".planning/prd.md",
+      ".planning/REQUIREMENTS.md",
+      "research-hub/PROJECT_HANDOFF.md",
+      "research-hub/CLICK_MAP_AND_TRACEABILITY.md",
+      "research-hub/BACKEND_ARCHITECTURE_MAP.md",
+      "research-hub/DEFERRED_TICKETS.md",
+      "research-hub/COMPLETE_GAP_ANALYSIS.md"
+    ],
+    "feature_census_modules_reused": [],
+    "feature_census_modules_fresh": [
+      "events", "people", "program", "sessions", "travel", "accommodation",
+      "transport", "communications", "certificates", "qr", "attendance",
+      "reports", "branding", "settings"
+    ],
+    "patterns": [
+      "Tile-href audit: diffing event-workspace-client.tsx hrefs against app directory tree found /templates (→404) and /settings (→404) — systematic dead-link audit is a reliable gap-detection method.",
+      "REQUIREMENTS.md false [x]: 'Super Admin can archive, cancel, or transfer ownership' — archive/cancel implemented, transfer ownership is NOT in event.ts.",
+      "Faculty invite accept is a cascade gap: updateFacultyInviteStatus updates invite only, no registration creation or event_people upsert.",
+      "event_user_assignments table + auth check exist but no write UI/action for assigning non-creator users to events.",
+      "H5/H6/H7 from DEFERRED_TICKETS.md are all confirmed FIXED in src/ (circuit-breaker.ts, timeout.ts, automation.ts:sendNotification, email.ts R2 attachments)."
+    ],
+    "promise": "NEXT"
   }
 ]

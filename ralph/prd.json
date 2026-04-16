@@ -2709,5 +2709,194 @@
     "completeness_discovered_at": "2026-04-17T00:00:00Z",
     "ought_citation": ".planning/REQUIREMENTS.md §Phase 9B Req 9B-2",
     "blocked_on_spec": true
+  },
+  {
+    "id": "p1-event-edit-settings",
+    "category": "crud",
+    "description": "Event settings/edit page at /events/[eventId]/settings plus updateEvent server action for editing name, dates, venue, module toggles after creation.",
+    "phase": 1,
+    "priority": 69,
+    "behavior": "The event workspace client links to /events/${event.id}/settings (event-workspace-client.tsx:123) but no route or server action exists. Super Admin or Event Coordinator must be able to edit: event name, start/end dates, timezone, venueName/venueAddress/venueCity/venueMapUrl, description, and moduleToggles after the event is created. An updateEvent server action (similar to createEvent but patching an existing row) must be added to src/lib/actions/event.ts. The settings page must respect RBAC: only owner/super_admin can save; read-only sees values but form is disabled. Source: .planning/prd.md §User Story 1; event-workspace-client.tsx line 123 dead link.",
+    "ui_details": "Settings gear icon in event workspace header → /events/[eventId]/settings. Form mirrors create-event-form.tsx but pre-populates current values. Save button calls updateEvent action, revalidates event workspace.",
+    "data_model": "events table: name, startDate, endDate, timezone, venueName, venueAddress, venueCity, venueMapUrl, description, moduleToggles, updatedBy, updatedAt",
+    "tests": {
+      "unit": [
+        "updateEvent with valid input updates event row and returns ok:true",
+        "updateEvent rejects non-owner non-super-admin with 403",
+        "updateEvent validates dates (end must be after start)",
+        "updateEvent with invalid moduleToggles JSON returns fieldError"
+      ],
+      "e2e": [
+        "Navigate to event workspace → click settings gear → form loads with current values → edit name → save → workspace shows updated name"
+      ],
+      "edge_cases": [
+        "Concurrent edit: two coordinators saving simultaneously must not corrupt row",
+        "Read-only role: form renders but Save is disabled"
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/prd.md §User Story 1 + §Phase 1 item 4; research-hub/CLICK_MAP_AND_TRACEABILITY.md M21 settings link",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p2-faculty-accept-creates-registration",
+    "category": "automation",
+    "description": "Faculty invite accept must create or confirm the faculty member's event registration and auto-upsert event_people.",
+    "phase": 2,
+    "priority": 70,
+    "behavior": "REQUIREMENTS.md explicitly unchecked: 'Accept creates/confirms registration and auto-upserts event_people'. Currently updateFacultyInviteStatus (program.ts:~800) only transitions the invite status to 'accepted' and sets respondedAt. It does NOT create an event_registrations row or upsert event_people. After acceptance: 1) upsert event_people for the faculty member if not present, 2) create or confirm a registration row (category='faculty', status='confirmed'). If a registration already exists (person already registered), do not duplicate — just confirm it. Must be idempotent. Source: .planning/REQUIREMENTS.md §Faculty Invitation (unchecked item); .planning/prd.md §User Story 55.",
+    "ui_details": "No new UI — side-effect of existing /e/[eventSlug]/confirm/[token] acceptance flow. The confirmed success page (e/[eventSlug]/confirm/success) may show registration number if created.",
+    "data_model": "event_registrations (insert if missing: personId, eventId, category='faculty', status='confirmed', qrCodeToken=uuid, registrationNumber=auto), event_people (upsert: personId, eventId, source='faculty_invite')",
+    "tests": {
+      "unit": [
+        "After faculty accepts: event_registrations row created with status=confirmed, category=faculty",
+        "Idempotent: accepting twice does not create duplicate registration",
+        "event_people row upserted for accepting faculty",
+        "Declined invite: no registration created"
+      ],
+      "e2e": [
+        "Faculty follows invitation link → accepts → registration appears in admin registrations list with status confirmed"
+      ],
+      "edge_cases": [
+        "Faculty already has a pending registration from self-registration → acceptance confirms it rather than creating duplicate",
+        "Faculty acceptance when event is at capacity → confirmed anyway (faculty bypass capacity check)"
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/REQUIREMENTS.md §Faculty Invitation (unchecked: 'Accept creates/confirms registration and auto-upserts event_people'); .planning/prd.md §User Story 55",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p4-m13-template-list-hub",
+    "category": "ui",
+    "description": "M13 Communications hub page: notification template list + full delivery log at /events/[eventId]/templates.",
+    "phase": 4,
+    "priority": 71,
+    "behavior": "The event workspace 'Templates' tile (event-workspace-client.tsx:67) navigates to /events/[eventId]/templates which does not exist (404). M13 (research-hub/PROJECT_HANDOFF.md) is the communications hub showing: (a) per-channel template cards (Email / WhatsApp tabs) that navigate to M39 editor on tap, (b) full notification delivery log showing all sends for this event (not just failed — communications/failed/ only shows failed ones). Requires new server actions: getEventNotificationTemplates(eventId) → list active templates; getEventNotificationLog(eventId, opts) → paginated log with channel/status/person filters. Page at src/app/(app)/events/[eventId]/templates/page.tsx. From any template card → navigate to /events/[eventId]/certificates/editor/[templateId] equivalent for notifications. Source: research-hub/PROJECT_HANDOFF.md M13; CLICK_MAP_AND_TRACEABILITY.md §M13.",
+    "ui_details": "M13 Communications hub: Email/WhatsApp tab toggle, template cards per system template key (registration_confirmation, travel_itinerary, etc.), each card shows subject, last updated, Edit button → M39. Below: full delivery log table (filter by channel, status, person, date). 'View Failed' shortcut → communications/failed/.",
+    "data_model": "notification_templates table (read: list per eventId + system templates); notification_log table (paginated read per eventId with status filter)",
+    "tests": {
+      "unit": [
+        "getEventNotificationTemplates returns event-specific overrides merged with system defaults",
+        "getEventNotificationLog paginates correctly by eventId, never leaks cross-event rows",
+        "Template list scoped by eventId — no cross-event leak"
+      ],
+      "e2e": [
+        "Navigate event workspace → Templates tile → M13 page loads with template cards and delivery log",
+        "Click template card → M39 editor opens with correct template",
+        "Delivery log shows both email and WhatsApp rows, filter by status=failed shows subset"
+      ],
+      "edge_cases": [
+        "Event with no overrides shows system default templates",
+        "Delivery log with 1000+ rows paginates without timeout"
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": "research-hub/PROJECT_HANDOFF.md M13; research-hub/CLICK_MAP_AND_TRACEABILITY.md §M13 Communications; .planning/prd.md §Phase 4 item 15",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p2-per-event-user-assignment",
+    "category": "crud",
+    "description": "Super Admin UI to assign Event Coordinators and Ops staff to specific events via event_user_assignments table.",
+    "phase": 2,
+    "priority": 72,
+    "behavior": "User Story 5: 'As a Super Admin, I want to assign Event Coordinators and Ops staff to specific events, so that access is scoped per conference.' Currently event_user_assignments is only populated at event creation (creator auto-assigned as owner). There is no action or UI to assign additional team members to specific events. Super Admins see all events regardless, but Event Coordinators and Ops roles see only events they are explicitly assigned to — so without assignment, non-super-admin users can never access events except the ones they created. Needs: (a) assignUserToEvent(eventId, clerkUserId, assignmentType) server action, (b) removeUserFromEvent(eventId, clerkUserId) action, (c) listEventAssignments(eventId) action, (d) UI page or panel within event settings to manage event-level access. Source: .planning/prd.md §User Story 5; .planning/REQUIREMENTS.md §Events ('Per-event access control scopes...').",
+    "ui_details": "Event settings page (/events/[eventId]/settings) or a dedicated /events/[eventId]/access page. Shows table of current assignees (name, role, assigned_at). + Add User: dropdown of org members (from Clerk), role selector (coordinator/ops/read_only), Assign button. Remove button per row (with confirmation). Super Admin only.",
+    "data_model": "event_user_assignments: eventId, authUserId (Clerk user ID), assignmentType (owner|coordinator|ops|read_only), assignedBy, isActive, assignedAt",
+    "tests": {
+      "unit": [
+        "assignUserToEvent inserts correct row scoped to eventId",
+        "removeUserFromEvent sets isActive=false, not hard delete",
+        "Non-super-admin cannot call assignUserToEvent",
+        "listEventAssignments returns only assignments for given eventId"
+      ],
+      "e2e": [
+        "Super Admin assigns a coordinator to event → coordinator can now see event in their list",
+        "Super Admin removes coordinator → coordinator can no longer access event"
+      ],
+      "edge_cases": [
+        "Assigning user who is already assigned → upsert, do not duplicate",
+        "Assigning user who has super_admin role → no-op or warning (super admin sees all events anyway)"
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/prd.md §User Story 5; .planning/REQUIREMENTS.md §Events ('Per-event access control scopes Event Coordinator, Ops, and Read-only to assigned events only')",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p1-transfer-event-ownership",
+    "category": "crud",
+    "description": "Transfer event ownership from one coordinator to another via Super Admin action.",
+    "phase": 1,
+    "priority": 73,
+    "behavior": "User Story 6: 'As a Super Admin, I want to transfer event ownership from one coordinator to another, so that team changes don't block operations.' REQUIREMENTS.md marks this as done but no transferEventOwnership action exists in event.ts — only updateEventStatus (archive/cancel). The transfer must: (a) set current owner's assignment to isActive=false, (b) insert or activate new owner's event_user_assignment with assignmentType='owner', (c) update events.updatedBy. Must be Super Admin only and must not remove the previous owner's data access (keep them as coordinator if they had prior work). Source: .planning/prd.md §User Story 6; .planning/REQUIREMENTS.md §Events.",
+    "ui_details": "Within event settings page or event workspace header menu: 'Transfer Ownership' option (Super Admin only). Modal: select new owner from org member list, confirm. Shows current owner for clarity.",
+    "data_model": "event_user_assignments: deactivate current owner row (isActive=false), insert new owner row (assignmentType='owner', assignedBy=superAdminId); events.updatedBy updated",
+    "tests": {
+      "unit": [
+        "transferEventOwnership deactivates old owner and inserts new owner row",
+        "Non-super-admin cannot transfer ownership",
+        "Transferring to self is a no-op (idempotent)",
+        "Previous owner retains read access after transfer"
+      ],
+      "e2e": [
+        "Super Admin transfers event from Coordinator A to Coordinator B → Coordinator B sees event; old coordinator loses owner status but still sees event"
+      ],
+      "edge_cases": [
+        "Transferring to a user not in the org → reject with error",
+        "Transferring ownership of an archived event → block or warn"
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/prd.md §User Story 6; .planning/REQUIREMENTS.md §Events ('Super Admin can archive, cancel, or transfer ownership of any event')",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p2-registration-settings-ui",
+    "category": "ui",
+    "description": "Per-event registration settings configuration UI (approval_required, capacity, waitlist, cutoff date, preference fields) — no admin action exists to write registrationSettings JSONB.",
+    "phase": 2,
+    "priority": 74,
+    "behavior": "User Story 28: 'As an Event Coordinator, I want to configure registration settings per event (open/closed, approval required, capacity, waitlist, cutoff date, preference fields), so that each event's registration behavior is tailored.' The registrationSettings JSONB column exists and is READ by registration.ts (capacity enforcement, approval_required check) but there is NO server action to write these settings, and no UI form. Currently all events default to no capacity limit, no approval, no cutoff. Needs: updateRegistrationSettings(eventId, settings) server action + settings form within event settings page. Settings: { requires_approval: boolean, capacity: number|null, waitlist_enabled: boolean, cutoff_date: ISO|null, preference_fields: string[] }. Source: .planning/prd.md §User Story 28; .planning/REQUIREMENTS.md §Registration.",
+    "ui_details": "Registration settings section within /events/[eventId]/settings page (or dedicated /events/[eventId]/registrations/settings). Fields: Approval Required toggle, Capacity (number input or 'unlimited'), Waitlist Enabled toggle, Cutoff Date picker, Preference Fields (multi-select: dietary, accommodation, CME, custom). Save writes to events.registrationSettings JSONB.",
+    "data_model": "events.registrationSettings JSONB: { requires_approval: boolean, capacity: number|null, waitlist_enabled: boolean, cutoff_date: string|null, preference_fields: string[] }",
+    "tests": {
+      "unit": [
+        "updateRegistrationSettings writes correct JSONB, scoped to eventId",
+        "Registration with requires_approval=true starts as pending",
+        "Registration beyond capacity goes to waitlisted if waitlist_enabled",
+        "Registration after cutoff_date is rejected"
+      ],
+      "e2e": [
+        "Set capacity=5, create 5 registrations → 6th registration becomes waitlisted",
+        "Set requires_approval=true → new registration status is pending, not confirmed"
+      ],
+      "edge_cases": [
+        "Lowering capacity below current confirmed count → no auto-cancellation, warning shown",
+        "Setting cutoff_date in the past → immediate registration block"
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/prd.md §User Story 28; .planning/REQUIREMENTS.md §Registration ('configure registration settings per event')",
+    "blocked_on_spec": false
   }
 ]
