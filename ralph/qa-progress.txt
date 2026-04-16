@@ -24,6 +24,7 @@
 - Cascade dead-letter QA must verify the helper is reachable from production handlers and that provider failure results are rethrown before the final attempt; helper-only tests can pass while handlers swallow `status='failed'` and Inngest never retries.
 - Red flag QA must compare TypeScript registries with SQL check constraints; adding a flag type or source type in code alone can still fail at runtime when the migration constraints are narrower.
 - Debounce QA must inspect the emitted cascade event payload after the debounce window, not just the Redis buffer; immediate first-emits can pass "one send" tests while still omitting later merged changes.
+- Cascade snapshot QA must verify the production emit path actually attaches `payload.variables`; a helper and handler fallback can both exist while retries still drift if the emitter never serializes the snapshot into the durable event.
 
 ## Iteration log
 
@@ -34,6 +35,12 @@
 - Bugs: 1 (high: 1)
 - Fix commits: 9aecf4d0e8774cfaba684a2070d8d57509aafb41
 - Notes: Fixed debounce emission so the first call schedules a single delayed flush and the emitted event uses the merged buffer; full Vitest passed, while cascade Playwright remains blocked by Clerk `/events` redirect setup and repo typecheck remains blocked by known broad existing errors.
+
+## 2026-04-16T06:18:29Z — cascade-032 — variable snapshot captured at emit time
+- Status: fixed
+- Bugs: 1 (high: 1)
+- Fix commits: 33b27ae25af1baab4b446205e40cd056cd1145cc
+- Notes: Fixed the production cascade emit/debounce path so travel and accommodation events persist frozen `payload.variables` snapshots before queueing; full Vitest passed, Playwright remains blocked by the Clerk `/events` redirect harness, repo typecheck remains blocked by known broad existing errors, and a real test-fixture emit proved the captured snapshot stayed unchanged after the source person row was edited.
 
 ## 2026-04-16T04:57:48Z — cascade-030 — three-attempt retry then dead-letter
 - Status: fixed
