@@ -25,10 +25,17 @@
 - Red flag QA must compare TypeScript registries with SQL check constraints; adding a flag type or source type in code alone can still fail at runtime when the migration constraints are narrower.
 - Debounce QA must inspect the emitted cascade event payload after the debounce window, not just the Redis buffer; immediate first-emits can pass "one send" tests while still omitting later merged changes.
 - Cascade snapshot QA must verify the production emit path actually attaches `payload.variables`; a helper and handler fallback can both exist while retries still drift if the emitter never serializes the snapshot into the durable event.
+- Frozen cascade contracts can drift from legacy internal event aliases like `*.saved` vs `*.created`; inspect the actual Inngest trigger names in production code, not just builder summaries or stale unit expectations.
 
 ## Iteration log
 
 <!-- Dated entries per QA'd feature. -->
+
+## 2026-04-16T06:34:13Z — cascade-033 — contract event aliases for cascade handlers
+- Status: fixed
+- Bugs: 1 (high: 1)
+- Fix commits: f3ac04e89ba5a950a94a0b9052f5bd9fb431334a
+- Notes: Added frozen `conference/travel.created` and `conference/accommodation.created` aliases to the production cascade registry and Inngest event map while keeping legacy `*.saved` triggers intact; full Vitest passed, focused Inngest registration tests passed, and Playwright/typecheck remain blocked by the known harness/repo-wide issues.
 
 ## 2026-04-16T05:53:11Z — cascade-031 — 5-second cascade debounce
 - Status: fixed

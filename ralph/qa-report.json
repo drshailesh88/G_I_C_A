@@ -808,5 +808,32 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests). The cascade-idempotency Playwright contract remains blocked before product assertions by Clerk auth global setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on known broad existing QA/test, Sentry, people/navigation, notification, and cascade test errors. Manual fixture verification against the test DB emitted a real travel.updated event, confirmed payload.variables captured the original delegate email/name plus changeSummary, then silently changed the source people row and re-read the captured event to confirm the stored snapshot remained unchanged for replay/retry."
+  },
+  {
+    "story_id": "cascade-033",
+    "qa_timestamp": "2026-04-16T06:34:13Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "skip",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "The production cascade registry only listened for legacy conference/travel.saved and conference/accommodation.saved events, so the frozen contract's created event names had no live Inngest handlers.",
+        "severity": "high",
+        "fix_commit": "f3ac04e89ba5a950a94a0b9052f5bd9fb431334a",
+        "files_changed": [
+          "src/lib/cascade/events.ts",
+          "src/lib/inngest/events.ts",
+          "src/lib/inngest/functions.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused Inngest registration tests passed (8/8). The cascade-idempotency Playwright contract remains blocked before product assertions by Clerk auth global setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on known broad existing QA/test, Sentry, people/navigation, notification, and cascade test errors outside this story. Manual verification confirmed the cascade registry now exposes both legacy saved triggers and frozen created aliases for travel and accommodation while preserving the existing retry budgets and handler ids."
   }
 ]

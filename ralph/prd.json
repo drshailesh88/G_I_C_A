@@ -1510,6 +1510,9 @@
   },
   {
     "id": "cascade-033",
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-16T06:34:13Z",
+    "qa_tested_by": "codex",
     "category": "data",
     "description": "Wire all 7 cascade events to their handlers per the frozen contract.",
     "page": "N/A — Backend",
