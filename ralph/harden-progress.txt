@@ -70,7 +70,32 @@
 
 - **Hex checksum format test**: Assert `result.fileChecksumSha256.toMatch(/^[0-9a-f]{64}$/)` to kill both the join-delimiter StringLiteral (`''` → `"Stryker was here!"`, makes output much longer) and the padStart pad-char StringLiteral (`'0'` → `''`, causes short bytes to lose leading zero and total length < 64).
 
+- **ExcelJS fill/font assertions**: To kill HEADER_FILL/HEADER_FONT ObjectLiteral/StringLiteral/BooleanLiteral mutants, parse the generated Excel buffer with ExcelJS and assert `cell.fill.type === 'pattern'`, `fill.fgColor.argb === 'FF1F4E79'`, `font.bold === true`, `font.color.argb === 'FFFFFFFF'`, `font.size === 11`. ExcelJS fully round-trips styling through the .xlsx binary.
+
+- **ExcelJS cell value precision**: Reading `ws.getRow(N).getCell(M).value` from a parsed buffer kills ArrayDeclaration/BlockStatement mutants on `ws.addRow([...])`. ExcelJS returns null (not '') for cells that were never set, and '' for cells explicitly set to empty string — distinguish these when the test cares.
+
+- **CSV header exact-match**: `expect(csv.split('\n')[0]).toBe(expectedHeaderString)` kills ALL column-name StringLiteral mutants in one assertion. Never use `.toContain()` per column — it leaves StringLiteral('' → mutant) alive.
+
+- **sanitizeFileName test via generateEventArchive**: The helper function is private; test it by feeding fileName strings through generateEventArchive's cert entry, then reading the appended name from archiver._entries. Use a per-test helper `runWithFileName(name)`.
+
+- **Filename dedup NoCoverage**: Pass ≥2 certs with identical fileName to generateEventArchive and assert the second gets a `-2` suffix (and third gets `-3`). This covers the entire L308-316 dedup block that is otherwise NoCoverage.
+
+- **uploadStream NoCoverage**: Create a storage stub with an `uploadStream` method; generateEventArchive takes the if-branch and never calls `upload`. Assert `uploadStream` called once, `upload` not called.
+
 ## Iteration log
+
+## 2026-04-16T22:42:00Z — src/lib/exports/archive.ts — kill surviving mutants, score 25.94% → 72.18%
+- Tier: business_60
+- Score: 25.94% (total) / 31.36% (covered) → 72.18% (total) / 78.37% (covered)
+- Mutants killed this iter: 122 (69→191+1T killed of 266 total)
+- Tests added: 46 tests in src/lib/exports/archive.mutation-kill.test.ts
+- Real bugs fixed: none
+- Key findings:
+  - ExcelJS round-trips fill/font/alignment in .xlsx binary — assert them to kill L50-58 constant mutants
+  - styleHeaders() and autoWidth() are dead code (never called) — NoCoverage mutants there are equivalent
+  - ws.columns ArrayDeclaration/ObjectLiteral mutations are NOT equivalent — can test via column width assertions (skipped; minor gain)
+  - Remaining 53 survived: select-shape ObjectLiterals (equivalent in mocked context), ws.columns widths, L344-347 stream event listeners (hard to assert with mock), L120-121 OptionalChaining (same result with mock data that always has getTime), sort arithmetic equivalents
+  - 21 remaining NoCoverage: mostly styleHeaders/autoWidth dead code + some L79 autoWidth internals
 
 ## 2026-04-16T22:20:00Z — src/lib/certificates/storage.ts — kill all surviving mutants, score 71.93% → 100%
 - Tier: critical_75
