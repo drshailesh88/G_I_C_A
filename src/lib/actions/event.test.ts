@@ -34,7 +34,7 @@ vi.mock('@/lib/db/with-event-scope', () => ({
   withEventScope: vi.fn(),
 }));
 
-import { createEvent, getEvent, getEvents, updateEventStatus } from './event';
+import { createEvent, getEvent, getEvents, getEventBySlug, updateEventStatus } from './event';
 
 function buildFormData(overrides: Record<string, string> = {}) {
   const formData = new FormData();
@@ -272,5 +272,330 @@ describe('event actions — REQ 9/10/11 access control tests', () => {
 
     await expect(updateEventStatus(eventId, 'published')).rejects.toThrow(/forbidden/i);
     expect(mockAssertEventAccess).toHaveBeenCalledWith(eventId, { requireWrite: true });
+  });
+});
+
+describe('event actions — hardening tests', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAuth.mockResolvedValue({ userId: 'user-1' });
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:super_admin' });
+    mockGetEventListContext.mockResolvedValue({ userId: 'user-1', role: 'org:super_admin', isSuperAdmin: true });
+  });
+
+  // ── Mock helpers ────────────────────────────────────────────────────────────
+
+  function mockOrgExists() {
+    const limitOrg = vi.fn().mockResolvedValue([{ id: 'org-1' }]);
+    const fromOrg = vi.fn(() => ({ limit: limitOrg }));
+    mockDb.select.mockReturnValueOnce({ from: fromOrg });
+  }
+
+  function mockEventInsert(captureValues?: (v: Record<string, unknown>) => void) {
+    const returning = vi.fn().mockResolvedValue([{ id: 'event-new' }]);
+    const values = vi.fn((v: Record<string, unknown>) => {
+      if (captureValues) captureValues(v);
+      return { returning };
+    });
+    mockDb.insert.mockReturnValueOnce({ values });
+  }
+
+  function mockAssignmentInsert(captureValues?: (v: Record<string, unknown>) => void) {
+    const values = vi.fn((v: Record<string, unknown>) => {
+      if (captureValues) captureValues(v);
+      return Promise.resolve([]);
+    });
+    mockDb.insert.mockReturnValueOnce({ values });
+  }
+
+  function mockCreateEventSuccess(
+    captureEventValues?: (v: Record<string, unknown>) => void,
+    captureAssignValues?: (v: Record<string, unknown>) => void,
+  ) {
+    mockOrgExists();
+    mockEventInsert(captureEventValues);
+    mockAssignmentInsert(captureAssignValues);
+  }
+
+  function mockUpdateEventStatusPath(
+    eventId: string,
+    currentStatus: string,
+    targetStatus: string,
+    captureUpdateSet?: (v: Record<string, unknown>) => void,
+  ) {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:super_admin' });
+
+    // First select: read event by id
+    const limit1 = vi.fn().mockResolvedValue([{ id: eventId, status: currentStatus }]);
+    const where1 = vi.fn(() => ({ limit: limit1 }));
+    const from1 = vi.fn(() => ({ where: where1, limit: limit1 }));
+
+    // Second select: verification after update
+    const limit2 = vi.fn().mockResolvedValue([{ id: eventId, status: targetStatus }]);
+    const where2 = vi.fn(() => ({ limit: limit2 }));
+    const from2 = vi.fn(() => ({ where: where2, limit: limit2 }));
+
+    mockDb.select
+      .mockReturnValueOnce({ from: from1 })
+      .mockReturnValueOnce({ from: from2 });
+
+    const updateWhere = vi.fn().mockResolvedValue([]);
+    const set = vi.fn((v: Record<string, unknown>) => {
+      if (captureUpdateSet) captureUpdateSet(v);
+      return { where: updateWhere };
+    });
+    mockDb.update.mockReturnValue({ set });
+  }
+
+  // ── slugify: special chars → single dash ───────────────────────────────────
+
+  it('slugify converts consecutive spaces to a single dash (not double)', async () => {
+    let insertedSlug = '';
+    mockCreateEventSuccess((v) => { insertedSlug = v.slug as string; });
+
+    const formData = buildFormData({ name: 'Hello  World' }); // two spaces
+    await createEvent(formData);
+
+    // Strip base36 timestamp suffix (no dashes in base36)
+    const slugPart = insertedSlug.slice(0, insertedSlug.lastIndexOf('-'));
+    expect(slugPart).toBe('hello-world');
+  });
+
+  // ── slugify: name > 80 chars truncates ─────────────────────────────────────
+
+  it('slugify truncates the slug prefix to 80 chars for a long name', async () => {
+    let insertedSlug = '';
+    mockCreateEventSuccess((v) => { insertedSlug = v.slug as string; });
+
+    const formData = buildFormData({ name: 'a'.repeat(90) });
+    await createEvent(formData);
+
+    const slugPart = insertedSlug.slice(0, insertedSlug.lastIndexOf('-'));
+    expect(slugPart.length).toBeLessThanOrEqual(80);
+  });
+
+  // ── getOrCreateDefaultOrg: creates org when none exists ────────────────────
+
+  it('createEvent inserts a new org with correct values when none exists', async () => {
+    // Org select returns empty → triggers insert
+    const limitOrg = vi.fn().mockResolvedValue([]);
+    const fromOrg = vi.fn(() => ({ limit: limitOrg }));
+    mockDb.select.mockReturnValueOnce({ from: fromOrg });
+
+    // Org insert returning new id
+    let capturedOrgValues: Record<string, unknown> = {};
+    const orgReturning = vi.fn().mockResolvedValue([{ id: 'new-org-id' }]);
+    const orgInsertValues = vi.fn((v: Record<string, unknown>) => {
+      capturedOrgValues = v;
+      return { returning: orgReturning };
+    });
+    mockDb.insert.mockReturnValueOnce({ values: orgInsertValues });
+
+    mockEventInsert();
+    mockAssignmentInsert();
+
+    const formData = buildFormData();
+    const result = await createEvent(formData);
+
+    expect(result.ok).toBe(true);
+    expect(capturedOrgValues).toMatchObject({ name: 'GEM India', slug: 'gem-india' });
+  });
+
+  // ── safeJsonParse: error field path and message ────────────────────────────
+
+  it('createEvent returns fieldErrors.moduleToggles with Invalid JSON message', async () => {
+    const formData = buildFormData({ moduleToggles: '{bad json' });
+    const result = await createEvent(formData);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.fieldErrors).toHaveProperty('moduleToggles');
+      expect(result.fieldErrors.moduleToggles).toContain('Invalid JSON');
+    }
+  });
+
+  // ── createEvent: default timezone ─────────────────────────────────────────
+
+  it('createEvent defaults timezone to Asia/Kolkata when not supplied', async () => {
+    let capturedValues: Record<string, unknown> = {};
+    mockCreateEventSuccess((v) => { capturedValues = v; });
+
+    const formData = buildFormData(); // no timezone field
+    await createEvent(formData);
+
+    expect(capturedValues.timezone).toBe('Asia/Kolkata');
+  });
+
+  // ── createEvent: optional fields stored as null when absent ───────────────
+
+  it('createEvent stores null for absent optional fields (description, venueAddress, venueCity, venueMapUrl)', async () => {
+    let capturedValues: Record<string, unknown> = {};
+    mockCreateEventSuccess((v) => { capturedValues = v; });
+
+    const formData = buildFormData(); // no optional fields
+    await createEvent(formData);
+
+    expect(capturedValues.description).toBeNull();
+    expect(capturedValues.venueAddress).toBeNull();
+    expect(capturedValues.venueCity).toBeNull();
+    expect(capturedValues.venueMapUrl).toBeNull();
+  });
+
+  it('createEvent stores provided optional fields (not null)', async () => {
+    let capturedValues: Record<string, unknown> = {};
+    mockCreateEventSuccess((v) => { capturedValues = v; });
+
+    const formData = buildFormData({
+      description: 'Annual summit',
+      venueAddress: '123 Main St',
+      venueCity: 'Mumbai',
+      venueMapUrl: 'https://maps.google.com/test',
+    });
+    await createEvent(formData);
+
+    expect(capturedValues.description).toBe('Annual summit');
+    expect(capturedValues.venueAddress).toBe('123 Main St');
+    expect(capturedValues.venueCity).toBe('Mumbai');
+    expect(capturedValues.venueMapUrl).toBe('https://maps.google.com/test');
+  });
+
+  // ── createEvent: eventUserAssignment type must be 'owner' ─────────────────
+
+  it('createEvent inserts eventUserAssignment with assignmentType "owner"', async () => {
+    let capturedAssignment: Record<string, unknown> = {};
+    mockCreateEventSuccess(undefined, (v) => { capturedAssignment = v; });
+
+    const formData = buildFormData();
+    await createEvent(formData);
+
+    expect(capturedAssignment).toMatchObject({ assignmentType: 'owner' });
+  });
+
+  // ── getEvents: role=null returns empty array ───────────────────────────────
+
+  it('getEvents returns [] when userId exists but role is null', async () => {
+    mockGetEventListContext.mockResolvedValue({
+      userId: 'user-no-role',
+      role: null,
+      isSuperAdmin: false,
+    });
+
+    const result = await getEvents();
+    expect(result).toEqual([]);
+  });
+
+  // ── getEventBySlug: boundary slug.length > 100 ────────────────────────────
+
+  it('getEventBySlug accepts a slug of exactly 100 chars', async () => {
+    const slug100 = 'a'.repeat(100);
+    const limit = vi.fn().mockResolvedValue([{ id: 'ev-1', slug: slug100, status: 'published' }]);
+    const where = vi.fn(() => ({ limit }));
+    const from = vi.fn(() => ({ where }));
+    mockDb.select.mockReturnValue({ from });
+
+    const result = await getEventBySlug(slug100);
+    expect(result.id).toBe('ev-1');
+  });
+
+  it('getEventBySlug rejects a slug of 101 chars', async () => {
+    await expect(getEventBySlug('a'.repeat(101))).rejects.toThrow('Invalid event slug');
+  });
+
+  it('getEventBySlug rejects an empty slug', async () => {
+    await expect(getEventBySlug('')).rejects.toThrow('Invalid event slug');
+  });
+
+  // ── updateEventStatus: event not found ────────────────────────────────────
+
+  it('updateEventStatus throws "Event not found" when event does not exist', async () => {
+    const eventId = '77777777-7777-7777-7777-777777777777';
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:super_admin' });
+
+    const limit = vi.fn().mockResolvedValue([]);
+    const where = vi.fn(() => ({ limit }));
+    const from = vi.fn(() => ({ where, limit }));
+    mockDb.select.mockReturnValue({ from });
+
+    await expect(updateEventStatus(eventId, 'published')).rejects.toThrow('Event not found');
+  });
+
+  // ── updateEventStatus: invalid transition from terminal state ─────────────
+
+  it('updateEventStatus error says "none (terminal state)" for archived → any', async () => {
+    const eventId = '88888888-8888-8888-8888-888888888888';
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:super_admin' });
+
+    const limit = vi.fn().mockResolvedValue([{ id: eventId, status: 'archived' }]);
+    const where = vi.fn(() => ({ limit }));
+    const from = vi.fn(() => ({ where, limit }));
+    mockDb.select.mockReturnValue({ from });
+
+    await expect(updateEventStatus(eventId, 'draft')).rejects.toThrow('none (terminal state)');
+  });
+
+  it('updateEventStatus error says "none (terminal state)" for cancelled → any', async () => {
+    const eventId = '99999999-9999-9999-9999-999999999999';
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:super_admin' });
+
+    const limit = vi.fn().mockResolvedValue([{ id: eventId, status: 'cancelled' }]);
+    const where = vi.fn(() => ({ limit }));
+    const from = vi.fn(() => ({ where, limit }));
+    mockDb.select.mockReturnValue({ from });
+
+    await expect(updateEventStatus(eventId, 'draft')).rejects.toThrow('none (terminal state)');
+  });
+
+  it('updateEventStatus error lists allowed transitions comma-separated for non-terminal state', async () => {
+    const eventId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:super_admin' });
+
+    // draft can go to published or cancelled; trying completed is invalid
+    const limit = vi.fn().mockResolvedValue([{ id: eventId, status: 'draft' }]);
+    const where = vi.fn(() => ({ limit }));
+    const from = vi.fn(() => ({ where, limit }));
+    mockDb.select.mockReturnValue({ from });
+
+    await expect(updateEventStatus(eventId, 'completed')).rejects.toThrow('published, cancelled');
+  });
+
+  // ── updateEventStatus: archivedAt / cancelledAt set only for correct target ─
+
+  it('updateEventStatus sets archivedAt when transitioning to archived', async () => {
+    const eventId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    let updateSetPayload: Record<string, unknown> = {};
+    mockUpdateEventStatusPath('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'completed', 'archived', (v) => { updateSetPayload = v; });
+
+    await updateEventStatus(eventId, 'archived');
+    expect(updateSetPayload.archivedAt).toBeInstanceOf(Date);
+    expect(updateSetPayload.cancelledAt).toBeUndefined();
+  });
+
+  it('updateEventStatus does NOT set archivedAt when transitioning to published', async () => {
+    const eventId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+    let updateSetPayload: Record<string, unknown> = {};
+    mockUpdateEventStatusPath('cccccccc-cccc-cccc-cccc-cccccccccccc', 'draft', 'published', (v) => { updateSetPayload = v; });
+
+    await updateEventStatus(eventId, 'published');
+    expect(updateSetPayload.archivedAt).toBeUndefined();
+    expect(updateSetPayload.cancelledAt).toBeUndefined();
+  });
+
+  it('updateEventStatus sets cancelledAt when transitioning to cancelled', async () => {
+    const eventId = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
+    let updateSetPayload: Record<string, unknown> = {};
+    mockUpdateEventStatusPath('dddddddd-dddd-dddd-dddd-dddddddddddd', 'draft', 'cancelled', (v) => { updateSetPayload = v; });
+
+    await updateEventStatus(eventId, 'cancelled');
+    expect(updateSetPayload.cancelledAt).toBeInstanceOf(Date);
+    expect(updateSetPayload.archivedAt).toBeUndefined();
+  });
+
+  it('updateEventStatus does NOT set cancelledAt when transitioning to archived', async () => {
+    const eventId = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+    let updateSetPayload: Record<string, unknown> = {};
+    mockUpdateEventStatusPath('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'completed', 'archived', (v) => { updateSetPayload = v; });
+
+    await updateEventStatus(eventId, 'archived');
+    expect(updateSetPayload.cancelledAt).toBeUndefined();
   });
 });
