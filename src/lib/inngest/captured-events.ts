@@ -41,6 +41,30 @@ export async function captureInngestEvent(event: {
   await redis.set(`${EVENTS_PREFIX}${event.id}`, record, { ex: TTL_SECONDS });
 }
 
+function extractSentEventId(result: unknown): string | null {
+  if (!result || typeof result !== 'object') return null;
+  const maybeIds = (result as { ids?: unknown }).ids;
+  if (Array.isArray(maybeIds) && typeof maybeIds[0] === 'string') {
+    return maybeIds[0];
+  }
+
+  const maybeId = (result as { id?: unknown }).id;
+  return typeof maybeId === 'string' ? maybeId : null;
+}
+
+export async function captureSentInngestEvent(
+  event: {
+    id?: string;
+    name: string;
+    data: Record<string, unknown>;
+  },
+  sendResult: unknown,
+): Promise<string> {
+  const id = event.id ?? extractSentEventId(sendResult) ?? crypto.randomUUID();
+  await captureInngestEvent({ id, name: event.name, data: event.data });
+  return id;
+}
+
 export async function getCapturedEvent(eventId: string): Promise<CapturedEvent | null> {
   const redis = getRedis();
   if (!redis) return null;

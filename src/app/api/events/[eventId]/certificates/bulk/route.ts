@@ -10,6 +10,7 @@ import { ROLES } from '@/lib/auth/roles';
 import { CERTIFICATE_TYPES } from '@/lib/validations/certificate';
 import { Redis } from '@upstash/redis';
 import { inngest } from '@/lib/inngest/client';
+import { captureSentInngestEvent } from '@/lib/inngest/captured-events';
 import { readBulkCertificateGenerationSummary } from '@/lib/certificates/bulk-generation-state';
 
 type Params = Promise<{ eventId: string }>;
@@ -186,7 +187,7 @@ export async function POST(request: Request, { params }: { params: Params }) {
   const lockExpiresAt = new Date(Date.now() + LOCK_TTL_SECONDS * 1000).toISOString();
 
   try {
-    await inngest.send({
+    const inngestEvent = {
       name: 'bulk/certificates.generate',
       data: {
         eventId,
@@ -196,7 +197,9 @@ export async function POST(request: Request, { params }: { params: Params }) {
         scope,
         lockKey,
       },
-    });
+    };
+    const sendResult = await inngest.send(inngestEvent);
+    await captureSentInngestEvent(inngestEvent, sendResult).catch(() => {});
 
     return NextResponse.json(
       {

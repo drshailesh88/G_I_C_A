@@ -18,6 +18,7 @@ import { assertCertificateWriteRole } from './certificate-rbac';
 import { CERTIFICATE_TYPES, ELIGIBILITY_BASIS_TYPES } from '@/lib/validations/certificate';
 import { isCertificateGenerationEnabled } from '@/lib/flags';
 import { inngest } from '@/lib/inngest/client';
+import { captureSentInngestEvent } from '@/lib/inngest/captured-events';
 
 // ── Recipient types ─────────────────────────────────────────
 export const RECIPIENT_TYPES = [
@@ -183,7 +184,7 @@ export async function bulkGenerateCertificates(
   if (!template) throw new Error('Active certificate template not found');
 
   // Dispatch to Inngest — actual generation happens in batched steps
-  await inngest.send({
+  const inngestEvent = {
     name: 'bulk/certificates.generate',
     data: {
       eventId,
@@ -193,7 +194,9 @@ export async function bulkGenerateCertificates(
       personIds: validated.personIds,
       eligibilityBasisType: validated.eligibilityBasisType,
     },
-  });
+  };
+  const sendResult = await inngest.send(inngestEvent);
+  await captureSentInngestEvent(inngestEvent, sendResult).catch(() => {});
 
   return {
     queued: true,
@@ -217,14 +220,16 @@ export async function sendCertificateNotifications(
   const validated = sendNotificationsSchema.parse(input);
 
   // Dispatch to Inngest — emails batched (20 + 30s sleep), WhatsApp per-message (2s sleep)
-  await inngest.send({
+  const inngestEvent = {
     name: 'bulk/certificates.notify',
     data: {
       eventId,
       certificateIds: validated.certificateIds,
       channel: validated.channel,
     },
-  });
+  };
+  const sendResult = await inngest.send(inngestEvent);
+  await captureSentInngestEvent(inngestEvent, sendResult).catch(() => {});
 
   return {
     queued: true,
