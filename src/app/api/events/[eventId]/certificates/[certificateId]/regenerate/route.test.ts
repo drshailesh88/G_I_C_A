@@ -157,6 +157,10 @@ describe('POST /api/events/[eventId]/certificates/[certificateId]/regenerate', (
 
     const res = await POST(makeRequest(), makeParams(EVENT_ID, CERT_ID));
     expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('forbidden');
+    expect(mockDb.select).not.toHaveBeenCalled();
+    expect(mockIssueCertificate).not.toHaveBeenCalled();
   });
 
   it('returns 403 for read_only role', async () => {
@@ -166,6 +170,8 @@ describe('POST /api/events/[eventId]/certificates/[certificateId]/regenerate', (
     expect(res.status).toBe(403);
     const body = await res.json();
     expect(body.error).toBe('forbidden');
+    expect(mockDb.select).not.toHaveBeenCalled();
+    expect(mockIssueCertificate).not.toHaveBeenCalled();
   });
 
   it('returns 400 for invalid eventId', async () => {

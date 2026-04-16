@@ -6,6 +6,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { assertCertificateWriteRole } from './certificate-rbac';
 import { CERTIFICATE_TYPES } from '@/lib/validations/certificate';
 import {
   validateBulkZipInput,
@@ -45,7 +46,8 @@ export async function bulkZipDownload(
     lock?: DistributedLock;
   },
 ): Promise<BulkZipResult> {
-  await assertEventAccess(eventId, { requireWrite: true });
+  const { role } = await assertEventAccess(eventId, { requireWrite: true });
+  assertCertificateWriteRole(role);
   const validated = bulkZipRequestSchema.parse(input);
 
   // Acquire distributed lock — prevents concurrent bulk generation

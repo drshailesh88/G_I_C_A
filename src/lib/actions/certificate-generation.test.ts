@@ -103,7 +103,7 @@ const mockTemplate = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockAssertEventAccess.mockResolvedValue({ userId: 'user_123' });
+  mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:super_admin' });
   mockIsCertificateGenerationEnabled.mockResolvedValue(true);
 });
 

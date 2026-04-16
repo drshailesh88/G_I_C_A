@@ -96,8 +96,8 @@ describe('GET /api/events/[eventId]/certificates/[certificateId]/download', () =
     expect(body.url).toMatch(/^https:\/\//);
   });
 
-  it('superseded cert downloadable by any authorized role', async () => {
-    mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:ops' });
+  it('superseded cert downloadable by certificate write role', async () => {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:event_coordinator' });
     mockSelectReturns([SUPERSEDED_CERT]);
 
     const res = await GET(makeRequest(), makeParams(EVENT_ID, CERT_ID));
@@ -132,19 +132,23 @@ describe('GET /api/events/[eventId]/certificates/[certificateId]/download', () =
     expect(mockGetSignedUrl).toHaveBeenCalledWith(ISSUED_CERT.storageKey, 300);
   });
 
-  it('read-only role gets 404 for revoked cert', async () => {
+  it('read-only role gets 403 before certificate lookup', async () => {
     mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:read_only' });
     mockSelectReturns([REVOKED_CERT]);
 
     const res = await GET(makeRequest(), makeParams(EVENT_ID, CERT_ID));
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'forbidden' });
+    expect(mockDb.select).not.toHaveBeenCalled();
   });
 
-  it('ops role gets 404 for revoked cert', async () => {
+  it('ops role gets 403 before certificate lookup', async () => {
     mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:ops' });
     mockSelectReturns([REVOKED_CERT]);
 
     const res = await GET(makeRequest(), makeParams(EVENT_ID, CERT_ID));
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: 'forbidden' });
+    expect(mockDb.select).not.toHaveBeenCalled();
   });
 });

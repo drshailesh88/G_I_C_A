@@ -129,6 +129,10 @@ describe('POST /api/events/[eventId]/certificates/bulk', () => {
     const body = { certificate_type: 'delegate_attendance', scope: 'all' };
     const res = await POST(makeRequest(body), makeParams());
     expect(res.status).toBe(403);
+    const json = await res.json();
+    expect(json.error).toBe('forbidden');
+    expect(mockSelect).not.toHaveBeenCalled();
+    expect(mockSet).not.toHaveBeenCalled();
   });
 
   it('rejects read_only role with 403', async () => {
@@ -140,6 +144,8 @@ describe('POST /api/events/[eventId]/certificates/bulk', () => {
     expect(res.status).toBe(403);
     const json = await res.json();
     expect(json.error).toBe('forbidden');
+    expect(mockSelect).not.toHaveBeenCalled();
+    expect(mockSet).not.toHaveBeenCalled();
   });
 
   it('rejects invalid event ID with 400', async () => {

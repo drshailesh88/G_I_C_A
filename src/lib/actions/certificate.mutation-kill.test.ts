@@ -863,7 +863,7 @@ describe('createCertificateTemplate — requireWrite assertion', () => {
       if (opts?.requireWrite !== true) {
         throw new Error('requireWrite must be true');
       }
-      return { userId: 'user_123' };
+      return { userId: 'user_123', role: 'org:super_admin' };
     });
     chainedInsert([mockTemplate]);
     const result = await createCertificateTemplate(EVENT_ID, validCreateInput);

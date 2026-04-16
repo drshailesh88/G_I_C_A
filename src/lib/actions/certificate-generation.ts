@@ -14,6 +14,7 @@ import { eq, and, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { assertCertificateWriteRole } from './certificate-rbac';
 import { CERTIFICATE_TYPES, ELIGIBILITY_BASIS_TYPES } from '@/lib/validations/certificate';
 import { isCertificateGenerationEnabled } from '@/lib/flags';
 import { inngest } from '@/lib/inngest/client';
@@ -160,7 +161,8 @@ export async function bulkGenerateCertificates(
     if (err instanceof Error && err.message.includes('currently disabled')) throw err;
   }
 
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  assertCertificateWriteRole(role);
   const validated = bulkGenerateRequestSchema.parse(input);
 
   // Quick validation: template must exist and be active
@@ -210,7 +212,8 @@ export async function sendCertificateNotifications(
   eventId: string,
   input: unknown,
 ): Promise<NotificationQueuedResult> {
-  await assertEventAccess(eventId, { requireWrite: true });
+  const { role } = await assertEventAccess(eventId, { requireWrite: true });
+  assertCertificateWriteRole(role);
   const validated = sendNotificationsSchema.parse(input);
 
   // Dispatch to Inngest — emails batched (20 + 30s sleep), WhatsApp per-message (2s sleep)

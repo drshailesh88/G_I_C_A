@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { assertCertificateWriteRole } from './certificate-rbac';
 import {
   issueCertificateSchema,
   revokeCertificateSchema,
@@ -60,7 +61,8 @@ function buildRenderedVariablesSnapshot(
 
 // ── Issue a single certificate ───────────────────────────────
 export async function issueCertificate(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  assertCertificateWriteRole(role);
   const validated = issueCertificateSchema.parse(input);
 
   // Block issuance on archived events
@@ -241,7 +243,8 @@ export async function issueCertificate(eventId: string, input: unknown) {
 
 // ── Revoke a certificate ─────────────────────────────────────
 export async function revokeCertificate(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  assertCertificateWriteRole(role);
   const validated = revokeCertificateSchema.parse(input);
 
   const [cert] = await db
@@ -348,7 +351,8 @@ export async function getCertificateDownloadUrl(
   certificateId: string,
   storageProvider?: import('@/lib/certificates/storage').StorageProvider,
 ) {
-  await assertEventAccess(eventId);
+  const { role } = await assertEventAccess(eventId);
+  assertCertificateWriteRole(role);
   const validatedId = certificateIdSchema.parse(certificateId);
 
   const [cert] = await db
@@ -492,7 +496,8 @@ const resendCertSchema = z.object({
 });
 
 export async function resendCertificateNotification(eventId: string, input: unknown) {
-  await assertEventAccess(eventId, { requireWrite: true });
+  const { role } = await assertEventAccess(eventId, { requireWrite: true });
+  assertCertificateWriteRole(role);
   const validated = resendCertSchema.parse(input);
 
   const [cert] = await db

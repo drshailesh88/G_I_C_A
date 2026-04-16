@@ -7,6 +7,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { assertCertificateWriteRole } from './certificate-rbac';
 import {
   createCertificateTemplateSchema,
   updateCertificateTemplateSchema,
@@ -80,7 +81,8 @@ export async function getCertificateTemplate(eventId: string, templateId: string
 
 // ── Create certificate template ──────────────────────────────
 export async function createCertificateTemplate(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  assertCertificateWriteRole(role);
   const validated = createCertificateTemplateSchema.parse(input);
 
   const [template] = await db
@@ -114,7 +116,8 @@ export async function createCertificateTemplate(eventId: string, input: unknown)
 
 // ── Update certificate template ──────────────────────────────
 export async function updateCertificateTemplate(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  assertCertificateWriteRole(role);
   const validated = updateCertificateTemplateSchema.parse(input);
   const { templateId, ...fields } = validated;
 
@@ -165,7 +168,8 @@ export async function updateCertificateTemplate(eventId: string, input: unknown)
 // ── Activate certificate template ────────────────────────────
 // Activating archives any other active template of the same type for this event.
 export async function activateCertificateTemplate(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  assertCertificateWriteRole(role);
   const { templateId } = activateCertificateTemplateSchema.parse(input);
 
   const [template] = await db
@@ -237,7 +241,8 @@ export async function activateCertificateTemplate(eventId: string, input: unknow
 
 // ── Archive certificate template ─────────────────────────────
 export async function archiveCertificateTemplate(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  assertCertificateWriteRole(role);
   const { templateId } = archiveCertificateTemplateSchema.parse(input);
 
   const [template] = await db

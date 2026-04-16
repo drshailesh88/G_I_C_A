@@ -121,6 +121,8 @@ describe('POST /api/events/[eventId]/certificates — RBAC', () => {
     expect(res.status).toBe(403);
     const json = await res.json();
     expect(json.error).toBe('forbidden');
+    expect(mockSelect).not.toHaveBeenCalled();
+    expect(mockIssueCertificate).not.toHaveBeenCalled();
   });
 
   it('returns 403 for read_only role', async () => {
@@ -130,6 +132,8 @@ describe('POST /api/events/[eventId]/certificates — RBAC', () => {
     expect(res.status).toBe(403);
     const json = await res.json();
     expect(json.error).toBe('forbidden');
+    expect(mockSelect).not.toHaveBeenCalled();
+    expect(mockIssueCertificate).not.toHaveBeenCalled();
   });
 
   it('allows event_coordinator role', async () => {

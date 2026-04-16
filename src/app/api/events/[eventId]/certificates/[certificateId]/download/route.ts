@@ -8,6 +8,7 @@ import { crossEvent404Response } from '@/lib/auth/sanitize-cross-event-404';
 import { ROLES } from '@/lib/auth/roles';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { createR2Provider } from '@/lib/certificates/storage';
+import { CERTIFICATE_WRITE_ROLES } from '@/lib/actions/certificate-rbac';
 
 type Params = Promise<{ eventId: string; certificateId: string }>;
 
@@ -36,6 +37,10 @@ export async function GET(
     role = access.role;
   } catch {
     return crossEvent404Response();
+  }
+
+  if (!role || !CERTIFICATE_WRITE_ROLES.has(role)) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
   const [cert] = await db

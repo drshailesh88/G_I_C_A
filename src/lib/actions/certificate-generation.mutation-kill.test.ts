@@ -89,7 +89,7 @@ const mockTemplate = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockAssertEventAccess.mockResolvedValue({ userId: 'user_123' });
+  mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:super_admin' });
   mockIsCertificateGenerationEnabled.mockResolvedValue(true);
 });
 
@@ -411,7 +411,7 @@ describe('bulkGenerateCertificates — template select shape', () => {
   });
 
   it('passes exact Inngest data with userId from assertEventAccess (L163)', async () => {
-    mockAssertEventAccess.mockResolvedValue({ userId: 'specific-user-id' });
+    mockAssertEventAccess.mockResolvedValue({ userId: 'specific-user-id', role: 'org:super_admin' });
     mockDb.select.mockReturnValueOnce(chainedSelect([mockTemplate]));
     await bulkGenerateCertificates(EVENT_ID, {
       templateId: TEMPLATE_ID,
