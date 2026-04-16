@@ -105,10 +105,10 @@
   },
   {
     "module": "src/lib/db/with-event-scope.ts",
-    "attempts": 1,
+    "attempts": 2,
     "plateau_buffer": [],
     "status": "GREEN",
-    "last_iter_at": "2026-04-17T02:05:00.000000Z",
+    "last_iter_at": "2026-04-16T20:37:06.525861Z",
     "signature": ""
   }
 ]
