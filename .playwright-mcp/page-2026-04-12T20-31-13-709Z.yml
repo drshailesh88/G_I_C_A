@@ -1,0 +1,15 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e7]
+      - heading "GEM India" [level=1] [ref=e10]
+      - paragraph [ref=e11]: Conference Management Platform
+    - paragraph [ref=e12]: Contact your admin for access
+  - button "Open Next.js Dev Tools" [ref=e142] [cursor=pointer]:
+    - generic [ref=e145]:
+      - text: Rendering
+      - generic [ref=e146]:
+        - generic [ref=e147]: .
+        - generic [ref=e148]: .
+        - generic [ref=e149]: .
+  - alert [ref=e13]

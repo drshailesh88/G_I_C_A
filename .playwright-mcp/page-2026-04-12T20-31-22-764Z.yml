@@ -1,0 +1,62 @@
+- generic [active] [ref=e1]:
+  - main [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - heading "Events" [level=1] [ref=e6]
+        - link "New" [ref=e7] [cursor=pointer]:
+          - /url: /events/new
+          - img [ref=e8]
+          - text: New
+      - generic [ref=e9]:
+        - heading "Upcoming" [level=2] [ref=e10]
+        - generic [ref=e11]:
+          - link "Draft Oct 10-12, 2026 Branding QA E2E Branding QA Venue, Delhi" [ref=e12] [cursor=pointer]:
+            - /url: /events/ea7cf974-d578-46cf-90f4-8bf2328b8566
+            - generic [ref=e13]:
+              - generic [ref=e15]: Draft
+              - generic [ref=e16]: Oct 10-12, 2026
+            - heading "Branding QA E2E" [level=3] [ref=e17]
+            - paragraph [ref=e18]: Branding QA Venue, Delhi
+          - link "Draft Sep 14-16, 2026 Program QA E2E Program QA Venue, Delhi" [ref=e19] [cursor=pointer]:
+            - /url: /events/88d0b22d-e48f-441b-8b0e-5fce957bb77a
+            - generic [ref=e20]:
+              - generic [ref=e22]: Draft
+              - generic [ref=e23]: Sep 14-16, 2026
+            - heading "Program QA E2E" [level=3] [ref=e24]
+            - paragraph [ref=e25]: Program QA Venue, Delhi
+          - link "Live Aug 10-12, 2026 Registration QA E2E Registration QA Venue, Delhi" [ref=e26] [cursor=pointer]:
+            - /url: /events/ee74b5c9-0667-45f5-b509-b0dea2af168c
+            - generic [ref=e27]:
+              - generic [ref=e29]: Live
+              - generic [ref=e30]: Aug 10-12, 2026
+            - heading "Registration QA E2E" [level=3] [ref=e31]
+            - paragraph [ref=e32]: Registration QA Venue, Delhi
+          - link "Draft Jul 10-12, 2026 Certificates QA E2E Certificates QA Venue, Delhi" [ref=e33] [cursor=pointer]:
+            - /url: /events/a94b5380-5212-445b-b35c-75221a026907
+            - generic [ref=e34]:
+              - generic [ref=e36]: Draft
+              - generic [ref=e37]: Jul 10-12, 2026
+            - heading "Certificates QA E2E" [level=3] [ref=e38]
+            - paragraph [ref=e39]: Certificates QA Venue, Delhi
+          - link "Draft Jun 10-12, 2026 Accommodation QA E2E Accommodation QA Venue, Delhi" [ref=e40] [cursor=pointer]:
+            - /url: /events/41dd60b9-80c4-440e-9f63-4c9e2ba7760c
+            - generic [ref=e41]:
+              - generic [ref=e43]: Draft
+              - generic [ref=e44]: Jun 10-12, 2026
+            - heading "Accommodation QA E2E" [level=3] [ref=e45]
+            - paragraph [ref=e46]: Accommodation QA Venue, Delhi
+          - link "Draft May 20-21, 2026 Transport QA E2E QA Venue, Delhi" [ref=e47] [cursor=pointer]:
+            - /url: /events/71643e76-b6d7-4a4b-b4ac-580bd563a3cf
+            - generic [ref=e48]:
+              - generic [ref=e50]: Draft
+              - generic [ref=e51]: May 20-21, 2026
+            - heading "Transport QA E2E" [level=3] [ref=e52]
+            - paragraph [ref=e53]: QA Venue, Delhi
+          - link "Draft May 9-11, 2026 GEM India 2026 Surya Hotel NFC New Delhi" [ref=e54] [cursor=pointer]:
+            - /url: /events/68ee91f0-6d37-4525-ab1b-393438434402
+            - generic [ref=e55]:
+              - generic [ref=e57]: Draft
+              - generic [ref=e58]: May 9-11, 2026
+            - heading "GEM India 2026" [level=3] [ref=e59]
+            - paragraph [ref=e60]: Surya Hotel NFC New Delhi
+  - alert [ref=e61]

@@ -1,0 +1,8 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e7]
+      - heading "GEM India" [level=1] [ref=e10]
+      - paragraph [ref=e11]: Conference Management Platform
+    - paragraph [ref=e12]: Contact your admin for access
+  - alert [ref=e13]

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ralph build loop — adapted from Huntley's pattern for GEM India.
+# Ralph build loop — adapted from Huntley's pattern 
 #
 # Usage:   ./ralph/build.sh [max_iterations=999]
 # Stops:   on <promise>COMPLETE</promise>, max_iterations, or Ctrl-C.
@@ -39,7 +39,7 @@ TOTAL=$(count_total)
 START_PASSES=$(count_passes)
 
 echo "───────────────────────────────────────────────────────────────"
-echo "Ralph build loop — GEM India"
+echo "Ralph build loop"
 echo "  prd:        $PRD  ($TOTAL stories, $START_PASSES already passing)"
 echo "  max iter:   $MAX_ITER"
 if [ ${#TIMEOUT_CMD[@]} -gt 0 ]; then

@@ -1,0 +1,41 @@
+- generic [ref=e1]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - img [ref=e7]
+      - heading "GEM India" [level=1] [ref=e10]
+      - paragraph [ref=e11]: Conference Management Platform
+    - generic [ref=e65]:
+      - generic [ref=e66]:
+        - generic [ref=e69]:
+          - paragraph [ref=e70]: ecg.shailesh@gmail.com
+          - button "Edit" [ref=e71] [cursor=pointer]:
+            - img [ref=e72]
+        - generic [ref=e74]:
+          - generic [ref=e75]:
+            - generic [ref=e78]:
+              - generic [ref=e79]:
+                - generic [ref=e80]: Password
+                - link "Forgot password?" [ref=e81] [cursor=pointer]:
+                  - /url: ""
+              - generic [ref=e82]:
+                - textbox "Password" [active] [ref=e83]:
+                  - /placeholder: Enter your password
+                - button "Show password" [ref=e84] [cursor=pointer]:
+                  - img [ref=e85]
+            - button "Continue" [ref=e89] [cursor=pointer]:
+              - generic [ref=e90]:
+                - text: Continue
+                - img [ref=e91]
+          - link "Use another method" [ref=e94] [cursor=pointer]:
+            - /url: http://localhost:4000/CLERK-ROUTER/HASH/factor-one
+      - generic [ref=e97]:
+        - generic [ref=e99]:
+          - paragraph [ref=e100]: Secured by
+          - link "Clerk logo" [ref=e101] [cursor=pointer]:
+            - /url: https://go.clerk.com/components
+            - img [ref=e102]
+        - paragraph [ref=e107]: Development mode
+    - paragraph [ref=e12]: Contact your admin for access
+  - button "Open Next.js Dev Tools" [ref=e61] [cursor=pointer]:
+    - img [ref=e62]
+  - alert [ref=e13]
