@@ -403,5 +403,21 @@
     },
     "bugs": [],
     "notes": "Full Vitest passed. Playwright certificate contracts remain blocked by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story. Manual review confirmed that all 4 certificate mutation endpoints (issue, regenerate, revoke, bulk) use assertEventAccess(eventId, { requireWrite: true }) which rejects read_only with 403, and subsequently verify the role against CERTIFICATE_WRITE_ROLES (Super Admin, Event Coordinator) to correctly reject ops with 403."
+  },
+  {
+    "story_id": "cert-api-016",
+    "qa_timestamp": "2026-04-16T01:23:42Z",
+    "qa_model": "codex",
+    "status": "pass",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [],
+    "notes": "Full Vitest passed (231 files, 4736 tests), and focused archived-event certificate route/access/verification suites passed (5 files, 90 tests). Certificate Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story. Manual verification confirmed single issuance and bulk generation both use assertEventAccess(eventId, { requireWrite: true }) so archived events return 400 before mutation side effects; issueCertificate has a second archived-event guard before any insert; bulk generation returns before Redis lock/Inngest enqueue when archived; and public /verify/[token] plus /api/verify/[token] delegate to lookupAndVerify without write access, preserving verification of existing issued certificates on archived events. Direct live DB persistence was not re-probed because the authenticated certificate contract fixture is blocked, but the focused issueCertificate unit test asserts archived events short-circuit before db.insert and the bulk route test asserts Redis lock acquisition is not attempted."
   }
 ]

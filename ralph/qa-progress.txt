@@ -107,3 +107,9 @@
 - Bugs: 0
 - Fix commits: none
 - Notes: Verified all certificate mutation endpoints (issue, regenerate, revoke, bulk) use assertEventAccess with requireWrite:true and explicitly check CERTIFICATE_WRITE_ROLES to reject org:ops and org:read_only with 403 forbidden. Full Vitest passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
+
+## 2026-04-16T01:23:42Z — cert-api-016 — archived-event certificate writes blocked
+- Status: pass
+- Bugs: 0
+- Fix commits: none
+- Notes: Verified archived events return 400 before certificate issuance or bulk-generation side effects, while existing archived-event certificates remain verifiable through the public verify routes. Full Vitest and focused archived-event certificate suites passed; certificate Playwright contracts and repo typecheck remain blocked by existing harness/repo issues.
