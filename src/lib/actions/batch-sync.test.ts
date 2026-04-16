@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
@@ -458,6 +459,40 @@ describe('processBatchSync', () => {
     const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
     expect(insertedIds[0]).toMatch(uuidPattern);
     expect(insertedIds[1]).toMatch(uuidPattern);
+  });
+
+  it('uses "event" as the null-sessionId fallback segment (exact ID match)', async () => {
+    // Kills: StringLiteral L29:52 ('event' → ''): the mutant produces hash of
+    //   `${eventId}:${personId}:` (empty string), yielding a completely different UUID.
+    // Also kills: LogicalOperator L36:19 (hash[16] ?? '0' → hash[16] && '0'):
+    //   with &&, hash[16] is always truthy (hex char), so result is always '0' → parseInt=0
+    //   → variant always '8'; but actual hash[16]='6' maps to variant 'a', so IDs differ.
+    chainedSelectSequence([
+      [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+      [{ fullName: 'Dr. Sharma' }],
+    ]);
+    const insertChain = chainedInsert([{ id: 'new-id' }]);
+
+    await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput({ sessionId: null })],
+    });
+
+    // Independently compute what the ID should be using the same construction.
+    const hash = createHash('sha256')
+      .update(`${EVENT_ID}:${PERSON_ID}:event`)
+      .digest('hex');
+    const expectedId = [
+      hash.slice(0, 8),
+      hash.slice(8, 12),
+      `5${hash.slice(13, 16)}`,
+      `${((parseInt(hash[16] ?? '0', 16) & 0x3) | 0x8).toString(16)}${hash.slice(17, 20)}`,
+      hash.slice(20, 32),
+    ].join('-');
+
+    expect(insertChain.values).toHaveBeenCalledWith(
+      expect.objectContaining({ id: expectedId }),
+    );
   });
 
   it('generates different ids for records with two distinct non-null sessionIds', async () => {
