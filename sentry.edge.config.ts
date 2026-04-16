@@ -1,4 +1,7 @@
 import * as Sentry from '@sentry/nextjs';
+import { sentryBeforeSendHook, shouldUseSentryTestTransport } from '@/lib/sentry/test-transport';
+
+const useTestTransport = shouldUseSentryTestTransport();
 
 Sentry.init({
   dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
@@ -9,4 +12,6 @@ Sentry.init({
 
   // Disable Sentry entirely if no DSN is configured
   enabled: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
+
+  ...(useTestTransport ? { beforeSend: sentryBeforeSendHook } : {}),
 });
