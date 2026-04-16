@@ -20,6 +20,12 @@
 
 <!-- Dated entries per QA'd feature. -->
 
+## 2026-04-16T02:11:42Z — tenancy-022 — event-scoped people list
+- Status: pass
+- Bugs: 0
+- Fix commits: none
+- Notes: Full Vitest and focused event people/person suites passed; direct DB verification confirmed event_people JOIN people scoping for Event A/B with no B-only leakage into A. Event-id Playwright contracts and repo typecheck remain blocked by known harness/repo issues.
+
 ## 2026-04-16T02:06:10Z — tenancy-021 — cross-event 404 body sanitization
 - Status: fixed
 - Bugs: 1 (medium: 1)

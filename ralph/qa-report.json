@@ -536,5 +536,21 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused sanitized 404, sessions API, and people API suites passed (3 files, 22 tests). Event-id Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; a targeted typecheck grep found no emergency-kit or sanitizer-local errors. Manual verification confirmed crossEvent404Response returns exactly { error: 'Not Found' } with no event ID or access/permission/forbidden wording, all event-scoped API routes using assertEventAccess have a sanitized cross-event response path, and the emergency-kit route now preserves true role denial as 403 while mapping EventNotFoundError to the generic 404. Persistence was skipped because this story only controls cross-event error response shape; no authorized mutation path was exercised while the authenticated browser fixture is blocked."
+  },
+  {
+    "story_id": "tenancy-022",
+    "qa_timestamp": "2026-04-16T02:11:42Z",
+    "qa_model": "codex",
+    "status": "pass",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [],
+    "notes": "Full Vitest passed (231 files, 4736 tests), and focused event people page/client plus person action suites passed (3 files, 36 tests). Event-id Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story. Manual DB verification against the test database used the production Drizzle schema for event_people JOIN people: Event A returned only A-linked people, excluded the B-only person, Event B returned the B-only person, and the shared person appeared in both scoped result sets. Manual render coverage verified the People heading, delegate cards with nullable email/phone fields, and the empty state. Cross-event behavior is guarded by assertEventAccess with EventNotFoundError mapped to Next notFound on the page."
   }
 ]
