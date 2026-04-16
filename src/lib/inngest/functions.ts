@@ -36,7 +36,7 @@ export const travelSavedFn = inngest.createFunction(
       const eventName = (event as Record<string, unknown>).name === 'conference/travel.created'
         ? 'conference/travel.created'
         : 'conference/travel.saved';
-      const data = validateCascadePayload(eventName, event.data);
+      const data = validateCascadePayload(eventName, event.data, { inngestEventId });
       await handleTravelSaved({ eventId: data.eventId, actor: data.actor, payload: data.payload });
       if (inngestEventId) await recordInngestAttempt(inngestEventId, 'completed').catch(() => {});
     } catch (err) {
@@ -56,7 +56,7 @@ export const travelUpdatedFn = inngest.createFunction(
   async ({ event }) => {
     const inngestEventId = (event as Record<string, unknown>).id as string | undefined;
     try {
-      const data = validateCascadePayload('conference/travel.updated', event.data);
+      const data = validateCascadePayload('conference/travel.updated', event.data, { inngestEventId });
       await handleTravelUpdated({ eventId: data.eventId, actor: data.actor, payload: data.payload });
       if (inngestEventId) await recordInngestAttempt(inngestEventId, 'completed').catch(() => {});
     } catch (err) {
@@ -76,7 +76,7 @@ export const travelCancelledFn = inngest.createFunction(
   async ({ event }) => {
     const inngestEventId = (event as Record<string, unknown>).id as string | undefined;
     try {
-      const data = validateCascadePayload('conference/travel.cancelled', event.data);
+      const data = validateCascadePayload('conference/travel.cancelled', event.data, { inngestEventId });
       await handleTravelCancelled({ eventId: data.eventId, actor: data.actor, payload: data.payload });
       if (inngestEventId) await recordInngestAttempt(inngestEventId, 'completed').catch(() => {});
     } catch (err) {
@@ -99,7 +99,7 @@ export const accommodationSavedFn = inngest.createFunction(
       const eventName = (event as Record<string, unknown>).name === 'conference/accommodation.created'
         ? 'conference/accommodation.created'
         : 'conference/accommodation.saved';
-      const data = validateCascadePayload(eventName, event.data);
+      const data = validateCascadePayload(eventName, event.data, { inngestEventId });
       await handleAccommodationSaved({ eventId: data.eventId, actor: data.actor, payload: data.payload });
       if (inngestEventId) await recordInngestAttempt(inngestEventId, 'completed').catch(() => {});
     } catch (err) {
@@ -119,7 +119,7 @@ export const accommodationUpdatedFn = inngest.createFunction(
   async ({ event }) => {
     const inngestEventId = (event as Record<string, unknown>).id as string | undefined;
     try {
-      const data = validateCascadePayload('conference/accommodation.updated', event.data);
+      const data = validateCascadePayload('conference/accommodation.updated', event.data, { inngestEventId });
       await handleAccommodationUpdated({ eventId: data.eventId, actor: data.actor, payload: data.payload });
       if (inngestEventId) await recordInngestAttempt(inngestEventId, 'completed').catch(() => {});
     } catch (err) {
@@ -139,7 +139,7 @@ export const accommodationCancelledFn = inngest.createFunction(
   async ({ event }) => {
     const inngestEventId = (event as Record<string, unknown>).id as string | undefined;
     try {
-      const data = validateCascadePayload('conference/accommodation.cancelled', event.data);
+      const data = validateCascadePayload('conference/accommodation.cancelled', event.data, { inngestEventId });
       await handleAccommodationCancelled({ eventId: data.eventId, actor: data.actor, payload: data.payload });
       if (inngestEventId) await recordInngestAttempt(inngestEventId, 'completed').catch(() => {});
     } catch (err) {
@@ -159,7 +159,7 @@ export const registrationCreatedFn = inngest.createFunction(
   async ({ event }) => {
     const inngestEventId = (event as Record<string, unknown>).id as string | undefined;
     try {
-      const data = validateCascadePayload('conference/registration.created', event.data);
+      const data = validateCascadePayload('conference/registration.created', event.data, { inngestEventId });
       await handleRegistrationCreated({ eventId: data.eventId, actor: data.actor, payload: data.payload });
       if (inngestEventId) await recordInngestAttempt(inngestEventId, 'completed').catch(() => {});
     } catch (err) {
@@ -179,7 +179,7 @@ export const sessionUpdatedFn = inngest.createFunction(
   async ({ event }) => {
     const inngestEventId = (event as Record<string, unknown>).id as string | undefined;
     try {
-      const data = validateCascadePayload('conference/session.updated', event.data);
+      const data = validateCascadePayload('conference/session.updated', event.data, { inngestEventId });
       await handleSessionUpdated({ eventId: data.eventId, actor: data.actor, payload: data.payload });
       if (inngestEventId) await recordInngestAttempt(inngestEventId, 'completed').catch(() => {});
     } catch (err) {
@@ -199,7 +199,7 @@ export const certificateGeneratedFn = inngest.createFunction(
   async ({ event }) => {
     const inngestEventId = (event as Record<string, unknown>).id as string | undefined;
     try {
-      const data = validateCascadePayload('conference/certificate.generated', event.data);
+      const data = validateCascadePayload('conference/certificate.generated', event.data, { inngestEventId });
       await handleCertificateGenerated({ eventId: data.eventId, actor: data.actor, payload: data.payload });
       if (inngestEventId) await recordInngestAttempt(inngestEventId, 'completed').catch(() => {});
     } catch (err) {
