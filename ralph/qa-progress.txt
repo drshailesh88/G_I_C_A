@@ -32,10 +32,17 @@
 - Cascade handler event-scope QA should seed cross-event downstream rows that share the same person and upstream id; same-event fixtures alone do not prove every handler query includes `eventId`.
 - Audit-log infra QA needs a live `DATABASE_URL_TEST` insert probe and a production call-site probe; mocked helper tests can pass while stale databases lack `audit_log` and contract routes never call `writeAudit`.
 - Certificate audit-log probe QA should include a non-certificate trap row whose `resource_id` equals the certificate id; `cert_id` may match `meta.cert_id` broadly, but direct `resource_id` matches must be scoped to `resource='certificate'`.
+- Inngest capture QA must audit every direct `inngest.send(...)` call site, not only cascade emit helpers; bulk certificate sends can bypass `/api/test/inngest-events` replay/query unless their send results are captured too.
 
 ## Iteration log
 
 <!-- Dated entries per QA'd feature. -->
+
+## 2026-04-16T09:36:59Z — infra-041 — captured Inngest events store and replay
+- Status: fixed
+- Bugs: 1 (high: 1)
+- Fix commits: 134d44d
+- Notes: Fixed direct certificate bulk Inngest sends so returned send ids are captured for replay/query. Full Vitest passed; focused captured-event/certificate-generation/bulk-route suites passed; Redis probe verified persistence, filters, TTL, attempts, guard, replay, and send-result capture. Playwright remains blocked by Clerk `/events` redirect setup and repo typecheck remains blocked by known broad errors.
 
 ## 2026-04-16T09:09:52Z — infra-039 — audit-log probe filters
 - Status: fixed
