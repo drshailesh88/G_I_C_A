@@ -13,12 +13,13 @@
   },
   {
     "module": "src/lib/actions/event.ts",
-    "attempts": 1,
+    "attempts": 2,
     "plateau_buffer": [
+      "score=73.08",
       "score=73.08"
     ],
     "status": "IN_PROGRESS",
-    "last_iter_at": "2026-04-16T16:12:22.360480Z",
+    "last_iter_at": "2026-04-16T16:16:05.241577Z",
     "signature": "score=73.08"
   }
 ]
