@@ -118,6 +118,19 @@
 
 ## Iteration log
 
+## 2026-04-17T01:28:00Z — src/lib/actions/dashboard.ts — kill 20 mutants, score 49.33% → 76%
+- Tier: critical_75
+- Score: 49.33% → 76% (57/75 killed)
+- Mutants killed this iter: 20 (38 survived → 18 remaining)
+- Tests added: 13 in src/lib/actions/dashboard.mutation-kill.test.ts
+- Real bugs fixed: none
+- Key findings:
+  - Asserting vi.mocked(eq).toHaveBeenCalledWith(expect.anything(), 'STATUS') kills all StringLiteral mutations on eq status args despite mocked context
+  - Asserting vi.mocked(inArray).toHaveBeenCalledWith(expect.anything(), ['sent', 'opened']) kills both StringLiteral AND ArrayDeclaration ([]) mutations on inArray args in one assertion
+  - getNeedsAttention had no assertEventAccess options assertion — adding it kills ObjectLiteral {} + BooleanLiteral false→true on L166
+  - Label StringLiteral mutations killed by exact `.label` assertions on NeedsAttentionItem results
+  - Remaining 18 equivalent: 12x .select({}) ObjectLiterals, 3x sql template StringLiterals, 1x MethodExpression setHours (date passed to mocked gte, irrelevant), 2x sql template in getNeedsAttention
+
 ## 2026-04-17T01:25:00Z — src/lib/actions/checkin-search.ts — kill 8 mutants, score 54.55% → 90.91%
 - Tier: critical_75
 - Score: 54.55% → 90.91%
