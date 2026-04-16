@@ -38,5 +38,13 @@
     "status": "GREEN",
     "last_iter_at": "2026-04-16T17:53:10.686080Z",
     "signature": ""
+  },
+  {
+    "module": "src/lib/exports/excel.ts",
+    "attempts": 1,
+    "plateau_buffer": [],
+    "status": "GREEN",
+    "last_iter_at": "2026-04-16T18:40:03.526610Z",
+    "signature": ""
   }
 ]
