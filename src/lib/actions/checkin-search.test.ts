@@ -293,4 +293,111 @@ describe('searchRegistrationsForCheckIn', () => {
 
     expect(mockWithEventScope).toHaveBeenCalled();
   });
+
+  it('calls assertEventAccess with requireWrite: true', async () => {
+    chainedSelectSequence([[], []]);
+
+    await searchRegistrationsForCheckIn(EVENT_ID, {
+      eventId: EVENT_ID,
+      query: 'Sharma',
+    });
+
+    expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_ID, { requireWrite: true });
+  });
+
+  it('wraps escaped query in % for ilike on all three text fields', async () => {
+    chainedSelectSequence([[], []]);
+
+    await searchRegistrationsForCheckIn(EVENT_ID, {
+      eventId: EVENT_ID,
+      query: 'Gupta',
+    });
+
+    const patterns = mockIlike.mock.calls.map((c: unknown[]) => c[1] as string);
+    expect(patterns).toHaveLength(3);
+    expect(patterns.every((p) => p === '%Gupta%')).toBe(true);
+  });
+
+  it('uses eq (not isNull) for session condition when sessionId is provided', async () => {
+    const SESSION_ID = '550e8400-e29b-41d4-a716-446655440010';
+    chainedSelectSequence([
+      [
+        {
+          registrationId: REG_ID,
+          personId: PERSON_ID,
+          fullName: 'Dr. Sharma',
+          email: 'sharma@example.com',
+          phoneE164: '+919876543210',
+          registrationNumber: 'GEM-DEL-00001',
+          category: 'delegate',
+          status: 'confirmed',
+        },
+      ],
+      [],
+    ]);
+
+    await searchRegistrationsForCheckIn(
+      EVENT_ID,
+      { eventId: EVENT_ID, query: 'Sharma' },
+      SESSION_ID,
+    );
+
+    expect(mockIsNull).not.toHaveBeenCalled();
+    const eqCalls = mockEq.mock.calls as unknown[][];
+    const sessionEq = eqCalls.find((c) => c[1] === SESSION_ID);
+    expect(sessionEq).toBeDefined();
+  });
+
+  it('uses isNull for session condition when sessionId is null', async () => {
+    chainedSelectSequence([
+      [
+        {
+          registrationId: REG_ID,
+          personId: PERSON_ID,
+          fullName: 'Dr. Sharma',
+          email: 'sharma@example.com',
+          phoneE164: '+919876543210',
+          registrationNumber: 'GEM-DEL-00001',
+          category: 'delegate',
+          status: 'confirmed',
+        },
+      ],
+      [],
+    ]);
+
+    await searchRegistrationsForCheckIn(
+      EVENT_ID,
+      { eventId: EVENT_ID, query: 'Sharma' },
+      null,
+    );
+
+    expect(mockIsNull).toHaveBeenCalledOnce();
+  });
+
+  it('uses actual personIds from rows in attendance lookup eq calls', async () => {
+    chainedSelectSequence([
+      [
+        {
+          registrationId: REG_ID,
+          personId: PERSON_ID,
+          fullName: 'Dr. Sharma',
+          email: 'sharma@example.com',
+          phoneE164: '+919876543210',
+          registrationNumber: 'GEM-DEL-00001',
+          category: 'delegate',
+          status: 'confirmed',
+        },
+      ],
+      [],
+    ]);
+
+    await searchRegistrationsForCheckIn(EVENT_ID, {
+      eventId: EVENT_ID,
+      query: 'Sharma',
+    });
+
+    const eqCalls = mockEq.mock.calls as unknown[][];
+    const personEq = eqCalls.find((c) => c[1] === PERSON_ID);
+    expect(personEq).toBeDefined();
+  });
 });
