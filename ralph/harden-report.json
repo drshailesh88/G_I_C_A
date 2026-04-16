@@ -57,10 +57,10 @@
   },
   {
     "module": "src/lib/inngest/bulk-functions.ts",
-    "attempts": 1,
+    "attempts": 2,
     "plateau_buffer": [],
     "status": "GREEN",
-    "last_iter_at": "2026-04-17T01:06:36.000000Z",
+    "last_iter_at": "2026-04-16T19:38:16.950715Z",
     "signature": ""
   }
 ]
