@@ -435,5 +435,31 @@
     },
     "bugs": [],
     "notes": "Full Vitest passed (231 files, 4736 tests), and the focused certificate issuance/API suites passed (2 files, 70 tests). Certificate Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS; CE16 is present in the frozen certificate contract but did not run because setup failed. Repo-level typecheck still fails on broad existing errors outside this story. Manual verification confirmed issueCertificate checks event_people for the exact (eventId, personId) before template lookup, before db.transaction, and before any issued_certificates insert; the not-attached branch throws 'person not attached to event'; the API route maps that to HTTP 400 with { error: 'person not attached to event' }; the focused service test asserts db.insert and db.transaction are not called for a cross-event person; and the attached-person API path returns 201. Direct live DB persistence was not re-probed because the authenticated certificate contract fixture is blocked."
+  },
+  {
+    "story_id": "tenancy-018",
+    "qa_timestamp": "2026-04-16T01:40:50Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "Authenticated cross-event GETs to /events/[eventId]/people redirected to /login instead of returning the required generic 404 page.",
+        "severity": "high",
+        "fix_commit": "64d71ebca5ff1c8b1415723ecd60a41c894d5c8d",
+        "files_changed": [
+          "src/app/(app)/events/[eventId]/people/page.tsx",
+          "src/lib/auth/event-access.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused event-access, sanitized 404, people page, people API, and sessions API suites passed (6 files, 53 tests). Event-id Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story. Manual verification confirmed assertEventAccess returns EventNotFoundError for unassigned non-super users, ForbiddenError with 403 for assigned read_only writes, super_admin bypasses event_user_assignments, API routes catch EventNotFoundError and return the sanitized { error: 'Not Found' } body, the sessions POST performs access before validation/insert so cross-event attempts cannot persist, and the people page now maps the 404-coded access failure to notFound() while preserving generic auth failure redirects."
   }
 ]
