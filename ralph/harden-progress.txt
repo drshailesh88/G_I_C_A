@@ -46,7 +46,20 @@
 
 - **Terminal-state transition error message**: For event status machine tests, assert the error message contains `'none (terminal state)'` when transitioning from archived/cancelled. This kills StringLiteral, ConditionalExpression, and LogicalOperator mutants on the fallback string in one assertion.
 
+- **Slug leading/trailing dash strip**: To kill the StringLiteral mutant on `.replace(/(^-|-$)/g, '')` ('' → "Stryker was here!"), use a name like `'---hello world---'` and assert the slug prefix equals `'hello-world'` with no leading/trailing dashes.
+
 ## Iteration log
+
+## 2026-04-16T21:45:00Z — src/lib/actions/event.ts — kill L17 slug-strip mutant, score 95.12% → 95.73%
+- Tier: critical_75
+- Score: 95.12% → 95.73%
+- Mutants killed this iter: 1 (L17 StringLiteral '' → "Stryker was here!" on slug trimming)
+- Tests added: 1 (event.test.ts — "slugify strips leading and trailing dashes from names starting/ending with special chars")
+- Real bugs fixed: none
+- Key findings:
+  - state.json baseline (73.08%) was stale; actual score was already 95.12% from previous iteration
+  - Remaining 6 survived + 1 NoCoverage are all confirmed equivalent (mocked context / server action gap)
+  - Module is now at 95.73%, well above 75% floor
 
 ## 2026-04-16T21:40:00Z — src/lib/actions/event.ts — kill 35 mutants, score 73.08% → 95.12%
 - Tier: critical_75
