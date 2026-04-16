@@ -5,6 +5,8 @@ import { db } from '@/lib/db';
 import { people, eventPeople } from '@/lib/db/schema';
 import { eq, or, and, ilike, desc, sql, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
+import { writeAudit } from '@/lib/audit/write';
+import { ROLES } from '@/lib/auth/roles';
 import {
   createPersonSchema,
   updatePersonSchema,
@@ -376,8 +378,10 @@ export async function importPeopleBatch(
 
 // ── Get people linked to an event (via event_people junction) ──
 export async function getEventPeople(eventId: string) {
-  const { userId } = await auth();
+  const session = await auth();
+  const { userId } = session;
   if (!userId) throw new Error('Unauthorized');
+  const isSuperAdmin = session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
 
   const rows = await db
     .select({
@@ -389,6 +393,20 @@ export async function getEventPeople(eventId: string) {
     .from(eventPeople)
     .innerJoin(people, eq(eventPeople.personId, people.id))
     .where(and(eq(eventPeople.eventId, eventId), isNull(people.anonymizedAt)));
+
+  if (isSuperAdmin) {
+    await writeAudit({
+      actorUserId: userId,
+      eventId,
+      action: 'read',
+      resource: 'people',
+      resourceId: eventId,
+      meta: {
+        count: rows.length,
+        scope: 'event_people',
+      },
+    });
+  }
 
   return rows;
 }
