@@ -1074,7 +1074,10 @@
           "expected": "404"
         }
       ]
-    }
+    },
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-16T02:21:42Z",
+    "qa_tested_by": "codex"
   },
   {
     "id": "tenancy-024",

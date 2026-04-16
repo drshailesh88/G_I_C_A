@@ -15,10 +15,17 @@
 - Bulk APIs that return `batch_id` need a durable retrievable summary keyed by that id; an Inngest handler return value alone is not an operator-visible batch report.
 - Public certificate verification must satisfy the frozen `/verify/{token}` contract, not only `/api/verify/{token}`; also verify counter persistence is awaited and any follow-up cert lookup is event-scoped.
 - Event-scoped routes outside the currently focused module can still catch `EventNotFoundError` as generic forbidden; audit every `assertEventAccess()` route for `crossEvent404Response()` before accepting CE4-style no-leak stories.
+- Auth/helper modules imported by server components must not use the `'use server'` directive when they export classes/constants; Next rejects non-async exports at runtime, and Vitest may not catch it.
 
 ## Iteration log
 
 <!-- Dated entries per QA'd feature. -->
+
+## 2026-04-16T02:21:42Z — tenancy-023 — super-admin event people access
+- Status: fixed
+- Bugs: 1 (high: 1)
+- Fix commits: 8112b4cce5557a30c31a444570976e8f898123ed
+- Notes: Fixed event-access runtime import by removing the server-action directive; full Vitest and focused event-access/people suites passed, DB verification confirmed Event B data with zero active super assignment rows, while event-id Playwright contracts and repo typecheck remain blocked by known harness/repo issues.
 
 ## 2026-04-16T02:11:42Z — tenancy-022 — event-scoped people list
 - Status: pass

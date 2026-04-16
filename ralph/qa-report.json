@@ -552,5 +552,30 @@
     },
     "bugs": [],
     "notes": "Full Vitest passed (231 files, 4736 tests), and focused event people page/client plus person action suites passed (3 files, 36 tests). Event-id Playwright contracts remain blocked before product assertions by Clerk auth setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story. Manual DB verification against the test database used the production Drizzle schema for event_people JOIN people: Event A returned only A-linked people, excluded the B-only person, Event B returned the B-only person, and the shared person appeared in both scoped result sets. Manual render coverage verified the People heading, delegate cards with nullable email/phone fields, and the empty state. Cross-event behavior is guarded by assertEventAccess with EventNotFoundError mapped to Next notFound on the page."
+  },
+  {
+    "story_id": "tenancy-023",
+    "qa_timestamp": "2026-04-16T02:21:42Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "src/lib/auth/event-access.ts used the 'use server' directive while exporting error classes, causing Next to reject the module at runtime before the super-admin people page could render.",
+        "severity": "high",
+        "fix_commit": "8112b4cce5557a30c31a444570976e8f898123ed",
+        "files_changed": [
+          "src/lib/auth/event-access.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused event-access, people page, person action, and people detail API suites passed (5 files, 68 tests before the fix; focused post-fix rerun covered 4 files, 61 tests). The frozen event-id Playwright contract still fails in global Clerk setup at /events with ERR_TOO_MANY_REDIRECTS; a targeted no-deps Example 2 run before the fix exposed the Next runtime compile error, and the post-fix full contract no longer reports the event-access compile error before hitting the known setup blocker. Repo-level typecheck still fails on broad existing QA/test, Sentry, people-list, navigation, notification, and cascade errors; a targeted grep of the post-fix typecheck output found no event-access or people-page errors. Manual verification confirmed checkEventAccess and assertEventAccess return super-admin authorization without querying event_user_assignments, EventPeoplePage calls assertEventAccess before loading event data, nonexistent events map to notFound, and getEventPeople scopes rows through event_people.event_id. Direct DB verification against the test database confirmed Event B exists, has 2 event_people rows all scoped to B, and the configured super user has 0 active event_user_assignments rows on B."
   }
 ]
