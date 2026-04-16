@@ -1457,7 +1457,10 @@
           "expected": "two distinct inngest events"
         }
       ]
-    }
+    },
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-16T05:53:11Z",
+    "qa_tested_by": "codex"
   },
   {
     "id": "cascade-032",

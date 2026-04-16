@@ -756,5 +756,30 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests). Focused cascade/notification suites passed. The cascade-idempotency Playwright contract remains blocked before product assertions by Clerk auth global setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on known broad existing QA/test, Sentry, people/navigation, notification, and cascade test errors; targeted grep found no production type errors in the touched cascade files. Manual review confirmed failed cascade notification results now read the existing notification_log attempt count, rethrow attempts 1-2 for Inngest retry, call handleDeadLetter on attempt 3, update the existing log row to failed, emit kind=cascade-dispatch-failure with trigger context, upsert a system_dispatch_failure red flag keyed by event and trigger id, and do not send any user-facing dispatch failure notification."
+  },
+  {
+    "story_id": "cascade-031",
+    "qa_timestamp": "2026-04-16T05:53:11Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "The debounce helper emitted the first cascade event immediately, so later rapid updates were only merged into the Redis buffer and never appeared in the single emitted event payload.",
+        "severity": "high",
+        "fix_commit": "9aecf4d0e8774cfaba684a2070d8d57509aafb41",
+        "files_changed": [
+          "src/lib/cascade/debounce.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), including the focused debounce suite. The cascade-idempotency Playwright contract remains blocked before product assertions by Clerk auth global setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on known broad existing QA/test, Sentry, people/navigation, notification, and cascade test errors; targeted typecheck grep found no errors in src/lib/cascade/debounce.ts. Manual in-process verification flushed a buffered travel.updated event and confirmed one handler invocation with both flightTime and seat in changeSummary, plus cleanup of metadata and buffer keys."
   }
 ]

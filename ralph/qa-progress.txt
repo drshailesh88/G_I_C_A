@@ -23,10 +23,17 @@
 - Notification log retry QA must verify the send orchestration uses the upsert path, not only that a standalone helper has ON CONFLICT semantics; helper-only tests can pass while `sendNotification` still does plain inserts.
 - Cascade dead-letter QA must verify the helper is reachable from production handlers and that provider failure results are rethrown before the final attempt; helper-only tests can pass while handlers swallow `status='failed'` and Inngest never retries.
 - Red flag QA must compare TypeScript registries with SQL check constraints; adding a flag type or source type in code alone can still fail at runtime when the migration constraints are narrower.
+- Debounce QA must inspect the emitted cascade event payload after the debounce window, not just the Redis buffer; immediate first-emits can pass "one send" tests while still omitting later merged changes.
 
 ## Iteration log
 
 <!-- Dated entries per QA'd feature. -->
+
+## 2026-04-16T05:53:11Z — cascade-031 — 5-second cascade debounce
+- Status: fixed
+- Bugs: 1 (high: 1)
+- Fix commits: 9aecf4d0e8774cfaba684a2070d8d57509aafb41
+- Notes: Fixed debounce emission so the first call schedules a single delayed flush and the emitted event uses the merged buffer; full Vitest passed, while cascade Playwright remains blocked by Clerk `/events` redirect setup and repo typecheck remains blocked by known broad existing errors.
 
 ## 2026-04-16T04:57:48Z — cascade-030 — three-attempt retry then dead-letter
 - Status: fixed
