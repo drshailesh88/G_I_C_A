@@ -1,12 +1,13 @@
 [
   {
     "module": "src/lib/actions/batch-sync.ts",
-    "attempts": 1,
+    "attempts": 2,
     "plateau_buffer": [
+      "score=65.22",
       "score=65.22"
     ],
     "status": "IN_PROGRESS",
-    "last_iter_at": "2026-04-16T15:34:20.595971Z",
+    "last_iter_at": "2026-04-16T15:40:20.080909Z",
     "signature": "score=65.22"
   }
 ]
