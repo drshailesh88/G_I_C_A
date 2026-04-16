@@ -24,6 +24,12 @@
 
 <!-- Dated entries per QA'd feature. -->
 
+## 2026-04-16T03:54:41Z — tenancy-027 — public registration by eventId
+- Status: pass
+- Bugs: 0
+- Fix commits: none
+- Notes: Verified anonymous `/register/[eventId]` rendering, successful submission persistence to people/event_registrations/event_people with URL eventId, E.164 phone normalization, duplicate-submission rejection, closed-registration disabled state, and invalid-event 404; full Vitest passed, while event-id Playwright and repo typecheck remain blocked by known harness/repo issues.
+
 ## 2026-04-16T02:59:55Z — tenancy-026 — event-scoped people detail
 - Status: fail (superseded by contract v3 bump at 2026-04-16 afternoon)
 - Bugs: 1 (high: 1) — invalidated

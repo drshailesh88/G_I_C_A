@@ -651,5 +651,21 @@
     },
     "bugs": [],
     "notes": "Full Vitest passed (231 files, 4736 tests), including the focused people-detail route suite. The frozen eventid-scoping Playwright contract remains blocked in Clerk global setup at /events with ERR_TOO_MANY_REDIRECTS before CE14 can execute. Repo-level typecheck still fails on broad pre-existing QA/test, Sentry, people-list, navigation, notification, and cascade errors outside this story. Manual verification used a temporary live-DB route probe with assertEventAccess mocked open because the auth harness is currently blocked: the shared person is attached to both Event A and Event B, the route returns the master person plus EVENT_A-only travel/sessions/registration collections (empty-array/null branch in current fixtures), and an outsider person with no event_people row for Event A returns a JSON 404."
+  },
+  {
+    "story_id": "tenancy-027",
+    "qa_timestamp": "2026-04-16T03:54:41Z",
+    "qa_model": "codex",
+    "status": "pass",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [],
+    "notes": "Full Vitest passed (231 files, 4736 tests), including the public register page client tests and registration action tests. The eventid-scoping Playwright contract remains blocked in Clerk global setup at /events with ERR_TOO_MANY_REDIRECTS before Example 5 can execute. Repo-level typecheck still fails on known broad pre-existing QA/test, Sentry, people/navigation, notification, and cascade errors outside this story. Manual browser QA visited /register/EVENT_A anonymously and observed no auth chrome, the Register heading, event name/venue, required core fields, and submit button; submitting a unique registration created one people row with E.164 phone, one event_registrations row scoped to EVENT_A, and one event_people junction row. Closed registration was verified by temporarily setting EVENT_B registration_settings.open=false: the page rendered Registration closed and all form controls plus the submit button were disabled, then the fixture setting was restored. A duplicate browser submission for the same email returned the already-registered error and left exactly one registration for that person/event. Invalid event IDs render 404."
   }
 ]
