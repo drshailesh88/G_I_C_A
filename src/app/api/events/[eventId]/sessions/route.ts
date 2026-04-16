@@ -12,6 +12,7 @@ import {
 } from '@/lib/auth/event-id-mismatch';
 import { crossEvent404Response } from '@/lib/auth/sanitize-cross-event-404';
 import { ROLES } from '@/lib/auth/roles';
+import { SESSION_TYPES } from '@/lib/validations/program';
 
 type Params = Promise<{ eventId: string }>;
 
@@ -32,15 +33,30 @@ function isEventArchivedError(err: unknown): boolean {
   );
 }
 
+const isoDateTimeSchema = z.string().trim().datetime('Invalid ISO timestamp');
+const hallIdSchema = z.string().uuid('Invalid hall ID');
+const sessionTypeSchema = z.enum(SESSION_TYPES);
+
 const requestSchema = z.object({
   title: z.string().trim().min(1, 'Title is required'),
-  starts_at: z.string().optional(),
-  ends_at: z.string().optional(),
-  hall_id: z.string().uuid().optional(),
-  session_type: z.string().optional(),
+  startsAt: isoDateTimeSchema.optional(),
+  starts_at: isoDateTimeSchema.optional(),
+  endsAt: isoDateTimeSchema.optional(),
+  ends_at: isoDateTimeSchema.optional(),
+  hallId: hallIdSchema.optional(),
+  hall_id: hallIdSchema.optional(),
+  sessionType: sessionTypeSchema.optional(),
+  session_type: sessionTypeSchema.optional(),
   eventId: z.string().optional(),
   event_id: z.string().optional(),
 });
+
+function pickAlias<T>(
+  preferred: T | undefined,
+  fallback: T | undefined,
+): T | undefined {
+  return preferred ?? fallback;
+}
 
 function getSubmittedEventId(
   body: z.infer<typeof requestSchema>,
@@ -107,7 +123,7 @@ export async function POST(
       urlEventId: eventId,
       bodyEventId: getSubmittedEventId(data, eventId),
       userId,
-      endpoint: 'POST /api/events/[eventId]/sessions',
+      endpoint: `/api/events/${eventId}/sessions`,
     });
   } catch (err) {
     if (err instanceof EventIdMismatchError) {
@@ -120,15 +136,20 @@ export async function POST(
   }
 
   try {
+    const startsAt = pickAlias(data.startsAt, data.starts_at);
+    const endsAt = pickAlias(data.endsAt, data.ends_at);
+    const hallId = pickAlias(data.hallId, data.hall_id);
+    const sessionType = pickAlias(data.sessionType, data.session_type);
+
     const [session] = await db
       .insert(sessions)
       .values({
         eventId,
         title: data.title,
-        startAtUtc: data.starts_at ? new Date(data.starts_at) : null,
-        endAtUtc: data.ends_at ? new Date(data.ends_at) : null,
-        hallId: data.hall_id ?? null,
-        sessionType: data.session_type ?? 'other',
+        startAtUtc: startsAt ? new Date(startsAt) : null,
+        endAtUtc: endsAt ? new Date(endsAt) : null,
+        hallId: hallId ?? null,
+        sessionType: sessionType ?? 'other',
         createdBy: userId,
         updatedBy: userId,
       })
