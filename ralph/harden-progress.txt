@@ -120,6 +120,19 @@
 
 ## Iteration log
 
+## 2026-04-17T02:15:00Z — src/lib/exports/types.ts — kill 6 surviving StringLiteral mutants, score 68.42% → 100%
+- Tier: business_60
+- Score: 68.42% → 100% (19/19 killed)
+- Mutants killed this iter: 6
+- Tests added: 6 in src/lib/exports/types.test.ts (new file)
+- Real bugs fixed: none
+- Key findings:
+  - Module had no test file at all; actual score was 68.42% (not 0% in state.json — stale baseline)
+  - All 6 surviving mutants were StringLiteral `""` on `description` fields in EXPORT_TYPES
+  - Killed by asserting exact `description` string values for each of the 6 export types
+  - All 13 previously killed mutants were label/key StringLiterals killed by excel.ts tests
+  - This is the LAST module below floor — all 71 modules now at or above their floor
+
 ## 2026-04-17T02:05:00Z — src/lib/db/with-event-scope.ts — kill 8 mutants, score 46.67% → 100%
 - Tier: critical_75
 - Score: 46.67% → 100% (15/15 killed)

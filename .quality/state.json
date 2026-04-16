@@ -502,10 +502,10 @@
     },
     "src/lib/exports/types.ts": {
       "tier": "business_60",
-      "mutation_baseline": 0,
-      "mutation_baseline_set_at": "2026-04-15T06:16:52.957Z",
+      "mutation_baseline": 100,
+      "mutation_baseline_set_at": "2026-04-17T02:15:00.000Z",
       "mutation_baseline_run_id": "baseline-manual",
-      "has_exceeded_floor": false
+      "has_exceeded_floor": true
     }
   },
   "baseline_reset_log": [],
