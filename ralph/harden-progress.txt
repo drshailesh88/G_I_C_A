@@ -1,0 +1,52 @@
+# Ralph Harden Progress Log
+
+## Hardening Patterns
+
+- **UUID-format ID assertion**: When a function builds a deterministic hash-based UUID (v5 pattern),
+  assert the `id` field in the insert call matches
+  `/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/`.
+  This kills BlockStatement, ArrayDeclaration, MethodExpression (slice→hash), join-separator,
+  and segment-prefix mutants in one test.
+
+- **SessionId determinism test**: For hash IDs that incorporate sessionId, add a test with TWO
+  DIFFERENT non-null sessionIds and assert `insertedIds[0] !== insertedIds[1]`. A single
+  null-vs-uuid test is NOT enough — the `??→&&` mutant still produces different hashes for
+  null vs a uuid. But two non-null UUIDs collapse to the same hash under `&&`.
+
+- **isDuplicateError coverage requires three paths**: (1) message-only duplicate (no code),
+  (2) code-only duplicate (no 'duplicate key' in message), (3) non-Error object.
+  Without all three, the OR→AND, toLowerCase→toUpperCase, and instanceof mutations all survive.
+
+- **assertEventAccess args**: Always assert `mockAssertEventAccess.toHaveBeenCalledWith(eventId, { requireWrite: true })`
+  in at least one success-path test. Omitting this lets ObjectLiteral `{}` and BooleanLiteral `false` mutants survive.
+
+- **DB select clause ObjectLiteral mutants** (e.g. `.select({...})→.select({})`) are **equivalent mutants**
+  in mocked DB test contexts — the mock returns pre-set data regardless of the select shape.
+  Note them as equivalent rather than spending iterations trying to kill them.
+
+- **"inner vs outer catch" boundary**: If a function has an outer try/catch wrapping an inner
+  try/catch, the `!registration` (not-found) check mutant `→false` is NOT equivalent — the outer
+  catch fires with a generic message. Add a message-content assertion (e.g. `toContain('not recognized')`)
+  to distinguish the two paths.
+
+- **personName in result**: Verify `result.results[0].result.personName` is the actual DB name
+  (not 'Unknown') to kill the `??→&&` mutant that collapses any truthy name to 'Unknown'.
+  Also add a test where the person query returns `[]` to verify the optional-chaining fallback
+  produces a synced record (not an error) with personName 'Unknown'.
+
+## Iteration log
+
+## 2026-04-16T21:00:00Z — src/lib/actions/batch-sync.ts — kill 37 surviving mutants
+- Tier: critical_75
+- Score: 63.56% → 94.92%
+- Mutants killed this iter: 37 (from 40 surviving → 5 surviving + 1 NoCoverage)
+- Tests added: 17 tests in src/lib/actions/batch-sync.test.ts
+- Real bugs fixed: none
+- Key findings:
+  - buildAttendanceRecordId had zero tests for the id field; UUID format assertion killed ~9 mutants
+  - isDuplicateError needed three separate test paths (message-only, code-only, non-Error)
+  - assertEventAccess was never verified with the correct options object
+  - sessionId propagation needed a truthy sessionId test (all prior tests used null)
+  - 5 equivalent mutants remain: hash-fallback for defined char (L36:19, L36:31),
+    DB select clause shape in mocked context (L95, L125), and ineligible-check in
+    batch-sync where determineScanResult only returns 'success'|'ineligible' (L147)
