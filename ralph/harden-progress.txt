@@ -56,7 +56,30 @@
 
 - **MethodExpression min→max kill**: For `z.number().int().min(N)` mutant to `max(N)`, test with `N+1` — it passes `min(N)` but fails `max(N)`. For offset `min(0)`, test `offset=1`.
 
+- **every→some kill requires a "partial match" array/object**: To kill `a.every(...)→a.some(...)`, craft inputs where at least one element matches but at least one doesn't. For arrays: `['a','b']` vs `['a','c']` — `'a'` matches so `some` returns true while `every` correctly returns false. For objects: `{a:1,b:2}` vs `{a:1,b:3}` — key `'a'` matches so `some` would return true. The existing order-mismatch or length-mismatch tests don't reach L45/L53.
+
+- **Primitive inequality to kill L47→true object-branch**: When deepEqual is mutated to always enter the object branch (condition→true), `Object.keys(1)=[]`, `Object.keys(true)=[]` — vacuously equal. Add `evaluateGuard({count:1},{count:2})→false` and `evaluateGuard({flag:true},{flag:false})→false` to catch this.
+
+- **null-value NoCoverage**: deepEqual's null-check branch (L41) only fires when a payload leaf value OR a guard value is `null`. Tests comparing nested objects never produce null deepEqual args unless you explicitly use `{x:null}` in the guard or payload.
+
+- **sanitizeKeyField exact-value assertion**: The existing colon-injection test only checked `key1 !== key2`. That inequality holds even when `:` is removed entirely (`''` mutant). Add an exact-value assertion like `toContain('ev_001')` to pin the replacement to `'_'`.
+
 ## Iteration log
+
+## 2026-04-16T22:15:00Z — src/lib/cascade/automation-utils.ts — kill surviving mutants, score 73.63% → 83.87%
+- Tier: critical_75
+- Score: 73.63% → 83.87%
+- Mutants killed this iter: 10 (2 NoCoverage + 8 survived; +1 timeout)
+- Tests added: 14 tests in src/lib/cascade/automation-utils.mutation-kill.test.ts
+- Real bugs fixed: none
+- Key findings:
+  - L41 null-check had zero coverage — any deepEqual call with null payload/guard value covers it
+  - L45/L53 every→some requires a "partial match" input (1+ element matches, 1+ differs)
+  - L47→true kills require testing different primitive values of same type (e.g. 1 vs 2, true vs false)
+  - L52 NoCoverage (object key-count) killed by different-length objects
+  - L63 sanitizeKeyField required exact-value assertion (not just inequality)
+  - Remaining 15 survived are confirmed equivalent: L16 (empty guard), L31/L32/L33 (redundant guards),
+    L43 (object path handles arrays), L47:32/L47-OR (L42 enforces same typeof), L82 (duplicate default)
 
 ## 2026-04-16T22:00:00Z — src/lib/actions/notifications.ts — kill all mutants, score 41.67% → 100%
 - Tier: critical_75
