@@ -15,6 +15,7 @@ import type {
   ProviderSendResult,
   Channel,
   AttachmentDescriptor,
+  CreateLogEntryInput,
 } from './types';
 import { renderTemplate } from './template-renderer';
 import {
@@ -23,6 +24,9 @@ import {
   getLogById,
   markAsRetrying,
 } from './log-queries';
+import { db } from '@/lib/db';
+import { notificationLog } from '@/lib/db/schema';
+import { and, eq, sql } from 'drizzle-orm';
 import { resendEmailProvider } from './email';
 import { evolutionWhatsAppProvider } from './whatsapp';
 import {
@@ -48,9 +52,18 @@ export type NotificationServiceDeps = {
   circuitBreaker?: CircuitBreakerService | null;
   renderTemplateFn: typeof renderTemplate;
   createLogEntryFn: typeof createLogEntry;
+  upsertLogEntryFn?: typeof defaultUpsertLogEntry;
+  beginLogAttemptFn?: typeof defaultBeginLogAttempt;
   updateLogStatusFn: typeof updateLogStatus;
   getLogByIdFn: typeof getLogById;
   flagService?: FlagReader | null;
+};
+
+type NotificationLogRow = Awaited<ReturnType<typeof createLogEntry>>;
+
+type BeginLogAttemptResult = {
+  row: NotificationLogRow;
+  shouldSend: boolean;
 };
 
 const defaultDeps: NotificationServiceDeps = {
@@ -60,6 +73,8 @@ const defaultDeps: NotificationServiceDeps = {
   circuitBreaker: null, // Set via getDefaultCircuitBreaker() in production wiring
   renderTemplateFn: renderTemplate,
   createLogEntryFn: createLogEntry,
+  upsertLogEntryFn: defaultUpsertLogEntry,
+  beginLogAttemptFn: defaultBeginLogAttempt,
   updateLogStatusFn: updateLogStatus,
   getLogByIdFn: getLogById,
   flagService: null, // Uses default flag service when null
@@ -104,6 +119,133 @@ function normalizeIdempotencyKey(input: SendNotificationInput): string {
   });
 }
 
+async function defaultUpsertLogEntry(
+  input: CreateLogEntryInput & {
+    lastErrorCode?: string | null;
+    lastErrorMessage?: string | null;
+  },
+): Promise<NotificationLogRow> {
+  const status = input.status ?? 'queued';
+  const now = new Date();
+
+  const rows = await db
+    .insert(notificationLog)
+    .values({
+      eventId: input.eventId,
+      personId: input.personId,
+      templateId: input.templateId,
+      templateKeySnapshot: input.templateKeySnapshot,
+      templateVersionNo: input.templateVersionNo,
+      channel: input.channel,
+      provider: input.provider,
+      triggerType: input.triggerType ?? null,
+      triggerEntityType: input.triggerEntityType ?? null,
+      triggerEntityId: input.triggerEntityId ?? null,
+      sendMode: input.sendMode,
+      idempotencyKey: input.idempotencyKey,
+      recipientEmail: input.recipientEmail ?? null,
+      recipientPhoneE164: input.recipientPhoneE164 ?? null,
+      renderedSubject: input.renderedSubject ?? null,
+      renderedBody: input.renderedBody,
+      renderedVariablesJson: input.renderedVariablesJson ?? null,
+      attachmentManifestJson: input.attachmentManifestJson ?? null,
+      status,
+      lastErrorCode: input.lastErrorCode ?? null,
+      lastErrorMessage: input.lastErrorMessage ?? null,
+      lastAttemptAt: now,
+      sentAt: status === 'sent' ? now : null,
+      failedAt: status === 'failed' ? now : null,
+      initiatedByUserId: input.initiatedByUserId ?? null,
+      isResend: input.isResend ?? false,
+      resendOfId: input.resendOfId ?? null,
+    })
+    .onConflictDoUpdate({
+      target: notificationLog.idempotencyKey,
+      set: {
+        attempts: sql`${notificationLog.attempts} + 1`,
+        status,
+        lastErrorCode: input.lastErrorCode ?? null,
+        lastErrorMessage: input.lastErrorMessage ?? null,
+        lastAttemptAt: now,
+        updatedAt: now,
+        ...(status === 'sent' ? { sentAt: now, failedAt: null } : {}),
+        ...(status === 'failed' ? { failedAt: now } : {}),
+      },
+    })
+    .returning();
+
+  return rows[0];
+}
+
+async function defaultBeginLogAttempt(
+  input: CreateLogEntryInput,
+): Promise<BeginLogAttemptResult> {
+  const now = new Date();
+
+  const rows = await db
+    .insert(notificationLog)
+    .values({
+      eventId: input.eventId,
+      personId: input.personId,
+      templateId: input.templateId,
+      templateKeySnapshot: input.templateKeySnapshot,
+      templateVersionNo: input.templateVersionNo,
+      channel: input.channel,
+      provider: input.provider,
+      triggerType: input.triggerType ?? null,
+      triggerEntityType: input.triggerEntityType ?? null,
+      triggerEntityId: input.triggerEntityId ?? null,
+      sendMode: input.sendMode,
+      idempotencyKey: input.idempotencyKey,
+      recipientEmail: input.recipientEmail ?? null,
+      recipientPhoneE164: input.recipientPhoneE164 ?? null,
+      renderedSubject: input.renderedSubject ?? null,
+      renderedBody: input.renderedBody,
+      renderedVariablesJson: input.renderedVariablesJson ?? null,
+      attachmentManifestJson: input.attachmentManifestJson ?? null,
+      status: 'queued',
+      lastAttemptAt: now,
+      initiatedByUserId: input.initiatedByUserId ?? null,
+      isResend: input.isResend ?? false,
+      resendOfId: input.resendOfId ?? null,
+    })
+    .onConflictDoUpdate({
+      target: notificationLog.idempotencyKey,
+      set: {
+        attempts: sql`${notificationLog.attempts} + 1`,
+        status: 'queued',
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        lastAttemptAt: now,
+        updatedAt: now,
+      },
+      setWhere: eq(notificationLog.status, 'failed'),
+    })
+    .returning();
+
+  if (rows[0]) {
+    return { row: rows[0], shouldSend: true };
+  }
+
+  const existingRows = await db
+    .select()
+    .from(notificationLog)
+    .where(and(
+      eq(notificationLog.eventId, input.eventId),
+      eq(notificationLog.idempotencyKey, input.idempotencyKey),
+    ))
+    .limit(1);
+
+  const existing = existingRows[0];
+  if (!existing) {
+    throw new Error(
+      `Notification log ${input.idempotencyKey} not found after idempotency conflict`,
+    );
+  }
+
+  return { row: existing, shouldSend: false };
+}
+
 // ── Main Send ─────────────────────────────────────────────────
 
 export async function sendNotification(
@@ -116,6 +258,8 @@ export async function sendNotification(
     idempotencyService,
     renderTemplateFn,
     createLogEntryFn,
+    upsertLogEntryFn,
+    beginLogAttemptFn,
     updateLogStatusFn,
   } = deps;
   const idempotencyKey = normalizeIdempotencyKey(input);
@@ -180,7 +324,10 @@ export async function sendNotification(
       errorCode: 'RENDER_FAILED',
     });
     // FIX #7: Record failed send in audit trail even on template errors
-    const failedLog = await createLogEntryFn({
+    const failedLogInput: CreateLogEntryInput & {
+      lastErrorCode: string;
+      lastErrorMessage: string;
+    } = {
       eventId: input.eventId,
       personId: input.personId,
       templateId: null,
@@ -200,8 +347,13 @@ export async function sendNotification(
       renderedVariablesJson: input.variables,
       attachmentManifestJson: input.attachments ?? null,
       status: 'failed',
+      lastErrorCode: 'RENDER_FAILED',
+      lastErrorMessage: renderError instanceof Error ? renderError.message : String(renderError),
       initiatedByUserId: input.initiatedByUserId ?? null,
-    });
+    };
+    const failedLog = upsertLogEntryFn
+      ? await upsertLogEntryFn(failedLogInput)
+      : await createLogEntryFn(failedLogInput);
     return {
       notificationLogId: failedLog.id,
       provider: providerNameForChannel(input.channel),
@@ -210,8 +362,8 @@ export async function sendNotification(
     };
   }
 
-  // 2. Create log row FIRST (status = queued) — durable record before idempotency
-  const logRow = await createLogEntryFn({
+  // 2. Begin a single durable attempt for this idempotency key.
+  const logInput = {
     eventId: input.eventId,
     personId: input.personId,
     templateId: rendered.templateId,
@@ -230,15 +382,29 @@ export async function sendNotification(
     renderedBody: rendered.body,
     renderedVariablesJson: rendered.variables,
     attachmentManifestJson: input.attachments ?? null,
-    status: 'queued',
+    status: 'queued' as const,
     initiatedByUserId: input.initiatedByUserId ?? null,
-  });
+  };
+
+  const attempt = beginLogAttemptFn
+    ? await beginLogAttemptFn(logInput)
+    : { row: await createLogEntryFn(logInput), shouldSend: true };
+  const logRow = attempt.row;
+
+  if (!attempt.shouldSend) {
+    return {
+      notificationLogId: logRow.id,
+      provider: providerNameForChannel(input.channel),
+      providerMessageId: logRow.providerMessageId,
+      status: logRow.status as NotificationStatus,
+    };
+  }
 
   // 3. Idempotency check — AFTER log creation so we have an audit trail
   // FIX #1: If process dies after Redis SET but before provider call,
   // the queued log row exists and ops can see + retry it.
   const isDuplicate = await idempotencyService.checkAndSet(idempotencyKey);
-  if (isDuplicate) {
+  if (isDuplicate && (logRow.attempts == null || logRow.attempts <= 1)) {
     // Already sent — update our log as a duplicate detection record
     await updateLogStatusFn(logRow.id, input.eventId, {
       status: 'sent',
@@ -251,6 +417,12 @@ export async function sendNotification(
       providerMessageId: null,
       status: 'sent' as NotificationStatus,
     };
+  }
+
+  if (beginLogAttemptFn) {
+    await updateLogStatusFn(logRow.id, input.eventId, {
+      status: 'sending',
+    });
   }
 
   // 4. Circuit breaker check
@@ -355,7 +527,7 @@ export async function sendNotification(
     providerMessageId: providerResult.providerMessageId,
     providerConversationId: providerResult.providerConversationId,
     ...(providerResult.accepted
-      ? { sentAt: new Date() }
+      ? { sentAt: new Date(), failedAt: null, lastErrorCode: null, lastErrorMessage: null }
       : {
           failedAt: new Date(),
           lastErrorCode: 'PROVIDER_REJECTED',

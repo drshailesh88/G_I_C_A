@@ -15,6 +15,11 @@ import type {
 
 export type NotificationLogRow = typeof notificationLog.$inferSelect;
 
+export type BeginLogAttemptResult = {
+  row: NotificationLogRow;
+  shouldSend: boolean;
+};
+
 /** Insert a new notification_log row and return it. */
 export async function createLogEntry(
   input: CreateLogEntryInput,
@@ -87,6 +92,11 @@ export async function upsertLogEntry(
       renderedVariablesJson: input.renderedVariablesJson ?? null,
       attachmentManifestJson: input.attachmentManifestJson ?? null,
       status,
+      lastErrorCode: input.lastErrorCode ?? null,
+      lastErrorMessage: input.lastErrorMessage ?? null,
+      lastAttemptAt: now,
+      sentAt: status === 'sent' ? now : null,
+      failedAt: status === 'failed' ? now : null,
       initiatedByUserId: input.initiatedByUserId ?? null,
       isResend: input.isResend ?? false,
       resendOfId: input.resendOfId ?? null,
@@ -109,6 +119,82 @@ export async function upsertLogEntry(
   return rows[0];
 }
 
+/**
+ * Begin a provider send attempt for an idempotency key.
+ *
+ * First attempt inserts one row. A retry only updates that same row when the
+ * previous attempt failed; already-sent or currently-sending duplicates are
+ * returned unchanged and must not call the provider again.
+ */
+export async function beginLogAttempt(
+  input: CreateLogEntryInput,
+): Promise<BeginLogAttemptResult> {
+  const now = new Date();
+
+  const rows = await db
+    .insert(notificationLog)
+    .values({
+      eventId: input.eventId,
+      personId: input.personId,
+      templateId: input.templateId,
+      templateKeySnapshot: input.templateKeySnapshot,
+      templateVersionNo: input.templateVersionNo,
+      channel: input.channel,
+      provider: input.provider,
+      triggerType: input.triggerType ?? null,
+      triggerEntityType: input.triggerEntityType ?? null,
+      triggerEntityId: input.triggerEntityId ?? null,
+      sendMode: input.sendMode,
+      idempotencyKey: input.idempotencyKey,
+      recipientEmail: input.recipientEmail ?? null,
+      recipientPhoneE164: input.recipientPhoneE164 ?? null,
+      renderedSubject: input.renderedSubject ?? null,
+      renderedBody: input.renderedBody,
+      renderedVariablesJson: input.renderedVariablesJson ?? null,
+      attachmentManifestJson: input.attachmentManifestJson ?? null,
+      status: 'queued',
+      lastAttemptAt: now,
+      initiatedByUserId: input.initiatedByUserId ?? null,
+      isResend: input.isResend ?? false,
+      resendOfId: input.resendOfId ?? null,
+    })
+    .onConflictDoUpdate({
+      target: notificationLog.idempotencyKey,
+      set: {
+        attempts: sql`${notificationLog.attempts} + 1`,
+        status: 'queued',
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        lastAttemptAt: now,
+        updatedAt: now,
+      },
+      setWhere: eq(notificationLog.status, 'failed'),
+    })
+    .returning();
+
+  if (rows[0]) {
+    return { row: rows[0], shouldSend: true };
+  }
+
+  const existingRows = await db
+    .select()
+    .from(notificationLog)
+    .where(and(
+      eq(notificationLog.eventId, input.eventId),
+      eq(notificationLog.idempotencyKey, input.idempotencyKey),
+    ))
+    .limit(1);
+
+  const existing = existingRows[0];
+  if (!existing) {
+    throw new Error(
+      `Notification log ${input.idempotencyKey} not found after idempotency conflict`,
+    );
+  }
+
+  return { row: existing, shouldSend: false };
+}
+
 /** Update status + provider data on an existing log row. Always scoped by eventId. */
 export async function updateLogStatus(
   logId: string,
@@ -119,12 +205,12 @@ export async function updateLogStatus(
     .update(notificationLog)
     .set({
       status: update.status,
-      providerMessageId: update.providerMessageId ?? undefined,
-      providerConversationId: update.providerConversationId ?? undefined,
-      lastErrorCode: update.lastErrorCode ?? undefined,
-      lastErrorMessage: update.lastErrorMessage ?? undefined,
-      sentAt: update.sentAt ?? undefined,
-      failedAt: update.failedAt ?? undefined,
+      providerMessageId: update.providerMessageId === undefined ? undefined : update.providerMessageId,
+      providerConversationId: update.providerConversationId === undefined ? undefined : update.providerConversationId,
+      lastErrorCode: update.lastErrorCode === undefined ? undefined : update.lastErrorCode,
+      lastErrorMessage: update.lastErrorMessage === undefined ? undefined : update.lastErrorMessage,
+      sentAt: update.sentAt === undefined ? undefined : update.sentAt,
+      failedAt: update.failedAt === undefined ? undefined : update.failedAt,
       lastAttemptAt: new Date(),
       updatedAt: new Date(),
     })
