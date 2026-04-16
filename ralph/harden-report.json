@@ -1,25 +1,10 @@
 [
   {
-    "module": "src/lib/actions/batch-sync.ts",
-    "attempts": 3,
-    "plateau_buffer": [
-      "score=65.22",
-      "score=65.22",
-      "score=65.22"
-    ],
-    "status": "BLOCKED",
-    "last_iter_at": "2026-04-16T15:42:53.184742Z",
-    "signature": "score=65.22"
-  },
-  {
-    "module": "src/lib/actions/event.ts",
-    "attempts": 2,
-    "plateau_buffer": [
-      "score=73.08",
-      "score=73.08"
-    ],
-    "status": "IN_PROGRESS",
-    "last_iter_at": "2026-04-16T16:16:05.241577Z",
-    "signature": "score=73.08"
+    "module": "src/lib/actions/notifications.ts",
+    "attempts": 1,
+    "plateau_buffer": [],
+    "status": "GREEN",
+    "last_iter_at": "2026-04-16T16:31:28.479678Z",
+    "signature": ""
   }
 ]
