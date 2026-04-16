@@ -88,7 +88,30 @@
 
 - **V8 short-circuit coverage gap for ?? right-side**: The `''` right-side of `a ?? ''` is NoCoverage in Stryker/V8 when `a` is never null in the test, even if the line executes. This is because V8 coverage tracks branches at a higher granularity. For `b.date ?? ''`, if V8 sees `b.date` is always non-null, the `''` branch is NoCoverage. To cover it, ensure the operand IS null in at least one test.
 
+- **ExcelJS column key kills via cell-position assertions**: For `ws.columns = [{header, key}, ...]` mutations where `key → ''`, `ws.addRow({prop: value})` won't place the value in that column. Assert `ws.getRow(2).getCell(N).value === expectedValue` (1-based column index) to kill key StringLiteral mutants. Combine with exact `toEqual([...headers])` for header StringLiterals. ObjectLiteral mutations on column entries (`{header,key} → {}`) are killed by either.
+
+- **ExcelJS alignment wrapText round-trips**: `alignment.wrapText` round-trips through xlsx binary alongside `vertical` and `horizontal`. Assert all three in the same styling test to kill alignment ObjectLiteral, StringLiteral, and BooleanLiteral mutants together.
+
+- **Transport batchMap/vehicleMap ArrayDeclaration kills**: `new Map(rows.map(r => [r.id, r]))` → `new Map([])` (ArrayDeclaration mutation). Kill by verifying that a passenger row reads the correct pickupHub or vehicleLabel from the respective map. Two vehicles/batches with distinct IDs — assert the correct one is used.
+
 ## Iteration log
+
+## 2026-04-17T00:08:00Z — src/lib/exports/excel.ts — kill surviving mutants, score 35.69% → 91.83%
+- Tier: business_60
+- Score: 35.69% (121/355) → 91.83% (326/355)
+- Mutants killed this iter: 205
+- Tests added: 30 tests in src/lib/exports/excel.mutation-kill.test.ts
+- Real bugs fixed: none
+- Key findings:
+  - Existing tests used toContain() for headers → only killed 6 of 11 attendee header mutations, left all key mutations alive
+  - Exact toEqual([...all headers]) kills ALL remaining header StringLiterals + ObjectLiterals for each sheet
+  - Cell value assertions by column index (1-based getCell(N)) kill all key StringLiteral mutations
+  - HEADER_FILL/FONT/ALIGNMENT assertions kill 13 constant mutations (fill.pattern, fgColor.argb, font.bold/color/size, alignment.vertical/horizontal/wrapText)
+  - Sort tests require 2+ rows in wrong order to kill MethodExpression/ConditionalExpression sort mutants
+  - Transport filter tests with 2 batches and mismatched vehicles/passengers kill L325/326 filter mutations
+  - batchMap/vehicleMap ArrayDeclaration mutations killed by asserting correct hub/label lookup
+  - Attendance ?? 'Event-level' needs both null test (→'Event-level') AND non-null test (→original) to kill ??→&& mutation
+  - Remaining 27 survived + 2 NoCoverage confirmed equivalent: db.select({}) ObjectLiterals (8), 'cancelled' ne() args (3), autoWidth internals (hard to test meaningfully), V8 short-circuit NoCoverage on ?? right-sides
 
 ## 2026-04-16T23:21:00Z — src/lib/exports/emergency-kit.ts — kill 18 more mutants, score 86.15% → 92.23%
 - Tier: business_60
