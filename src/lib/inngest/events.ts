@@ -41,9 +41,11 @@ export type ArchiveGenerateData = {
 
 /** Inngest event map — each cascade event name maps to its data shape */
 export type InngestEvents = {
+  'conference/travel.created': { data: CascadeInngestEventData };
   'conference/travel.saved': { data: CascadeInngestEventData };
   'conference/travel.updated': { data: CascadeInngestEventData };
   'conference/travel.cancelled': { data: CascadeInngestEventData };
+  'conference/accommodation.created': { data: CascadeInngestEventData };
   'conference/accommodation.saved': { data: CascadeInngestEventData };
   'conference/accommodation.updated': { data: CascadeInngestEventData };
   'conference/accommodation.cancelled': { data: CascadeInngestEventData };

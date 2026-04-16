@@ -28,12 +28,15 @@ export const travelSavedFn = inngest.createFunction(
   {
     id: 'cascade-travel-saved',
     retries: 3,
-    triggers: [{ event: 'conference/travel.saved' }],
+    triggers: [{ event: 'conference/travel.saved' }, { event: 'conference/travel.created' }],
   },
   async ({ event }) => {
     const inngestEventId = (event as Record<string, unknown>).id as string | undefined;
     try {
-      const data = validateCascadePayload('conference/travel.saved', event.data);
+      const eventName = (event as Record<string, unknown>).name === 'conference/travel.created'
+        ? 'conference/travel.created'
+        : 'conference/travel.saved';
+      const data = validateCascadePayload(eventName, event.data);
       await handleTravelSaved({ eventId: data.eventId, actor: data.actor, payload: data.payload });
       if (inngestEventId) await recordInngestAttempt(inngestEventId, 'completed').catch(() => {});
     } catch (err) {
@@ -88,12 +91,15 @@ export const accommodationSavedFn = inngest.createFunction(
   {
     id: 'cascade-accommodation-saved',
     retries: 3,
-    triggers: [{ event: 'conference/accommodation.saved' }],
+    triggers: [{ event: 'conference/accommodation.saved' }, { event: 'conference/accommodation.created' }],
   },
   async ({ event }) => {
     const inngestEventId = (event as Record<string, unknown>).id as string | undefined;
     try {
-      const data = validateCascadePayload('conference/accommodation.saved', event.data);
+      const eventName = (event as Record<string, unknown>).name === 'conference/accommodation.created'
+        ? 'conference/accommodation.created'
+        : 'conference/accommodation.saved';
+      const data = validateCascadePayload(eventName, event.data);
       await handleAccommodationSaved({ eventId: data.eventId, actor: data.actor, payload: data.payload });
       if (inngestEventId) await recordInngestAttempt(inngestEventId, 'completed').catch(() => {});
     } catch (err) {
