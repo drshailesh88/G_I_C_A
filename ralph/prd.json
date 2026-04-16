@@ -1980,5 +1980,734 @@
         }
       ]
     }
+  },
+  {
+    "id": "p2-people-merge-duplicates-ui",
+    "category": "ui",
+    "description": "M57 Merge Duplicates — side-by-side review UI for resolving duplicate person records.",
+    "phase": 2,
+    "priority": 43,
+    "page": "/people/merge/[duplicateGroupId]",
+    "behavior": "Server component renders two candidate person rows side-by-side with per-field selection (keep-left / keep-right / keep-both-as-notes) and a single 'Merge' action that writes a canonical row and soft-deletes the loser with tombstone metadata. Dedup candidates originate from fuzzy matches surfaced by M62 Import Success and the People list. Merge must preserve referential integrity: event_people rows, travel/accommodation/session_assignments pointing at the merged id are re-pointed atomically inside a transaction. Actor and timestamp written to audit_log. .planning/REQUIREMENTS.md §People explicitly lists this as unbuilt. research-hub/PROJECT_HANDOFF.md M57 is the wireframe.",
+    "ui_details": "Wireframe M57 `9GInC.png`. Two-column diff with conflict highlights; 'Merge' CTA disabled until every differing field is resolved. Entry points: M62 'Review 1 Possible Duplicate' link + M03 People list per-row overflow menu.",
+    "data_model": "people (UPDATE + soft delete), event_people, travel_records, accommodation_records, session_assignments, faculty_invites, event_registrations, attendance_records, issued_certificates — all FK repoint to canonical id; audit_log row for the merge.",
+    "tests": {
+      "unit": [
+        { "name": "mergePersons repoints all FK tables", "description": "After merge, every dependent row has person_id = canonical id and loser row is soft-deleted.", "input": "two person ids with dependents", "expected_output": "dependents repointed; loser deletedAt set" },
+        { "name": "merge rejects if emails E.164-normalize to different non-empty values with no override", "description": "Conflicting non-empty contact fields require explicit resolution.", "input": "two rows with different emails and no resolution", "expected_output": "throws MergeConflictError" }
+      ],
+      "e2e": [
+        { "name": "M57 merge flow", "steps": ["Seed two duplicate persons with distinct travel records", "Coord visits /people/merge/<group>", "Select keep-left for all conflicts", "Click Merge"], "expected": "both travel rows now on canonical person; loser hidden from people list" }
+      ],
+      "edge_cases": [
+        { "name": "merge into self", "steps": ["Call mergePersons with same id twice"], "expected": "400 cannot_merge_self" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/REQUIREMENTS.md §People `merge duplicate person records side-by-side`; research-hub/PROJECT_HANDOFF.md M57",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p2-people-change-history",
+    "category": "ui",
+    "description": "Person detail screen shows change history (timestamp, actor, action, field diff, source) from Bemi/audit_log.",
+    "phase": 2,
+    "priority": 44,
+    "page": "/people/[personId]",
+    "behavior": "Add a 'Change history' tab or drawer on the person detail page that queries audit_log rows for resource='person' AND resource_id=personId, ordered by timestamp desc. Each row renders actor (Clerk username or system), action (create/update/delete/merge/anonymize), changed fields as before→after JSON diff, and source (ui/csv-import/cascade). Pagination 25-per-page. Scopes: global visible to Super Admin; Event Coordinator sees only changes attributable to events they are assigned to.",
+    "ui_details": "Wireframe M09 (Person Detail) extended with a collapsible 'History' section. Empty state: 'No changes recorded yet.'",
+    "data_model": "Reads audit_log filtered by resource+resource_id; no schema change (table added in infra-038).",
+    "tests": {
+      "unit": [
+        { "name": "fetchPersonHistory returns recent audit rows", "description": "Filter by resource='person' and resource_id.", "input": "personId with 3 audit rows", "expected_output": "3 rows desc by timestamp" }
+      ],
+      "e2e": [
+        { "name": "edit person then view history", "steps": ["Update person specialty", "Visit /people/<id>", "Open history"], "expected": "row visible with field diff specialty: old→new" }
+      ],
+      "edge_cases": [
+        { "name": "person never edited", "steps": ["Open history on fresh person"], "expected": "empty state rendered" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/REQUIREMENTS.md §People `Change history visible on person detail screen`; research-hub/PROJECT_HANDOFF.md M09",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p2-m04-public-attendee-program",
+    "category": "ui",
+    "description": "M04 — public attendee-facing scientific program view (cards < 768px, grid >= 768px).",
+    "phase": 2,
+    "priority": 45,
+    "page": "/e/[eventSlug]/program",
+    "behavior": "Public (no auth) page that renders the published program for an event. Only sessions with is_public=true and the latest published program_version are shown. Mobile layout is a card list grouped by date; desktop (>= 768px) auto-switches to a horizontal schedule grid using the same data source as the admin grid (M30). URL deep links to a specific date via ?d=YYYY-MM-DD. Hitting an unpublished or draft event returns 404. research-hub/PROJECT_HANDOFF.md M04.",
+    "ui_details": "Wireframe M04 `oRvH5.png`. Bottom-tab PROGRAM target for attendees. Reuses session card + schedule grid components.",
+    "data_model": "Reads sessions + program_versions (published snapshot only) + halls, scoped by eventId; no writes.",
+    "tests": {
+      "unit": [
+        { "name": "only published sessions returned", "description": "getPublicProgram filters is_public=true and latest published program_version.", "input": "event with draft + published", "expected_output": "only published sessions" }
+      ],
+      "e2e": [
+        { "name": "public program renders on mobile and desktop", "steps": ["GET /e/<slug>/program at 390px", "Assert card list visible", "Resize to 1024px", "Assert grid visible"], "expected": "both layouts render" }
+      ],
+      "edge_cases": [
+        { "name": "unpublished event 404", "steps": ["GET program of draft event"], "expected": "404" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/PRD.md §Build Phases Phase 2 `M04 Attendee Program View`; research-hub/PROJECT_HANDOFF.md M04",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p2-d3-add-person-sheet",
+    "category": "ui",
+    "description": "D3 — slide-up bottom sheet for Add Person from M03 `+ Add` CTA.",
+    "phase": 2,
+    "priority": 46,
+    "page": "/people (sheet)",
+    "behavior": "Client component bottom sheet triggered by M03 `+ Add` CTA. Fields: salutation, full_name (required), designation, specialty, city, phone (normalized to E.164 via libphonenumber-js), email, role tags multi-select. Validation: full_name + at least one of email/phone. Submit calls the create-person server action; on success, sheet closes and list item is prepended with optimistic update. Dedup check runs on blur of email/phone — if match, sheet switches to 'Use existing' panel with a link to the match.",
+    "ui_details": "Wireframe M03 slide-up sheet (design required per DEFERRED_TICKETS.md D3). Bottom-sheet pattern on mobile, right-side drawer on desktop.",
+    "data_model": "people INSERT (master row); event_people left alone — creation from admin list does not attach to an event.",
+    "tests": {
+      "unit": [
+        { "name": "schema requires full_name + (email|phone)", "description": "Zod schema rejects row with neither.", "input": "{full_name:'A'}", "expected_output": "ZodError" },
+        { "name": "dedupe match returns existing id", "description": "Email-normalized match returns existing person id and skips insert.", "input": "existing email", "expected_output": "{matched:true,id:<existing>}" }
+      ],
+      "e2e": [
+        { "name": "Add Person sheet happy path", "steps": ["Open M03", "Tap + Add", "Fill full_name + email", "Submit"], "expected": "sheet closes; row visible in list" }
+      ],
+      "edge_cases": [
+        { "name": "phone invalid country code", "steps": ["Enter +0000..."], "expected": "inline error" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": "research-hub/DEFERRED_TICKETS.md D3; research-hub/PROJECT_HANDOFF.md M03",
+    "blocked_on_spec": true
+  },
+  {
+    "id": "p2-d7-terms-privacy-page",
+    "category": "ui",
+    "description": "D7 — Terms & Privacy policy page linked from M07 Registration form.",
+    "phase": 2,
+    "priority": 47,
+    "page": "/legal/terms and /legal/privacy",
+    "behavior": "Two public static pages containing the Terms of Service and Privacy Policy text. Linked from M07 footer ('By registering you agree to our Terms & Privacy Policy'). Content is editable by Super Admin as plain markdown stored in a `legal_pages` JSONB config on the organizations row (single-row in V1); falls back to a baked-in default when unset. No auth. research-hub/DEFERRED_TICKETS.md D7.",
+    "ui_details": "Simple MDX/typography page — no interactive elements. Accessible by public URL.",
+    "data_model": "organizations.legalPages JSONB: { terms: string, privacy: string, updatedAt: ts } — uses existing organizations schema.",
+    "tests": {
+      "unit": [
+        { "name": "returns seeded text when organizations.legalPages null", "description": "Falls back to default markdown strings.", "input": "null legalPages", "expected_output": "non-empty markdown" }
+      ],
+      "e2e": [
+        { "name": "link on M07 opens terms", "steps": ["Visit /register/<event>", "Click 'Terms & Privacy'"], "expected": "/legal/terms renders 200" }
+      ],
+      "edge_cases": [
+        { "name": "unknown sub-slug 404", "steps": ["GET /legal/cookies"], "expected": "404" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": "research-hub/DEFERRED_TICKETS.md D7",
+    "blocked_on_spec": true
+  },
+  {
+    "id": "p2-d5-speaker-profile",
+    "category": "ui",
+    "description": "D5 — Speaker Profile view from M25 speaker cards (name, bio, photo, sessions list).",
+    "phase": 2,
+    "priority": 48,
+    "page": "/e/[eventSlug]/speakers/[personId]",
+    "behavior": "Public page showing a faculty member's profile for a specific event: salutation + full_name, designation, organization, bio (new people.bio column), photo (people.photoStorageKey with R2 signed URL), and the list of sessions they are assigned to (session_assignments + sessions JOIN). Private fields (email, phone, travel, accommodation) are NEVER exposed. Accessible only if the event is published and the person has at least one published session_assignments row.",
+    "ui_details": "Wireframe M25 speaker card → expandable card or dedicated detail page. Mobile: full-height sheet. Desktop: two-column layout.",
+    "data_model": "people.bio (TEXT), people.photoStorageKey (TEXT) — schema additions. Public fields only.",
+    "tests": {
+      "unit": [
+        { "name": "only public fields serialized", "description": "Serializer helper emits id, name, designation, bio, photoUrl, sessions; whitelist enforced.", "input": "full people row", "expected_output": "object missing email, phone, etc." }
+      ],
+      "e2e": [
+        { "name": "speaker profile renders", "steps": ["GET /e/<slug>/speakers/<personId>"], "expected": "200 with profile card visible" }
+      ],
+      "edge_cases": [
+        { "name": "person with zero assignments 404", "steps": ["GET speaker with no sessions"], "expected": "404" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": "research-hub/DEFERRED_TICKETS.md D5; research-hub/PROJECT_HANDOFF.md M25",
+    "blocked_on_spec": true
+  },
+  {
+    "id": "p2-program-aggregated-faculty-email",
+    "category": "automation",
+    "description": "Send one aggregated email (and WhatsApp) per faculty member showing ALL their responsibilities across sessions.",
+    "phase": 2,
+    "priority": 49,
+    "page": "N/A — Backend",
+    "behavior": "New server action sendFacultyBundle(eventId) iterates distinct person_ids in session_assignments for the event, renders one React Email with the full responsibility list (sessions grouped by day, role per row, hall, timestamps in IST), and sends via the notification service using template key 'faculty_bundle'. WhatsApp variant is a condensed text version with a link to the public faculty confirmation page. Idempotency key: `notification:{userId}:{eventId}:faculty_bundle:{programVersionId}:{channel}`. Triggers: (a) on program.version_published cascade event; (b) manual 'Send Bundle' CTA on M26. Resend does NOT re-email already-acked faculty unless coordinator ticks 'Force resend'. Each recipient gets exactly one email per program version, not one per session. PRD §User Stories #24.",
+    "ui_details": "CTA on M26 Faculty Invitation screen: 'Send aggregated bundle to all faculty'. Toast on completion reports count sent and count skipped.",
+    "data_model": "New notification template (email + whatsapp) `faculty_bundle`; uses existing notification_log with template='faculty_bundle'.",
+    "tests": {
+      "unit": [
+        { "name": "groups assignments by person", "description": "Build-payload helper returns one object per distinct person with nested sessions array.", "input": "6 session_assignments across 2 people", "expected_output": "2 payloads, sessions grouped correctly" }
+      ],
+      "e2e": [
+        { "name": "bundle send triggers 2 emails not 6", "steps": ["Seed 2 faculty with 3 sessions each", "POST sendFacultyBundle", "Probe notification_log"], "expected": "2 rows template='faculty_bundle' email channel" }
+      ],
+      "edge_cases": [
+        { "name": "resend on same version is a no-op", "steps": ["Send bundle twice"], "expected": "second call inserts 0 new rows; attempts counter unchanged" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/PRD.md User Story #24; .planning/REQUIREMENTS.md §Scientific Program `Aggregated faculty email`",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p2-program-revised-responsibility-notifications",
+    "category": "automation",
+    "description": "Revised-responsibility A/B/C diff notification on program version publish.",
+    "phase": 2,
+    "priority": 50,
+    "page": "N/A — Backend",
+    "behavior": "New cascade handler for conference/program.version_published computes a structured diff between the newly published program_version and the immediately prior published one. Per affected faculty, compute three buckets: A=added (new assignments), B=changed (role, hall, or time shifted), C=removed (assignment withdrawn). Render one email per faculty with the three buckets and send via the notification service. If a faculty member has zero net changes, skip. Idempotency key includes programVersionId and personId. PRD §User Story #56. This is distinct from the aggregated-bundle story: this fires on every republish and shows only diffs, not the full list.",
+    "ui_details": "M52 Version History page shows per-version 'Preview Revised Emails' (linked to p2-d1-preview-revised-emails).",
+    "data_model": "program_versions.diffJson (added/changed/removed) already defined in schema; this handler consumes it.",
+    "tests": {
+      "unit": [
+        { "name": "diff computation A/B/C buckets", "description": "Given two versions, compute per-person buckets correctly.", "input": "2 versions with mixed changes", "expected_output": "expected A/B/C bucket shape" },
+        { "name": "skips faculty with no net diff", "description": "Faculty who had 2 sessions then still have the same 2 sessions get no email.", "input": "same assignments across versions", "expected_output": "0 sends for that person" }
+      ],
+      "e2e": [
+        { "name": "publish version → affected faculty receive email", "steps": ["Publish v1 with 3 assignments", "Publish v2 with 1 change + 1 removal + 1 addition", "Probe notification_log"], "expected": "correct recipients with correct A/B/C content" }
+      ],
+      "edge_cases": [
+        { "name": "first-ever publish (no prior)", "steps": ["Publish v1 of a new event"], "expected": "no revised emails; use aggregated bundle instead" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/PRD.md User Story #56; .planning/REQUIREMENTS.md §Scientific Program `Revised-responsibility notifications`",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p2-m52-version-history",
+    "category": "ui",
+    "description": "M52 Version History / Program Changes page with per-version diffs and publish controls.",
+    "phase": 2,
+    "priority": 51,
+    "page": "/events/[eventId]/changes",
+    "behavior": "Server component lists all program_versions rows for the event in desc order. Each row shows version number, publishedAt, actor, added/changed/removed counts, and a 'Preview Revised Emails' button (opens p2-d1 modal). Clicking a version expands the full A/B/C diff grouped by faculty. Super Admin / Coordinator can 'Republish' to re-trigger the revised-responsibility notifications for the latest version. research-hub/PROJECT_HANDOFF.md M52.",
+    "ui_details": "Wireframe M52 `VHcOm.png`. Entry point: M21 Event Workspace → `Changes` tile.",
+    "data_model": "Reads program_versions (existing).",
+    "tests": {
+      "unit": [
+        { "name": "diff counts computed", "description": "Return {added, changed, removed} counts derived from diffJson.", "input": "diffJson with mixed buckets", "expected_output": "correct counts" }
+      ],
+      "e2e": [
+        { "name": "M52 lists versions", "steps": ["Seed 3 published versions", "Coord visits /events/<id>/changes"], "expected": "3 rows rendered with counts" }
+      ],
+      "edge_cases": [
+        { "name": "event with no publishes", "steps": ["Visit M52 on unpublished event"], "expected": "empty state 'No versions yet'" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/PRD.md Phase 6 `Program versioning (M52)`; research-hub/PROJECT_HANDOFF.md M52",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p2-d1-preview-revised-emails",
+    "category": "ui",
+    "description": "D1 — Preview Revised Emails modal on M52 showing sample email with A/B/C diff.",
+    "phase": 2,
+    "priority": 52,
+    "page": "/events/[eventId]/changes (modal)",
+    "behavior": "Client component modal triggered from M52 `Preview Revised Emails`. Receives (eventId, programVersionId) and a selectable 'For faculty: <dropdown>'. Renders a fully styled email preview (React Email → HTML string) using the same renderer used by the notification service, but with a dry-run flag so no send occurs. Shows both email and WhatsApp variants in tabs.",
+    "ui_details": "Wireframe M52 modal (design required per DEFERRED_TICKETS.md D1). Mobile: full-screen sheet; desktop: centered modal.",
+    "data_model": "No writes; reads program_versions, session_assignments, people.",
+    "tests": {
+      "unit": [
+        { "name": "dry-run flag suppresses provider call", "description": "Render helper with dryRun=true returns HTML but does not invoke provider.", "input": "dryRun:true", "expected_output": "html string; 0 provider calls" }
+      ],
+      "e2e": [
+        { "name": "modal preview renders", "steps": ["Visit M52", "Click Preview Revised Emails", "Pick faculty"], "expected": "modal opens with email body" }
+      ],
+      "edge_cases": [
+        { "name": "faculty with zero diff", "steps": ["Pick a faculty with empty A/B/C"], "expected": "modal shows 'No changes for this faculty'" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": "research-hub/DEFERRED_TICKETS.md D1; research-hub/PROJECT_HANDOFF.md M52",
+    "blocked_on_spec": true
+  },
+  {
+    "id": "p2-m30-conflict-fix-action",
+    "category": "ui",
+    "description": "M30 `Fix` CTA navigation destination (conflicting session pre-loaded, conflict highlighted).",
+    "phase": 2,
+    "priority": 53,
+    "page": "/events/[eventId]/sessions/[sessionId]?conflict=<conflictId>",
+    "behavior": "When M30 detects a faculty double-booking or hall overlap, a per-conflict banner shows `Fix`. Clicking navigates to the conflicting session's edit screen (M23) with the conflicting faculty or hall pre-selected and a red inline banner naming the other session. Saving either side resolves the conflict; M30 re-renders without the banner on return. research-hub/DEFERRED_TICKETS.md D2.",
+    "ui_details": "Reuses M23 Add/Edit Session form. Query string `?conflict=<id>` carries the co-conflict session id for highlighting.",
+    "data_model": "No new schema; reads sessions + session_assignments + halls.",
+    "tests": {
+      "unit": [
+        { "name": "conflict param renders banner", "description": "M23 page component shows red banner naming the other session when ?conflict present.", "input": "?conflict=<id>", "expected_output": "banner rendered" }
+      ],
+      "e2e": [
+        { "name": "Fix flow clears conflict", "steps": ["Seed conflict", "Click Fix on M30", "Edit one session to resolve", "Return to M30"], "expected": "banner gone" }
+      ],
+      "edge_cases": [
+        { "name": "conflict id not found", "steps": ["Pass invalid conflict id"], "expected": "page still renders; banner shows 'conflict cleared'" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": "research-hub/DEFERRED_TICKETS.md D2; research-hub/PROJECT_HANDOFF.md M30",
+    "blocked_on_spec": true
+  },
+  {
+    "id": "p3-transport-suggest-batches",
+    "category": "automation",
+    "description": "System suggests transport batches from travel records; Ops accepts, merges, splits, or discards.",
+    "phase": 3,
+    "priority": 54,
+    "page": "/events/[eventId]/transport (suggestions panel)",
+    "behavior": "New server action suggestTransportBatches(eventId) clusters travel_records by (direction, hub, time window ±30min). Each cluster becomes a draft transport_batch with status='suggested' and a suggestedFrom jsonb array of source travelIds. Ops views suggestions at top of M10 with Accept / Merge (with another suggestion) / Split / Discard actions. Accepted suggestions transition to status='planned' and appear in the normal batch list. Suggestions update when new travel records arrive (cascade handler). .planning/REQUIREMENTS.md §Transport line is unchecked; PRD §Ops Story #44.",
+    "ui_details": "Panel above the batch list on M10 showing each suggestion as a card with roll-up passenger count + 4 action buttons.",
+    "data_model": "transport_batches.status enum extended with 'suggested'; transport_batches.suggestedFrom jsonb (array of travelIds); no new table.",
+    "tests": {
+      "unit": [
+        { "name": "cluster by hub + 30-min window", "description": "Two arrivals 10:05 and 10:20 at BOM → one cluster.", "input": "2 travel rows", "expected_output": "1 suggestion with 2 sources" },
+        { "name": "different hubs never coalesce", "description": "BOM and DEL arrivals stay in separate suggestions regardless of time.", "input": "2 rows different hubs", "expected_output": "2 suggestions" }
+      ],
+      "e2e": [
+        { "name": "accept flow", "steps": ["Seed 10 travel rows", "Open M10", "Click Accept on first suggestion"], "expected": "batch row now status='planned'" }
+      ],
+      "edge_cases": [
+        { "name": "no travel records yet", "steps": ["Open M10 with 0 travel"], "expected": "suggestions panel empty state" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/REQUIREMENTS.md §Transport `System suggests batches from travel records`; .planning/PRD.md User Story #44",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p3-registration-cancel-cascade",
+    "category": "automation",
+    "description": "Registration cancellation cascade — create red flags on linked travel/accommodation/transport records; never auto-delete.",
+    "phase": 3,
+    "priority": 55,
+    "page": "N/A — Backend",
+    "behavior": "Extend registration cancel server action to emit conference/registration.cancelled (payload schema already exists). New Inngest handler looks up travel_records, accommodation_records, and transport_passenger_assignments for (eventId, personId) and upserts a red_flags row of flag_type='registration_cancelled' per record (via cascade-035 upsert helper) scoped to that record. No records are deleted or altered beyond flag creation. Ops sees flagged rows on M05/M10 so they can re-plan. PRD §User Stories invariants; REQUIREMENTS.md §Registration line is unchecked.",
+    "ui_details": "No new UI — flags surface via existing M05/M10 red-flag pills.",
+    "data_model": "red_flags (upsert via cascade-035); reads travel_records, accommodation_records, transport_passenger_assignments.",
+    "tests": {
+      "unit": [
+        { "name": "handler upserts flag per linked record", "description": "Given 2 travel + 1 accommodation for the person, create 3 flags.", "input": "reg cancel payload", "expected_output": "3 upsert calls" }
+      ],
+      "e2e": [
+        { "name": "cancel reg → flags appear", "steps": ["Seed reg + travel + accommodation", "Cancel registration", "Probe /api/test/red-flags"], "expected": "2 active flags; rows intact" }
+      ],
+      "edge_cases": [
+        { "name": "second cancel is idempotent", "steps": ["Cancel twice"], "expected": "same single set of flags; no duplicates" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/REQUIREMENTS.md §Registration `Registration cancellation creates red flags on linked logistics records`",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p4-m39-template-editor",
+    "category": "ui",
+    "description": "M39 Communications template editor page (email + WhatsApp variants per system template key).",
+    "phase": 4,
+    "priority": 56,
+    "page": "/events/[eventId]/communications/templates/[templateId]",
+    "behavior": "Server component loads a notification_template row (or creates a draft for a system key), renders a split editor: left panel = WYSIWYG email editor with variable chips ({recipient_name}, {event_name}, ...) using a lightweight block editor (candidates: react-email local render + textarea with live HTML preview); right panel = WhatsApp text area with the same variable chips. Save persists subject, emailHtml, whatsappText, updatedBy. Variables list is discovered from the template key's schema. Changes take effect on next scheduled send — in-flight Inngest events use their frozen snapshot (see cascade-032).",
+    "ui_details": "Wireframe M39 `FGhXX.png`. Entry: M13 Communications list → tap a template card.",
+    "data_model": "notification_templates — existing (per-event override rows).",
+    "tests": {
+      "unit": [
+        { "name": "variables chip list from template key schema", "description": "For key 'travel_itinerary', variables chips include flight_number, pnr, etc.", "input": "key 'travel_itinerary'", "expected_output": "expected chips list" }
+      ],
+      "e2e": [
+        { "name": "edit + save + render", "steps": ["Open M39 for 'travel_itinerary'", "Edit subject", "Save", "Trigger travel notification"], "expected": "sent email subject matches new value" }
+      ],
+      "edge_cases": [
+        { "name": "markup that escapes variables", "steps": ["Paste body with {{malicious}}"], "expected": "unrecognized variables render as literal (no injection)" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/PRD.md Phase 4 `Notification templates (M13 Communications, M39 Template Editor)`; research-hub/PROJECT_HANDOFF.md M39",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p4-m53-automation-triggers",
+    "category": "ui",
+    "description": "M53 Automation Triggers management page (one trigger = one channel = one template).",
+    "phase": 4,
+    "priority": 57,
+    "page": "/events/[eventId]/triggers",
+    "behavior": "Lists automation_triggers rows for the event. Each trigger: source_event (enum: registration.created, travel.saved, certificate.generated, ...), channel (email | whatsapp), template_id (FK), is_active (bool). Coordinator can add/edit/disable. Saving an active trigger takes effect on next matching cascade event. The handleDomainEvent cascade handler already consumes this table (per REQUIREMENTS.md Req 6A-2).",
+    "ui_details": "Wireframe M53 `LG8tQ.png`. Entry: M21 Event Workspace → `Triggers` tile.",
+    "data_model": "automation_triggers — existing schema.",
+    "tests": {
+      "unit": [
+        { "name": "Zod forbids duplicate (source_event, channel) per event", "description": "Schema rejects second trigger with same domain event + channel.", "input": "duplicate insert", "expected_output": "ZodError or 400" }
+      ],
+      "e2e": [
+        { "name": "create trigger then fire event", "steps": ["Create trigger travel.saved→whatsapp→travel_itinerary", "Save travel", "Probe notification_log"], "expected": "WhatsApp row present" }
+      ],
+      "edge_cases": [
+        { "name": "disabled trigger does not fire", "steps": ["Set is_active=false", "Fire event"], "expected": "0 notification_log rows for that channel" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/PRD.md Phase 4 `Automation triggers (M53)`; research-hub/PROJECT_HANDOFF.md M53",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p5-m58-attendance-report-page",
+    "category": "ui",
+    "description": "M58 Attendance report drill-down page (by day, by session, totals).",
+    "phase": 5,
+    "priority": 58,
+    "page": "/events/[eventId]/attendance",
+    "behavior": "Drill-down from M11 stat cards (Checked In / Remaining / Total). Shows three tabs: (1) Overall — counts with percentage, hourly bar chart; (2) By Day — table of date rows with unique attendee counts; (3) By Session — table of session rows with scan counts. Export-to-Excel CTA reuses exportAttendanceReport (already in lib/exports/excel.ts). All queries filter by eventId.",
+    "ui_details": "Wireframe M58 `YBvs4.png`. Entry points: M11 stat-card tap, M21 Event Workspace → `QR Check-in` → `Attendance report` link.",
+    "data_model": "Reads attendance_records + sessions, no new tables.",
+    "tests": {
+      "unit": [
+        { "name": "by-session grouping sums correctly", "description": "10 attendance rows across 3 sessions produce 3 grouped rows summing to 10.", "input": "seeded attendance", "expected_output": "3 row response" }
+      ],
+      "e2e": [
+        { "name": "open attendance report", "steps": ["Visit M11", "Tap Checked In stat", "Arrive on /attendance"], "expected": "200; three tabs render" }
+      ],
+      "edge_cases": [
+        { "name": "no scans yet", "steps": ["Fresh event"], "expected": "empty states across tabs" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/PRD.md Phase 5 `M58 Attendance Report`; research-hub/PROJECT_HANDOFF.md M58",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p5-d6-issued-certificates-list",
+    "category": "ui",
+    "description": "D6 — View All Issued Certificates list from M61 with per-row actions (preview/resend/revoke).",
+    "phase": 5,
+    "priority": 59,
+    "page": "/events/[eventId]/certificates/issued",
+    "behavior": "Paginated table of issued_certificates rows: recipient name + reg#, certificate type, issued_at, status (issued/superseded/revoked), delivery_status (derived from notification_log last row). Filters: type, status, delivery_status. Search by name or reg#. Per-row actions: Preview PDF (signed URL), Resend (re-fire notification via existing path), Revoke (opens reason modal — reuses cert-api-009 endpoint). Already hinted by REQUIREMENTS.md Req 7A-3 which is marked [x] but the actual route `/certificates/issued` does NOT exist in src/app/(app)/events/[eventId]/certificates/.",
+    "ui_details": "Wireframe M61 `View All Issued Certificates` link (design required per DEFERRED_TICKETS.md D6).",
+    "data_model": "Reads issued_certificates + people + notification_log; no schema change.",
+    "tests": {
+      "unit": [
+        { "name": "filter by status=revoked", "description": "Query returns only revoked rows.", "input": "status=revoked", "expected_output": "all rows status='revoked'" }
+      ],
+      "e2e": [
+        { "name": "list renders + actions available", "steps": ["Seed 3 issued certs", "Visit /certificates/issued"], "expected": "3 rows with Preview/Resend/Revoke per row" }
+      ],
+      "edge_cases": [
+        { "name": "cross-event 404", "steps": ["Coord_A visits /events/B/certificates/issued"], "expected": "404" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": "research-hub/DEFERRED_TICKETS.md D6; .planning/REQUIREMENTS.md §Phase 7A Req 7A-3",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p6-event-duplicate",
+    "category": "crud",
+    "description": "Duplicate an event's structure (sessions, halls, branding, triggers) without copying person-linked data.",
+    "phase": 6,
+    "priority": 60,
+    "page": "/events/[eventId] (action) → /events/new?copyFrom=...",
+    "behavior": "Server action duplicateEvent(sourceEventId, { name, startDate, endDate }) creates a new event row and DEEP copies: halls, sessions (with new ids, parent_session_id remapped), session_role_requirements, notification_templates (event-level overrides), automation_triggers, branding. Does NOT copy: event_registrations, event_people, session_assignments (confirmed faculty), travel_records, accommodation_records, transport_batches, issued_certificates, faculty_invites, attendance_records. All newly created rows have new ids and event_id = new event. Dates shifted relative to the new start_date. Super Admin or Event Coordinator only.",
+    "ui_details": "CTA on M21 Event Workspace overflow menu: 'Duplicate Event...' → opens a create form with fields pre-filled from the source event (name suffixed with ' (Copy)'). Toast on success navigates to M21 for the new event.",
+    "data_model": "Writes to: events, halls, sessions, session_role_requirements, notification_templates, automation_triggers (all with new event_id). No new schema.",
+    "tests": {
+      "unit": [
+        { "name": "person-linked tables not copied", "description": "After duplicate, new event has zero rows in event_people, registrations, travel, etc.", "input": "source with delegates", "expected_output": "new event has only structural rows" },
+        { "name": "parent_session_id remapped", "description": "Sub-sessions reference new parent ids, not old.", "input": "source with parent+sub session", "expected_output": "new sub-session.parent_session_id in new event" }
+      ],
+      "e2e": [
+        { "name": "duplicate flow", "steps": ["Duplicate source event", "Visit new event workspace"], "expected": "halls + sessions + triggers present; no registrations" }
+      ],
+      "edge_cases": [
+        { "name": "source has no sessions", "steps": ["Duplicate empty event"], "expected": "new event created; structural tables empty" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/PRD.md User Story #3; .planning/REQUIREMENTS.md §Events `duplicate an event's structure`; PRD Phase 6 bullet 27",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p6-m51-event-field-builder",
+    "category": "ui",
+    "description": "M51 Event Field Builder — toggle-based schema editor for registration and custom event fields.",
+    "phase": 6,
+    "priority": 61,
+    "page": "/events/[eventId]/fields",
+    "behavior": "Coordinator can toggle standard registration fields on/off (age, specialty, city, etc.) and add up to 10 custom fields (type: text | number | select | date | file). Custom fields persist into events.registrationSettings.customFields jsonb and are rendered by the public M07 registration form. Existing registrations' preference jsonb retains old shapes; new fields apply only to future registrations. PRD Phase 6 bullet 26 and REQUIREMENTS.md Should-Have line (moved to Must per deferred status).",
+    "ui_details": "Wireframe M51 `ZpAv1.png`. Entry: M21 Event Workspace → `Event Fields` tile.",
+    "data_model": "events.registrationSettings JSONB gains customFields[] shape; no new table.",
+    "tests": {
+      "unit": [
+        { "name": "Zod schema enforces max 10 custom fields", "description": "11th field rejected.", "input": "11 fields", "expected_output": "ZodError" }
+      ],
+      "e2e": [
+        { "name": "custom field appears on M07", "steps": ["Add custom field 'referral_source'", "Visit /register/<slug>"], "expected": "form renders the field" }
+      ],
+      "edge_cases": [
+        { "name": "rename field after registrations exist", "steps": ["Rename 'referral_source' to 'referred_by'"], "expected": "existing preferences preserved; new key applies only to new registrations" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/PRD.md Phase 6 `Event Fields builder (M51)`; research-hub/PROJECT_HANDOFF.md M51",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p6-m54-ops-more-menu",
+    "category": "ui",
+    "description": "M54 More Menu Ops role variant — gates Comms/Certs/Branding/Settings tiles for Ops role.",
+    "phase": 6,
+    "priority": 62,
+    "page": "/more",
+    "behavior": "Extend the existing /more page to render only role-permitted tiles. Ops sees: Travel, Accommodation, Transport, Reports. Other tiles (Email/WhatsApp, Certificates, QR Scanner, Branding, Settings & Team) are hidden or rendered with a lock icon + tooltip 'Not available for your role'. Uses has({ role: 'org:ops' }) from @clerk/nextjs.",
+    "ui_details": "Wireframe M54 `IWTdp.png`. Same route as M08 with role-aware rendering.",
+    "data_model": "No schema change; reads Clerk role.",
+    "tests": {
+      "unit": [
+        { "name": "filterTiles for ops returns only Ops tiles", "description": "Helper returns expected subset for role=ops.", "input": "role=org:ops", "expected_output": "4 tiles" }
+      ],
+      "e2e": [
+        { "name": "ops sees limited menu", "steps": ["Sign in as ops", "Visit /more"], "expected": "Travel/Accommodation/Transport/Reports only" }
+      ],
+      "edge_cases": [
+        { "name": "super sees everything", "steps": ["Sign in as super", "Visit /more"], "expected": "all tiles" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": "research-hub/PROJECT_HANDOFF.md M54",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p6-m47-global-reports",
+    "category": "ui",
+    "description": "M47 global cross-event Reports & Exports catalog (Super Admin) complementing per-event reports.",
+    "phase": 6,
+    "priority": 63,
+    "page": "/reports",
+    "behavior": "Super Admin landing reached from M01 `Reports` and M08 `Reports & Exports`. Renders: event selector (defaults to 'All events'), list of report types (attendee roster, travel, rooming, transport, faculty responsibilities, attendance, notification log). Each type can be scoped to one event or 'all events combined' (super_admin only). Per-event reports page (/events/[eventId]/reports) continues to exist — this is the cross-event hub.",
+    "ui_details": "Wireframe M47 `i8T1g.png`.",
+    "data_model": "Reads only; uses existing exports/excel.ts; cross-event queries require super_admin guard.",
+    "tests": {
+      "unit": [
+        { "name": "cross-event export rejects non-super", "description": "Ops calling all-events export gets 403.", "input": "role=org:ops", "expected_output": "403" }
+      ],
+      "e2e": [
+        { "name": "super downloads cross-event attendee roster", "steps": ["Sign in super", "Visit /reports", "Pick attendee, All events", "Download"], "expected": "Excel has rows from multiple events" }
+      ],
+      "edge_cases": [
+        { "name": "coord sees only their events in picker", "steps": ["Coord with 2 events"], "expected": "dropdown only lists those 2" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/PRD.md Phase 6 `Reports & Exports (M47)`; research-hub/PROJECT_HANDOFF.md M47",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p6-d8-notification-drawer",
+    "category": "ui",
+    "description": "D8 — Notification drawer from M01 bell icon (recent notifications list).",
+    "phase": 6,
+    "priority": 64,
+    "page": "/ (dashboard drawer)",
+    "behavior": "Bell icon on M01 opens a right-side drawer (or slide-down sheet on mobile). Lists most recent 50 notification_log rows relevant to the current user (recipient = user email/phone OR actor = user). Each row: template name, channel, status, sent_at (IST), resend CTA on failed. Mark-all-read updates a redis key 'ui:notif-read:<userId>:<ts>'. Unread count shown as a badge on the bell.",
+    "ui_details": "Wireframe M01 bell icon (design required per DEFERRED_TICKETS.md D8).",
+    "data_model": "Reads notification_log; writes Redis unread cursor.",
+    "tests": {
+      "unit": [
+        { "name": "filter by recipient/actor", "description": "Query restricts to rows touching the user.", "input": "userId", "expected_output": "rows matching either recipient_email/phone or actor" }
+      ],
+      "e2e": [
+        { "name": "bell opens drawer", "steps": ["Visit /", "Tap bell"], "expected": "drawer visible with rows" }
+      ],
+      "edge_cases": [
+        { "name": "no notifications", "steps": ["Fresh user"], "expected": "empty state" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": "research-hub/DEFERRED_TICKETS.md D8",
+    "blocked_on_spec": true
+  },
+  {
+    "id": "p6-d9-profile-account-sheet",
+    "category": "ui",
+    "description": "D9 — Profile/account sheet from M01 avatar (name, email, role, sign out).",
+    "phase": 6,
+    "priority": 65,
+    "page": "/ (avatar sheet)",
+    "behavior": "Avatar icon on M01 opens a compact sheet showing Clerk user name, primary email, role label, 'Manage account' deep-link to Clerk UserProfile component, 'Sign out' button. Reachable from every dashboard screen via the persistent top bar.",
+    "ui_details": "Wireframe M01 avatar (design required per DEFERRED_TICKETS.md D9). Uses Clerk's <UserProfile/> for the full account page; the sheet itself is a thin wrapper.",
+    "data_model": "No schema; Clerk data + role lookup.",
+    "tests": {
+      "unit": [
+        { "name": "role label mapping", "description": "role key to display string.", "input": "org:event_coordinator", "expected_output": "'Event Coordinator'" }
+      ],
+      "e2e": [
+        { "name": "sign out flow", "steps": ["Click avatar", "Sign out"], "expected": "redirects to /login" }
+      ],
+      "edge_cases": [
+        { "name": "manage account link", "steps": ["Click Manage account"], "expected": "Clerk profile renders" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": "research-hub/DEFERRED_TICKETS.md D9",
+    "blocked_on_spec": true
+  },
+  {
+    "id": "p9-e2e-playwright-full-journey",
+    "category": "ui",
+    "description": "Req 9A-1 — Playwright E2E full-journey test script (distinct from existing Vitest integration test).",
+    "phase": 6,
+    "priority": 66,
+    "page": "e2e/ (test harness)",
+    "behavior": "Add a Playwright test in e2e/ that drives the full admin+delegate+scanner journey in a real browser against the dev server: create event → add halls → create sessions → assign faculty → publish → register 10 delegates → verify QRs visible → create travel records for 3 → verify cascade red flags on accommodation/transport → create accommodation → verify transport suggestions (p3-transport-suggest-batches) → assign vehicles kanban → generate certificates → verify R2 signed URLs → send via email → verify notification_log rows → check in 5 via QR scanner → verify attendance → export Excel rooming list → export emergency kit ZIP → verify all files present. Must run headless in CI with seeded DB.",
+    "ui_details": "No new UI — this exercises every module end-to-end.",
+    "data_model": "Seeds test event + delegates + faculty; asserts across tables.",
+    "tests": {
+      "unit": [],
+      "e2e": [
+        { "name": "full journey green", "steps": ["npx playwright test e2e/full-journey.spec.ts"], "expected": "exit 0" }
+      ],
+      "edge_cases": [
+        { "name": "one intermediate step fails", "steps": ["Inject failure mid-journey"], "expected": "test fails with descriptive artefact (video + trace)" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/REQUIREMENTS.md §Phase 9A Req 9A-1",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p9-production-deploy-env",
+    "category": "integration",
+    "description": "Req 9B-1 — Production environment setup: Vercel project, env vars, Neon prod branch, Clerk prod, R2, Evolution API, Upstash, Sentry, Inngest, domain.",
+    "phase": 6,
+    "priority": 67,
+    "page": "N/A — Infra",
+    "behavior": "Land the infrastructure scaffolding: `vercel.json` with project settings, a type-checked env schema at src/lib/env.ts (Zod) covering DATABASE_URL, CLERK_*, R2_*, EVOLUTION_API_URL/TOKEN, UPSTASH_REDIS_*, RESEND_API_KEY, SENTRY_DSN, INNGEST_EVENT_KEY/SIGNING_KEY; run migrations + seed templates + full-journey test on production. Stage: Neon branching; UAT event seed. Custom domain with HTTPS.",
+    "ui_details": "No UI.",
+    "data_model": "No schema change.",
+    "tests": {
+      "unit": [
+        { "name": "env schema rejects empty vars", "description": "Zod fails fast when DATABASE_URL missing.", "input": "no env", "expected_output": "throws at startup" }
+      ],
+      "e2e": [
+        { "name": "prod smoke", "steps": ["Deploy", "Hit /api/health"], "expected": "200" }
+      ],
+      "edge_cases": [
+        { "name": "missing Sentry DSN in non-prod", "steps": ["Build without SENTRY_DSN"], "expected": "build succeeds; Sentry disabled warning" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/REQUIREMENTS.md §Phase 9B Req 9B-1",
+    "blocked_on_spec": false
+  },
+  {
+    "id": "p9-client-uat-pilot",
+    "category": "integration",
+    "description": "Req 9B-2 — Client UAT with pilot event (real imports, real registrations, real logistics, real certificates, physical QR check-in).",
+    "phase": 6,
+    "priority": 68,
+    "page": "N/A — Process",
+    "behavior": "Support the client running a real pilot event end-to-end on production: import real faculty/delegates, real program, 20-30 live registrations, real travel/accommodation, certificates generated + sent, QR check-in on physical phones, all reports exported. Bugs surfaced during UAT are triaged into new prd.json stories following the same build→test→codex cycle. Deliverable: UAT acceptance sign-off + a post-UAT punch list.",
+    "ui_details": "No UI (process gate).",
+    "data_model": "No schema; exercises existing tables.",
+    "tests": {
+      "unit": [],
+      "e2e": [
+        { "name": "UAT acceptance", "steps": ["Run pilot event", "Capture issues", "Fix via normal loop"], "expected": "client sign-off document committed to .planning/" }
+      ],
+      "edge_cases": [
+        { "name": "critical bug mid-UAT", "steps": ["Hotfix on a dedicated branch"], "expected": "deploy without regressing prior acceptance items" }
+      ]
+    },
+    "passes": false,
+    "qa_tested": false,
+    "completeness_source": "auto-detected by harden-completeness.sh",
+    "completeness_discovered_at": "2026-04-17T00:00:00Z",
+    "ought_citation": ".planning/REQUIREMENTS.md §Phase 9B Req 9B-2",
+    "blocked_on_spec": true
   }
 ]

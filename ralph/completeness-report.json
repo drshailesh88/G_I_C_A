@@ -2,34 +2,72 @@
   {
     "iteration": 1,
     "timestamp": "2026-04-17T00:00:00Z",
-    "ought_sources": [
-      "e2e/contracts/certificates/{invariants.md,examples.md,counterexamples.md,api-contract.json}",
-      "e2e/contracts/eventid-scoping/{invariants.md,examples.md,counterexamples.md,api-contract.json}",
-      "e2e/contracts/cascade-idempotency/{invariants.md,examples.md,counterexamples.md,api-contract.json}"
+    "appended_count": 26,
+    "appended_ids": [
+      "p2-people-merge-duplicates-ui",
+      "p2-people-change-history",
+      "p2-m04-public-attendee-program",
+      "p2-d3-add-person-sheet",
+      "p2-d7-terms-privacy-page",
+      "p2-d5-speaker-profile",
+      "p2-program-aggregated-faculty-email",
+      "p2-program-revised-responsibility-notifications",
+      "p2-m52-version-history",
+      "p2-d1-preview-revised-emails",
+      "p2-m30-conflict-fix-action",
+      "p3-transport-suggest-batches",
+      "p3-registration-cancel-cascade",
+      "p4-m39-template-editor",
+      "p4-m53-automation-triggers",
+      "p5-m58-attendance-report-page",
+      "p5-d6-issued-certificates-list",
+      "p6-event-duplicate",
+      "p6-m51-event-field-builder",
+      "p6-m54-ops-more-menu",
+      "p6-m47-global-reports",
+      "p6-d8-notification-drawer",
+      "p6-d9-profile-account-sheet",
+      "p9-e2e-playwright-full-journey",
+      "p9-production-deploy-env",
+      "p9-client-uat-pilot"
     ],
-    "ought_counts": {
-      "certificates": { "invariants": 21, "examples": 11, "counterexamples": 20 },
-      "eventid-scoping": { "invariants": 15, "examples": 10, "counterexamples": 14 },
-      "cascade-idempotency": { "invariants": 20, "examples": 12, "counterexamples": 20 }
+    "per_phase_gaps": {
+      "P1": { "ought": 6, "is": 6, "gap": 0, "appended": 0 },
+      "P2": { "ought": 24, "is": 13, "gap": 11, "appended": 11 },
+      "P3": { "ought": 9, "is": 7, "gap": 2, "appended": 2 },
+      "P4": { "ought": 6, "is": 4, "gap": 2, "appended": 2 },
+      "P5": { "ought": 9, "is": 7, "gap": 2, "appended": 2 },
+      "P6": { "ought": 12, "is": 3, "gap": 9, "appended": 9 },
+      "Total": { "ought": 66, "is": 40, "gap": 26, "appended": 26 }
     },
-    "is_sources": [
-      "ralph/prd.json (42 entries, all passes:true)",
-      "feature-census/{certificates,events,people,program,registration,travel,accommodation,transport,communications,attendance}/CENSUS.md"
+    "sources_consulted": [
+      ".planning/prd.md",
+      ".planning/REQUIREMENTS.md",
+      "research-hub/PROJECT_HANDOFF.md",
+      "research-hub/CLICK_MAP_AND_TRACEABILITY.md",
+      "research-hub/BACKEND_ARCHITECTURE_MAP.md",
+      "research-hub/DEFERRED_TICKETS.md",
+      "research-hub/COMPLETE_GAP_ANALYSIS.md"
     ],
-    "spot_checked_implementations": [
-      "src/app/api/events/[eventId]/certificates/route.ts",
-      "src/app/api/events/[eventId]/certificates/bulk/route.ts",
-      "src/app/api/events/[eventId]/certificates/[certificateId]/route.ts",
-      "src/app/api/verify/[token]/route.ts",
-      "src/app/api/events/[eventId]/sessions",
-      "src/app/api/events/[eventId]/people",
-      "src/lib/db/schema/audit-log.ts",
-      "src/lib/notifications/idempotency.ts",
-      "src/lib/cascade/debounce.ts"
+    "feature_census_modules_reused": [
+      "events",
+      "people",
+      "program",
+      "travel",
+      "accommodation",
+      "transport",
+      "communications",
+      "certificates",
+      "qr",
+      "reports"
     ],
-    "missing_found": 0,
-    "appended_to_prd": 0,
-    "outcome": "COMPLETENESS_COMPLETE",
-    "note": "All 42 prd.json hardening stories have verified code artifacts. Contract invariants/examples/CEs are covered either by explicit anchor citation in story behavior text or implicitly by the endpoint-level story's implementation + frozen e2e contract tests. Un-cited anchors are a documentation-traceability concern, not a missing feature."
+    "feature_census_modules_fresh": [],
+    "patterns": [
+      "Prior run narrowed OUGHT to hardening-only; authoritative OUGHT is .planning/prd.md + REQUIREMENTS.md + PROJECT_HANDOFF.md across all 6 phases.",
+      "REQUIREMENTS.md checkbox state is stale in 3 places (faculty upsert, accommodation send, rooming list export) — already in src/.",
+      "Majority of gaps are UI-only pages (9) atop existing schema; next biggest bucket is cascade/notification (5); 3 are deployment/test gaps.",
+      "All DEFERRED_TICKETS.md D1–D9 items audited; D2 renamed as p2-m30-conflict-fix-action and D6 as p5-d6-issued-certificates-list so they enter the build queue."
+    ],
+    "promise": "NEXT"
   }
 ]

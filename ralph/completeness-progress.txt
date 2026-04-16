@@ -2,36 +2,93 @@
 
 ## Completeness Patterns
 
-<!-- Patterns noticed when diffing OUGHT vs IS. Agent writes here. -->
-
-- prd.json is scoped to a hardening phase (certificates + eventid-scoping +
-  cascade-idempotency + supporting infra). The authoritative OUGHT for this
-  phase is e2e/contracts/**/{invariants,examples,counterexamples}.md, NOT the
-  full 48-wireframe product PRD. Broader product features (QR scanning,
-  comms templates UI, reports, branding letterheads) are explicitly deferred
-  per research-hub/DEFERRED_TICKETS.md and are out of scope for this loop.
-- Coverage mapping lives in story `behavior` text as anchor references
-  ("CE7", "Example 5", "Invariant 3"). Not every invariant is cited by
-  name — many are implicitly covered by the story implementing the
-  enclosing endpoint. Don't flag an un-cited invariant as missing unless
-  its behavior is genuinely absent from all 42 stories.
+- Prior COMPLETENESS run narrowed OUGHT to the 42 Phase-5 hardening tickets
+  already in ralph/prd.json and emitted "OUGHT ⊆ IS for hardening scope".
+  That was incorrect: ralph/prd.json is a working queue, NOT the authoritative
+  OUGHT. The real OUGHT is `.planning/prd.md` + `.planning/REQUIREMENTS.md`
+  + the 48-wireframe inventory in `research-hub/PROJECT_HANDOFF.md`. When
+  auditing future iterations, always start from those three sources — never
+  treat prd.json as the target.
+- REQUIREMENTS.md `[x]` checkboxes are sometimes stale. Three items marked
+  `[ ]` were actually implemented (faculty accept event_people upsert at
+  program.ts:521, accommodation send-on-save at accommodation-cascade.ts:104,
+  rooming list export at excel.ts:196). Always verify against src/ before
+  appending a missing-feature story.
+- Click-map destinations in research-hub/CLICK_MAP_AND_TRACEABILITY.md
+  reference wireframe IDs (M##). Several modules (M04 public program,
+  M39 template editor, M47 global reports, M51 custom fields, M52 version
+  history, M53 automation triggers, M54 ops more-menu, M58 attendance
+  report) are referenced by click paths but have no route or handler in
+  src/. These are genuine gaps.
+- DEFERRED_TICKETS.md D1–D9 must all be in-scope. D2 (conflict fix action)
+  and D6 (issued-certs list) overlap with existing modules and need
+  explicit story entries so they are not forgotten.
 
 ## Iteration log
 
-<!-- Dated entries per diff cycle, appended by completeness agent. -->
-
 ## 2026-04-17T00:00:00Z — iter 1
-- OUGHT count:     3 contract domains (certificates 52 items, eventid-scoping 39, cascade-idempotency 52)
-- IS count:        42 prd.json stories, all passes:true + qa_tested:true
-- Missing found:   0 unimplemented features
-- Appended to prd: 0
-- Spot-checked routes: /api/events/[eventId]/certificates + /bulk + /[certId],
-  /api/verify/[token], src/lib/db/schema/audit-log.ts, src/lib/notifications/idempotency.ts,
-  src/lib/cascade/debounce.ts — all present.
-- Patterns noticed: contract invariants are mostly covered by endpoint-level
-  stories rather than 1:1 with individual I/CE anchors. A few CEs
-  (certs CE10/CE13/CE18, eventid-scoping CE5-CE13, cascade-idempotency CE3-CE8)
-  are not explicitly cited in behavior text but their underlying behavior is
-  enforced by an existing story's implementation + e2e contract tests.
-  Treating traceability-only gaps as non-missing per the patterns note above.
-- Outcome: COMPLETENESS_COMPLETE — OUGHT ⊆ IS for the hardening scope.
+Per-phase coverage:
+
+| Phase | OUGHT (count) | IS (found) | Gap | Appended |
+|-------|---------------|------------|-----|----------|
+| P1    | 6             | 6          | 0   | 0        |
+| P2    | 24            | 13         | 11  | 11       |
+| P3    | 9             | 7          | 2   | 2        |
+| P4    | 6             | 4          | 2   | 2        |
+| P5    | 9             | 7          | 2   | 2        |
+| P6    | 12            | 3          | 9   | 9        |
+| Total | 66            | 40         | 26  | 26       |
+
+Note: "P9" deploy/UAT items (Req 9A-1 Playwright full-journey E2E, Req
+9B-1 production deploy envs, Req 9B-2 client pilot UAT) are bucketed
+into Phase 6 in prd.json (`phase: 6`) since the PRD only declares six
+phases; they are counted in the P6 row above.
+
+Sources consulted:
+- .planning/prd.md ✓
+- .planning/REQUIREMENTS.md ✓
+- research-hub/PROJECT_HANDOFF.md ✓
+- research-hub/CLICK_MAP_AND_TRACEABILITY.md ✓
+- research-hub/BACKEND_ARCHITECTURE_MAP.md ✓
+- research-hub/DEFERRED_TICKETS.md ✓
+- research-hub/COMPLETE_GAP_ANALYSIS.md ✓
+
+feature-census runs: reused Apr 9 CENSUS.md outputs for events, people,
+program, travel, accommodation, transport, communications, certificates,
+qr, reports; cross-validated against current src/ tree via Glob+Grep
+(src/app/(app)/**, src/app/(public)/**, src/lib/actions/**,
+src/lib/cascade/**, src/lib/db/schema/**). Fresh census deferred to
+next iteration because prior outputs are < 30 days old and no
+src-tree commits touched censused modules since then.
+
+Appended story IDs (priorities 43–68):
+- P2 (11): p2-people-merge-duplicates-ui, p2-people-change-history,
+  p2-m04-public-attendee-program, p2-d3-add-person-sheet,
+  p2-d7-terms-privacy-page, p2-d5-speaker-profile,
+  p2-program-aggregated-faculty-email,
+  p2-program-revised-responsibility-notifications,
+  p2-m52-version-history, p2-d1-preview-revised-emails,
+  p2-m30-conflict-fix-action
+- P3 (2): p3-transport-suggest-batches, p3-registration-cancel-cascade
+- P4 (2): p4-m39-template-editor, p4-m53-automation-triggers
+- P5 (2): p5-m58-attendance-report-page, p5-d6-issued-certificates-list
+- P6 (6): p6-event-duplicate, p6-m51-event-field-builder,
+  p6-m54-ops-more-menu, p6-m47-global-reports,
+  p6-d8-notification-drawer, p6-d9-profile-account-sheet
+- P9-bucketed-into-P6 (3): p9-e2e-playwright-full-journey,
+  p9-production-deploy-env, p9-client-uat-pilot
+
+Patterns noticed:
+- 9 of 26 gaps are UI-only pages whose underlying handlers/schema
+  already exist (merge-duplicates, change-history, version-history,
+  issued-cert list, ops more-menu, global reports, notification
+  drawer, profile sheet, field builder). These need wireframe→route
+  mapping, not new domain logic.
+- 5 of 26 are cascade/notification gaps (aggregated faculty email,
+  revised-responsibility notifications, registration-cancel cascade,
+  conflict-fix action, preview-revised-emails).
+- 3 of 26 are deployment/test gaps (Playwright E2E, prod deploy,
+  UAT) that depend on feature-complete state, not feature code.
+- 1 gap (p2-m04-public-attendee-program) is a public route with no
+  schema impact — small but missed.
+
