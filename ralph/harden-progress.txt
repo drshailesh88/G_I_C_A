@@ -94,7 +94,30 @@
 
 - **Transport batchMap/vehicleMap ArrayDeclaration kills**: `new Map(rows.map(r => [r.id, r]))` → `new Map([])` (ArrayDeclaration mutation). Kill by verifying that a passenger row reads the correct pickupHub or vehicleLabel from the respective map. Two vehicles/batches with distinct IDs — assert the correct one is used.
 
+- **Genuine fuzzy test requirement**: All existing fuzzy-column tests in csv-import used exact-alias inputs (e.g. 'full name', 'e-mail' ARE exact aliases). To cover the Fuse fuzzy branch, use genuinely misspelled inputs like 'Moblie' or 'Phonne' that are NOT in any alias list. Assert `mappedTo` is non-null and `confidence < 1` (not exact).
+
+- **Optional field `|| undefined` pattern**: `field.trim() || undefined` mutants need TWO tests: (1) non-empty value → assert actual string (kills ConditionalExpression→false + LogicalOperator&&→||), (2) empty string → assert undefined (kills ConditionalExpression→true). Without the raw-value assertion, the &&→|| mutant survives even when existing tests check E.164 phone.
+
+- **findDuplicates null-guard kills**: `if (p.email)` before `emailMap.set(p.email.toLowerCase(), p)` — mutation to `if(true)` calls `null.toLowerCase()` which throws. Add a test with `existingPeople` having `email: null` and assert no throw + no matches.
+
+- **findDuplicates "no match" path**: `if (match)` at the email/phone lookup — mutation to `if(true)` pushes `{ existingPerson: undefined }` making length > 0. Add tests where email/phone is present in CSV but NOT in roster and assert 0 matches.
+
+- **Fuse empty-results boundary (L199 EqualityOperator)**: `nameResults.length > 0` → `>= 0`. For a completely unrecognizable name (e.g. 'Xyzzy Qqqqqq'), Fuse returns empty array with threshold:0.3. The mutation tries `nameResults[0].score` on undefined → TypeError → test fails → mutant killed.
+
 ## Iteration log
+
+## 2026-04-17T00:26:00Z — src/lib/import/csv-import.ts — kill surviving mutants, score 58.82% → 83.16%
+- Tier: business_60
+- Score: 58.82% → 83.16% (covered), 81.09% total
+- Mutants killed this iter: 53 (110 → 163 killed)
+- Tests added: 24 tests in src/lib/import/csv-import.mutation-kill.test.ts
+- Real bugs fixed: none
+- Key findings:
+  - All 3 "fuzzy" tests in existing suite were actually exact-alias matches — Fuse fuzzy branch (L82-86) was entirely NoCoverage
+  - L111 LogicalOperator &&→|| survived because no test had email-only or phone-only (all had both or neither)
+  - L129-135 raw field LogicalOperator/ConditionalExpression survived because tests only checked phoneE164, not raw phone
+  - findDuplicates null-email/phone tests needed because ConditionalExpression→true throws on null.toLowerCase()
+  - Remaining 33 survived + 5 NoCoverage: L65 ObjectLiteral (Fuse config shape, equivalent in mocked context), L101 ConditionalExpression (null key in Map doesn't affect other lookups — equivalent), L108/L122/L131-135 inner ?? right-sides (equivalent when key absent), L199:35 ConditionalExpression (score always defined with includeScore:true), L199:73 both mutations (Fuse threshold:0.3 means returned results always have score<0.3 — equivalent)
 
 ## 2026-04-17T00:08:00Z — src/lib/exports/excel.ts — kill surviving mutants, score 35.69% → 91.83%
 - Tier: business_60
