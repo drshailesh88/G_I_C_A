@@ -383,8 +383,9 @@ function AccommodationTable({
                               {flag.flagStatus === 'unreviewed' && (
                                 <button
                                   onClick={() => onReviewFlag(flag.id)}
-                                  disabled={reviewingFlag === flag.id}
-                                  className="text-amber-700 hover:text-amber-900 disabled:opacity-50"
+                                  disabled={!canWrite || reviewingFlag === flag.id}
+                                  aria-disabled={!canWrite || reviewingFlag === flag.id}
+                                  className="text-amber-700 hover:text-amber-900 disabled:opacity-50 disabled:cursor-not-allowed"
                                   title="Mark Reviewed"
                                 >
                                   <Eye className="h-3 w-3" />
@@ -394,8 +395,9 @@ function AccommodationTable({
                                 flag.flagStatus === 'reviewed') && (
                                 <button
                                   onClick={() => onResolveFlag(flag.id)}
-                                  disabled={reviewingFlag === flag.id}
-                                  className="text-green-700 hover:text-green-900 disabled:opacity-50"
+                                  disabled={!canWrite || reviewingFlag === flag.id}
+                                  aria-disabled={!canWrite || reviewingFlag === flag.id}
+                                  className="text-green-700 hover:text-green-900 disabled:opacity-50 disabled:cursor-not-allowed"
                                   title="Resolve"
                                 >
                                   <CheckCircle className="h-3 w-3" />
@@ -501,8 +503,9 @@ function AccommodationCard({
                   {flag.flagStatus === 'unreviewed' && (
                     <button
                       onClick={() => onReviewFlag(flag.id)}
-                      disabled={reviewingFlag === flag.id}
-                      className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-200 disabled:opacity-50"
+                      disabled={!canWrite || reviewingFlag === flag.id}
+                      aria-disabled={!canWrite || reviewingFlag === flag.id}
+                      className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Eye className="h-3 w-3" />
                       Mark Reviewed
@@ -511,8 +514,9 @@ function AccommodationCard({
                   {(flag.flagStatus === 'unreviewed' || flag.flagStatus === 'reviewed') && (
                     <button
                       onClick={() => onResolveFlag(flag.id)}
-                      disabled={reviewingFlag === flag.id}
-                      className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-200 disabled:opacity-50"
+                      disabled={!canWrite || reviewingFlag === flag.id}
+                      aria-disabled={!canWrite || reviewingFlag === flag.id}
+                      className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-200 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <CheckCircle className="h-3 w-3" />
                       Resolve
