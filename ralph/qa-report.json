@@ -976,5 +976,38 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), plus focused audit-log route tests passed. The eventid-scoping Playwright contract still fails before product assertions in global auth setup with ERR_TOO_MANY_REDIRECTS at /events, and repo typecheck remains blocked by known broad unrelated errors; a narrow typecheck grep found no audit-log route errors. Manual DATABASE_URL_TEST probing seeded event A/B audit rows, verified event_id, actor_user_id, actor_username, resource, cert_id meta, no-filter capped, and camelCase response behavior, and confirmed the cert_id trap travel row was excluded after the fix."
+  },
+  {
+    "story_id": "infra-040",
+    "qa_timestamp": "2026-04-16T09:19:33Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "The test-only provider-mode route rejected the frozen contract payload shape `{ mode: { failN: 2 } }`, so cascade-idempotency retries could not be configured through `/api/test/provider-mode`.",
+        "severity": "high",
+        "fix_commit": "436229d",
+        "files_changed": [
+          "src/app/api/test/provider-mode/route.ts"
+        ]
+      },
+      {
+        "description": "The provider-mode shim threw simulated failures before persisting `test:last-sent:{triggerId}:{channel}`, so failed attempts left `/api/test/last-sent-body` empty instead of exposing the rendered body.",
+        "severity": "medium",
+        "fix_commit": "436229d",
+        "files_changed": [
+          "src/lib/notifications/provider-mode.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), including focused provider-mode route and shim suites (2 files, 16 tests). The cascade-idempotency Playwright contract still fails before product assertions in Clerk global setup with ERR_TOO_MANY_REDIRECTS at /events, and repo typecheck remains blocked by known broad QA/test, Sentry, people/navigation, notification, and cascade errors outside this story. Manual runtime verification confirmed `/api/test/provider-mode` now accepts the frozen `{ failN: 2 }` payload and normalizes it to `failN:2`, normal mode reaches the real adapter, fail mode still throws the expected provider exception shape while persisting `test:last-sent:*`, and a live failN sequence produced throw/throw/success with `/api/test/last-sent-body` returning the rendered body."
   }
 ]
