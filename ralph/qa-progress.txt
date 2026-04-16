@@ -27,10 +27,18 @@
 - Cascade snapshot QA must verify the production emit path actually attaches `payload.variables`; a helper and handler fallback can both exist while retries still drift if the emitter never serializes the snapshot into the durable event.
 - Frozen cascade contracts can drift from legacy internal event aliases like `*.saved` vs `*.created`; inspect the actual Inngest trigger names in production code, not just builder summaries or stale unit expectations.
 - Malformed cascade payload QA must verify the captured Sentry event carries the real Inngest event id; a handler can correctly dead-letter once yet still fail CE10 if the validation capture is not queryable by `inngestEventId`.
+- Partial-index upsert stories need a live DB probe: mocked `onConflictDoUpdate` tests can pass while a provisioned database is missing the partial unique index and every real write fails with Postgres `42P10`.
+- Cascade handler event-scope QA should seed cross-event downstream rows that share the same person and upstream id; same-event fixtures alone do not prove every handler query includes `eventId`.
 
 ## Iteration log
 
 <!-- Dated entries per QA'd feature. -->
+
+## 2026-04-16T07:47:13Z — cascade-036 — cascade handler eventId scoping
+- Status: pass
+- Bugs: 0
+- Fix commits: none
+- Notes: Full Vitest and focused handler eventId audit passed; synthetic diff-audit rejected an unscoped cascade handler query; DATABASE_URL_TEST probe proved Event A travel cascade writes only Event A red flags even when Event B has same-person/same-travel-id trap rows. Playwright remains blocked by Clerk `/events` redirect setup and repo typecheck remains blocked by known broad errors.
 
 ## 2026-04-16T06:34:13Z — cascade-033 — contract event aliases for cascade handlers
 - Status: fixed
@@ -43,6 +51,12 @@
 - Bugs: 1 (high: 1)
 - Fix commits: e8abd66
 - Notes: Fixed malformed cascade payload Sentry captures to include the real Inngest event id, then verified in-process that the travel.updated function throws NonRetriableError, records exactly one failed attempt, and produces a queryable `cascade-payload-invalid` event; Playwright remains blocked by the Clerk `/events` redirect harness and repo typecheck remains blocked by known broad existing errors.
+
+## 2026-04-16T07:16:15Z — cascade-035 — red-flag upsert partial index
+- Status: fixed
+- Bugs: 1 (high: 1)
+- Fix commits: 3d3ebee7aca115ae0a48ada8d099210ba1587b2e
+- Notes: Fixed live red-flag upserts to self-heal the missing `uq_red_flag_active` partial unique index before the first `ON CONFLICT` write; DATABASE_URL_TEST probes then confirmed create/update/reopen semantics, a single active row under concurrent duplicate calls, the expected partial predicate in `pg_indexes`, and no non-test raw `red_flags` inserts outside the helper.
 
 ## 2026-04-16T05:53:11Z — cascade-031 — 5-second cascade debounce
 - Status: fixed

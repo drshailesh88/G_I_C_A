@@ -1643,7 +1643,10 @@
           "expected": "migration file present"
         }
       ]
-    }
+    },
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-16T07:16:15Z",
+    "qa_tested_by": "codex"
   },
   {
     "id": "cascade-036",
@@ -1684,7 +1687,10 @@
           "expected": "returns master row regardless of event"
         }
       ]
-    }
+    },
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-16T07:47:13Z",
+    "qa_tested_by": "codex"
   },
   {
     "id": "cascade-037",
