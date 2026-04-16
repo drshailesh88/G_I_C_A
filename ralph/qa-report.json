@@ -667,5 +667,30 @@
     },
     "bugs": [],
     "notes": "Full Vitest passed (231 files, 4736 tests), including the public register page client tests and registration action tests. The eventid-scoping Playwright contract remains blocked in Clerk global setup at /events with ERR_TOO_MANY_REDIRECTS before Example 5 can execute. Repo-level typecheck still fails on known broad pre-existing QA/test, Sentry, people/navigation, notification, and cascade errors outside this story. Manual browser QA visited /register/EVENT_A anonymously and observed no auth chrome, the Register heading, event name/venue, required core fields, and submit button; submitting a unique registration created one people row with E.164 phone, one event_registrations row scoped to EVENT_A, and one event_people junction row. Closed registration was verified by temporarily setting EVENT_B registration_settings.open=false: the page rendered Registration closed and all form controls plus the submit button were disabled, then the fixture setting was restored. A duplicate browser submission for the same email returned the already-registered error and left exactly one registration for that person/event. Invalid event IDs render 404."
+  },
+  {
+    "story_id": "cascade-028",
+    "qa_timestamp": "2026-04-16T04:07:45Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "Cascade notification sends accepted legacy `notify:*` idempotency keys containing timestamps instead of storing/checking the frozen `notification:{userId}:{eventId}:{type}:{triggerId}:{channel}` key, so replayed cascades could miss the intended Redis key and cross-contract probes saw the wrong key shape.",
+        "severity": "high",
+        "fix_commit": "9a22ddd641979bdce4f230bfd43356703687dc19",
+        "files_changed": [
+          "src/lib/notifications/send.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), including focused notification idempotency/send and cascade handler suites (9 files, 113 tests). The cascade-idempotency Playwright contract remains blocked before product assertions by Clerk auth global setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on known broad existing QA/test, Sentry, people/navigation, notification test, and cascade test errors outside this story; no production send.ts type error was reported. Manual injected-dependency verification confirmed a legacy travel `notify:*` key is normalized to `notification:p1:EVENT_A:travel_confirmed:travel-1:email`, persisted to the notification log, and used for the Redis check; a duplicate Redis hit returned sent without calling the provider."
   }
 ]

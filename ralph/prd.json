@@ -1265,6 +1265,9 @@
   },
   {
     "id": "cascade-028",
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-16T04:07:45Z",
+    "qa_tested_by": "codex",
     "category": "data",
     "description": "Notification idempotency key builder and enforcement.",
     "page": "N/A — Backend",

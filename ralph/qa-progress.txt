@@ -19,10 +19,17 @@
 - Event-scoped routes outside the currently focused module can still catch `EventNotFoundError` as generic forbidden; audit every `assertEventAccess()` route for `crossEvent404Response()` before accepting CE4-style no-leak stories.
 - Auth/helper modules imported by server components must not use the `'use server'` directive when they export classes/constants; Next rejects non-async exports at runtime, and Vitest may not catch it.
 - CE14-style shared-person fixtures can be sparse: a person may belong to Event A and B while current test data has zero travel/session/registration rows in both. When that happens, manual QA should still verify the live route’s empty-array/null branch against the DB and separately probe the missing-`event_people` 404 path, rather than assuming the fixture is rich enough to prove leakage.
+- Cascade notification idempotency QA should inspect the actual key stored/checked by `sendNotification`, not only handler-level arguments; legacy `notify:*` keys with timestamps can pass visible handler tests while violating the frozen `notification:{userId}:{eventId}:{type}:{triggerId}:{channel}` contract.
 
 ## Iteration log
 
 <!-- Dated entries per QA'd feature. -->
+
+## 2026-04-16T04:07:45Z — cascade-028 — notification idempotency key builder and enforcement
+- Status: fixed
+- Bugs: 1 (high: 1)
+- Fix commits: 9a22ddd641979bdce4f230bfd43356703687dc19
+- Notes: Normalized legacy cascade `notify:*` keys inside the notification service to canonical `notification:*` keys before log persistence and Redis SET NX checks; full Vitest passed, while cascade Playwright remains blocked by Clerk `/events` redirect setup and repo typecheck remains blocked by known broad existing errors.
 
 ## 2026-04-16T03:54:41Z — tenancy-027 — public registration by eventId
 - Status: pass
