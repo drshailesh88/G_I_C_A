@@ -33,6 +33,7 @@
 - Audit-log infra QA needs a live `DATABASE_URL_TEST` insert probe and a production call-site probe; mocked helper tests can pass while stale databases lack `audit_log` and contract routes never call `writeAudit`.
 - Certificate audit-log probe QA should include a non-certificate trap row whose `resource_id` equals the certificate id; `cert_id` may match `meta.cert_id` broadly, but direct `resource_id` matches must be scoped to `resource='certificate'`.
 - Inngest capture QA must audit every direct `inngest.send(...)` call site, not only cascade emit helpers; bulk certificate sends can bypass `/api/test/inngest-events` replay/query unless their send results are captured too.
+- Test-only observability transports must key off explicit test/E2E mode, not `NODE_ENV !== 'production'`; otherwise ordinary development traffic can contaminate probe routes like `/api/test/sentry-events` and produce false-positive QA evidence.
 
 ## Iteration log
 
@@ -43,6 +44,12 @@
 - Bugs: 1 (high: 1)
 - Fix commits: 134d44d
 - Notes: Fixed direct certificate bulk Inngest sends so returned send ids are captured for replay/query. Full Vitest passed; focused captured-event/certificate-generation/bulk-route suites passed; Redis probe verified persistence, filters, TTL, attempts, guard, replay, and send-result capture. Playwright remains blocked by Clerk `/events` redirect setup and repo typecheck remains blocked by known broad errors.
+
+## 2026-04-16T09:58:37Z — infra-042 — Sentry test transport capture
+- Status: fixed
+- Bugs: 1 (high: 1)
+- Fix commits: 94a54dd
+- Notes: Restricted the Sentry test transport to explicit test/E2E mode so plain development no longer pollutes `/api/test/sentry-events`, while keeping Redis-backed capture live in test mode. Full Vitest and focused Sentry suites passed; direct probes verified CE3/CE15/CE10 filter lookups through the route; Playwright remains blocked by Clerk `/events` redirect setup and repo typecheck remains blocked by known broad errors.
 
 ## 2026-04-16T09:09:52Z — infra-039 — audit-log probe filters
 - Status: fixed

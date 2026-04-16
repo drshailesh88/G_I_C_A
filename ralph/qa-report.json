@@ -1036,5 +1036,32 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), including focused captured-event/certificate-generation/bulk-route suites (4 files, 68 tests). The cascade-idempotency Playwright contract still fails before product assertions in Clerk global setup with ERR_TOO_MANY_REDIRECTS at /events, and repo typecheck remains blocked by known broad QA/test, Sentry, people/navigation, notification, and cascade errors outside this story; a narrow typecheck grep found no errors in the changed files. Manual Redis-backed probing verified event persistence, name/triggerId/window filtering, 1h TTLs on event and attempt keys, two attempt records with lastStatus=completed, test-route JSON responses, production guard 404, replay with the same event id and unchanged payload, and the new send-result capture helper using returned Inngest ids."
+  },
+  {
+    "story_id": "infra-042",
+    "qa_timestamp": "2026-04-16T09:58:37Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "The Sentry test transport was enabled in ordinary development, so `/api/test/sentry-events` captured non-test events instead of staying empty outside explicit test mode.",
+        "severity": "high",
+        "fix_commit": "94a54dd",
+        "files_changed": [
+          "sentry.server.config.ts",
+          "sentry.edge.config.ts",
+          "src/lib/sentry/test-transport.ts"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests), and focused Sentry transport/route suites passed (3 files, 12 tests). The eventid-scoping and cascade-idempotency Playwright contract packs remain blocked before product assertions by Clerk global setup redirecting `/events` with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on broad existing errors outside this story; a narrow grep found no `sentry.server.config.ts`, `sentry.edge.config.ts`, or `src/lib/sentry/test-transport.ts` errors after the fix. Manual Redis-backed probing verified a real `assertEventIdMatch` capture appears in test mode with no Sentry DSN configured, the same path no longer writes any buffered event in plain development with `E2E_TEST_MODE=0`, and `/api/test/sentry-events` correctly filtered live captured events by `kind`+`endpoint`, `triggerId`, and `inngestEventId` for CE3, CE15, and CE10 payloads."
   }
 ]
