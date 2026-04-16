@@ -8,6 +8,12 @@
   This kills BlockStatement, ArrayDeclaration, MethodExpression (slice→hash), join-separator,
   and segment-prefix mutants in one test.
 
+- **Exact UUID determinism assertion**: To kill StringLiteral and LogicalOperator mutants inside
+  a UUID-building function (e.g. fallback string `'event'` → `''`, or `??` → `&&` on hash nibble),
+  recompute the expected UUID in the test using the same algorithm with `createHash` and assert
+  `insertChain.values` was called with `{ id: expectedId }` (exact equality, not just regex).
+  This pins the exact hash input and variant nibble, killing mutants that the regex test cannot.
+
 - **SessionId determinism test**: For hash IDs that incorporate sessionId, add a test with TWO
   DIFFERENT non-null sessionIds and assert `insertedIds[0] !== insertedIds[1]`. A single
   null-vs-uuid test is NOT enough — the `??→&&` mutant still produces different hashes for
@@ -35,6 +41,19 @@
   produces a synced record (not an error) with personName 'Unknown'.
 
 ## Iteration log
+
+## 2026-04-16T21:09:00Z — src/lib/actions/batch-sync.ts — kill L29:52 + L36:19 exact-UUID test
+- Tier: critical_75
+- Score: 94.92% → 96.61%
+- Mutants killed this iter: 2 (L29:52 StringLiteral 'event'→'', L36:19 LogicalOperator ??→&&)
+- Tests added: 1 (batch-sync.test.ts — "uses 'event' as the null-sessionId fallback segment (exact ID match)")
+- Real bugs fixed: none
+- Key findings:
+  - An exact-UUID determinism test (recomputing expected ID with createHash) kills both the
+    fallback-string mutant and the hash-nibble operator mutant in one assertion.
+  - Remaining 3 survived + 1 NoCoverage are equivalent: L36:31 NoCoverage (hash always 64 chars),
+    L95/L125 ObjectLiteral (select shape irrelevant in mocked context), L147:13 ConditionalExpression
+    (determineScanResult only returns success|ineligible in this code path).
 
 ## 2026-04-16T21:00:00Z — src/lib/actions/batch-sync.ts — kill 37 surviving mutants
 - Tier: critical_75
