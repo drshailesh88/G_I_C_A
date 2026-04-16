@@ -17,7 +17,13 @@ export default async function EventPeoplePage({
 
   try {
     await assertEventAccess(eventId);
-  } catch {
+  } catch (err) {
+    if (
+      err instanceof Error &&
+      (err.name === 'EventNotFoundError' || (err as { statusCode?: number }).statusCode === 404)
+    ) {
+      notFound();
+    }
     redirect('/login');
   }
 

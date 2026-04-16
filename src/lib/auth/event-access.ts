@@ -7,6 +7,9 @@ import { and, eq } from 'drizzle-orm';
 import { ROLES } from './roles';
 
 export class EventNotFoundError extends Error {
+  readonly statusCode = 404;
+  readonly code = 'EVENT_NOT_FOUND';
+
   constructor() {
     super('Not found');
     this.name = 'EventNotFoundError';
