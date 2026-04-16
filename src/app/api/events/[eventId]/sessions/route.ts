@@ -38,8 +38,20 @@ const requestSchema = z.object({
   ends_at: z.string().optional(),
   hall_id: z.string().uuid().optional(),
   session_type: z.string().optional(),
+  eventId: z.string().optional(),
   event_id: z.string().optional(),
 });
+
+function getSubmittedEventId(
+  body: z.infer<typeof requestSchema>,
+  urlEventId: string,
+): string | undefined {
+  const submitted = [body.eventId, body.event_id].filter(
+    (value): value is string => typeof value === 'string',
+  );
+
+  return submitted.find((value) => value !== urlEventId) ?? submitted[0];
+}
 
 export async function POST(
   request: Request,
@@ -93,7 +105,7 @@ export async function POST(
   try {
     assertEventIdMatch({
       urlEventId: eventId,
-      bodyEventId: data.event_id,
+      bodyEventId: getSubmittedEventId(data, eventId),
       userId,
       endpoint: 'POST /api/events/[eventId]/sessions',
     });
