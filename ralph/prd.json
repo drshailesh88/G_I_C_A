@@ -1407,7 +1407,10 @@
           "expected": "no row with type='dispatch_failure_user_notice'"
         }
       ]
-    }
+    },
+    "qa_tested": true,
+    "qa_tested_at": "2026-04-16T04:57:48Z",
+    "qa_tested_by": "codex"
   },
   {
     "id": "cascade-031",

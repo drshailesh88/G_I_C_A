@@ -718,5 +718,43 @@
       }
     ],
     "notes": "Full Vitest passed after the fix (231 files, 4736 tests), including focused notification log/send and travel cascade suites (8 files, 114 tests). The cascade-idempotency Playwright contract remains blocked before product assertions by Clerk auth global setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on known broad existing QA/test, Sentry, people/navigation, notification test, and cascade test errors outside this story; targeted typecheck grep found no production errors in src/lib/notifications/log-queries.ts or src/lib/notifications/send.ts. Manual review confirmed notification_log.idempotencyKey is unique, failed retries use ON CONFLICT DO UPDATE on the same key with attempts = attempts + 1, sent/in-flight duplicates return the existing row without another provider call, status progresses queued to sending to sent/failed, and successful retries clear prior error fields while setting sentAt."
+  },
+  {
+    "story_id": "cascade-030",
+    "qa_timestamp": "2026-04-16T04:57:48Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "playwright_contract": "fail",
+      "typecheck": "fail",
+      "manual_happy_path": "pass",
+      "manual_persistence": "pass",
+      "manual_edge_cases": "pass"
+    },
+    "bugs": [
+      {
+        "description": "Cascade notification provider failures were recorded as failed send results but not rethrown, so Inngest never retried to three attempts and the production dead-letter path was never reached.",
+        "severity": "high",
+        "fix_commit": "10968e6e30ae869d5cd637b078c7a9b5af9d9cdc",
+        "files_changed": [
+          "src/lib/cascade/dead-letter.ts",
+          "src/lib/cascade/handlers/travel-cascade.ts",
+          "src/lib/cascade/handlers/accommodation-cascade.ts",
+          "src/lib/cascade/handlers/registration-cascade.ts",
+          "src/lib/cascade/handlers/session-cascade.ts",
+          "src/lib/cascade/handlers/certificate-cascade.ts"
+        ]
+      },
+      {
+        "description": "The red_flags database check constraints did not allow the required system_dispatch_failure flag type, notification_log target, or cascade_dispatch source, so a real dead-letter red flag could fail at persistence time.",
+        "severity": "high",
+        "fix_commit": "10968e6e30ae869d5cd637b078c7a9b5af9d9cdc",
+        "files_changed": [
+          "drizzle/migrations/0007_expand_red_flags_for_system_dispatch.sql"
+        ]
+      }
+    ],
+    "notes": "Full Vitest passed after the fix (231 files, 4736 tests). Focused cascade/notification suites passed. The cascade-idempotency Playwright contract remains blocked before product assertions by Clerk auth global setup redirecting /events with ERR_TOO_MANY_REDIRECTS. Repo-level typecheck still fails on known broad existing QA/test, Sentry, people/navigation, notification, and cascade test errors; targeted grep found no production type errors in the touched cascade files. Manual review confirmed failed cascade notification results now read the existing notification_log attempt count, rethrow attempts 1-2 for Inngest retry, call handleDeadLetter on attempt 3, update the existing log row to failed, emit kind=cascade-dispatch-failure with trigger context, upsert a system_dispatch_failure red flag keyed by event and trigger id, and do not send any user-facing dispatch failure notification."
   }
 ]

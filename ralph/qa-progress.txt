@@ -21,10 +21,18 @@
 - CE14-style shared-person fixtures can be sparse: a person may belong to Event A and B while current test data has zero travel/session/registration rows in both. When that happens, manual QA should still verify the live route’s empty-array/null branch against the DB and separately probe the missing-`event_people` 404 path, rather than assuming the fixture is rich enough to prove leakage.
 - Cascade notification idempotency QA should inspect the actual key stored/checked by `sendNotification`, not only handler-level arguments; legacy `notify:*` keys with timestamps can pass visible handler tests while violating the frozen `notification:{userId}:{eventId}:{type}:{triggerId}:{channel}` contract.
 - Notification log retry QA must verify the send orchestration uses the upsert path, not only that a standalone helper has ON CONFLICT semantics; helper-only tests can pass while `sendNotification` still does plain inserts.
+- Cascade dead-letter QA must verify the helper is reachable from production handlers and that provider failure results are rethrown before the final attempt; helper-only tests can pass while handlers swallow `status='failed'` and Inngest never retries.
+- Red flag QA must compare TypeScript registries with SQL check constraints; adding a flag type or source type in code alone can still fail at runtime when the migration constraints are narrower.
 
 ## Iteration log
 
 <!-- Dated entries per QA'd feature. -->
+
+## 2026-04-16T04:57:48Z — cascade-030 — three-attempt retry then dead-letter
+- Status: fixed
+- Bugs: 2 (high: 2)
+- Fix commits: 10968e6e30ae869d5cd637b078c7a9b5af9d9cdc
+- Notes: Fixed cascade notification failure handling so failed send results rethrow for attempts 1-2 and dead-letter on attempt 3, and added the red_flags constraint migration needed for system_dispatch_failure persistence; full Vitest passed, while cascade Playwright remains blocked by Clerk `/events` redirect setup and repo typecheck remains blocked by known broad existing errors.
 
 ## 2026-04-16T04:28:03Z — cascade-029 — notification_log one row per idempotency key
 - Status: fixed
