@@ -2325,5 +2325,54 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/db/with-event-scope.ts",
+    "module": "src/lib/db/with-event-scope.ts",
+    "attacked_at": "2026-04-17T15:52:15Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "sql_injection",
+        "payload": "eventId=\"550e8400-e29b-41d4-a716-446655440000' OR 1=1 --\"",
+        "result": "blocked_by_parameterized_eq"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "eventId with non-canonical or whitespace-padded UUID aliases",
+        "result": "blocked_after_fix"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "eventId='not-a-uuid', null, undefined, or whitespace-only",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized eventId string formed by concatenating multiple UUIDs",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "concurrent helper calls with valid event IDs",
+        "result": "not_applicable_pure_condition_builder_has_no_shared_state"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "invoke the helper without Clerk checks",
+        "result": "not_applicable_internal_helper_has_no_auth_surface"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "withEventScope only rejected falsy event IDs. Any other string, including whitespace-padded, malformed, or oversized UUID-shaped garbage, was accepted and forwarded into UUID-backed query conditions, so any caller that forgot route/body validation could turn this shared scope guard into a DB-layer failure path instead of failing closed at the tenant boundary.",
+        "fix": "Validated eventId with the canonical event UUID schema before building any SQL condition and added regression coverage to prove malformed event IDs are rejected before eq()/and() are invoked.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/db/with-event-scope.test.ts > rejects invalid eventId; src/lib/db/with-event-scope.mutation-kill.test.ts > rejects malformed event IDs before building any SQL"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

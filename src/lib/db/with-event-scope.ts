@@ -1,5 +1,6 @@
 import { eq, and, type SQL } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
+import { eventIdSchema } from '@/lib/validations/event';
 
 /**
  * Append event_id scoping to any existing where clause.
@@ -14,8 +15,8 @@ export function withEventScope(
   eventId: string,
   ...conditions: (SQL | undefined)[]
 ): SQL {
-  if (!eventId) {
-    throw new Error('withEventScope: eventId is required — refusing to build unscoped query');
+  if (!eventIdSchema.safeParse(eventId).success) {
+    throw new Error('withEventScope: eventId must be a canonical UUID — refusing to build query');
   }
 
   const allConditions = [

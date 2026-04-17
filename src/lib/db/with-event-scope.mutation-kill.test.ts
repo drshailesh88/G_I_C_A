@@ -13,6 +13,8 @@ vi.mock('drizzle-orm', async (importOriginal) => {
 import { eq, and } from 'drizzle-orm';
 import { withEventScope } from './with-event-scope';
 
+const VALID_EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
+
 const testTable = pgTable('wes_mk', {
   id: uuid('id').primaryKey(),
   eventId: uuid('event_id').notNull(),
@@ -27,7 +29,7 @@ describe('withEventScope — mutation kill: filter predicate and branch selectio
 
   // L26: `=== 1` → `false` — always calls and(); this asserts it does NOT for no-extras case
   it('does NOT call and() when no extra conditions are provided', () => {
-    withEventScope(testTable.eventId, 'evt-001');
+    withEventScope(testTable.eventId, VALID_EVENT_ID);
     expect(vi.mocked(and)).not.toHaveBeenCalled();
   });
 
@@ -39,14 +41,14 @@ describe('withEventScope — mutation kill: filter predicate and branch selectio
     const extra = eq(testTable.status, 'active');
     vi.mocked(and).mockClear();
     vi.mocked(eq).mockClear();
-    withEventScope(testTable.eventId, 'evt-001', extra);
+    withEventScope(testTable.eventId, VALID_EVENT_ID, extra);
     expect(vi.mocked(and)).toHaveBeenCalledOnce();
   });
 
   // L23: MethodExpression `...conditions` (no filter) — undefined kept; allConditions has 2 items; and() called
   // L23: `true` — undefined kept; same effect
   it('does NOT call and() when the only extra condition is undefined (filtered out)', () => {
-    withEventScope(testTable.eventId, 'evt-002', undefined);
+    withEventScope(testTable.eventId, VALID_EVENT_ID, undefined);
     expect(vi.mocked(and)).not.toHaveBeenCalled();
   });
 
@@ -56,7 +58,7 @@ describe('withEventScope — mutation kill: filter predicate and branch selectio
     const extra = eq(testTable.status, 'confirmed');
     vi.mocked(and).mockClear();
     vi.mocked(eq).mockClear();
-    withEventScope(testTable.eventId, 'evt-003', extra);
+    withEventScope(testTable.eventId, VALID_EVENT_ID, extra);
     expect(vi.mocked(and).mock.calls[0]).toHaveLength(2);
   });
 
@@ -65,8 +67,14 @@ describe('withEventScope — mutation kill: filter predicate and branch selectio
     const extra = eq(testTable.status, 'pending');
     vi.mocked(and).mockClear();
     vi.mocked(eq).mockClear();
-    withEventScope(testTable.eventId, 'evt-004', extra, undefined);
+    withEventScope(testTable.eventId, VALID_EVENT_ID, extra, undefined);
     expect(vi.mocked(and)).toHaveBeenCalledOnce();
     expect(vi.mocked(and).mock.calls[0]).toHaveLength(2);
+  });
+
+  it('rejects malformed event IDs before building any SQL', () => {
+    expect(() => withEventScope(testTable.eventId, 'not-a-uuid')).toThrow(/eventId/i);
+    expect(vi.mocked(eq)).not.toHaveBeenCalled();
+    expect(vi.mocked(and)).not.toHaveBeenCalled();
   });
 });
