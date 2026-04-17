@@ -3,6 +3,7 @@
 ## Attack Patterns
 
 <!-- Recurring attack vectors + their fixes. Agent writes here. -->
+- Code-seeded registries must be deeply frozen before export. Mutable module-level arrays and nested lists let one runtime caller poison later seed/render behavior for the whole process and can even grow the shared registry with forged entries.
 - Runtime lookup registries used for `key in registry` validation must use null-prototype, immutable objects. Plain object registries inherit `__proto__`, `constructor`, and `toString`, which lets malformed route params pass validation and lets one runtime caller poison metadata for later requests.
 - Redis-backed provider/state helpers must exact-match a small allowlist before building keys. Whitespace-padded, unknown, or oversized provider strings otherwise create parallel key namespaces, bypass open-circuit state, and spray unbounded Redis keys.
 - Webhook correlation lookups must scope provider message IDs by provider, not message ID alone. The schema only guarantees uniqueness for `(provider, providerMessageId)`, so same-channel providers that emit the same upstream ID can otherwise advance the wrong notification log.
@@ -356,3 +357,9 @@
 - Attacks tried: 6
 - Bugs found: 1
 - Key finding: `send.ts` had drifted local copies of the notification-log begin/upsert SQL, so a cross-event idempotency-key conflict on the default production path could bypass the hardened tenant guard already present in `log-queries.ts`.
+
+## 2026-04-17T18:06:22Z — src/lib/notifications/system-templates.ts — registry poisoning hardening
+- Verdict: hardened
+- Attacks tried: 6
+- Bugs found: 1
+- Key finding: the exported system-template seed registry was mutable process-wide, so any runtime caller could rewrite shared body/variable definitions or append forged seeds that poisoned later notification seeding and rendering.

@@ -1,7 +1,7 @@
 /**
  * System Template Seeds
  *
- * 10 V1 system template keys, each as email + WhatsApp = 20 templates total.
+ * 12 V1 system template keys, each as email + WhatsApp = 24 templates total.
  * These are global defaults (eventId = null). Events can override any template.
  *
  * Template keys:
@@ -19,7 +19,7 @@
 
 import type { Channel } from './types';
 
-export type SystemTemplateSeed = {
+export type SystemTemplateSeed = Readonly<{
   templateKey: string;
   channel: Channel;
   templateName: string;
@@ -29,12 +29,12 @@ export type SystemTemplateSeed = {
   subjectLine: string | null;
   bodyContent: string;
   previewText: string | null;
-  allowedVariablesJson: string[];
-  requiredVariablesJson: string[];
+  allowedVariablesJson: readonly string[];
+  requiredVariablesJson: readonly string[];
   isSystemTemplate: true;
-};
+}>;
 
-export const SYSTEM_TEMPLATE_SEEDS: SystemTemplateSeed[] = [
+const SYSTEM_TEMPLATE_SEED_DATA: SystemTemplateSeed[] = [
   // ── 1. Registration Confirmation ────────────────────────────
   {
     templateKey: 'registration_confirmation',
@@ -632,6 +632,18 @@ See you there!`,
     isSystemTemplate: true,
   },
 ];
+
+function freezeSystemTemplateSeed(seed: SystemTemplateSeed): SystemTemplateSeed {
+  return Object.freeze({
+    ...seed,
+    allowedVariablesJson: Object.freeze([...seed.allowedVariablesJson]),
+    requiredVariablesJson: Object.freeze([...seed.requiredVariablesJson]),
+  });
+}
+
+export const SYSTEM_TEMPLATE_SEEDS = Object.freeze(
+  SYSTEM_TEMPLATE_SEED_DATA.map(freezeSystemTemplateSeed),
+) as ReadonlyArray<SystemTemplateSeed>;
 
 /**
  * Get all unique template keys from the system seeds.

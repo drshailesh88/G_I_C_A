@@ -3168,5 +3168,54 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/system-templates.ts",
+    "module": "src/lib/notifications/system-templates.ts",
+    "attacked_at": "2026-04-17T18:06:22Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "stale_state",
+        "payload": "mutate bodyContent and allowedVariablesJson through the live object references returned by getSeedsForKey('registration_confirmation')",
+        "result": "succeeded"
+      },
+      {
+        "category": "injection",
+        "payload": "push a forged template definition into the exported SYSTEM_TEMPLATE_SEEDS registry so later callers observe a new system template key",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "append arbitrary forged seeds repeatedly into the exported registry to grow downstream iteration work",
+        "result": "succeeded_via_mutable_shared_array"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "query unknown, control-character, and oversized template keys through getSeedsForKey",
+        "result": "blocked_no_match"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "attempt cross-event access through the global eventless system-template seed registry",
+        "result": "not_applicable_global_registry_has_no_event_surface"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "attempt RBAC bypass through the static system-template helper module",
+        "result": "not_applicable_static_registry_has_no_auth_surface"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "stale_state",
+        "description": "system-templates.ts exported a mutable process-wide seed array and returned live object references. Any runtime caller could rewrite body content or nested variable lists, or append forged seeds, and poison later notification seeding/rendering across the whole Node process.",
+        "fix": "Deep-froze every exported seed and its nested variable arrays before exposing the registry so callers cannot mutate shared system-template state at runtime.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/system-templates.adversarial.test.ts > blocks process-wide registry poisoning through the exported seed array; src/lib/notifications/system-templates.adversarial.test.ts > blocks nested mutation of shared seed objects returned by getSeedsForKey"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
