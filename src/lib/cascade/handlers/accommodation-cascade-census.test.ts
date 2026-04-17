@@ -33,6 +33,10 @@ vi.mock('@/lib/db/schema', () => ({
     personId: 'tpa.person_id',
     assignmentStatus: 'tpa.assignment_status',
   },
+  events: {
+    id: 'events.id',
+    name: 'events.name',
+  },
 }));
 vi.mock('@/lib/db/schema/people', () => ({
   people: {
@@ -93,6 +97,7 @@ const actor = { type: 'user' as const, id: 'user_census' };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockDb.select.mockImplementation(() => createChainableSelect([]));
   clearCascadeHandlers();
   registerAccommodationCascadeHandlers();
 });

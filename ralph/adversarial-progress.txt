@@ -43,6 +43,7 @@
 - QR payload helpers must enforce the same length budget and canonical URL shape as the attendance validators. If they trust URL normalization or unbounded base URLs, malformed `../checkin`/duplicate-param payloads and self-invalidating oversized QR codes slip through.
 - Shared event auth helpers must validate UUID event scopes themselves and require a real event row even for super-admin bypasses. Trusting callers or bypassing existence checks lets malformed or phantom event IDs reach downstream auth/DB code.
 - Automation payload sanitizers must recurse through nested objects and arrays. Top-level-only filtering leaks tokens/passwords into template variables and persisted notification logs.
+- Cascade notification handlers cannot trust `payload.variables` for recipient routing or template identity fields. Rebuild recipient/event/fullName vars from scoped DB state before dispatch, or forged snapshots can redirect notifications and normal saved events can arrive without a valid destination/template context.
 
 ## Iteration log
 
@@ -196,3 +197,9 @@
 - Attacks tried: 6
 - Bugs found: 3
 - Key finding: the emitter trusted any record-shaped payload and nested registration event scope, and it dropped whole cascade jobs when optional snapshot enrichment failed before `inngest.send`.
+
+## 2026-04-17T13:36:52Z — src/lib/cascade/handlers/accommodation-cascade.ts — accommodation notification context hardening
+- Verdict: hardened
+- Attacks tried: 7
+- Bugs found: 2
+- Key finding: the accommodation cascade trusted snapshot-supplied recipient/event vars and the saved path dropped destination/template context entirely, so direct forged events could redirect notifications and normal confirmation sends could arrive without a valid recipient.

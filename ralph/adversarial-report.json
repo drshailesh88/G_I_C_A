@@ -1867,5 +1867,67 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/cascade/handlers/accommodation-cascade.ts",
+    "module": "src/lib/cascade/handlers/accommodation-cascade.ts",
+    "attacked_at": "2026-04-17T13:36:52Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "conference/accommodation.saved for a delegate with email only and no prepopulated routing vars",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "conference/accommodation.updated with scoped eventId but forged payload.variables.eventName from another event",
+        "result": "succeeded"
+      },
+      {
+        "category": "info_leakage",
+        "payload": "conference/accommodation.updated with victim personId and attacker-controlled recipientEmail/recipientPhoneE164/fullName in payload.variables",
+        "result": "succeeded"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "direct invocation without module auth context",
+        "result": "not_applicable_internal_handler_has_no_auth_surface"
+      },
+      {
+        "category": "race_condition",
+        "payload": "concurrent accommodation.updated retries with identical ids",
+        "result": "no_new_handler_local_race_beyond_notification_idempotency"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized changeSummary and sharedRoomGroup values inside already-bounded cascade payloads",
+        "result": "no_unbounded_handler_work_beyond_scoped_selects"
+      },
+      {
+        "category": "injection",
+        "payload": "HTML/SQL metacharacters inside reason/changeSummary snapshot fields",
+        "result": "no_exploitable_failure_in_handler_layer"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "availability",
+        "description": "handleAccommodationSaved forwarded only hotel/check-in vars to sendNotification and still attempted both channels even when no recipient existed, so normal accommodation confirmations could reach the notification layer without the destination/template context needed to render and deliver.",
+        "fix": "Build a full notification context for saved events from scoped person/event lookups, inject trusted recipient/fullName/eventName vars, and skip channels with no destination before dispatch.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/cascade/handlers/accommodation-cascade.test.ts > uses scoped contact fields for accommodation save and skips channels with no destination"
+      },
+      {
+        "severity": "high",
+        "category": "info_leakage",
+        "description": "Accommodation update/cancel handlers trusted payload.variables wholesale. A forged cascade envelope could set recipientEmail/recipientPhoneE164/fullName/eventName to attacker-controlled values and redirect notifications for another delegate while presenting the wrong event context.",
+        "fix": "Rebuild recipient and template identity fields from scoped DB state and let snapshot variables supply only non-authoritative domain data.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/cascade/handlers/accommodation-cascade.test.ts > ignores forged snapshot recipients on accommodation update and uses scoped contact data"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

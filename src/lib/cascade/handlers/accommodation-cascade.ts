@@ -12,10 +12,11 @@
 import { db } from '@/lib/db';
 import {
   accommodationRecords,
+  events,
   transportPassengerAssignments,
 } from '@/lib/db/schema';
 import { people } from '@/lib/db/schema/people';
-import { eq, ne, and } from 'drizzle-orm';
+import { eq, ne } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { upsertRedFlag } from '../red-flags';
 import { sendNotification } from '@/lib/notifications/send';
@@ -45,6 +46,64 @@ async function resolvePersonContact(personId: string) {
     .where(eq(people.id, personId))
     .limit(1);
   return person ?? null;
+}
+
+async function resolveEventName(eventId: string) {
+  const [event] = await db
+    .select({
+      name: events.name,
+    })
+    .from(events)
+    .where(eq(events.id, eventId))
+    .limit(1);
+
+  return event?.name ?? null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function getOptionalString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+async function buildAccommodationNotificationVariables(params: {
+  eventId: string;
+  personId: string;
+  snapshotVars?: unknown;
+  domainVars: Record<string, unknown>;
+}) {
+  const snapshotVars = asRecord(params.snapshotVars);
+  const [person, eventName] = await Promise.all([
+    resolvePersonContact(params.personId),
+    resolveEventName(params.eventId),
+  ]);
+
+  const trustedFullName = person?.fullName ?? getOptionalString(snapshotVars.fullName);
+  const trustedRecipientName =
+    person?.fullName ??
+    getOptionalString(snapshotVars.recipientName) ??
+    trustedFullName;
+
+  return {
+    ...snapshotVars,
+    ...params.domainVars,
+    recipientEmail: person?.email ?? null,
+    recipientPhoneE164: person?.phoneE164 ?? null,
+    recipientName: trustedRecipientName,
+    fullName: trustedFullName,
+    eventName: eventName ?? getOptionalString(snapshotVars.eventName),
+  };
 }
 
 // ── Helper: safe notification send (never throws) ────────────
@@ -109,10 +168,27 @@ export async function handleAccommodationSaved(params: {
 }) {
   const { eventId, payload } = params;
   const data = payload as unknown as AccommodationSavedPayload;
-  const snapshotVars = payload.variables as Record<string, unknown> | undefined;
+  const notificationVars = await buildAccommodationNotificationVariables({
+    eventId,
+    personId: data.personId,
+    snapshotVars: payload.variables,
+    domainVars: {
+      hotelName: data.hotelName,
+      checkInDate: data.checkInDate,
+      checkOutDate: data.checkOutDate,
+      googleMapsUrl: data.googleMapsUrl,
+    },
+  });
   const ts = Date.now();
 
   for (const channel of ['email', 'whatsapp'] as const) {
+    if (
+      (channel === 'email' && !notificationVars.recipientEmail) ||
+      (channel === 'whatsapp' && !notificationVars.recipientPhoneE164)
+    ) {
+      continue;
+    }
+
     await safeSendNotification({
       eventId,
       personId: data.personId,
@@ -121,12 +197,7 @@ export async function handleAccommodationSaved(params: {
       triggerType: 'accommodation.saved',
       triggerEntityType: 'accommodation_record',
       triggerEntityId: data.accommodationRecordId,
-      variables: {
-        hotelName: data.hotelName,
-        checkInDate: data.checkInDate,
-        checkOutDate: data.checkOutDate,
-        googleMapsUrl: data.googleMapsUrl,
-      },
+      variables: notificationVars,
       idempotencyKey: `notify:accommodation-confirmation:${eventId}:${data.personId}:${data.accommodationRecordId}:${ts}:${channel}`,
       cascadeEvent: 'conference/accommodation.saved',
       payload,
@@ -202,20 +273,14 @@ export async function handleAccommodationUpdated(params: {
   }
 
   // 3. Notify delegate via email + WhatsApp
-  const snapshotVars = payload.variables as Record<string, unknown> | undefined;
-  let baseVars: Record<string, unknown>;
-
-  if (snapshotVars) {
-    baseVars = snapshotVars;
-  } else {
-    const person = await resolvePersonContact(data.personId);
-    baseVars = {
+  const baseVars = await buildAccommodationNotificationVariables({
+    eventId,
+    personId: data.personId,
+    snapshotVars: payload.variables,
+    domainVars: {
       changeSummary: data.changeSummary,
-      recipientEmail: person?.email ?? null,
-      recipientPhoneE164: person?.phoneE164 ?? null,
-      recipientName: person?.fullName ?? null,
-    };
-  }
+    },
+  });
 
   const ts = Date.now();
 
@@ -287,21 +352,15 @@ export async function handleAccommodationCancelled(params: {
   }
 
   // Notify delegate via email + WhatsApp
-  const snapshotVars = payload.variables as Record<string, unknown> | undefined;
-  let baseVars: Record<string, unknown>;
-
-  if (snapshotVars) {
-    baseVars = snapshotVars;
-  } else {
-    const person = await resolvePersonContact(data.personId);
-    baseVars = {
+  const baseVars = await buildAccommodationNotificationVariables({
+    eventId,
+    personId: data.personId,
+    snapshotVars: payload.variables,
+    domainVars: {
       cancelledAt: data.cancelledAt,
       reason: data.reason,
-      recipientEmail: person?.email ?? null,
-      recipientPhoneE164: person?.phoneE164 ?? null,
-      recipientName: person?.fullName ?? null,
-    };
-  }
+    },
+  });
 
   const ts = Date.now();
 

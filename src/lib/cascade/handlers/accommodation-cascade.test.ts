@@ -27,6 +27,10 @@ vi.mock('@/lib/db/schema', () => ({
     personId: 'tpa.person_id',
     assignmentStatus: 'tpa.assignment_status',
   },
+  events: {
+    id: 'events.id',
+    name: 'events.name',
+  },
 }));
 vi.mock('@/lib/db/schema/people', () => ({
   people: {
@@ -82,6 +86,7 @@ const mockDb = vi.mocked(db as { select: ReturnType<typeof vi.fn> });
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockDb.select.mockImplementation(() => createChainableSelect([]));
   clearCascadeHandlers();
   registerAccommodationCascadeHandlers();
 });
@@ -91,6 +96,43 @@ describe('Accommodation cascade → real notification', () => {
   const personId = 'person-200';
   const accommodationRecordId = 'accom-300';
   const actor = { type: 'user' as const, id: 'user_1' };
+
+  it('uses scoped contact fields for accommodation save and skips channels with no destination', async () => {
+    const personSelect = createChainableSelect([
+      { email: 'saved@test.com', phoneE164: null, fullName: 'Saved Delegate' },
+    ]);
+    const eventSelect = createChainableSelect([
+      { name: 'GEM India 2026' },
+    ]);
+
+    mockDb.select
+      .mockReturnValueOnce(personSelect)
+      .mockReturnValueOnce(eventSelect);
+
+    await emitCascadeEvent(CASCADE_EVENTS.ACCOMMODATION_SAVED, eventId, actor, {
+      accommodationRecordId,
+      personId,
+      registrationId: null,
+      hotelName: 'Hotel One',
+      checkInDate: '2026-04-10',
+      checkOutDate: '2026-04-12',
+      googleMapsUrl: 'https://maps.example/hotel-one',
+    });
+
+    expect(mockSendNotification).toHaveBeenCalledOnce();
+    const call = mockSendNotification.mock.calls[0][0];
+    expect(call.channel).toBe('email');
+    expect(call.variables).toEqual(expect.objectContaining({
+      recipientEmail: 'saved@test.com',
+      recipientPhoneE164: null,
+      recipientName: 'Saved Delegate',
+      fullName: 'Saved Delegate',
+      eventName: 'GEM India 2026',
+      hotelName: 'Hotel One',
+      checkInDate: '2026-04-10',
+      checkOutDate: '2026-04-12',
+    }));
+  });
 
   it('sends email + WhatsApp on accommodation update when person has both', async () => {
     const transportSelect = createChainableSelect([]);
@@ -122,6 +164,48 @@ describe('Accommodation cascade → real notification', () => {
 
     const waCall = mockSendNotification.mock.calls[1][0];
     expect(waCall.channel).toBe('whatsapp');
+  });
+
+  it('ignores forged snapshot recipients on accommodation update and uses scoped contact data', async () => {
+    const transportSelect = createChainableSelect([]);
+    const personSelect = createChainableSelect([
+      { email: 'real@hotel.com', phoneE164: '+919000000099', fullName: 'Real Guest' },
+    ]);
+    const eventSelect = createChainableSelect([
+      { name: 'Scoped Event' },
+    ]);
+
+    mockDb.select
+      .mockReturnValueOnce(transportSelect)
+      .mockReturnValueOnce(personSelect)
+      .mockReturnValueOnce(eventSelect);
+
+    await emitCascadeEvent(CASCADE_EVENTS.ACCOMMODATION_UPDATED, eventId, actor, {
+      accommodationRecordId,
+      personId,
+      previous: {},
+      current: {},
+      changeSummary: { hotelName: { from: 'Old', to: 'New' } },
+      sharedRoomGroup: null,
+      variables: {
+        recipientEmail: 'attacker@example.com',
+        recipientPhoneE164: '+15550000000',
+        recipientName: 'Attacker',
+        fullName: 'Attacker',
+        eventName: 'Wrong Event',
+      },
+    });
+
+    expect(mockSendNotification).toHaveBeenCalledTimes(2);
+    for (const [callArg] of mockSendNotification.mock.calls) {
+      expect(callArg.variables).toEqual(expect.objectContaining({
+        recipientEmail: 'real@hotel.com',
+        recipientPhoneE164: '+919000000099',
+        recipientName: 'Real Guest',
+        fullName: 'Real Guest',
+        eventName: 'Scoped Event',
+      }));
+    }
   });
 
   it('sends only email on accommodation cancellation when no phone', async () => {
