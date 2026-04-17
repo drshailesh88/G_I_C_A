@@ -2675,5 +2675,70 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/import/csv-import.ts",
+    "module": "src/lib/import/csv-import.ts",
+    "attacked_at": "2026-04-17T16:36:38Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "prototype_pollution",
+        "payload": "map a hostile CSV header like '__proto__' to fullName and parse rows through inherited object properties",
+        "result": "succeeded"
+      },
+      {
+        "category": "formula_injection",
+        "payload": "fullName '=cmd|' /C calc'!A0' imported from CSV and accepted as valid person data",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "CSV preview with 501+ rows despite the server-side import batch limit of 500 rows",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "dangerous object-prototype headers like '__proto__' and 'constructor' in raw CSV headers",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "attempted eventId/body scope confusion through csv-import helper entrypoints",
+        "result": "not_applicable_helper_module_has_no_event_scope"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "attempted direct privilege bypass through csv-import helper entrypoints",
+        "result": "not_applicable_helper_module_has_no_auth_surface"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "prototype_pollution",
+        "description": "parseRows trusted mapped column names and read row values with direct property access. A hostile CSV column like '__proto__' could be manually mapped in the UI, causing row parsing to read an inherited prototype object and throw instead of failing closed.",
+        "fix": "Rejected dangerous object-prototype column names at parse time and switched mapped-cell reads to own-property checks that ignore inherited values.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/import/csv-import.test.ts > fails closed on dangerous prototype-style mapped columns instead of crashing"
+      },
+      {
+        "severity": "high",
+        "category": "formula_injection",
+        "description": "The CSV helper accepted spreadsheet-formula payloads in imported text fields, so attacker-supplied values such as '=cmd|...' could be stored through the import flow and later execute when exported back into Excel-compatible spreadsheets.",
+        "fix": "Added fail-closed formula-prefix checks for imported text fields before rows are treated as valid preview/import candidates.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/import/csv-import.test.ts > rejects spreadsheet formula payloads in text fields"
+      },
+      {
+        "severity": "medium",
+        "category": "resource_exhaustion",
+        "description": "parseCsvString would parse arbitrarily large CSV previews and allowed more than 500 rows even though the server action rejects imports above that limit, letting hostile or oversized files consume client work before failing late.",
+        "fix": "Added a 20MB boundary check and capped CSV preview parsing to 501 rows so oversized imports fail early with an explicit row-limit error.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/import/csv-import.test.ts > rejects CSV files that exceed the batch row limit"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

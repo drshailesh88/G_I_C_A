@@ -4,6 +4,7 @@
 
 <!-- Recurring attack vectors + their fixes. Agent writes here. -->
 - Runtime lookup registries used for `key in registry` validation must use null-prototype, immutable objects. Plain object registries inherit `__proto__`, `constructor`, and `toString`, which lets malformed route params pass validation and lets one runtime caller poison metadata for later requests.
+- CSV import helpers are security boundaries too: reject dangerous object-prototype header names, fail closed on mapped `__proto__`/`constructor` lookups, and block spreadsheet-formula payloads before imported text can crash previews or become stored export-time formula injection.
 - Redis-backed feature-flag helpers are security boundaries too: validate canonical `eventId` segments and runtime flag keys before building keys, or malformed tenant IDs will miss to default-open flags and prototype-chain/default-registry lookups can return truthy non-booleans.
 - Storage helpers must validate object-key canonical form and signed-URL TTLs before touching the S3/R2 SDK. Otherwise traversal-style keys or overlong expiries can bypass higher-level event scoping assumptions and turn private files into long-lived download URLs.
 - Shared event-scope SQL helpers must validate canonical UUID event IDs, not just truthiness. Otherwise malformed, whitespace-padded, or oversized tenant IDs reach UUID-backed queries and turn missing caller-side validation into DB-layer failures instead of a fail-closed scope guard.
@@ -294,3 +295,9 @@
 - Attacks tried: 5
 - Bugs found: 2
 - Key finding: the flag helper trusted raw `eventId` strings and mutable plain-object defaults, so malformed event IDs could miss Redis and fail open to `registration_open=true`, while prototype/default registry lookups and runtime mutation could poison later flag decisions.
+
+## 2026-04-17T16:36:38Z — src/lib/import/csv-import.ts — CSV boundary hardening
+- Verdict: hardened
+- Attacks tried: 6
+- Bugs found: 3
+- Key finding: the import helper trusted prototype-shaped CSV headers, spreadsheet-formula text payloads, and oversized batch previews, so a hostile CSV could crash row parsing, seed export-time formula injection, or bypass the server-side 500-row import limit until late failure.

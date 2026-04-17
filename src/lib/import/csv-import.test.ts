@@ -257,6 +257,28 @@ describe('parseRows edge cases', () => {
     expect(parsed[0]).not.toHaveProperty('extra');
     expect(parsed[0]).not.toHaveProperty('Extra');
   });
+
+  it('fails closed on dangerous prototype-style mapped columns instead of crashing', () => {
+    const parsed = parseRows(
+      [{} as Record<string, string>],
+      [
+        { csvColumn: '__proto__', mappedTo: 'fullName', confidence: 1 },
+        { csvColumn: 'Email', mappedTo: 'email', confidence: 1 },
+      ],
+    );
+
+    expect(parsed[0].errors).toContain('Missing full name');
+    expect(parsed[0].errors).toContain('At least one of email or phone is required');
+  });
+
+  it('rejects spreadsheet formula payloads in text fields', () => {
+    const parsed = parseRows(
+      [{ Name: '=cmd|\' /C calc\'!A0', Email: 'test@example.com', Tags: '', Extra: '' }],
+      mappings,
+    );
+
+    expect(parsed[0].errors).toContain('Unsafe spreadsheet formula in full name');
+  });
 });
 
 describe('parseCsvString edge cases', () => {
@@ -280,5 +302,23 @@ describe('parseCsvString edge cases', () => {
 Müller François,test@example.com`;
     const result = parseCsvString(csv);
     expect(result.rows[0].Name).toBe('Müller François');
+  });
+
+  it('rejects dangerous object-prototype headers', () => {
+    const csv = `__proto__,Email
+Test,test@example.com`;
+
+    const result = parseCsvString(csv);
+    expect(result.errors).toContain('Unsafe CSV column header: __proto__');
+  });
+
+  it('rejects CSV files that exceed the batch row limit', () => {
+    const csv = [
+      'Name,Email',
+      ...Array.from({ length: 501 }, (_, index) => `Person ${index + 1},person${index + 1}@example.com`),
+    ].join('\n');
+
+    const result = parseCsvString(csv);
+    expect(result.errors).toContain('CSV import exceeds 500 row limit');
   });
 });

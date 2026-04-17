@@ -2,6 +2,11 @@ import Papa from 'papaparse';
 import Fuse from 'fuse.js';
 import { normalizePhone } from '@/lib/validations/person';
 
+const MAX_CSV_IMPORT_ROWS = 500;
+const MAX_CSV_IMPORT_BYTES = 20 * 1024 * 1024;
+const DANGEROUS_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const SPREADSHEET_FORMULA_PREFIX = /^[\t\r ]*[=+\-@]/;
+
 // ── Column mapping ─────────────────────────────────────────────
 // Standard fields we expect to find in a CSV.
 const KNOWN_COLUMNS = [
@@ -56,6 +61,29 @@ export interface CsvImportResult {
   validRows: number;
 }
 
+function isDangerousObjectKey(value: string): boolean {
+  return DANGEROUS_OBJECT_KEYS.has(value.trim().toLowerCase());
+}
+
+function getMappedCellValue(row: Record<string, string>, columnName: string | undefined): string {
+  if (!columnName || isDangerousObjectKey(columnName) || !Object.hasOwn(row, columnName)) {
+    return '';
+  }
+
+  const value = row[columnName];
+  return typeof value === 'string' ? value : '';
+}
+
+function addSpreadsheetFormulaError(
+  errors: string[],
+  label: string,
+  value: string,
+) {
+  if (value && SPREADSHEET_FORMULA_PREFIX.test(value)) {
+    errors.push(`Unsafe spreadsheet formula in ${label}`);
+  }
+}
+
 // ── Auto-map columns ───────────────────────────────────────────
 export function autoMapColumns(csvHeaders: string[]): ColumnMapping[] {
   const allAliases = KNOWN_COLUMNS.flatMap((col) =>
@@ -98,17 +126,31 @@ export function parseRows(
 ): ParsedPerson[] {
   const keyMap = new Map<MappedKey, string>();
   for (const m of mappings) {
-    if (m.mappedTo) keyMap.set(m.mappedTo, m.csvColumn);
+    if (m.mappedTo && !isDangerousObjectKey(m.csvColumn)) keyMap.set(m.mappedTo, m.csvColumn);
   }
 
   return rows.map((row, index) => {
     const errors: string[] = [];
-    const fullName = (row[keyMap.get('fullName') ?? ''] ?? '').trim();
-    const email = (row[keyMap.get('email') ?? ''] ?? '').trim();
-    const phone = (row[keyMap.get('phone') ?? ''] ?? '').trim();
+    const fullName = getMappedCellValue(row, keyMap.get('fullName')).trim();
+    const email = getMappedCellValue(row, keyMap.get('email')).trim();
+    const phone = getMappedCellValue(row, keyMap.get('phone')).trim();
+    const salutation = getMappedCellValue(row, keyMap.get('salutation')).trim();
+    const designation = getMappedCellValue(row, keyMap.get('designation')).trim();
+    const specialty = getMappedCellValue(row, keyMap.get('specialty')).trim();
+    const organization = getMappedCellValue(row, keyMap.get('organization')).trim();
+    const city = getMappedCellValue(row, keyMap.get('city')).trim();
+    const tagsRaw = getMappedCellValue(row, keyMap.get('tags')).trim();
 
     if (!fullName) errors.push('Missing full name');
     if (!email && !phone) errors.push('At least one of email or phone is required');
+    addSpreadsheetFormulaError(errors, 'full name', fullName);
+    addSpreadsheetFormulaError(errors, 'email', email);
+    addSpreadsheetFormulaError(errors, 'salutation', salutation);
+    addSpreadsheetFormulaError(errors, 'designation', designation);
+    addSpreadsheetFormulaError(errors, 'specialty', specialty);
+    addSpreadsheetFormulaError(errors, 'organization', organization);
+    addSpreadsheetFormulaError(errors, 'city', city);
+    addSpreadsheetFormulaError(errors, 'tags', tagsRaw);
 
     let phoneE164: string | undefined;
     if (phone) {
@@ -119,7 +161,6 @@ export function parseRows(
       }
     }
 
-    const tagsRaw = (row[keyMap.get('tags') ?? ''] ?? '').trim();
     const tags = tagsRaw ? tagsRaw.split(/[,;|]/).map((t) => t.trim()).filter(Boolean) : undefined;
 
     return {
@@ -128,11 +169,11 @@ export function parseRows(
       email: email || undefined,
       phone: phone || undefined,
       phoneE164,
-      salutation: (row[keyMap.get('salutation') ?? ''] ?? '').trim() || undefined,
-      designation: (row[keyMap.get('designation') ?? ''] ?? '').trim() || undefined,
-      specialty: (row[keyMap.get('specialty') ?? ''] ?? '').trim() || undefined,
-      organization: (row[keyMap.get('organization') ?? ''] ?? '').trim() || undefined,
-      city: (row[keyMap.get('city') ?? ''] ?? '').trim() || undefined,
+      salutation: salutation || undefined,
+      designation: designation || undefined,
+      specialty: specialty || undefined,
+      organization: organization || undefined,
+      city: city || undefined,
       tags,
       errors,
     };
@@ -216,15 +257,34 @@ export function parseCsvString(csvContent: string): {
   rows: Record<string, string>[];
   errors: string[];
 } {
+  if (new TextEncoder().encode(csvContent).length > MAX_CSV_IMPORT_BYTES) {
+    return {
+      headers: [],
+      rows: [],
+      errors: ['CSV file exceeds 20MB limit'],
+    };
+  }
+
   const result = Papa.parse<Record<string, string>>(csvContent, {
     header: true,
     skipEmptyLines: true,
     transformHeader: (h) => h.trim(),
+    preview: MAX_CSV_IMPORT_ROWS + 1,
   });
 
+  const headers = result.meta.fields ?? [];
+  const errors = result.errors.map((e) => `Row ${e.row}: ${e.message}`);
+  const unsafeHeaders = headers.filter(isDangerousObjectKey);
+  for (const header of unsafeHeaders) {
+    errors.push(`Unsafe CSV column header: ${header}`);
+  }
+  if (result.data.length > MAX_CSV_IMPORT_ROWS) {
+    errors.push(`CSV import exceeds ${MAX_CSV_IMPORT_ROWS} row limit`);
+  }
+
   return {
-    headers: result.meta.fields ?? [],
+    headers,
     rows: result.data,
-    errors: result.errors.map((e) => `Row ${e.row}: ${e.message}`),
+    errors,
   };
 }
