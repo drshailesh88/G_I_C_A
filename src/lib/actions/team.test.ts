@@ -5,15 +5,26 @@ const {
   mockAuth,
   mockClerkClient,
   mockRevalidatePath,
+  mockRedisSet,
+  mockRedisEval,
 } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
   mockClerkClient: vi.fn(),
   mockRevalidatePath: vi.fn(),
+  mockRedisSet: vi.fn(),
+  mockRedisEval: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
   auth: mockAuth,
   clerkClient: mockClerkClient,
+}));
+
+vi.mock('@upstash/redis', () => ({
+  Redis: vi.fn().mockImplementation(() => ({
+    set: mockRedisSet,
+    eval: mockRedisEval,
+  })),
 }));
 
 vi.mock('next/cache', () => ({
@@ -27,6 +38,8 @@ const ORG_ID = 'org_abc123';
 const USER_SA = 'user_superadmin';
 const USER_COORD = 'user_coordinator';
 const USER_OPS = 'user_ops';
+
+type Membership = ReturnType<typeof makeMembership>;
 
 function authAsSuperAdmin(userId = USER_SA) {
   mockAuth.mockResolvedValue({
@@ -44,9 +57,43 @@ function makeMembership(userId: string, email: string, role: string, firstName =
   };
 }
 
-function mockOrgClient(memberships: ReturnType<typeof makeMembership>[]) {
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+
+  return { promise, resolve };
+}
+
+function mockOrgClient(memberships: Membership[]) {
   const orgApi = {
-    getOrganizationMembershipList: vi.fn().mockResolvedValue({ data: memberships }),
+    getOrganizationMembershipList: vi.fn().mockImplementation((params?: {
+      limit?: number;
+      offset?: number;
+      role?: string[];
+      userId?: string[];
+    }) => {
+      const limit = params?.limit ?? memberships.length;
+      const offset = params?.offset ?? 0;
+
+      let filtered = memberships;
+
+      if (params?.role?.length) {
+        filtered = filtered.filter((membership) => params.role!.includes(membership.role));
+      }
+
+      if (params?.userId?.length) {
+        filtered = filtered.filter((membership) =>
+          params.userId!.includes(membership.publicUserData.userId),
+        );
+      }
+
+      return Promise.resolve({
+        data: filtered.slice(offset, offset + limit),
+        totalCount: filtered.length,
+      });
+    }),
     createOrganizationInvitation: vi.fn().mockResolvedValue({}),
     updateOrganizationMembership: vi.fn().mockResolvedValue({}),
     deleteOrganizationMembership: vi.fn().mockResolvedValue({}),
@@ -58,6 +105,12 @@ function mockOrgClient(memberships: ReturnType<typeof makeMembership>[]) {
 describe('Team Management (6D-1)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.UPSTASH_REDIS_REST_URL = 'https://redis.test';
+    process.env.UPSTASH_REDIS_REST_TOKEN = 'test-token';
+    delete process.env.UPSTASH_REDIS_REST_URL_TEST;
+    delete process.env.UPSTASH_REDIS_REST_TOKEN_TEST;
+    mockRedisSet.mockResolvedValue('OK');
+    mockRedisEval.mockResolvedValue(1);
   });
 
   describe('getTeamMembers', () => {
@@ -75,6 +128,19 @@ describe('Team Management (6D-1)', () => {
       expect(result[0].email).toBe('admin@gem.org');
       expect(result[0].role).toBe(ROLES.SUPER_ADMIN);
       expect(result[1].email).toBe('coord@gem.org');
+    });
+
+    it('paginates across every Clerk membership page', async () => {
+      authAsSuperAdmin();
+      const members = Array.from({ length: 101 }, (_, index) =>
+        makeMembership(`user_${index + 1}`, `user${index + 1}@gem.org`, ROLES.READ_ONLY),
+      );
+      mockOrgClient(members);
+
+      const result = await getTeamMembers();
+
+      expect(result).toHaveLength(101);
+      expect(result.at(-1)?.email).toBe('user101@gem.org');
     });
 
     it('rejects non-super-admin users', async () => {
@@ -159,21 +225,6 @@ describe('Team Management (6D-1)', () => {
     it('blocks downgrading the last super admin', async () => {
       authAsSuperAdmin();
       mockOrgClient([
-        makeMembership(USER_SA, 'admin@gem.org', ROLES.SUPER_ADMIN),
-        makeMembership(USER_COORD, 'coord@gem.org', ROLES.SUPER_ADMIN),
-      ]);
-      // USER_COORD is one of 2 super admins — try downgrading USER_SA is blocked by "own role" guard
-      // Let's test: only 1 super admin (USER_SA), try to downgrade another who IS super admin
-      // Setup: USER_SA is current user, USER_OPS is the only other super admin
-      mockOrgClient([
-        makeMembership(USER_SA, 'admin@gem.org', ROLES.SUPER_ADMIN),
-        makeMembership(USER_OPS, 'ops@gem.org', ROLES.SUPER_ADMIN),
-      ]);
-
-      // Remove one so only USER_OPS is super admin besides USER_SA
-      // Actually: both are SA, downgrading USER_OPS to OPS means only 1 SA left — that's fine
-      // But if we have only 1 SA (not current user), downgrading them is blocked
-      mockOrgClient([
         makeMembership(USER_SA, 'admin@gem.org', ROLES.EVENT_COORDINATOR), // not SA in DB
         makeMembership(USER_OPS, 'ops@gem.org', ROLES.SUPER_ADMIN), // only SA
       ]);
@@ -220,11 +271,6 @@ describe('Team Management (6D-1)', () => {
     it('blocks removing the last super admin', async () => {
       authAsSuperAdmin();
       mockOrgClient([
-        makeMembership(USER_SA, 'admin@gem.org', ROLES.SUPER_ADMIN),
-        makeMembership(USER_OPS, 'ops@gem.org', ROLES.SUPER_ADMIN),
-      ]);
-      // Only USER_OPS is super admin (USER_SA shows as coordinator in member list)
-      mockOrgClient([
         makeMembership(USER_SA, 'admin@gem.org', ROLES.EVENT_COORDINATOR),
         makeMembership(USER_OPS, 'ops@gem.org', ROLES.SUPER_ADMIN),
       ]);
@@ -233,6 +279,53 @@ describe('Team Management (6D-1)', () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toMatch(/last Super Admin/i);
+    });
+
+    it('blocks removing the last super admin even when they appear after the first 100 members', async () => {
+      authAsSuperAdmin();
+      const members = [
+        ...Array.from({ length: 100 }, (_, index) =>
+          makeMembership(`user_${index + 1}`, `user${index + 1}@gem.org`, ROLES.EVENT_COORDINATOR),
+        ),
+        makeMembership(USER_OPS, 'ops@gem.org', ROLES.SUPER_ADMIN),
+      ];
+      mockOrgClient(members);
+
+      const result = await removeTeamMember({ userId: USER_OPS });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/last Super Admin/i);
+    });
+
+    it('fails closed when another team membership change already holds the lock', async () => {
+      authAsSuperAdmin();
+      const orgApi = mockOrgClient([
+        makeMembership(USER_SA, 'admin@gem.org', ROLES.SUPER_ADMIN),
+        makeMembership(USER_COORD, 'coord@gem.org', ROLES.EVENT_COORDINATOR),
+      ]);
+      const updateDeferred = createDeferred<{}>();
+
+      orgApi.updateOrganizationMembership.mockImplementation(() => updateDeferred.promise);
+      mockRedisSet
+        .mockResolvedValueOnce('OK')
+        .mockResolvedValueOnce(null);
+
+      const firstChange = changeMemberRole({
+        userId: USER_COORD,
+        role: ROLES.OPS,
+      });
+
+      await Promise.resolve();
+
+      const overlappingRemove = await removeTeamMember({ userId: USER_COORD });
+
+      updateDeferred.resolve({});
+      const firstResult = await firstChange;
+
+      expect(overlappingRemove.success).toBe(false);
+      expect(overlappingRemove.error).toMatch(/already in progress/i);
+      expect(firstResult.success).toBe(true);
+      expect(orgApi.deleteOrganizationMembership).not.toHaveBeenCalled();
     });
   });
 

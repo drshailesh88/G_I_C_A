@@ -1,5 +1,6 @@
 'use server';
 
+import { Redis } from '@upstash/redis';
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { revalidatePath } from 'next/cache';
 import { ROLES, type RoleValue } from '@/lib/auth/roles';
@@ -19,12 +20,39 @@ export type TeamMember = {
   createdAt: number;
 };
 
+type OrganizationMembershipRecord = {
+  publicUserData?: {
+    userId?: string | null;
+    identifier?: string | null;
+    firstName?: string | null;
+    lastName?: string | null;
+    imageUrl?: string | null;
+  } | null;
+  role: string;
+  createdAt: number;
+};
+
+type TeamMutationLockHandle = {
+  key: string;
+  ownerToken: string;
+};
+
+type TeamMutationLock = {
+  acquire(orgId: string): Promise<TeamMutationLockHandle | null>;
+  release(handle: TeamMutationLockHandle): Promise<void>;
+};
+
 const ROLE_LABELS: Record<string, string> = {
   [ROLES.SUPER_ADMIN]: 'Super Admin',
   [ROLES.EVENT_COORDINATOR]: 'Event Coordinator',
   [ROLES.OPS]: 'Ops',
   [ROLES.READ_ONLY]: 'Read-only',
 };
+
+const MEMBERSHIP_PAGE_SIZE = 100;
+const TEAM_MUTATION_LOCK_PREFIX = 'team:membership-lock:';
+const TEAM_MUTATION_LOCK_TTL_SECONDS = 15;
+const RELEASE_LOCK_LUA = `if redis.call("get",KEYS[1]) == ARGV[1] then return redis.call("del",KEYS[1]) else return 0 end`;
 
 export function getRoleLabel(role: string): string {
   return ROLE_LABELS[role] ?? role;
@@ -46,16 +74,106 @@ async function getOrgId(): Promise<string> {
   return orgId;
 }
 
+function getTeamMutationRedisClient(): Redis {
+  const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.UPSTASH_REDIS_REST_URL_TEST;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.UPSTASH_REDIS_REST_TOKEN_TEST;
+
+  if (!url || !token) {
+    throw new Error('Team membership mutations require Redis lock configuration');
+  }
+
+  return new Redis({ url, token });
+}
+
+function createRedisTeamMutationLock(): TeamMutationLock {
+  return {
+    async acquire(orgId) {
+      const redis = getTeamMutationRedisClient();
+      const key = `${TEAM_MUTATION_LOCK_PREFIX}${orgId}`;
+      const ownerToken = crypto.randomUUID();
+      const result = await redis.set(key, ownerToken, {
+        nx: true,
+        ex: TEAM_MUTATION_LOCK_TTL_SECONDS,
+      });
+
+      if (result === 'OK') {
+        return { key, ownerToken };
+      }
+
+      return null;
+    },
+
+    async release(handle) {
+      const redis = getTeamMutationRedisClient();
+      await redis.eval(RELEASE_LOCK_LUA, [handle.key], [handle.ownerToken]);
+    },
+  };
+}
+
+async function withTeamMutationLock<T>(
+  orgId: string,
+  action: () => Promise<T>,
+): Promise<T> {
+  const lock = createRedisTeamMutationLock();
+
+  let handle: TeamMutationLockHandle | null = null;
+
+  try {
+    handle = await lock.acquire(orgId);
+  } catch {
+    throw new Error('Unable to verify team membership lock. Please try again later.');
+  }
+
+  if (!handle) {
+    throw new Error('Another team membership change is already in progress. Please try again.');
+  }
+
+  try {
+    return await action();
+  } finally {
+    await lock.release(handle).catch(() => undefined);
+  }
+}
+
+async function listOrganizationMemberships(
+  orgId: string,
+  filters?: {
+    role?: RoleValue[];
+    userId?: string[];
+  },
+): Promise<OrganizationMembershipRecord[]> {
+  const client = await clerkClient();
+  const memberships: OrganizationMembershipRecord[] = [];
+  let offset = 0;
+  let totalCount = 0;
+
+  do {
+    const page = await client.organizations.getOrganizationMembershipList({
+      organizationId: orgId,
+      limit: MEMBERSHIP_PAGE_SIZE,
+      offset,
+      ...(filters?.role ? { role: filters.role } : {}),
+      ...(filters?.userId ? { userId: filters.userId } : {}),
+    });
+
+    memberships.push(...page.data);
+    totalCount = page.totalCount;
+    offset += page.data.length;
+  } while (offset < totalCount);
+
+  return memberships;
+}
+
+async function listSuperAdminMemberships(orgId: string): Promise<OrganizationMembershipRecord[]> {
+  return listOrganizationMemberships(orgId, { role: [ROLES.SUPER_ADMIN] });
+}
+
 export async function getTeamMembers(): Promise<TeamMember[]> {
   await assertSuperAdmin();
   const orgId = await getOrgId();
-  const client = await clerkClient();
-  const memberships = await client.organizations.getOrganizationMembershipList({
-    organizationId: orgId,
-    limit: 100,
-  });
+  const memberships = await listOrganizationMemberships(orgId);
 
-  return memberships.data.map((m) => ({
+  return memberships.map((m) => ({
     userId: m.publicUserData?.userId ?? '',
     email: m.publicUserData?.identifier ?? '',
     firstName: m.publicUserData?.firstName ?? null,
@@ -112,26 +230,30 @@ export async function changeMemberRole(input: {
     return { success: false, error: 'Cannot change your own role' };
   }
 
-  // Guard: cannot downgrade the last super admin
-  if (parsed.data.role !== ROLES.SUPER_ADMIN) {
-    const members = await getTeamMembers();
-    const superAdmins = members.filter((m) => m.role === ROLES.SUPER_ADMIN);
-    const targetIsSuperAdmin = superAdmins.some((m) => m.userId === parsed.data.userId);
-    if (targetIsSuperAdmin && superAdmins.length <= 1) {
-      return { success: false, error: 'Cannot downgrade the last Super Admin' };
-    }
-  }
-
   try {
-    const client = await clerkClient();
-    await client.organizations.updateOrganizationMembership({
-      organizationId: orgId,
-      userId: parsed.data.userId,
-      role: parsed.data.role as RoleValue,
-    });
+    return await withTeamMutationLock(orgId, async () => {
+      // Guard: cannot downgrade the last super admin
+      if (parsed.data.role !== ROLES.SUPER_ADMIN) {
+        const superAdmins = await listSuperAdminMemberships(orgId);
+        const targetIsSuperAdmin = superAdmins.some(
+          (membership) => membership.publicUserData?.userId === parsed.data.userId,
+        );
 
-    revalidatePath('/settings/team');
-    return { success: true };
+        if (targetIsSuperAdmin && superAdmins.length <= 1) {
+          return { success: false, error: 'Cannot downgrade the last Super Admin' };
+        }
+      }
+
+      const client = await clerkClient();
+      await client.organizations.updateOrganizationMembership({
+        organizationId: orgId,
+        userId: parsed.data.userId,
+        role: parsed.data.role as RoleValue,
+      });
+
+      revalidatePath('/settings/team');
+      return { success: true };
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to change role';
     return { success: false, error: message };
@@ -154,23 +276,27 @@ export async function removeTeamMember(input: {
     return { success: false, error: 'Cannot remove yourself from the team' };
   }
 
-  // Guard: cannot remove the last super admin
-  const members = await getTeamMembers();
-  const superAdmins = members.filter((m) => m.role === ROLES.SUPER_ADMIN);
-  const targetIsSuperAdmin = superAdmins.some((m) => m.userId === parsed.data.userId);
-  if (targetIsSuperAdmin && superAdmins.length <= 1) {
-    return { success: false, error: 'Cannot remove the last Super Admin' };
-  }
-
   try {
-    const client = await clerkClient();
-    await client.organizations.deleteOrganizationMembership({
-      organizationId: orgId,
-      userId: parsed.data.userId,
-    });
+    return await withTeamMutationLock(orgId, async () => {
+      // Guard: cannot remove the last super admin
+      const superAdmins = await listSuperAdminMemberships(orgId);
+      const targetIsSuperAdmin = superAdmins.some(
+        (membership) => membership.publicUserData?.userId === parsed.data.userId,
+      );
 
-    revalidatePath('/settings/team');
-    return { success: true };
+      if (targetIsSuperAdmin && superAdmins.length <= 1) {
+        return { success: false, error: 'Cannot remove the last Super Admin' };
+      }
+
+      const client = await clerkClient();
+      await client.organizations.deleteOrganizationMembership({
+        organizationId: orgId,
+        userId: parsed.data.userId,
+      });
+
+      revalidatePath('/settings/team');
+      return { success: true };
+    });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to remove member';
     return { success: false, error: message };

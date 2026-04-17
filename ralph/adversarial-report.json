@@ -1288,5 +1288,62 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/team.ts",
+    "module": "src/lib/actions/team.ts",
+    "attacked_at": "2026-04-17T10:39:46Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "role_escalation",
+        "payload": "call getTeamMembers, changeMemberRole, and removeTeamMember without org:super_admin",
+        "result": "blocked"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "invalid invite role/email and empty userId payloads",
+        "result": "blocked"
+      },
+      {
+        "category": "injection",
+        "payload": "HTML/SQL metacharacters in emailAddress, role, and userId fields",
+        "result": "blocked_by_zod_and_clerk_parameterization"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "organization with 101 memberships and the only super admin on a later Clerk page",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "overlapping changeMemberRole/removeTeamMember requests while another membership mutation is in flight",
+        "result": "succeeded"
+      },
+      {
+        "category": "info_leakage",
+        "payload": "force Clerk membership mutation failures and inspect returned errors",
+        "result": "no_exploitable_failure_in_action_layer"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "resource_exhaustion",
+        "description": "Team membership reads and last-super-admin protections trusted a single 100-row Clerk membership page. In a large organization, a sole super admin on a later page could be removed or downgraded, leaving the org without any super admin and hiding members from the team UI.",
+        "fix": "Paginated Clerk membership reads until totalCount is exhausted and reused paginated super-admin lookups for destructive role/removal guards.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/team.test.ts > paginates across every Clerk membership page; blocks removing the last super admin even when they appear after the first 100 members"
+      },
+      {
+        "severity": "high",
+        "category": "race_condition",
+        "description": "changeMemberRole and removeTeamMember performed the last-super-admin check before the Clerk write with no serialization, so overlapping admin mutations could both pass the stale read and strip every super admin from the organization.",
+        "fix": "Wrapped destructive team membership mutations in an org-scoped Redis lock so only one admin-changing mutation can evaluate the invariant and write at a time.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/team.test.ts > fails closed when another team membership change already holds the lock"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
