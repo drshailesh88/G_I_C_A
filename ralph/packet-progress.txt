@@ -14,6 +14,17 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-17T23:40:00Z — PKT-C-001 — Terms and privacy pages
+
+- Story ID: p2-d7-terms-privacy-page
+- Implemented: Created `src/app/(public)/terms/page.tsx` — client component at `/terms` under the existing `(public)` layout. Tab toggle (Terms of Service / Privacy Policy) uses local `useState`. Each tab renders accordion sections (`AccordionSection` component, also local `useState` per item with chevron animation). Static content arrays (`TERMS_SECTIONS`, `PRIVACY_SECTIONS`) each have 6 sections. "Back to Registration" ghost button at the bottom. Added `/terms` link footer to registration form (`registration-form-client.tsx` in the event registration flow).
+- Files changed:
+  - src/app/(public)/terms/page.tsx (new — full terms/privacy page with tab toggle and accordions)
+  - src/app/(public)/terms/terms.test.ts (new — 6 tests: section counts, non-empty title/body, unique titles)
+  - src/app/(public)/e/[eventSlug]/register/registration-form-client.tsx (added "Terms & Privacy Policy" footer link)
+- Tests run: `npm run test:run` — 6 new tests pass; 3 pre-existing failing test files (archive-bypass, travel-cascade, full-journey), unchanged.
+- Risks/follow-ups: Static MDX upgrade (CMS editor) deferred to v2 per design decisions. "Back to Registration" links to `/` (generic) since there is no single registration URL independent of eventSlug — a future packet may pass the event slug via query param if needed.
+
 ## 2026-04-17T23:34:30Z — PKT-A-005 — Registration cancellation cascade creates linked red flags
 
 - Story ID: p3-registration-cancel-cascade

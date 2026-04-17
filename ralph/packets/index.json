@@ -2,7 +2,7 @@
   "version": 1,
   "pipeline": "ralph-packets",
   "updated_at": "2026-04-17T00:00:00Z",
-  "current_packet_id": "PKT-A-005",
+  "current_packet_id": "PKT-C-001",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -402,7 +402,7 @@
       "bucket": "C",
       "module": "public",
       "priority": 6,
-      "status": "READY",
+      "status": "NEEDS_REVIEW",
       "packet_file": "ralph/packets/PKT-C-001-p2-d7-terms-privacy-page.md",
       "spec_status": "frozen",
       "wireframe_status": "frozen",
@@ -419,9 +419,9 @@
         ]
       },
       "linear_issue_id": null,
-      "build_commit": null,
+      "build_commit": "618b67abf3a5086a4674061121723d6b581b67e4",
       "qa_commit": null,
-      "last_status_at": null,
+      "last_status_at": "2026-04-17T23:40:00.000000Z",
       "depends_on": []
     },
     {
