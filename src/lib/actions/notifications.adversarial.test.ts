@@ -36,6 +36,7 @@ vi.mock('next/cache', () => ({
 
 import {
   getFailedNotifications,
+  getNotificationDetail,
   manualResend,
   retryNotification,
 } from './notifications';
@@ -90,6 +91,49 @@ describe('notifications actions — adversarial review', () => {
     ).resolves.toEqual([{ id: LOG_ID, eventId: EVENT_ID }]);
   });
 
+  it('blocks ops users from reading communications failure logs', async () => {
+    mockAssertEventAccess.mockResolvedValue({
+      userId: 'ops-1',
+      role: 'org:ops',
+    });
+
+    await expect(
+      getFailedNotifications({
+        eventId: EVENT_ID,
+      }),
+    ).rejects.toThrow('forbidden');
+
+    expect(mockListFailedLogs).not.toHaveBeenCalled();
+  });
+
+  it('blocks ops users from reading notification detail payloads', async () => {
+    mockAssertEventAccess.mockResolvedValue({
+      userId: 'ops-1',
+      role: 'org:ops',
+    });
+
+    await expect(
+      getNotificationDetail({
+        eventId: EVENT_ID,
+        notificationLogId: LOG_ID,
+      }),
+    ).rejects.toThrow('forbidden');
+
+    expect(mockGetLogById).not.toHaveBeenCalled();
+  });
+
+  it('rejects oversized templateKey filters before auth or database work', async () => {
+    await expect(
+      getFailedNotifications({
+        eventId: EVENT_ID,
+        templateKey: 'a'.repeat(101),
+      }),
+    ).rejects.toThrow();
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockListFailedLogs).not.toHaveBeenCalled();
+  });
+
   it('retryNotification should revalidate the failed notifications page after a retry', async () => {
     await retryNotification({
       eventId: EVENT_ID,
@@ -101,6 +145,23 @@ describe('notifications actions — adversarial review', () => {
     );
   });
 
+  it('blocks ops users from retrying failed notifications', async () => {
+    mockAssertEventAccess.mockResolvedValue({
+      userId: 'ops-1',
+      role: 'org:ops',
+    });
+
+    await expect(
+      retryNotification({
+        eventId: EVENT_ID,
+        notificationLogId: LOG_ID,
+      }),
+    ).rejects.toThrow('forbidden');
+
+    expect(mockRetryFailedNotification).not.toHaveBeenCalled();
+    expect(mockRevalidatePath).not.toHaveBeenCalled();
+  });
+
   it('manualResend should revalidate the failed notifications page after a resend', async () => {
     await manualResend({
       eventId: EVENT_ID,
@@ -110,5 +171,22 @@ describe('notifications actions — adversarial review', () => {
     expect(mockRevalidatePath).toHaveBeenCalledWith(
       `/events/${EVENT_ID}/communications/failed`,
     );
+  });
+
+  it('blocks ops users from manually resending notifications', async () => {
+    mockAssertEventAccess.mockResolvedValue({
+      userId: 'ops-1',
+      role: 'org:ops',
+    });
+
+    await expect(
+      manualResend({
+        eventId: EVENT_ID,
+        notificationLogId: LOG_ID,
+      }),
+    ).rejects.toThrow('forbidden');
+
+    expect(mockResendNotification).not.toHaveBeenCalled();
+    expect(mockRevalidatePath).not.toHaveBeenCalled();
   });
 });

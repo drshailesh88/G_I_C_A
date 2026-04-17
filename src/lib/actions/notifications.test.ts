@@ -18,7 +18,7 @@ const resendSchema = z.object({
 const listFailedSchema = z.object({
   eventId: z.string().uuid(),
   channel: z.enum(['email', 'whatsapp']).optional(),
-  templateKey: z.string().optional(),
+  templateKey: z.string().trim().min(1).max(100).optional(),
   limit: z.number().int().min(1).max(200).optional(),
   offset: z.number().int().min(0).optional(),
 });
@@ -88,6 +88,22 @@ describe('Notification action schemas', () => {
       const result = listFailedSchema.safeParse({
         eventId: validUuid,
         channel: 'sms',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects whitespace-only templateKey', () => {
+      const result = listFailedSchema.safeParse({
+        eventId: validUuid,
+        templateKey: '   ',
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('rejects templateKey longer than 100 characters', () => {
+      const result = listFailedSchema.safeParse({
+        eventId: validUuid,
+        templateKey: 'a'.repeat(101),
       });
       expect(result.success).toBe(false);
     });

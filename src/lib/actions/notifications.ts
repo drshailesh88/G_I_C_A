@@ -1,10 +1,35 @@
 'use server';
 
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { ROLES } from '@/lib/auth/roles';
 import { listFailedLogs, getLogById } from '@/lib/notifications/log-queries';
 import { retryFailedNotification, resendNotification } from '@/lib/notifications/send';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+
+const COMMUNICATIONS_READ_ROLES = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+  ROLES.READ_ONLY,
+]);
+
+const COMMUNICATIONS_WRITE_ROLES = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+]);
+
+function assertNotificationsRole(
+  role: string | null | undefined,
+  options?: { requireWrite?: boolean },
+): void {
+  const allowedRoles = options?.requireWrite
+    ? COMMUNICATIONS_WRITE_ROLES
+    : COMMUNICATIONS_READ_ROLES;
+
+  if (!role || !allowedRoles.has(role)) {
+    throw new Error('forbidden');
+  }
+}
 
 // ── Schemas ──────────────────────────────────────────────────
 
@@ -21,7 +46,7 @@ const resendSchema = z.object({
 const listFailedSchema = z.object({
   eventId: z.string().uuid(),
   channel: z.enum(['email', 'whatsapp']).optional(),
-  templateKey: z.string().optional(),
+  templateKey: z.string().trim().min(1).max(100).optional(),
   limit: z.number().int().min(1).max(200).optional(),
   offset: z.number().int().min(0).optional(),
 });
@@ -30,8 +55,8 @@ const listFailedSchema = z.object({
 
 export async function getFailedNotifications(input: unknown) {
   const validated = listFailedSchema.parse(input);
-  // FIX #5: Read-only users should be able to monitor failed notifications
-  await assertEventAccess(validated.eventId);
+  const { role } = await assertEventAccess(validated.eventId);
+  assertNotificationsRole(role);
 
   return listFailedLogs(validated.eventId, {
     channel: validated.channel,
@@ -45,7 +70,8 @@ export async function getFailedNotifications(input: unknown) {
 
 export async function retryNotification(input: unknown) {
   const validated = retrySchema.parse(input);
-  const { userId } = await assertEventAccess(validated.eventId, { requireWrite: true });
+  const { userId, role } = await assertEventAccess(validated.eventId, { requireWrite: true });
+  assertNotificationsRole(role, { requireWrite: true });
 
   const result = await retryFailedNotification({
     eventId: validated.eventId,
@@ -61,7 +87,8 @@ export async function retryNotification(input: unknown) {
 
 export async function manualResend(input: unknown) {
   const validated = resendSchema.parse(input);
-  const { userId } = await assertEventAccess(validated.eventId, { requireWrite: true });
+  const { userId, role } = await assertEventAccess(validated.eventId, { requireWrite: true });
+  assertNotificationsRole(role, { requireWrite: true });
 
   const result = await resendNotification({
     eventId: validated.eventId,
@@ -81,7 +108,8 @@ export async function getNotificationDetail(input: unknown) {
     notificationLogId: z.string().uuid(),
   }).parse(input);
 
-  await assertEventAccess(validated.eventId);
+  const { role } = await assertEventAccess(validated.eventId);
+  assertNotificationsRole(role);
 
   const log = await getLogById(validated.notificationLogId, validated.eventId);
   if (!log) throw new Error('Notification not found');

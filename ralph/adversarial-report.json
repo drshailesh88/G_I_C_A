@@ -969,5 +969,62 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/notifications.ts",
+    "module": "src/lib/actions/notifications.ts",
+    "attacked_at": "2026-04-17T08:32:38Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "role_escalation",
+        "payload": "call getFailedNotifications/getNotificationDetail/retryNotification/manualResend as org:ops",
+        "result": "succeeded"
+      },
+      {
+        "category": "info_leakage",
+        "payload": "use org:ops access to read failed notification recipients, bodies, and provider errors from communications logs",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "request notificationLogId from another event under the active eventId scope",
+        "result": "blocked_by_existing_event_scoped_queries"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "whitespace-only and oversized templateKey filters on getFailedNotifications",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "101+ character templateKey filter sent directly to the failed-log query path",
+        "result": "succeeded"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "SQL metacharacters inside templateKey and notificationLogId",
+        "result": "blocked_by_zod_and_parameterized_queries"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "role_escalation",
+        "description": "The notifications action trusted generic event access, so org:ops users could bypass the UI and read failed communication payloads or trigger retry/resend operations even though the communications module is coordinator/admin only.",
+        "fix": "Added communications-specific read/write role allowlists inside the action: reads now allow super_admin, event_coordinator, and read_only; retries/resends allow only super_admin and event_coordinator.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/notifications.adversarial.test.ts > blocks ops users from reading communications failure logs; blocks ops users from retrying failed notifications"
+      },
+      {
+        "severity": "medium",
+        "category": "resource_exhaustion",
+        "description": "getFailedNotifications accepted whitespace-only and arbitrarily long templateKey filters, so direct callers could force pointless oversized filter payloads through validation into auth/database work.",
+        "fix": "Trimmed templateKey and enforced a 1..100 character limit before auth or query execution.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/notifications.adversarial.test.ts > rejects oversized templateKey filters before auth or database work"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
