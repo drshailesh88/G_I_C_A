@@ -14,6 +14,18 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-17T23:55:00Z — PKT-C-005 — Notification drawer
+
+- Story ID: p6-d8-notification-drawer
+- Implemented: Added three server actions to `dashboard.ts` — `getRecentNotifications` (joins `notificationLog` with `people` for name, returns up to 20 items + full unread count), `getNotificationUnreadCount` (lightweight badge count), and `markAllNotificationsRead` (bulk-updates non-read/non-failed rows to read). Created `NotificationDrawer` client component in `src/app/(app)/dashboard/` — bottom sheet on mobile (<768px) and 360px right-side drawer on desktop, with filter tabs (All/Unread/Failed), orange unread dots, channel icons, relative timestamps, status-colored text, and "View all notifications" footer link. Updated `DashboardClient` to wire the bell button to open the drawer, fetch unread count on event select, and display the badge count.
+- Files changed:
+  - src/lib/actions/dashboard.ts (added RecentNotificationItem type, getRecentNotifications, getNotificationUnreadCount, markAllNotificationsRead; added people + desc/not imports)
+  - src/app/(app)/dashboard/notification-drawer.tsx (new — client drawer component)
+  - src/app/(app)/dashboard/notification-drawer.test.ts (new — 11 tests, all pass)
+  - src/app/(app)/dashboard/dashboard-client.tsx (bell badge + drawer wiring)
+- Tests run: `npm run test:run` — 11 new tests pass; 3 pre-existing failing test files (archive-bypass, travel-cascade, full-journey), unchanged.
+- Risks/follow-ups: Unread badge pre-loads on event select via `getNotificationUnreadCount`; drawer refreshes on open (fetch-on-open pattern). Individual mark-as-read deferred per spec. Real-time push updates deferred per spec. The "View all notifications" link points to `/events/[eventId]/communications` which has no page yet (future packet).
+
 ## 2026-04-17T23:40:00Z — PKT-C-001 — Terms and privacy pages
 
 - Story ID: p2-d7-terms-privacy-page

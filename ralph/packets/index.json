@@ -2,7 +2,7 @@
   "version": 1,
   "pipeline": "ralph-packets",
   "updated_at": "2026-04-17T00:00:00Z",
-  "current_packet_id": "PKT-C-001",
+  "current_packet_id": "PKT-C-004",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -491,7 +491,7 @@
       "bucket": "C",
       "module": "program",
       "priority": 7,
-      "status": "READY",
+      "status": "BUILDING",
       "packet_file": "ralph/packets/PKT-C-004-p2-m30-conflict-fix-action.md",
       "spec_status": "frozen",
       "wireframe_status": "frozen",
@@ -510,7 +510,7 @@
       "linear_issue_id": null,
       "build_commit": null,
       "qa_commit": null,
-      "last_status_at": null,
+      "last_status_at": "2026-04-17T18:09:06.270540Z",
       "depends_on": []
     },
     {
@@ -520,7 +520,7 @@
       "bucket": "C",
       "module": "dashboard",
       "priority": 8,
-      "status": "READY",
+      "status": "NEEDS_REVIEW",
       "packet_file": "ralph/packets/PKT-C-005-p6-d8-notification-drawer.md",
       "spec_status": "frozen",
       "wireframe_status": "frozen",
@@ -537,9 +537,9 @@
         ]
       },
       "linear_issue_id": null,
-      "build_commit": null,
+      "build_commit": "f440cc0",
       "qa_commit": null,
-      "last_status_at": null,
+      "last_status_at": "2026-04-17T23:55:00.000000Z",
       "depends_on": []
     },
     {
