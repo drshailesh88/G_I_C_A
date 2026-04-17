@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   Settings,
+  SlidersHorizontal,
   ToggleRight,
   LayoutGrid,
   Calendar,
@@ -63,6 +64,7 @@ const MODULE_TILES = [
   { key: null, section: 'PROGRAM & CONTENT', label: 'Changes', icon: History, href: '/changes' },
   // PEOPLE & REGISTRATION
   { key: 'registration', section: 'PEOPLE & REGISTRATION', label: 'Registrations', icon: Users, href: '/registrations' },
+  { key: 'registration', section: 'PEOPLE & REGISTRATION', label: 'Reg Settings', icon: SlidersHorizontal, href: '/registration-settings' },
   { key: null, section: 'PEOPLE & REGISTRATION', label: 'Invite Faculty', icon: UserPlus, href: '/faculty/invite' },
   // COMMUNICATIONS
   { key: 'communications', section: 'COMMUNICATIONS', label: 'Templates', icon: Mail, href: '/templates' },

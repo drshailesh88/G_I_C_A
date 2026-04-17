@@ -56,6 +56,19 @@ export const updateEventStatusSchema = z.object({
 
 export const updateEventSchema = createEventSchema;
 
+export const registrationSettingsSchema = z.object({
+  approvalRequired: z.boolean().default(false),
+  maxCapacity: z.number().int().min(1).nullable().optional().transform((v) => v ?? null),
+  waitlistEnabled: z.boolean().default(false),
+  cutoffDate: z.string().nullable().optional().transform((v) => v ?? null),
+  preferenceFields: z.object({
+    dietaryNeeds: z.boolean().default(true),
+    travelPreferences: z.boolean().default(true),
+    accessibilityRequirements: z.boolean().default(true),
+  }).default({}),
+});
+
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type UpdateEventStatusInput = z.infer<typeof updateEventStatusSchema>;
+export type RegistrationSettings = z.infer<typeof registrationSettingsSchema>;
