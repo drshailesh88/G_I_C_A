@@ -89,6 +89,32 @@ describe('getAllCertificateTypeConfigs', () => {
   });
 });
 
+describe('hardening: registry immutability', () => {
+  it('does not let callers poison required variables through a returned config', () => {
+    const config = getCertificateTypeConfig('delegate_attendance');
+
+    try {
+      (config.requiredVariables as string[]).push('attacker_var');
+    } catch {
+      // Frozen configs should reject mutation in strict mode.
+    }
+
+    expect(getCertificateTypeConfig('delegate_attendance').requiredVariables).not.toContain('attacker_var');
+  });
+
+  it('does not let callers overwrite the certificate prefix process-wide', () => {
+    const config = getCertificateTypeConfig('delegate_attendance');
+
+    try {
+      (config as { certificateNumberPrefix: string }).certificateNumberPrefix = 'PWN';
+    } catch {
+      // Frozen configs should reject mutation in strict mode.
+    }
+
+    expect(generateCertificateNumber('delegate_attendance', 1, 2026)).toBe('GEM2026-ATT-00001');
+  });
+});
+
 describe('generateCertificateNumber', () => {
   it('generates correct format for delegate_attendance', () => {
     const num = generateCertificateNumber('delegate_attendance', 1, 2026);
@@ -134,6 +160,20 @@ describe('generateCertificateNumber', () => {
     const num = generateCertificateNumber('delegate_attendance', 1);
     const year = new Date().getFullYear();
     expect(num).toContain(`GEM${year}`);
+  });
+
+  it('rejects non-integer and out-of-range sequences', () => {
+    expect(() => generateCertificateNumber('delegate_attendance', 0, 2026)).toThrow('Invalid certificate sequence');
+    expect(() => generateCertificateNumber('delegate_attendance', -1, 2026)).toThrow('Invalid certificate sequence');
+    expect(() => generateCertificateNumber('delegate_attendance', 1.5, 2026)).toThrow('Invalid certificate sequence');
+    expect(() => generateCertificateNumber('delegate_attendance', Number.POSITIVE_INFINITY, 2026)).toThrow('Invalid certificate sequence');
+    expect(() => generateCertificateNumber('delegate_attendance', 100000, 2026)).toThrow('Invalid certificate sequence');
+  });
+
+  it('rejects malformed year values', () => {
+    expect(() => generateCertificateNumber('delegate_attendance', 1, 999)).toThrow('Invalid certificate year');
+    expect(() => generateCertificateNumber('delegate_attendance', 1, 10_000)).toThrow('Invalid certificate year');
+    expect(() => generateCertificateNumber('delegate_attendance', 1, Number.NaN)).toThrow('Invalid certificate year');
   });
 });
 
@@ -192,6 +232,7 @@ describe('parseCertificateNumber', () => {
     expect(parseCertificateNumber('GEM2026-AT-00001')).toBeNull(); // 2-char prefix
     expect(parseCertificateNumber('GEM2026-ATT-0001')).toBeNull(); // 4-digit seq
     expect(parseCertificateNumber('GEM26-ATT-00001')).toBeNull(); // 2-digit year
+    expect(parseCertificateNumber('GEM2026-XXX-00001')).toBeNull(); // unknown prefix
     expect(parseCertificateNumber('')).toBeNull();
   });
 

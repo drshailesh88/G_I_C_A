@@ -2097,5 +2097,67 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/certificates/certificate-types.ts",
+    "module": "src/lib/certificates/certificate-types.ts",
+    "attacked_at": "2026-04-17T15:28:27Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "stale_state",
+        "payload": "mutate getCertificateTypeConfig('delegate_attendance').requiredVariables and certificateNumberPrefix at runtime to poison later certificate issuance helpers",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "parse forged certificate numbers like 'GEM2026-XXX-00001' with an unknown 3-letter prefix",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "generate certificate numbers with sequence=0, -1, 1.5, Infinity, or 100000 and malformed year values",
+        "result": "succeeded"
+      },
+      {
+        "category": "injection",
+        "payload": "parse certificate numbers containing HTML/script-like prefix content such as 'GEM2026-SCR-00001' and non-matching delimiters",
+        "result": "blocked_by_strict_format_regex"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "cross-event access through this registry/number helper module",
+        "result": "not_applicable_no_eventid_or_db_surface"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "direct invocation without Clerk role checks",
+        "result": "not_applicable_internal_registry_has_no_auth_surface"
+      },
+      {
+        "category": "race_condition",
+        "payload": "concurrent helper calls with the same valid inputs",
+        "result": "no_new_failure_beyond_shared_mutable_registry_poisoning"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "stale_state",
+        "description": "The exported certificate registry and the objects returned by getCertificateTypeConfig were mutable. Any caller in the process could push attacker-controlled required variables or overwrite a certificateNumberPrefix, poisoning later template validation and certificate number generation for every request handled by that server instance.",
+        "fix": "Freeze every config object and its variable arrays before export so callers only receive immutable registry data.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/certificates/certificate-types.test.ts > does not let callers poison required variables through a returned config; src/lib/certificates/certificate-types.test.ts > does not let callers overwrite the certificate prefix process-wide"
+      },
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "parseCertificateNumber accepted any uppercase 3-letter prefix, so forged numbers like GEM2026-XXX-00001 parsed as valid-looking certificates, and generateCertificateNumber emitted impossible identifiers for zero, fractional, infinite, or >99999 sequences and malformed years instead of failing closed.",
+        "fix": "Reject unknown prefixes during parsing and validate year/sequence bounds before generating a certificate number.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/certificates/certificate-types.test.ts > rejects non-integer and out-of-range sequences; src/lib/certificates/certificate-types.test.ts > rejects malformed year values; src/lib/certificates/certificate-types.test.ts > returns null for invalid format"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

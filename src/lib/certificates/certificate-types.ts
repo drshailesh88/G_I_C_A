@@ -30,7 +30,15 @@ export type CertificateTypeConfig = {
   requiresSessionAttendance: boolean;
 };
 
-export const CERTIFICATE_TYPE_CONFIGS: Record<CertificateType, CertificateTypeConfig> = {
+function freezeCertificateConfig(config: CertificateTypeConfig): CertificateTypeConfig {
+  return Object.freeze({
+    ...config,
+    defaultVariables: Object.freeze([...config.defaultVariables]),
+    requiredVariables: Object.freeze([...config.requiredVariables]),
+  });
+}
+
+const RAW_CERTIFICATE_TYPE_CONFIGS: Record<CertificateType, CertificateTypeConfig> = {
   delegate_attendance: {
     type: 'delegate_attendance',
     displayName: 'Delegate Attendance Certificate',
@@ -158,6 +166,28 @@ export const CERTIFICATE_TYPE_CONFIGS: Record<CertificateType, CertificateTypeCo
   },
 };
 
+export const CERTIFICATE_TYPE_CONFIGS: Record<CertificateType, CertificateTypeConfig> = Object.freeze(
+  Object.fromEntries(
+    Object.entries(RAW_CERTIFICATE_TYPE_CONFIGS).map(([type, config]) => [type, freezeCertificateConfig(config)]),
+  ) as Record<CertificateType, CertificateTypeConfig>,
+);
+
+const VALID_CERTIFICATE_PREFIXES = new Set(
+  Object.values(CERTIFICATE_TYPE_CONFIGS).map((config) => config.certificateNumberPrefix),
+);
+
+function assertValidCertificateSequence(sequence: number): void {
+  if (!Number.isSafeInteger(sequence) || sequence < 1 || sequence > 99_999) {
+    throw new Error('Invalid certificate sequence');
+  }
+}
+
+function assertValidCertificateYear(year: number): void {
+  if (!Number.isSafeInteger(year) || year < 1000 || year > 9999) {
+    throw new Error('Invalid certificate year');
+  }
+}
+
 /**
  * Get the config for a certificate type.
  */
@@ -187,6 +217,8 @@ export function generateCertificateNumber(
 ): string {
   const config = getCertificateTypeConfig(type);
   const y = year ?? new Date().getFullYear();
+  assertValidCertificateYear(y);
+  assertValidCertificateSequence(sequence);
   const seq = String(sequence).padStart(5, '0');
   return `GEM${y}-${config.certificateNumberPrefix}-${seq}`;
 }
@@ -202,6 +234,7 @@ export function parseCertificateNumber(certNumber: string): {
 } | null {
   const match = certNumber.match(/^GEM(\d{4})-([A-Z]{3})-(\d{5})$/);
   if (!match) return null;
+  if (!VALID_CERTIFICATE_PREFIXES.has(match[2])) return null;
   return {
     year: parseInt(match[1], 10),
     prefix: match[2],

@@ -47,6 +47,8 @@
 - Cascade notification handlers cannot trust `payload.variables` for recipient routing or template identity fields. Rebuild recipient/event/fullName vars from scoped DB state before dispatch, or forged snapshots can redirect notifications and normal saved events can arrive without a valid destination/template context.
 - Red-flag lifecycle writes need compare-and-swap guards on `eventId`/`flagStatus`/`updatedAt`. Reading a flag under scope and then updating by bare `id` lets stale reviewers overwrite newer review/resolve transitions.
 - ZIP/file-export filename sanitizers must strip control characters, trim before removing leading dots, collapse `..`, and cap entry-name length. Otherwise whitespace-padded traversal names, null bytes, or oversized filenames survive into archive headers.
+- Shared certificate/template registries must be exported as immutable data. Returning live config objects lets one caller mutate required variables or prefixes and poison later requests handled by the same server process.
+- Fixed-format identifier helpers must validate both namespace membership and numeric bounds. Accepting unknown certificate prefixes or overflowed/fractional sequence numbers creates forged or impossible IDs that downstream code may treat as legitimate.
 
 ## Iteration log
 
@@ -224,3 +226,9 @@
 - Attacks tried: 6
 - Bugs found: 2
 - Key finding: the bulk ZIP utility let whitespace-padded traversal names, control characters, and arbitrarily long filenames survive into archive entry headers, creating ambiguous extraction paths and avoidable archive-size abuse.
+
+## 2026-04-17T15:28:27Z — src/lib/certificates/certificate-types.ts — registry immutability and certificate ID validation hardening
+- Verdict: hardened
+- Attacks tried: 7
+- Bugs found: 2
+- Key finding: the certificate type registry was mutable process-wide, so one caller could poison later issuance config, and the helper accepted forged/overflowed certificate identifiers instead of failing closed.
