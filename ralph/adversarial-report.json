@@ -4266,5 +4266,62 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/validations/registration.ts",
+    "module": "src/lib/validations/registration.ts",
+    "attacked_at": "2026-04-17T20:53:19Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "publicRegistrationSchema with phone='not-a-phone'",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "publicRegistrationSchema with age=true",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "publicRegistrationSchema with preferences={priority: 1n}",
+        "result": "succeeded"
+      },
+      {
+        "category": "prototype_pollution",
+        "payload": "publicRegistrationSchema with preferences parsed from '{\"__proto__\":{\"polluted\":\"yes\"}}'",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not_applicable_module_has_no_event_scoped_queries_or_writes",
+        "result": "not_applicable"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "not_applicable_module_has_no_auth_or_role_boundary",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "publicRegistrationSchema only checked that phone was non-empty and used broad numeric coercion for age, so direct callers could pass `phone='not-a-phone'` and `age=true` through validation. The registration action then failed later during phone normalization or persisted a fabricated integer age that never came from a canonical numeric input.",
+        "fix": "Trim and validate phone input with libphonenumber-js at the schema boundary and replace broad age coercion with a canonical integer-only parser that rejects booleans and other non-string/non-number payloads.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/registration.test.ts > rejects malformed phone strings that only fail during later normalization; src/lib/validations/registration.test.ts > rejects boolean age values instead of coercing them to integers"
+      },
+      {
+        "severity": "medium",
+        "category": "prototype_pollution",
+        "description": "publicRegistrationSchema accepted arbitrary `preferences` values via `z.record(z.unknown())`, so non-JSON-safe values like `BigInt` passed validation and would only fail during later `jsonb` persistence. The same record-based parse also let `__proto__` payloads survive as unsafe object shapes instead of being rejected at the boundary.",
+        "fix": "Validate `preferences` as a raw plain object and recursively reject reserved keys, non-JSON values, circular references, and over-deep nesting before the action can persist or transform the payload.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/registration.test.ts > rejects preferences payloads that are not JSON-safe for persistence; src/lib/validations/registration.test.ts > rejects preferences payloads with prototype-polluting keys"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

@@ -76,6 +76,48 @@ describe('publicRegistrationSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('rejects malformed phone strings that only fail during later normalization', () => {
+    const result = publicRegistrationSchema.safeParse({
+      fullName: 'Test',
+      email: 'test@example.com',
+      phone: 'not-a-phone',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects boolean age values instead of coercing them to integers', () => {
+    const result = publicRegistrationSchema.safeParse({
+      fullName: 'Test',
+      email: 'test@example.com',
+      phone: '+919876543210',
+      age: true,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects preferences payloads that are not JSON-safe for persistence', () => {
+    const result = publicRegistrationSchema.safeParse({
+      fullName: 'Test',
+      email: 'test@example.com',
+      phone: '+919876543210',
+      preferences: {
+        dietary: 'vegetarian',
+        priority: BigInt(1),
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects preferences payloads with prototype-polluting keys', () => {
+    const result = publicRegistrationSchema.safeParse({
+      fullName: 'Test',
+      email: 'test@example.com',
+      phone: '+919876543210',
+      preferences: JSON.parse('{"__proto__":{"polluted":"yes"}}'),
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('updateRegistrationStatusSchema', () => {
