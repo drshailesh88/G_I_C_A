@@ -3,6 +3,7 @@
 ## Attack Patterns
 
 <!-- Recurring attack vectors + their fixes. Agent writes here. -->
+- DLQ and queue-drain helpers must validate queued record shape per item, preserve partial success when later items are corrupt, and cap caller-controlled batch sizes. One poison entry or oversized batch count otherwise turns recovery code into a data-loss and Redis-churn path.
 - Code-seeded registries must be deeply frozen before export. Mutable module-level arrays and nested lists let one runtime caller poison later seed/render behavior for the whole process and can even grow the shared registry with forged entries.
 - Runtime lookup registries used for `key in registry` validation must use null-prototype, immutable objects. Plain object registries inherit `__proto__`, `constructor`, and `toString`, which lets malformed route params pass validation and lets one runtime caller poison metadata for later requests.
 - Redis-backed provider/state helpers must exact-match a small allowlist before building keys. Whitespace-padded, unknown, or oversized provider strings otherwise create parallel key namespaces, bypass open-circuit state, and spray unbounded Redis keys.
@@ -405,3 +406,9 @@
 - Attacks tried: 7
 - Bugs found: 2
 - Key finding: the trigger query helpers accepted malformed runtime UUIDs and let event A triggers reference event B templates, so direct callers could store cross-tenant trigger/template links or hit UUID-backed queries before the module failed closed.
+
+## 2026-04-17T19:26:31Z — src/lib/notifications/webhook-dlq.ts — malformed queue and batch hardening
+- Verdict: hardened
+- Attacks tried: 5
+- Bugs found: 2
+- Key finding: one poison DLQ value could make batch recovery drop already-popped valid webhooks, and unbounded pop counts let direct callers force oversized Redis drain loops.

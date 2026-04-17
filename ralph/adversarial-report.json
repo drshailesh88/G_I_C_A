@@ -3505,5 +3505,57 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/webhook-dlq.ts",
+    "module": "src/lib/notifications/webhook-dlq.ts",
+    "attacked_at": "2026-04-17T19:26:31Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "pushToDlq called with provider='resend ' and otherwise valid-looking entry fields",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "popFromDlq batch containing valid JSON followed by a malformed Redis value like '{not-json'",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "popFromDlq(1000) with the queue continuously returning valid items",
+        "result": "succeeded"
+      },
+      {
+        "category": "auth_bypass",
+        "payload": "not_applicable_module_has_no_auth_or_role_boundary",
+        "result": "not_applicable"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not_applicable_module_has_no_event_scope_inputs",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "pushToDlq trusted runtime input and popFromDlq trusted raw Redis values. A direct caller could enqueue invalid provider/channel/timestamp data, and one malformed queued value later caused popFromDlq to throw, discard already-popped good entries from the return value, and silently lose recoverable webhook deliveries.",
+        "fix": "Added runtime DLQ entry validation on push/pop, refused malformed queue writes, and changed popFromDlq to skip poison entries while preserving already-popped valid entries.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/webhook-dlq.adversarial.test.ts > rejects malformed providers before poisoning the DLQ; src/lib/notifications/webhook-dlq.adversarial.test.ts > skips malformed popped entries instead of discarding already-popped valid ones"
+      },
+      {
+        "severity": "medium",
+        "category": "resource_exhaustion",
+        "description": "popFromDlq accepted any caller-supplied count, so a direct caller could force arbitrarily large Redis drain batches and unbounded rpop round-trips in one invocation.",
+        "fix": "Normalized dequeue counts to fail closed on invalid values and capped each batch to 100 entries.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/webhook-dlq.adversarial.test.ts > caps dequeue batch size to prevent oversized Redis drains"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

@@ -9,13 +9,19 @@
  */
 
 import { Redis } from '@upstash/redis';
+import type { Channel, ProviderName } from './types';
 
 const DLQ_KEY = 'webhook:dlq';
 const DLQ_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
+const DEFAULT_POP_COUNT = 10;
+const MAX_POP_COUNT = 100;
+
+const VALID_PROVIDERS = new Set<ProviderName>(['resend', 'evolution_api', 'waba']);
+const VALID_CHANNELS = new Set<Channel>(['email', 'whatsapp']);
 
 export type DlqEntry = {
-  provider: string;
-  channel: 'email' | 'whatsapp';
+  provider: ProviderName;
+  channel: Channel;
   rawPayload: unknown;
   failedAt: string;
   errorMessage: string;
@@ -28,19 +34,82 @@ function getRedisClient(): Redis | null {
   return new Redis({ url, token });
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isValidTimestamp(value: string): boolean {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed);
+}
+
+function isValidDlqEntry(value: unknown): value is DlqEntry {
+  if (!isRecord(value)) return false;
+
+  return (
+    typeof value.provider === 'string' &&
+    VALID_PROVIDERS.has(value.provider as ProviderName) &&
+    typeof value.channel === 'string' &&
+    VALID_CHANNELS.has(value.channel as Channel) &&
+    typeof value.failedAt === 'string' &&
+    isValidTimestamp(value.failedAt) &&
+    typeof value.errorMessage === 'string' &&
+    value.errorMessage.trim().length > 0 &&
+    'rawPayload' in value
+  );
+}
+
+function serializeDlqEntry(entry: DlqEntry): string | null {
+  if (!isValidDlqEntry(entry)) {
+    return null;
+  }
+
+  try {
+    return JSON.stringify(entry);
+  } catch {
+    return null;
+  }
+}
+
+function parseDlqEntry(raw: unknown): DlqEntry | null {
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return isValidDlqEntry(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizePopCount(count: number): number {
+  if (!Number.isSafeInteger(count) || count <= 0) {
+    return 0;
+  }
+
+  return Math.min(count, MAX_POP_COUNT);
+}
+
 /**
  * Push a failed webhook payload to the dead letter queue.
  * Best-effort — if Redis is also down, we log and accept the loss.
  */
 export async function pushToDlq(entry: DlqEntry): Promise<boolean> {
   try {
-    const redis = getRedisClient();
-    if (!redis) {
-      console.error('[webhook-dlq] Redis not configured — payload lost:', JSON.stringify(entry).slice(0, 200));
+    const serializedEntry = serializeDlqEntry(entry);
+    if (!serializedEntry) {
+      console.error('[webhook-dlq] Refusing to push malformed DLQ entry');
       return false;
     }
 
-    await redis.lpush(DLQ_KEY, JSON.stringify(entry));
+    const redis = getRedisClient();
+    if (!redis) {
+      console.error(
+        '[webhook-dlq] Redis not configured — payload lost:',
+        serializedEntry.slice(0, 200),
+      );
+      return false;
+    }
+
+    await redis.lpush(DLQ_KEY, serializedEntry);
     // Set TTL on the list to auto-expire after 7 days
     await redis.expire(DLQ_KEY, DLQ_TTL_SECONDS);
     return true;
@@ -54,16 +123,37 @@ export async function pushToDlq(entry: DlqEntry): Promise<boolean> {
  * Pop entries from the DLQ for reprocessing.
  * Returns up to `count` entries (oldest first).
  */
-export async function popFromDlq(count: number = 10): Promise<DlqEntry[]> {
+export async function popFromDlq(count: number = DEFAULT_POP_COUNT): Promise<DlqEntry[]> {
   try {
     const redis = getRedisClient();
     if (!redis) return [];
 
+    const normalizedCount = normalizePopCount(count);
+    if (normalizedCount === 0) {
+      console.error('[webhook-dlq] Refusing to pop DLQ entries with invalid count:', count);
+      return [];
+    }
+
     const entries: DlqEntry[] = [];
-    for (let i = 0; i < count; i++) {
-      const raw = await redis.rpop(DLQ_KEY);
+    for (let i = 0; i < normalizedCount; i++) {
+      let raw: unknown;
+
+      try {
+        raw = await redis.rpop(DLQ_KEY);
+      } catch (error) {
+        console.error('[webhook-dlq] Failed to pop from DLQ:', error);
+        break;
+      }
+
       if (!raw) break;
-      entries.push(typeof raw === 'string' ? JSON.parse(raw) : raw as DlqEntry);
+
+      const parsedEntry = parseDlqEntry(raw);
+      if (!parsedEntry) {
+        console.error('[webhook-dlq] Dropping malformed DLQ entry during pop');
+        continue;
+      }
+
+      entries.push(parsedEntry);
     }
     return entries;
   } catch (error) {
