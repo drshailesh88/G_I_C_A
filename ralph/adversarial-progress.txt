@@ -76,6 +76,7 @@
 - Notification-template query helpers must require an explicit `eventId | null` scope on every exported read and validate both event/template UUIDs before building Drizzle conditions. Optional unscoped lookup paths become cross-tenant read gadgets, and read-then-write version bumps collapse under concurrent content edits.
 - Automation-trigger query helpers must validate runtime UUIDs and event-scope referenced template IDs themselves. Otherwise direct callers can persist triggers that point at another event's template or push malformed IDs into UUID-backed queries before action-layer Zod runs.
 - Signed webhook verifiers must validate numeric timestamp freshness before accepting an HMAC. Otherwise any captured legitimate request can be replayed indefinitely to duplicate delivery events or rerun downstream status handling long after the original send.
+- Shared class-name merge helpers are security boundaries too: only honor own enumerable keys from object inputs and bound array traversal iteratively, or prototype-backed dictionaries can inject inherited classes and cyclic/deep arrays can crash render paths with stack overflows.
 
 ## Iteration log
 
@@ -439,3 +440,9 @@
 - Attacks tried: 6
 - Bugs found: 1
 - Key finding: `captureError()` only set Sentry user context for authenticated calls, so a later anonymous/system error in the same warm process inherited the previous request's user ID and corrupted security/incident attribution.
+
+## 2026-04-17T19:55:42Z — src/lib/utils.ts — class merge hardening
+- Verdict: hardened
+- Attacks tried: 6
+- Bugs found: 2
+- Key finding: `cn()` trusted inherited class-map keys from `clsx` and recursive array traversal, so malformed prototype-backed input could inject unexpected classes while cyclic or deeply nested arrays could crash the render path with a stack overflow.

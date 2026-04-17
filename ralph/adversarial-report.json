@@ -3748,5 +3748,62 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/utils.ts",
+    "module": "src/lib/utils.ts",
+    "attacked_at": "2026-04-17T19:55:42Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "mixed strings, booleans, nullish values, custom-prototype objects, cyclic arrays, and 20k-deep nested arrays passed directly to cn()",
+        "result": "succeeded"
+      },
+      {
+        "category": "prototype_pollution",
+        "payload": "Object.create({ hidden: true }) with own key { visible: true } passed as a class dictionary",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "cyclic class arrays and 20k nested arrays causing recursive clsx traversal",
+        "result": "succeeded"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "<script>alert(1)</script> and attribute-like class tokens stay inert strings in this helper",
+        "result": "no_exploitable_failure_in_module"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not_applicable_module_has_no_event_scope_queries_or_writes",
+        "result": "not_applicable"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "not_applicable_module_has_no_auth_or_role_boundary",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "prototype_pollution",
+        "description": "cn() delegated object handling to clsx, which iterates inherited enumerable keys. A prototype-backed class dictionary could therefore inject ancestor class names like hidden even when the caller only intended its own keys.",
+        "fix": "Replaced the direct clsx call with an iterative flattener that only honors own enumerable keys before applying tailwind-merge.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/utils.test.ts > ignores prototype-backed class dictionaries"
+      },
+      {
+        "severity": "medium",
+        "category": "resource_exhaustion",
+        "description": "cn() used clsx's recursive array traversal. Cyclic inputs or very deep nested arrays could throw RangeError: Maximum call stack size exceeded and crash render paths that touched the helper.",
+        "fix": "Flatten class values iteratively, skip cyclic arrays, and cap traversal depth/node count so malformed inputs fail closed instead of overflowing the stack.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/utils.test.ts > does not recurse forever on cyclic class arrays; src/lib/utils.test.ts > fails closed on deeply nested class arrays instead of overflowing the stack"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
