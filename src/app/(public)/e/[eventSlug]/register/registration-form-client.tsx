@@ -181,6 +181,13 @@ export function RegistrationFormClient({
             'Complete Registration'
           )}
         </button>
+
+        <p className="mt-4 text-center text-xs text-text-secondary">
+          By registering you agree to our{' '}
+          <Link href="/terms" className="text-primary hover:underline">
+            Terms &amp; Privacy Policy
+          </Link>
+        </p>
       </form>
     </div>
   );
