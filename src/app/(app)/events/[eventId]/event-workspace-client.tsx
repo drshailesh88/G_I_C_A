@@ -12,6 +12,7 @@ import {
   FileText,
   History,
   Users,
+  Users2,
   UserPlus,
   Mail,
   Zap,
@@ -74,6 +75,7 @@ const MODULE_TILES = [
   { key: 'certificates', section: 'CERTIFICATES & QR', label: 'Certificates', icon: Award, href: '/certificates' },
   { key: 'qr_checkin', section: 'CERTIFICATES & QR', label: 'QR Check-in', icon: QrCode, href: '/qr' },
   // ADMIN
+  { key: null, section: 'ADMIN', label: 'Team', icon: Users2, href: '/team' },
   { key: null, section: 'ADMIN', label: 'Feature Flags', icon: ToggleRight, href: '/flags' },
 ];
 
