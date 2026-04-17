@@ -21,6 +21,78 @@ export const TRAVEL_RECORD_TRANSITIONS: Record<TravelRecordStatus, TravelRecordS
   cancelled: [],  // terminal — soft cancel only
 };
 
+function trimString(value: unknown): unknown {
+  return typeof value === 'string' ? value.trim() : value;
+}
+
+function parseUtcTimestamp(value: string): Date | null {
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.(\d{1,3}))?Z$/,
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const [, yearPart, monthPart, dayPart, hourPart, minutePart, secondPart, , millisPart] = match;
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+  const day = Number(dayPart);
+  const hour = Number(hourPart);
+  const minute = Number(minutePart);
+  const second = Number(secondPart);
+  const millisecond = millisPart ? Number(millisPart.padEnd(3, '0')) : 0;
+
+  if (
+    month < 1 || month > 12
+    || day < 1 || day > 31
+    || hour > 23
+    || minute > 59
+    || second > 59
+  ) {
+    return null;
+  }
+
+  const parsed = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  if (
+    parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+    || parsed.getUTCHours() !== hour
+    || parsed.getUTCMinutes() !== minute
+    || parsed.getUTCSeconds() !== second
+    || parsed.getUTCMilliseconds() !== millisecond
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function isValidUtcTimestamp(value: string): boolean {
+  return parseUtcTimestamp(value) !== null;
+}
+
+function getTimestampMillis(value: string): number | null {
+  return parseUtcTimestamp(value)?.getTime() ?? null;
+}
+
+const optionalUtcTimestampSchema = (label: string) =>
+  z.preprocess(
+    trimString,
+    z.union([
+      z.literal(''),
+      z
+        .string()
+        .min(1, `${label} must be a valid UTC timestamp`)
+        .refine(isValidUtcTimestamp, `${label} must be a valid UTC timestamp`),
+    ]).optional(),
+  );
+
 // ── Create travel record schema ───────────────────────────────
 export const createTravelRecordSchema = z.object({
   personId: z.string().uuid('Invalid person ID'),
@@ -31,8 +103,8 @@ export const createTravelRecordSchema = z.object({
   fromLocation: z.string().trim().max(300).optional().or(z.literal('')),
   toCity: z.string().trim().min(1, 'To city is required').max(200),
   toLocation: z.string().trim().max(300).optional().or(z.literal('')),
-  departureAtUtc: z.string().optional().or(z.literal('')),
-  arrivalAtUtc: z.string().optional().or(z.literal('')),
+  departureAtUtc: optionalUtcTimestampSchema('Departure time'),
+  arrivalAtUtc: optionalUtcTimestampSchema('Arrival time'),
   carrierName: z.string().trim().max(200).optional().or(z.literal('')),
   serviceNumber: z.string().trim().max(50).optional().or(z.literal('')),
   pnrOrBookingRef: z.string().trim().max(50).optional().or(z.literal('')),
@@ -40,15 +112,26 @@ export const createTravelRecordSchema = z.object({
   terminalOrGate: z.string().trim().max(100).optional().or(z.literal('')),
   attachmentUrl: z.string().trim().max(500).optional().or(z.literal('')),
   notes: z.string().trim().max(2000).optional().or(z.literal('')),
-}).refine(
-  (data) => {
-    if (data.departureAtUtc && data.arrivalAtUtc) {
-      return new Date(data.arrivalAtUtc) > new Date(data.departureAtUtc);
-    }
-    return true;
-  },
-  { message: 'Arrival must be after departure', path: ['arrivalAtUtc'] },
-);
+}).superRefine((data, ctx) => {
+  if (!data.departureAtUtc || !data.arrivalAtUtc) {
+    return;
+  }
+
+  const departureMillis = getTimestampMillis(data.departureAtUtc);
+  const arrivalMillis = getTimestampMillis(data.arrivalAtUtc);
+
+  if (
+    departureMillis !== null
+    && arrivalMillis !== null
+    && arrivalMillis <= departureMillis
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Arrival must be after departure',
+      path: ['arrivalAtUtc'],
+    });
+  }
+});
 
 // ── Update travel record schema ───────────────────────────────
 export const updateTravelRecordSchema = z.object({
@@ -59,8 +142,8 @@ export const updateTravelRecordSchema = z.object({
   fromLocation: z.string().trim().max(300).optional().or(z.literal('')),
   toCity: z.string().trim().min(1).max(200).optional(),
   toLocation: z.string().trim().max(300).optional().or(z.literal('')),
-  departureAtUtc: z.string().optional().or(z.literal('')),
-  arrivalAtUtc: z.string().optional().or(z.literal('')),
+  departureAtUtc: optionalUtcTimestampSchema('Departure time'),
+  arrivalAtUtc: optionalUtcTimestampSchema('Arrival time'),
   carrierName: z.string().trim().max(200).optional().or(z.literal('')),
   serviceNumber: z.string().trim().max(50).optional().or(z.literal('')),
   pnrOrBookingRef: z.string().trim().max(50).optional().or(z.literal('')),
@@ -68,6 +151,25 @@ export const updateTravelRecordSchema = z.object({
   terminalOrGate: z.string().trim().max(100).optional().or(z.literal('')),
   attachmentUrl: z.string().trim().max(500).optional().or(z.literal('')),
   notes: z.string().trim().max(2000).optional().or(z.literal('')),
+}).superRefine((data, ctx) => {
+  if (!data.departureAtUtc || !data.arrivalAtUtc) {
+    return;
+  }
+
+  const departureMillis = getTimestampMillis(data.departureAtUtc);
+  const arrivalMillis = getTimestampMillis(data.arrivalAtUtc);
+
+  if (
+    departureMillis !== null
+    && arrivalMillis !== null
+    && arrivalMillis <= departureMillis
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Arrival must be after departure',
+      path: ['arrivalAtUtc'],
+    });
+  }
 });
 
 // ── Cancel travel record schema ───────────────────────────────
@@ -87,12 +189,31 @@ export const travelCsvRowSchema = z.object({
   toCity: z.string().trim().min(1, 'To city is required'),
   fromLocation: z.string().optional().or(z.literal('')),
   toLocation: z.string().optional().or(z.literal('')),
-  departureAtUtc: z.string().optional().or(z.literal('')),
-  arrivalAtUtc: z.string().optional().or(z.literal('')),
+  departureAtUtc: optionalUtcTimestampSchema('Departure time'),
+  arrivalAtUtc: optionalUtcTimestampSchema('Arrival time'),
   carrierName: z.string().optional().or(z.literal('')),
   serviceNumber: z.string().optional().or(z.literal('')),
   pnrOrBookingRef: z.string().optional().or(z.literal('')),
   terminalOrGate: z.string().optional().or(z.literal('')),
+}).superRefine((data, ctx) => {
+  if (!data.departureAtUtc || !data.arrivalAtUtc) {
+    return;
+  }
+
+  const departureMillis = getTimestampMillis(data.departureAtUtc);
+  const arrivalMillis = getTimestampMillis(data.arrivalAtUtc);
+
+  if (
+    departureMillis !== null
+    && arrivalMillis !== null
+    && arrivalMillis <= departureMillis
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Arrival must be after departure',
+      path: ['arrivalAtUtc'],
+    });
+  }
 });
 
 export const travelRecordIdSchema = z.string().uuid('Invalid travel record ID');

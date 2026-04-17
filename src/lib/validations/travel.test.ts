@@ -132,6 +132,26 @@ describe('createTravelRecordSchema', () => {
     expect(result.departureAtUtc).toBe('2026-05-01T10:00:00Z');
   });
 
+  it('rejects impossible UTC timestamps instead of normalizing them', () => {
+    const result = createTravelRecordSchema.safeParse({
+      ...validInput,
+      departureAtUtc: '2026-02-30T10:00:00Z',
+    });
+    expect(result.success).toBe(false);
+    const issue = result.error?.issues.find((item) => item.path.includes('departureAtUtc'));
+    expect(issue?.message).toBe('Departure time must be a valid UTC timestamp');
+  });
+
+  it('rejects non-UTC or local timestamp variants', () => {
+    for (const timestamp of ['2026-05-01T10:00:00+05:30', '2026-05-01 10:00:00', '2026-05-01']) {
+      const result = createTravelRecordSchema.safeParse({
+        ...validInput,
+        arrivalAtUtc: timestamp,
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
   it('trims whitespace from city names', () => {
     const result = createTravelRecordSchema.parse({
       ...validInput,
@@ -173,6 +193,26 @@ describe('updateTravelRecordSchema', () => {
     expect(() =>
       updateTravelRecordSchema.parse({ travelRecordId: 'not-a-uuid' }),
     ).toThrow();
+  });
+
+  it('rejects invalid UTC timestamps in updates', () => {
+    const result = updateTravelRecordSchema.safeParse({
+      travelRecordId: '550e8400-e29b-41d4-a716-446655440000',
+      departureAtUtc: '2026-02-30T10:00:00Z',
+    });
+    expect(result.success).toBe(false);
+    const issue = result.error?.issues.find((item) => item.path.includes('departureAtUtc'));
+    expect(issue?.message).toBe('Departure time must be a valid UTC timestamp');
+  });
+
+  it('rejects inverted timestamp updates when both boundaries are provided', () => {
+    expect(() =>
+      updateTravelRecordSchema.parse({
+        travelRecordId: '550e8400-e29b-41d4-a716-446655440000',
+        departureAtUtc: '2026-05-01T10:00:00Z',
+        arrivalAtUtc: '2026-05-01T08:00:00Z',
+      }),
+    ).toThrow('Arrival must be after departure');
   });
 });
 
@@ -230,6 +270,32 @@ describe('travelCsvRowSchema', () => {
         fromCity: '',
       }),
     ).toThrow();
+  });
+
+  it('rejects malformed UTC timestamps in CSV rows', () => {
+    const result = travelCsvRowSchema.safeParse({
+      direction: 'inbound',
+      travelMode: 'flight',
+      fromCity: 'Mumbai',
+      toCity: 'Delhi',
+      departureAtUtc: '2026-05-01T10:00:00+05:30',
+    });
+    expect(result.success).toBe(false);
+    const issue = result.error?.issues.find((item) => item.path.includes('departureAtUtc'));
+    expect(issue?.message).toBe('Departure time must be a valid UTC timestamp');
+  });
+
+  it('rejects inverted UTC windows in CSV rows', () => {
+    expect(() =>
+      travelCsvRowSchema.parse({
+        direction: 'inbound',
+        travelMode: 'flight',
+        fromCity: 'Mumbai',
+        toCity: 'Delhi',
+        departureAtUtc: '2026-05-01T10:00:00Z',
+        arrivalAtUtc: '2026-05-01T08:00:00Z',
+      }),
+    ).toThrow('Arrival must be after departure');
   });
 });
 

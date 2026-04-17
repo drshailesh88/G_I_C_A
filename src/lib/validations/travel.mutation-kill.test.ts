@@ -84,6 +84,20 @@ describe('Optional fields accept empty strings', () => {
 // Spec: "Validation errors contain descriptive messages"
 // ══════════════════════════════════════════════════════════════
 describe('Validation error messages are meaningful', () => {
+  it('departureAtUtc invalid timestamp error is specific', () => {
+    const result = createTravelRecordSchema.safeParse({
+      personId: '550e8400-e29b-41d4-a716-446655440001',
+      direction: 'inbound',
+      travelMode: 'flight',
+      fromCity: 'A',
+      toCity: 'B',
+      departureAtUtc: '2026-02-30T10:00:00Z',
+    });
+    expect(result.success).toBe(false);
+    const departureError = result.error!.issues.find((i) => i.path.includes('departureAtUtc'));
+    expect(departureError?.message).toContain('valid UTC timestamp');
+  });
+
   it('personId UUID error message mentions "person"', () => {
     const result = createTravelRecordSchema.safeParse({
       personId: 'not-a-uuid',
@@ -249,5 +263,28 @@ describe('CSV import schema validation', () => {
       terminalOrGate: '',
     });
     expect(result.success).toBe(true);
+  });
+
+  it('rejects CSV timestamps that are not canonical UTC instants', () => {
+    const result = travelCsvRowSchema.safeParse({
+      direction: 'inbound',
+      travelMode: 'flight',
+      fromCity: 'Delhi',
+      toCity: 'Mumbai',
+      departureAtUtc: '2026-05-01T10:00:00+05:30',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects CSV rows with arrival not strictly after departure', () => {
+    const result = travelCsvRowSchema.safeParse({
+      direction: 'inbound',
+      travelMode: 'flight',
+      fromCity: 'Delhi',
+      toCity: 'Mumbai',
+      departureAtUtc: '2026-05-01T10:00:00Z',
+      arrivalAtUtc: '2026-05-01T09:59:59Z',
+    });
+    expect(result.success).toBe(false);
   });
 });

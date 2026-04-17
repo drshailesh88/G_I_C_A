@@ -4398,5 +4398,72 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/validations/travel.ts",
+    "module": "src/lib/validations/travel.ts",
+    "attacked_at": "2026-04-17T21:15:57Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "injection",
+        "payload": "SQL/XSS metacharacters in cities, carrier, notes, and attachment fields",
+        "result": "no_exploitable_failure_in_validation_layer"
+      },
+      {
+        "category": "auth_bypass",
+        "payload": "not_applicable_module_has_no_auth_boundary",
+        "result": "not_applicable"
+      },
+      {
+        "category": "race_condition",
+        "payload": "not_applicable_pure_validation_module_has_no_concurrent_state_transition",
+        "result": "not_applicable"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized city, notes, attachment, and transport metadata strings beyond schema limits",
+        "result": "blocked"
+      },
+      {
+        "category": "stale_state",
+        "payload": "not_applicable_module_has_no_persisted_state_or_compare_and_swap_logic",
+        "result": "not_applicable"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "impossible UTC timestamps, local/offset timestamp variants, and inverted arrival/departure windows in create, update, and CSV payloads",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not_applicable_module_has_no_eventid_input_or_event_scoped_query",
+        "result": "not_applicable"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "not_applicable_module_has_no_role_boundary",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "The travel create, update, and CSV schemas treated departure/arrival fields as arbitrary strings and only the create schema did a loose `new Date(...)` comparison. Direct callers could send values like `2026-02-30T10:00:00Z`, `2026-05-01T10:00:00+05:30`, or `2026-05-01 10:00:00`, which JavaScript normalizes to a different instant instead of rejecting at the validation boundary.",
+        "fix": "Added a strict UTC timestamp parser for travel schemas so impossible dates and non-canonical local or offset timestamps are rejected before any action-layer Date coercion.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/travel.test.ts > rejects impossible UTC timestamps instead of normalizing them; src/lib/validations/travel.test.ts > rejects non-UTC or local timestamp variants; src/lib/validations/travel.mutation-kill.test.ts > departureAtUtc invalid timestamp error is specific"
+      },
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "updateTravelRecordSchema and travelCsvRowSchema never enforced that arrival must be strictly after departure, so direct callers could submit inverted travel windows through update or CSV-import paths even though create-time validation tried to block them.",
+        "fix": "Applied the same arrival-after-departure invariant across create, update, and CSV travel schemas after strict timestamp validation succeeds.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/travel.test.ts > rejects inverted timestamp updates when both boundaries are provided; src/lib/validations/travel.test.ts > rejects inverted UTC windows in CSV rows; src/lib/validations/travel.mutation-kill.test.ts > rejects CSV rows with arrival not strictly after departure"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
