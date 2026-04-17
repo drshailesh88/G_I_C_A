@@ -54,5 +54,8 @@ export const updateEventStatusSchema = z.object({
   newStatus: z.enum(EVENT_STATUSES),
 });
 
+export const updateEventSchema = createEventSchema;
+
 export type CreateEventInput = z.infer<typeof createEventSchema>;
+export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type UpdateEventStatusInput = z.infer<typeof updateEventStatusSchema>;

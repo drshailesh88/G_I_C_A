@@ -6,7 +6,7 @@ import { events, eventUserAssignments, organizations } from '@/lib/db/schema';
 import { eq, desc, and } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { ZodError, ZodIssue } from 'zod';
-import { createEventSchema, eventIdSchema, EVENT_TRANSITIONS, type EventStatus } from '@/lib/validations/event';
+import { createEventSchema, updateEventSchema, eventIdSchema, EVENT_TRANSITIONS, type EventStatus } from '@/lib/validations/event';
 import { assertEventAccess, getEventListContext } from '@/lib/auth/event-access';
 import { withEventScope } from '@/lib/db/with-event-scope';
 
@@ -73,6 +73,10 @@ function buildEventStateFilters(event: {
 
 export type CreateEventResult =
   | { ok: true; id: string }
+  | { ok: false; status: 400; fieldErrors: Record<string, string[]>; formErrors: string[] };
+
+export type UpdateEventResult =
+  | { ok: true }
   | { ok: false; status: 400; fieldErrors: Record<string, string[]>; formErrors: string[] };
 
 export async function createEvent(formData: FormData): Promise<CreateEventResult> {
@@ -321,4 +325,68 @@ export async function updateEventStatus(eventId: string, newStatus: EventStatus)
   revalidatePath(`/events/${eventId}`);
 
   return { success: true };
+}
+
+export async function updateEvent(eventId: string, formData: FormData): Promise<UpdateEventResult> {
+  eventIdSchema.parse(eventId);
+
+  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+
+  let moduleTogglesRaw: unknown;
+  try {
+    moduleTogglesRaw = safeJsonParse(
+      (formData.get('moduleToggles') as string) || '{}',
+      'moduleToggles',
+    );
+  } catch (err) {
+    if (err instanceof ZodError) {
+      const flat = err.flatten();
+      return { ok: false, status: 400, fieldErrors: flat.fieldErrors as Record<string, string[]>, formErrors: flat.formErrors };
+    }
+    throw err;
+  }
+
+  const raw = {
+    name: formData.get('name') as string,
+    startDate: formData.get('startDate') as string,
+    endDate: formData.get('endDate') as string,
+    timezone: (formData.get('timezone') as string) || 'Asia/Kolkata',
+    venueName: formData.get('venueName') as string,
+    venueAddress: (formData.get('venueAddress') as string) || undefined,
+    venueCity: (formData.get('venueCity') as string) || undefined,
+    venueMapUrl: (formData.get('venueMapUrl') as string) || undefined,
+    description: (formData.get('description') as string) || undefined,
+    moduleToggles: moduleTogglesRaw,
+  };
+
+  const parsed = updateEventSchema.safeParse(raw);
+  if (!parsed.success) {
+    const flat = parsed.error.flatten();
+    return { ok: false, status: 400, fieldErrors: flat.fieldErrors as Record<string, string[]>, formErrors: flat.formErrors };
+  }
+
+  const validated = parsed.data;
+
+  await db
+    .update(events)
+    .set({
+      name: validated.name,
+      description: validated.description || null,
+      startDate: new Date(validated.startDate),
+      endDate: new Date(validated.endDate),
+      timezone: validated.timezone,
+      venueName: validated.venueName,
+      venueAddress: validated.venueAddress || null,
+      venueCity: validated.venueCity || null,
+      venueMapUrl: validated.venueMapUrl || null,
+      moduleToggles: validated.moduleToggles,
+      updatedBy: userId,
+      updatedAt: new Date(),
+    })
+    .where(eq(events.id, eventId));
+
+  revalidatePath(`/events/${eventId}`);
+  revalidatePath(`/events/${eventId}/settings`);
+
+  return { ok: true };
 }
