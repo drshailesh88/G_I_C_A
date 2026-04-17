@@ -20,13 +20,12 @@ import type {
 import { renderTemplate } from './template-renderer';
 import {
   createLogEntry,
+  upsertLogEntry,
+  beginLogAttempt,
   updateLogStatus,
   getLogById,
   markAsRetrying,
 } from './log-queries';
-import { db } from '@/lib/db';
-import { notificationLog } from '@/lib/db/schema';
-import { and, eq, sql } from 'drizzle-orm';
 import { resendEmailProvider } from './email';
 import { evolutionWhatsAppProvider } from './whatsapp';
 import {
@@ -52,18 +51,11 @@ export type NotificationServiceDeps = {
   circuitBreaker?: CircuitBreakerService | null;
   renderTemplateFn: typeof renderTemplate;
   createLogEntryFn: typeof createLogEntry;
-  upsertLogEntryFn?: typeof defaultUpsertLogEntry;
-  beginLogAttemptFn?: typeof defaultBeginLogAttempt;
+  upsertLogEntryFn?: typeof upsertLogEntry;
+  beginLogAttemptFn?: typeof beginLogAttempt;
   updateLogStatusFn: typeof updateLogStatus;
   getLogByIdFn: typeof getLogById;
   flagService?: FlagReader | null;
-};
-
-type NotificationLogRow = Awaited<ReturnType<typeof createLogEntry>>;
-
-type BeginLogAttemptResult = {
-  row: NotificationLogRow;
-  shouldSend: boolean;
 };
 
 const defaultDeps: NotificationServiceDeps = {
@@ -73,8 +65,8 @@ const defaultDeps: NotificationServiceDeps = {
   circuitBreaker: null, // Set via getDefaultCircuitBreaker() in production wiring
   renderTemplateFn: renderTemplate,
   createLogEntryFn: createLogEntry,
-  upsertLogEntryFn: defaultUpsertLogEntry,
-  beginLogAttemptFn: defaultBeginLogAttempt,
+  upsertLogEntryFn: upsertLogEntry,
+  beginLogAttemptFn: beginLogAttempt,
   updateLogStatusFn: updateLogStatus,
   getLogByIdFn: getLogById,
   flagService: null, // Uses default flag service when null
@@ -117,133 +109,6 @@ function normalizeIdempotencyKey(input: SendNotificationInput): string {
     triggerId: input.triggerEntityId ?? input.idempotencyKey,
     channel: input.channel,
   });
-}
-
-async function defaultUpsertLogEntry(
-  input: CreateLogEntryInput & {
-    lastErrorCode?: string | null;
-    lastErrorMessage?: string | null;
-  },
-): Promise<NotificationLogRow> {
-  const status = input.status ?? 'queued';
-  const now = new Date();
-
-  const rows = await db
-    .insert(notificationLog)
-    .values({
-      eventId: input.eventId,
-      personId: input.personId,
-      templateId: input.templateId,
-      templateKeySnapshot: input.templateKeySnapshot,
-      templateVersionNo: input.templateVersionNo,
-      channel: input.channel,
-      provider: input.provider,
-      triggerType: input.triggerType ?? null,
-      triggerEntityType: input.triggerEntityType ?? null,
-      triggerEntityId: input.triggerEntityId ?? null,
-      sendMode: input.sendMode,
-      idempotencyKey: input.idempotencyKey,
-      recipientEmail: input.recipientEmail ?? null,
-      recipientPhoneE164: input.recipientPhoneE164 ?? null,
-      renderedSubject: input.renderedSubject ?? null,
-      renderedBody: input.renderedBody,
-      renderedVariablesJson: input.renderedVariablesJson ?? null,
-      attachmentManifestJson: input.attachmentManifestJson ?? null,
-      status,
-      lastErrorCode: input.lastErrorCode ?? null,
-      lastErrorMessage: input.lastErrorMessage ?? null,
-      lastAttemptAt: now,
-      sentAt: status === 'sent' ? now : null,
-      failedAt: status === 'failed' ? now : null,
-      initiatedByUserId: input.initiatedByUserId ?? null,
-      isResend: input.isResend ?? false,
-      resendOfId: input.resendOfId ?? null,
-    })
-    .onConflictDoUpdate({
-      target: notificationLog.idempotencyKey,
-      set: {
-        attempts: sql`${notificationLog.attempts} + 1`,
-        status,
-        lastErrorCode: input.lastErrorCode ?? null,
-        lastErrorMessage: input.lastErrorMessage ?? null,
-        lastAttemptAt: now,
-        updatedAt: now,
-        ...(status === 'sent' ? { sentAt: now, failedAt: null } : {}),
-        ...(status === 'failed' ? { failedAt: now } : {}),
-      },
-    })
-    .returning();
-
-  return rows[0];
-}
-
-async function defaultBeginLogAttempt(
-  input: CreateLogEntryInput,
-): Promise<BeginLogAttemptResult> {
-  const now = new Date();
-
-  const rows = await db
-    .insert(notificationLog)
-    .values({
-      eventId: input.eventId,
-      personId: input.personId,
-      templateId: input.templateId,
-      templateKeySnapshot: input.templateKeySnapshot,
-      templateVersionNo: input.templateVersionNo,
-      channel: input.channel,
-      provider: input.provider,
-      triggerType: input.triggerType ?? null,
-      triggerEntityType: input.triggerEntityType ?? null,
-      triggerEntityId: input.triggerEntityId ?? null,
-      sendMode: input.sendMode,
-      idempotencyKey: input.idempotencyKey,
-      recipientEmail: input.recipientEmail ?? null,
-      recipientPhoneE164: input.recipientPhoneE164 ?? null,
-      renderedSubject: input.renderedSubject ?? null,
-      renderedBody: input.renderedBody,
-      renderedVariablesJson: input.renderedVariablesJson ?? null,
-      attachmentManifestJson: input.attachmentManifestJson ?? null,
-      status: 'queued',
-      lastAttemptAt: now,
-      initiatedByUserId: input.initiatedByUserId ?? null,
-      isResend: input.isResend ?? false,
-      resendOfId: input.resendOfId ?? null,
-    })
-    .onConflictDoUpdate({
-      target: notificationLog.idempotencyKey,
-      set: {
-        attempts: sql`${notificationLog.attempts} + 1`,
-        status: 'queued',
-        lastErrorCode: null,
-        lastErrorMessage: null,
-        lastAttemptAt: now,
-        updatedAt: now,
-      },
-      setWhere: eq(notificationLog.status, 'failed'),
-    })
-    .returning();
-
-  if (rows[0]) {
-    return { row: rows[0], shouldSend: true };
-  }
-
-  const existingRows = await db
-    .select()
-    .from(notificationLog)
-    .where(and(
-      eq(notificationLog.eventId, input.eventId),
-      eq(notificationLog.idempotencyKey, input.idempotencyKey),
-    ))
-    .limit(1);
-
-  const existing = existingRows[0];
-  if (!existing) {
-    throw new Error(
-      `Notification log ${input.idempotencyKey} not found after idempotency conflict`,
-    );
-  }
-
-  return { row: existing, shouldSend: false };
 }
 
 // ── Main Send ─────────────────────────────────────────────────

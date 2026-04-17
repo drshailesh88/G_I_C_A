@@ -42,11 +42,13 @@ vi.mock('./template-renderer', () => ({
   validateRequiredVariables: vi.fn(),
 }));
 vi.mock('./log-queries', () => ({
+  beginLogAttempt: vi.fn(),
   createLogEntry: vi.fn(),
   updateLogStatus: vi.fn(),
   getLogById: vi.fn(),
   listFailedLogs: vi.fn(),
   markAsRetrying: vi.fn(),
+  upsertLogEntry: vi.fn(),
 }));
 vi.mock('./email', () => ({
   resendEmailProvider: { send: vi.fn() },

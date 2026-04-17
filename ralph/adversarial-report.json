@@ -3119,5 +3119,54 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/send.ts",
+    "module": "src/lib/notifications/send.ts",
+    "attacked_at": "2026-04-17T17:50:53Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "call the default `sendNotification()` path with an idempotency key already reserved by a failed log row from another event",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "replay a send after a previous failure to verify that the begin-attempt path only reuses failed rows from the same event",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "force the render-failure branch while the same foreign idempotency key is already reserved, exercising the default log-upsert path",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "inspect the default conflict-update SQL for concurrent duplicate sends sharing an idempotency key",
+        "result": "succeeded_via_cross_event_conflict_path"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "recipient and template values containing SQL metacharacters",
+        "result": "blocked_by_parameterized_notification_paths"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "attempt RBAC bypass directly through the notification orchestration helper",
+        "result": "not_applicable_service_orchestrator_has_no_auth_surface"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "The default `sendNotification()` and render-failure paths bypassed the hardened `log-queries.ts` helpers and used private local copies of the begin/upsert SQL. Those copies did not scope idempotency conflicts by `eventId`, so reusing an idempotency key that already belonged to another event's failed log could hijack that foreign row on the default production path.",
+        "fix": "Removed the duplicated local SQL helpers and routed the default send and render-failure paths through the canonical hardened `beginLogAttempt` and `upsertLogEntry` implementations from `log-queries.ts`.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/send.adversarial.test.ts > fails closed before provider send when beginLogAttempt detects a cross-event idempotency conflict; src/lib/notifications/send.adversarial.test.ts > uses the hardened upsert path for render failures before any provider send"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
