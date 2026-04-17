@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
 import { eventUserAssignments, events } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
+import { eventIdSchema } from '@/lib/validations/event';
 import { ROLES } from './roles';
 
 export class EventNotFoundError extends Error {
@@ -34,6 +35,7 @@ export type EventAccessResult = {
   authorized: boolean;
   userId: string;
   role: string | null;
+  eventStatus?: string | null;
 };
 
 function mapAssignmentTypeToRole(assignmentType: string | null | undefined): string | null {
@@ -72,21 +74,45 @@ async function resolveClerkRole(): Promise<{
   return { userId, role, isSuperAdmin };
 }
 
+function isValidEventId(eventId: string): boolean {
+  return eventIdSchema.safeParse(eventId).success;
+}
+
+async function getEventStatus(eventId: string): Promise<string | null> {
+  const [event] = await db
+    .select({ status: events.status })
+    .from(events)
+    .where(eq(events.id, eventId))
+    .limit(1);
+
+  return event?.status ?? null;
+}
+
 /**
  * Check if the current user has access to a specific event.
  * Super Admin bypasses — sees all events.
  * Other roles: must have an active row in event_user_assignments.
  */
 export async function checkEventAccess(eventId: string): Promise<EventAccessResult> {
+  if (!isValidEventId(eventId)) {
+    return { authorized: false, userId: '', role: null };
+  }
+
   const { userId, role: clerkRole, isSuperAdmin } = await resolveClerkRole();
 
   if (!userId) {
     return { authorized: false, userId: '', role: null };
   }
 
-  // Super Admin bypasses event-level assignment check
+  // Super Admin bypasses event-level assignment checks, but the target event
+  // still needs to exist so downstream callers don't operate on phantom scopes.
   if (isSuperAdmin) {
-    return { authorized: true, userId, role: clerkRole };
+    const eventStatus = await getEventStatus(eventId);
+    if (!eventStatus) {
+      return { authorized: false, userId, role: clerkRole };
+    }
+
+    return { authorized: true, userId, role: clerkRole, eventStatus };
   }
 
   // Fall back to per-event assignments when Clerk org roles are unavailable.
@@ -138,12 +164,12 @@ export async function assertEventAccess(
   }
 
   if (options?.requireWrite) {
-    const [event] = await db
-      .select({ status: events.status })
-      .from(events)
-      .where(eq(events.id, eventId))
-      .limit(1);
-    if (event?.status === 'archived') {
+    const eventStatus = result.eventStatus ?? await getEventStatus(eventId);
+    if (!eventStatus) {
+      throw new EventNotFoundError();
+    }
+
+    if (eventStatus === 'archived') {
       throw new EventArchivedError();
     }
   }

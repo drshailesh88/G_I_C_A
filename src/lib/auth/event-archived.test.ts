@@ -17,6 +17,9 @@ vi.mock('@/lib/db', () => ({
 
 import { assertEventAccess, EventArchivedError } from './event-access';
 
+const ARCHIVED_EVENT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const ACTIVE_EVENT_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+
 function mockSelectChain(results: unknown[]) {
   const limit = vi.fn().mockResolvedValue(results);
   const where = vi.fn(() => ({ limit }));
@@ -26,7 +29,8 @@ function mockSelectChain(results: unknown[]) {
 
 describe('cascade-037: new mutation on archived event blocked', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mockAuth.mockReset();
+    mockDb.select.mockReset();
   });
 
   it('assertEventAccess with requireWrite throws EventArchivedError for archived event', async () => {
@@ -45,7 +49,7 @@ describe('cascade-037: new mutation on archived event blocked', () => {
       .mockReturnValueOnce({ from: eventChain.from });
 
     await expect(
-      assertEventAccess('event-archived', { requireWrite: true }),
+      assertEventAccess(ARCHIVED_EVENT_ID, { requireWrite: true }),
     ).rejects.toThrow(EventArchivedError);
   });
 
@@ -62,7 +66,7 @@ describe('cascade-037: new mutation on archived event blocked', () => {
       .mockReturnValueOnce({ from: assignmentChain.from })
       .mockReturnValueOnce({ from: eventChain.from });
 
-    const result = await assertEventAccess('event-active', { requireWrite: true });
+    const result = await assertEventAccess(ACTIVE_EVENT_ID, { requireWrite: true });
     expect(result.userId).toBe('coord-1');
   });
 
@@ -75,7 +79,7 @@ describe('cascade-037: new mutation on archived event blocked', () => {
     const assignmentChain = mockSelectChain([{ assignmentType: 'owner' }]);
     mockDb.select.mockReturnValueOnce({ from: assignmentChain.from });
 
-    const result = await assertEventAccess('event-archived');
+    const result = await assertEventAccess(ARCHIVED_EVENT_ID);
     expect(result.userId).toBe('coord-1');
     // Only one select call (assignment), no event status check
     expect(mockDb.select).toHaveBeenCalledTimes(1);

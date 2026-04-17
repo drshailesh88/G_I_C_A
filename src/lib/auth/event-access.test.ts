@@ -17,6 +17,10 @@ vi.mock('@/lib/db', () => ({
 
 import { checkEventAccess, assertEventAccess, getEventListContext, EventNotFoundError, ForbiddenError } from './event-access';
 
+const EVENT_ID_1 = '11111111-1111-4111-8111-111111111111';
+const EVENT_ID_2 = '22222222-2222-4222-8222-222222222222';
+const EVENT_ID_3 = '33333333-3333-4333-8333-333333333333';
+
 function mockAssignmentQuery(result: unknown[]) {
   const limit = vi.fn().mockResolvedValue(result);
   const where = vi.fn(() => ({ limit }));
@@ -25,16 +29,36 @@ function mockAssignmentQuery(result: unknown[]) {
   return { from, where, limit };
 }
 
+function mockSelectChain(result: unknown[]) {
+  const limit = vi.fn().mockResolvedValue(result);
+  const where = vi.fn(() => ({ limit }));
+  const from = vi.fn(() => ({ where }));
+  return { from, where, limit };
+}
+
 describe('checkEventAccess', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mockAuth.mockReset();
+    mockDb.select.mockReset();
   });
 
   it('returns unauthorized when no userId in session', async () => {
     mockAuth.mockResolvedValue({ userId: null, has: () => false });
 
-    const result = await checkEventAccess('event-1');
+    const result = await checkEventAccess(EVENT_ID_1);
     expect(result.authorized).toBe(false);
+  });
+
+  it('rejects malformed event IDs before auth or database access', async () => {
+    const result = await checkEventAccess('not-a-uuid');
+
+    expect(result).toEqual({
+      authorized: false,
+      userId: '',
+      role: null,
+    });
+    expect(mockAuth).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
   });
 
   it('super admin bypasses event assignment check', async () => {
@@ -43,11 +67,31 @@ describe('checkEventAccess', () => {
       has: ({ role }: { role: string }) => role === 'org:super_admin',
     });
 
-    const result = await checkEventAccess('event-1');
+    const eventChain = mockSelectChain([{ status: 'published' }]);
+    mockDb.select.mockReturnValueOnce({ from: eventChain.from });
+
+    const result = await checkEventAccess(EVENT_ID_1);
     expect(result.authorized).toBe(true);
     expect(result.role).toBe('org:super_admin');
-    // Should NOT query event_user_assignments
-    expect(mockDb.select).not.toHaveBeenCalled();
+    expect(mockDb.select).toHaveBeenCalledTimes(1);
+  });
+
+  it('super admin is denied when the event does not exist', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'admin-1',
+      has: ({ role }: { role: string }) => role === 'org:super_admin',
+    });
+
+    const eventChain = mockSelectChain([]);
+    mockDb.select.mockReturnValueOnce({ from: eventChain.from });
+
+    const result = await checkEventAccess('5f31c4fc-e70a-4b09-b432-57b7d92bb4eb');
+    expect(result).toEqual({
+      authorized: false,
+      userId: 'admin-1',
+      role: 'org:super_admin',
+    });
+    expect(mockDb.select).toHaveBeenCalledTimes(1);
   });
 
   it('event coordinator with assignment is authorized', async () => {
@@ -55,9 +99,9 @@ describe('checkEventAccess', () => {
       userId: 'coord-1',
       has: ({ role }: { role: string }) => role === 'org:event_coordinator',
     });
-    mockAssignmentQuery([{ id: 'a1', eventId: 'event-1', authUserId: 'coord-1', isActive: true }]);
+    mockAssignmentQuery([{ id: 'a1', eventId: EVENT_ID_1, authUserId: 'coord-1', isActive: true }]);
 
-    const result = await checkEventAccess('event-1');
+    const result = await checkEventAccess(EVENT_ID_1);
     expect(result.authorized).toBe(true);
     expect(result.role).toBe('org:event_coordinator');
   });
@@ -69,7 +113,7 @@ describe('checkEventAccess', () => {
     });
     mockAssignmentQuery([]);
 
-    const result = await checkEventAccess('event-1');
+    const result = await checkEventAccess(EVENT_ID_1);
     expect(result.authorized).toBe(false);
   });
 
@@ -78,9 +122,9 @@ describe('checkEventAccess', () => {
       userId: 'ops-1',
       has: ({ role }: { role: string }) => role === 'org:ops',
     });
-    mockAssignmentQuery([{ id: 'a2', eventId: 'event-1', authUserId: 'ops-1', isActive: true }]);
+    mockAssignmentQuery([{ id: 'a2', eventId: EVENT_ID_1, authUserId: 'ops-1', isActive: true }]);
 
-    const result = await checkEventAccess('event-1');
+    const result = await checkEventAccess(EVENT_ID_1);
     expect(result.authorized).toBe(true);
     expect(result.role).toBe('org:ops');
   });
@@ -92,7 +136,7 @@ describe('checkEventAccess', () => {
     });
     mockAssignmentQuery([]);
 
-    const result = await checkEventAccess('event-1');
+    const result = await checkEventAccess(EVENT_ID_1);
     expect(result.authorized).toBe(false);
   });
 
@@ -107,7 +151,7 @@ describe('checkEventAccess', () => {
       },
     ]);
 
-    const result = await checkEventAccess('event-1');
+    const result = await checkEventAccess(EVENT_ID_1);
     expect(result.authorized).toBe(true);
     expect(result.role).toBe('org:event_coordinator');
   });
@@ -123,7 +167,7 @@ describe('checkEventAccess', () => {
       },
     ]);
 
-    const result = await checkEventAccess('event-1');
+    const result = await checkEventAccess(EVENT_ID_1);
     expect(result.authorized).toBe(true);
     expect(result.role).toBe('org:read_only');
   });
@@ -131,7 +175,8 @@ describe('checkEventAccess', () => {
 
 describe('assertEventAccess', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mockAuth.mockReset();
+    mockDb.select.mockReset();
   });
 
   it('throws EventNotFoundError when access is denied (no assignment)', async () => {
@@ -141,7 +186,14 @@ describe('assertEventAccess', () => {
     });
     mockAssignmentQuery([]);
 
-    await expect(assertEventAccess('event-1')).rejects.toThrow(EventNotFoundError);
+    await expect(assertEventAccess(EVENT_ID_1)).rejects.toThrow(EventNotFoundError);
+  });
+
+  it('throws EventNotFoundError for malformed event IDs before auth or database access', async () => {
+    await expect(assertEventAccess('not-a-uuid')).rejects.toThrow(EventNotFoundError);
+
+    expect(mockAuth).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
   });
 
   it('coord_A → event B returns 404 signal (NotFoundError)', async () => {
@@ -152,11 +204,11 @@ describe('assertEventAccess', () => {
     mockAssignmentQuery([]);
 
     try {
-      await assertEventAccess('event-B');
+      await assertEventAccess(EVENT_ID_2);
       expect.fail('should have thrown');
     } catch (err) {
       expect(err).toBeInstanceOf(EventNotFoundError);
-      expect((err as EventNotFoundError).message).not.toContain('event-B');
+      expect((err as EventNotFoundError).message).not.toContain(EVENT_ID_2);
     }
   });
 
@@ -166,7 +218,10 @@ describe('assertEventAccess', () => {
       has: ({ role }: { role: string }) => role === 'org:super_admin',
     });
 
-    const result = await assertEventAccess('event-1');
+    const eventChain = mockSelectChain([{ status: 'published' }]);
+    mockDb.select.mockReturnValueOnce({ from: eventChain.from });
+
+    const result = await assertEventAccess(EVENT_ID_1);
     expect(result.userId).toBe('admin-1');
     expect(result.role).toBe('org:super_admin');
   });
@@ -177,9 +232,9 @@ describe('assertEventAccess', () => {
       userId: 'readonly-1',
       has: ({ role }: { role: string }) => role === 'org:read_only',
     });
-    mockAssignmentQuery([{ id: 'a4', eventId: 'event-1', authUserId: 'readonly-1', isActive: true }]);
+    mockAssignmentQuery([{ id: 'a4', eventId: EVENT_ID_1, authUserId: 'readonly-1', isActive: true }]);
 
-    await expect(assertEventAccess('event-1', { requireWrite: true })).rejects.toThrow(/read-only|forbidden/i);
+    await expect(assertEventAccess(EVENT_ID_1, { requireWrite: true })).rejects.toThrow(/read-only|forbidden/i);
   });
 
   it('read_only + requireWrite → ForbiddenError carrying 403', async () => {
@@ -187,10 +242,10 @@ describe('assertEventAccess', () => {
       userId: 'readonly-A',
       has: ({ role }: { role: string }) => role === 'org:read_only',
     });
-    mockAssignmentQuery([{ id: 'a-ro', eventId: 'event-A', authUserId: 'readonly-A', isActive: true }]);
+    mockAssignmentQuery([{ id: 'a-ro', eventId: EVENT_ID_2, authUserId: 'readonly-A', isActive: true }]);
 
     try {
-      await assertEventAccess('event-A', { requireWrite: true });
+      await assertEventAccess(EVENT_ID_2, { requireWrite: true });
       expect.fail('should have thrown');
     } catch (err) {
       expect(err).toBeInstanceOf(ForbiddenError);
@@ -203,9 +258,13 @@ describe('assertEventAccess', () => {
       userId: 'coord-1',
       has: ({ role }: { role: string }) => role === 'org:event_coordinator',
     });
-    mockAssignmentQuery([{ id: 'a5', eventId: 'event-1', authUserId: 'coord-1', isActive: true }]);
+    const assignmentChain = mockSelectChain([{ id: 'a5', eventId: EVENT_ID_1, authUserId: 'coord-1', isActive: true }]);
+    const eventChain = mockSelectChain([{ status: 'published' }]);
+    mockDb.select
+      .mockReturnValueOnce({ from: assignmentChain.from })
+      .mockReturnValueOnce({ from: eventChain.from });
 
-    const result = await assertEventAccess('event-1', { requireWrite: true });
+    const result = await assertEventAccess(EVENT_ID_1, { requireWrite: true });
     expect(result.userId).toBe('coord-1');
   });
 
@@ -215,21 +274,25 @@ describe('assertEventAccess', () => {
       has: ({ role }: { role: string }) => role === 'org:super_admin',
     });
 
-    const result = await assertEventAccess('event-B');
+    const eventChain = mockSelectChain([{ status: 'published' }]);
+    mockDb.select.mockReturnValueOnce({ from: eventChain.from });
+
+    const result = await assertEventAccess(EVENT_ID_2);
     expect(result.userId).toBe('admin-1');
     expect(result.role).toBe('org:super_admin');
   });
 
-  it('super bypasses assignment check — does not query event_user_assignments', async () => {
+  it('super bypasses assignment check but still requires the event to exist', async () => {
     mockAuth.mockResolvedValue({
       userId: 'super-1',
       has: ({ role }: { role: string }) => role === 'org:super_admin',
     });
 
-    const result = await assertEventAccess('event-B');
-    expect(result.userId).toBe('super-1');
-    expect(result.role).toBe('org:super_admin');
-    expect(mockDb.select).not.toHaveBeenCalled();
+    const eventChain = mockSelectChain([]);
+    mockDb.select.mockReturnValueOnce({ from: eventChain.from });
+
+    await expect(assertEventAccess('c2764ee2-dc57-4332-b6d5-7f96c32be9ea')).rejects.toThrow(EventNotFoundError);
+    expect(mockDb.select).toHaveBeenCalledTimes(1);
   });
 
   it('allows assigned owners without Clerk roles to write via fallback role', async () => {
@@ -237,9 +300,13 @@ describe('assertEventAccess', () => {
       userId: 'owner-without-role',
       has: () => false,
     });
-    mockAssignmentQuery([{ assignmentType: 'owner' }]);
+    const assignmentChain = mockSelectChain([{ assignmentType: 'owner' }]);
+    const eventChain = mockSelectChain([{ status: 'published' }]);
+    mockDb.select
+      .mockReturnValueOnce({ from: assignmentChain.from })
+      .mockReturnValueOnce({ from: eventChain.from });
 
-    const result = await assertEventAccess('event-1', { requireWrite: true });
+    const result = await assertEventAccess(EVENT_ID_1, { requireWrite: true });
     expect(result.userId).toBe('owner-without-role');
     expect(result.role).toBe('org:event_coordinator');
   });
@@ -251,13 +318,14 @@ describe('assertEventAccess', () => {
     });
     mockAssignmentQuery([{ assignmentType: 'collaborator' }]);
 
-    await expect(assertEventAccess('event-1', { requireWrite: true })).rejects.toThrow(/read-only|forbidden/i);
+    await expect(assertEventAccess(EVENT_ID_1, { requireWrite: true })).rejects.toThrow(/read-only|forbidden/i);
   });
 });
 
 describe('getEventListContext', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mockAuth.mockReset();
+    mockDb.select.mockReset();
   });
 
   it('returns isSuperAdmin true for super admin', async () => {

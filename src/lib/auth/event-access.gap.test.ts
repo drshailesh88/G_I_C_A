@@ -17,6 +17,8 @@ vi.mock('@/lib/db', () => ({
 
 import { checkEventAccess, assertEventAccess } from './event-access';
 
+const EVENT_ID_1 = '11111111-1111-4111-8111-111111111111';
+
 function mockAssignmentQuery(result: unknown[]) {
   const limit = vi.fn().mockResolvedValue(result);
   const where = vi.fn(() => ({ limit }));
@@ -25,9 +27,17 @@ function mockAssignmentQuery(result: unknown[]) {
   return { from, where, limit };
 }
 
+function mockSelectChain(result: unknown[]) {
+  const limit = vi.fn().mockResolvedValue(result);
+  const where = vi.fn(() => ({ limit }));
+  const from = vi.fn(() => ({ where }));
+  return { from, where, limit };
+}
+
 describe('checkEventAccess — gap tests', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mockAuth.mockReset();
+    mockDb.select.mockReset();
   });
 
   it('ops without assignment denied', async () => {
@@ -37,7 +47,7 @@ describe('checkEventAccess — gap tests', () => {
     });
     mockAssignmentQuery([]);
 
-    const result = await checkEventAccess('event-1');
+    const result = await checkEventAccess(EVENT_ID_1);
     expect(result.authorized).toBe(false);
   });
 
@@ -46,9 +56,9 @@ describe('checkEventAccess — gap tests', () => {
       userId: 'readonly-1',
       has: ({ role }: { role: string }) => role === 'org:read_only',
     });
-    mockAssignmentQuery([{ id: 'a1', eventId: 'event-1', authUserId: 'readonly-1', isActive: true }]);
+    mockAssignmentQuery([{ id: 'a1', eventId: EVENT_ID_1, authUserId: 'readonly-1', isActive: true }]);
 
-    const result = await checkEventAccess('event-1');
+    const result = await checkEventAccess(EVENT_ID_1);
     expect(result.authorized).toBe(true);
     expect(result.role).toBe('org:read_only');
   });
@@ -60,25 +70,29 @@ describe('checkEventAccess — gap tests', () => {
     });
     mockAssignmentQuery([{ assignmentType: 'owner' }]);
 
-    const result = await checkEventAccess('event-1');
+    const result = await checkEventAccess(EVENT_ID_1);
     expect(result.authorized).toBe(true);
     expect(result.role).toBe('org:event_coordinator');
   });
 
-  it('super admin does not query event_user_assignments', async () => {
+  it('super admin validates event existence without querying assignments', async () => {
     mockAuth.mockResolvedValue({
       userId: 'admin-1',
       has: ({ role }: { role: string }) => role === 'org:super_admin',
     });
 
-    await checkEventAccess('event-1');
-    expect(mockDb.select).not.toHaveBeenCalled();
+    const eventChain = mockSelectChain([{ status: 'published' }]);
+    mockDb.select.mockReturnValueOnce({ from: eventChain.from });
+
+    await checkEventAccess(EVENT_ID_1);
+    expect(mockDb.select).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('assertEventAccess — gap tests', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mockAuth.mockReset();
+    mockDb.select.mockReset();
   });
 
   it('ops allowed for write operations', async () => {
@@ -86,9 +100,13 @@ describe('assertEventAccess — gap tests', () => {
       userId: 'ops-1',
       has: ({ role }: { role: string }) => role === 'org:ops',
     });
-    mockAssignmentQuery([{ id: 'a1', eventId: 'event-1', authUserId: 'ops-1', isActive: true }]);
+    const assignmentChain = mockSelectChain([{ id: 'a1', eventId: EVENT_ID_1, authUserId: 'ops-1', isActive: true }]);
+    const eventChain = mockSelectChain([{ status: 'published' }]);
+    mockDb.select
+      .mockReturnValueOnce({ from: assignmentChain.from })
+      .mockReturnValueOnce({ from: eventChain.from });
 
-    const result = await assertEventAccess('event-1', { requireWrite: true });
+    const result = await assertEventAccess(EVENT_ID_1, { requireWrite: true });
     expect(result.userId).toBe('ops-1');
   });
 
@@ -98,7 +116,10 @@ describe('assertEventAccess — gap tests', () => {
       has: ({ role }: { role: string }) => role === 'org:super_admin',
     });
 
-    const result = await assertEventAccess('event-1', { requireWrite: true });
+    const eventChain = mockSelectChain([{ status: 'published' }]);
+    mockDb.select.mockReturnValueOnce({ from: eventChain.from });
+
+    const result = await assertEventAccess(EVENT_ID_1, { requireWrite: true });
     expect(result.userId).toBe('admin-1');
   });
 
@@ -109,6 +130,6 @@ describe('assertEventAccess — gap tests', () => {
     });
     mockAssignmentQuery([{ assignmentType: 'collaborator' }]);
 
-    await expect(assertEventAccess('event-1', { requireWrite: true })).rejects.toThrow(/read-only|forbidden/i);
+    await expect(assertEventAccess(EVENT_ID_1, { requireWrite: true })).rejects.toThrow(/read-only|forbidden/i);
   });
 });

@@ -1594,6 +1594,58 @@
     "verdict": "hardened"
   },
   {
+    "story_id": "src/lib/auth/event-access.ts",
+    "module": "src/lib/auth/event-access.ts",
+    "attacked_at": "2026-04-17T12:50:24Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "eventId='not-a-uuid' passed directly into checkEventAccess/assertEventAccess",
+        "result": "succeeded"
+      },
+      {
+        "category": "auth_bypass",
+        "payload": "super-admin session requests a UUID-shaped eventId that has no matching events row",
+        "result": "succeeded"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "assigned read-only collaborator calls assertEventAccess(eventId, { requireWrite: true })",
+        "result": "blocked"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized/non-UUID eventId values to force auth/database work through the shared helper",
+        "result": "succeeded"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "SQL metacharacters inside eventId",
+        "result": "blocked_by_uuid_validation_and_parameterized_queries"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "checkEventAccess and assertEventAccess trusted callers to validate route event IDs first. Direct calls with malformed or oversized eventId strings still resolved auth and could reach database work before the helper failed closed.",
+        "fix": "Validate eventId inside event-access before auth/database access and treat malformed scopes as not found.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/auth/event-access.test.ts > rejects malformed event IDs before auth or database access; throws EventNotFoundError for malformed event IDs before auth or database access"
+      },
+      {
+        "severity": "medium",
+        "category": "auth_bypass",
+        "description": "The super-admin bypass authorized any UUID-shaped eventId without checking that the event actually existed. That let downstream read/write callers enter phantom event scopes and fail later with inconsistent behavior instead of a clean 404-style denial.",
+        "fix": "Require a real events row for super-admin access and reuse that event snapshot when enforcing archived/write checks.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/auth/event-access.test.ts > super admin is denied when the event does not exist; super bypasses assignment check but still requires the event to exist"
+      }
+    ],
+    "verdict": "hardened"
+  },
+  {
     "story_id": "src/lib/attendance/qr-utils.ts",
     "module": "src/lib/attendance/qr-utils.ts",
     "attacked_at": "2026-04-17T12:42:02Z",
