@@ -57,6 +57,9 @@ const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 const TEMPLATE_ID = '660e8400-e29b-41d4-a716-446655440001';
 const PERSON_1 = '770e8400-e29b-41d4-a716-446655440001';
 const PERSON_2 = '770e8400-e29b-41d4-a716-446655440002';
+const CERT_ID_1 = '880e8400-e29b-41d4-a716-446655440001';
+const CERT_ID_2 = '880e8400-e29b-41d4-a716-446655440002';
+const FOREIGN_CERT_ID = '880e8400-e29b-41d4-a716-446655440099';
 
 // Chain helper for select queries
 function chainedSelect(rows: unknown[]) {
@@ -110,6 +113,17 @@ beforeEach(() => {
 // ── getEligibleRecipients ───────────────────────────────────
 
 describe('getEligibleRecipients', () => {
+  it('rejects a malformed eventId before auth or database access', async () => {
+    await expect(
+      getEligibleRecipients('not-a-uuid', {
+        recipientType: 'all_delegates',
+      }),
+    ).rejects.toThrow('Invalid event ID');
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
   it('returns confirmed delegates for all_delegates recipient type', async () => {
     mockDb.select.mockReturnValueOnce(chainedSelect(mockRecipients));
 
@@ -169,6 +183,20 @@ describe('getEligibleRecipients', () => {
 // ── bulkGenerateCertificates (now queues via Inngest) ──────
 
 describe('bulkGenerateCertificates', () => {
+  it('rejects a malformed eventId before auth, flags, or database access', async () => {
+    await expect(
+      bulkGenerateCertificates('not-a-uuid', {
+        templateId: TEMPLATE_ID,
+        recipientType: 'all_delegates',
+        eligibilityBasisType: 'registration',
+      }),
+    ).rejects.toThrow('Invalid event ID');
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockIsCertificateGenerationEnabled).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
   it('sends Inngest event with correct data for bulk generation', async () => {
     // Template lookup
     mockDb.select.mockReturnValueOnce(chainedSelect([mockTemplate]));
@@ -221,8 +249,26 @@ describe('bulkGenerateCertificates', () => {
     expect(mockInngestSend).not.toHaveBeenCalled();
   });
 
+  it('fails closed when certificate generation availability cannot be verified', async () => {
+    mockIsCertificateGenerationEnabled.mockRejectedValueOnce(new Error('Redis unavailable'));
+
+    await expect(
+      bulkGenerateCertificates(EVENT_ID, {
+        templateId: TEMPLATE_ID,
+        recipientType: 'all_delegates',
+        eligibilityBasisType: 'registration',
+      }),
+    ).rejects.toThrow('Certificate generation availability could not be verified');
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+    expect(mockInngestSend).not.toHaveBeenCalled();
+  });
+
   it('includes personIds for custom recipient type', async () => {
-    mockDb.select.mockReturnValueOnce(chainedSelect([mockTemplate]));
+    mockDb.select
+      .mockReturnValueOnce(chainedSelect([{ personId: PERSON_1 }, { personId: PERSON_2 }]))
+      .mockReturnValueOnce(chainedSelect([mockTemplate]));
 
     await bulkGenerateCertificates(EVENT_ID, {
       templateId: TEMPLATE_ID,
@@ -241,15 +287,34 @@ describe('bulkGenerateCertificates', () => {
       }),
     );
   });
+
+  it('rejects custom personIds that are not attached to the active event', async () => {
+    mockDb.select.mockReturnValueOnce(chainedSelect([{ personId: PERSON_1 }]));
+
+    await expect(
+      bulkGenerateCertificates(EVENT_ID, {
+        templateId: TEMPLATE_ID,
+        recipientType: 'custom',
+        personIds: [PERSON_1, PERSON_2],
+        eligibilityBasisType: 'manual',
+      }),
+    ).rejects.toThrow('One or more recipients do not belong to this event');
+
+    expect(mockInngestSend).not.toHaveBeenCalled();
+  });
 });
 
 // ── sendCertificateNotifications (now queues via Inngest) ──
 
 describe('sendCertificateNotifications', () => {
-  const CERT_ID_1 = '880e8400-e29b-41d4-a716-446655440001';
-  const CERT_ID_2 = '880e8400-e29b-41d4-a716-446655440002';
-
   it('sends Inngest event for email notifications', async () => {
+    mockDb.select.mockReturnValueOnce(
+      chainedSelect([
+        { id: CERT_ID_1, status: 'issued' },
+        { id: CERT_ID_2, status: 'issued' },
+      ]),
+    );
+
     const result = await sendCertificateNotifications(EVENT_ID, {
       certificateIds: [CERT_ID_1, CERT_ID_2],
       channel: 'email',
@@ -268,6 +333,9 @@ describe('sendCertificateNotifications', () => {
 
   it('dispatches Inngest event with correct structure (CP-62)', async () => {
     const CERT_ID = '880e8400-e29b-41d4-a716-446655440001';
+    mockDb.select.mockReturnValueOnce(
+      chainedSelect([{ id: CERT_ID, status: 'issued' }]),
+    );
     await sendCertificateNotifications(EVENT_ID, {
       certificateIds: [CERT_ID],
       channel: 'whatsapp',
@@ -284,6 +352,10 @@ describe('sendCertificateNotifications', () => {
   });
 
   it('sends Inngest event for both channels', async () => {
+    mockDb.select.mockReturnValueOnce(
+      chainedSelect([{ id: CERT_ID_1, status: 'issued' }]),
+    );
+
     await sendCertificateNotifications(EVENT_ID, {
       certificateIds: [CERT_ID_1],
       channel: 'both',
@@ -294,5 +366,35 @@ describe('sendCertificateNotifications', () => {
         data: expect.objectContaining({ channel: 'both' }),
       }),
     );
+  });
+
+  it('rejects certificateIds from another event before queuing notifications', async () => {
+    mockDb.select.mockReturnValueOnce(
+      chainedSelect([{ id: CERT_ID_1, status: 'issued' }]),
+    );
+
+    await expect(
+      sendCertificateNotifications(EVENT_ID, {
+        certificateIds: [CERT_ID_1, FOREIGN_CERT_ID],
+        channel: 'email',
+      }),
+    ).rejects.toThrow('One or more certificates do not belong to this event');
+
+    expect(mockInngestSend).not.toHaveBeenCalled();
+  });
+
+  it('rejects superseded or revoked certificates before queuing notifications', async () => {
+    mockDb.select.mockReturnValueOnce(
+      chainedSelect([{ id: CERT_ID_1, status: 'superseded' }]),
+    );
+
+    await expect(
+      sendCertificateNotifications(EVENT_ID, {
+        certificateIds: [CERT_ID_1],
+        channel: 'email',
+      }),
+    ).rejects.toThrow('Only currently issued certificates can be notified');
+
+    expect(mockInngestSend).not.toHaveBeenCalled();
   });
 });

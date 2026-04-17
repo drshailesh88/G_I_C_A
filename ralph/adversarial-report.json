@@ -413,5 +413,88 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/certificate-generation.ts",
+    "module": "src/lib/actions/certificate-generation.ts",
+    "attacked_at": "2026-04-17T06:38:21Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "server-action eventId=not-a-uuid for recipient preview, bulk generation, and notification queueing",
+        "result": "succeeded"
+      },
+      {
+        "category": "feature_flag_bypass",
+        "payload": "isCertificateGenerationEnabled throws Redis/provider error while the flag should gate generation",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "bulkGenerateCertificates recipientType=custom with personIds from another event",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "bulkGenerateCertificates recipientType=custom with empty or repeated personIds to queue a silent no-op/background job",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "sendCertificateNotifications with certificateIds from another event",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "sendCertificateNotifications with superseded/revoked certificateIds after certificate chain status changed",
+        "result": "succeeded"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "call bulk generation / notification actions without certificate write role",
+        "result": "blocked"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "templateId, personIds, and certificateIds containing SQL metacharacters",
+        "result": "blocked_by_zod_and_parameterized_queries"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "The certificate-generation actions trusted the route/server-action eventId and called auth/database helpers before validating UUID shape, so malformed event scopes reached auth/database work instead of failing fast.",
+        "fix": "Added explicit eventId validation at the start of recipient preview, bulk generation, and notification queue actions.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/certificate-generation.test.ts > rejects a malformed eventId before auth or database access; rejects a malformed eventId before auth, flags, or database access"
+      },
+      {
+        "severity": "high",
+        "category": "feature_flag_bypass",
+        "description": "bulkGenerateCertificates wrapped isCertificateGenerationEnabled() in a catch that only rethrew the 'currently disabled' branch, so any Redis/provider failure silently failed open and allowed certificate generation to continue while the feature gate was unavailable.",
+        "fix": "Made the feature-flag gate fail closed: provider errors now abort generation with a generic availability-verification error instead of proceeding.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/certificate-generation.test.ts > fails closed when certificate generation availability cannot be verified"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "bulkGenerateCertificates accepted arbitrary custom personIds and queued Inngest work even when some IDs were not attached to the active event, letting direct callers smuggle cross-event recipients into the job payload and queue silent no-op jobs.",
+        "fix": "Required custom recipient lists to be non-empty, bounded, deduplicated, and fully event-scoped before dispatching the bulk generation event.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/certificate-generation.test.ts > rejects custom personIds that are not attached to the active event"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "sendCertificateNotifications queued async work for any UUID-shaped certificate IDs, even if the IDs belonged to another event or had already been superseded/revoked, so direct callers could queue misleading or stale notification jobs.",
+        "fix": "Validated that every certificate ID belongs to the active event and is still in issued status before dispatching the notification job.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/certificate-generation.test.ts > rejects certificateIds from another event before queuing notifications; rejects superseded or revoked certificates before queuing notifications"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

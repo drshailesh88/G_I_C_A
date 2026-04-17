@@ -14,10 +14,18 @@
 - Server actions must validate runtime enum parameters and uploaded file bytes. TypeScript unions and browser-provided MIME strings do not protect direct action callers.
 - JSON blob read-merge-write actions need compare-and-swap guards on `updatedAt`, or concurrent partial updates can silently clobber unrelated fields.
 - Long-running bulk jobs cannot ignore distributed-lock renew failures. If the lock expires or ownership is lost mid-flight, abort instead of continuing duplicate work without exclusivity.
+- Async queue entrypoints must validate event-scoped resource IDs before dispatch. If they trust the worker to filter later, cross-event or stale IDs still queue misleading background jobs.
+- Feature-flag checks for destructive bulk actions must fail closed on provider/Redis errors. Swallowing lookup failures turns an outage into a gate bypass.
 
 ## Iteration log
 
 <!-- Dated entries per feature attacked. -->
+## 2026-04-17T06:38:21Z — src/lib/actions/certificate-generation.ts — certificate generation queue hardening
+- Verdict: hardened
+- Attacks tried: 8
+- Bugs found: 4
+- Key finding: the queue entrypoints failed open on flag-provider errors and accepted malformed, cross-event, or stale recipient/certificate IDs, so direct callers could enqueue invalid background jobs.
+
 ## 2026-04-17T06:28:08Z — src/lib/actions/certificate-bulk-zip.ts — certificate bulk ZIP lock hardening
 - Verdict: hardened
 - Attacks tried: 9

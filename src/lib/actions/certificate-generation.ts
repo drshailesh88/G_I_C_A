@@ -29,10 +29,13 @@ export const RECIPIENT_TYPES = [
 ] as const;
 export type RecipientType = (typeof RECIPIENT_TYPES)[number];
 
+const eventIdSchema = z.string().uuid('Invalid event ID');
+const customRecipientIdsSchema = z.array(z.string().uuid()).min(1).max(500);
+
 // ── Validation schemas ──────────────────────────────────────
 const getRecipientsSchema = z.object({
   recipientType: z.enum(RECIPIENT_TYPES),
-  personIds: z.array(z.string().uuid()).optional(),
+  personIds: z.array(z.string().uuid()).max(500).optional(),
 });
 
 const bulkGenerateRequestSchema = z.object({
@@ -40,6 +43,27 @@ const bulkGenerateRequestSchema = z.object({
   recipientType: z.enum(RECIPIENT_TYPES),
   personIds: z.array(z.string().uuid()).optional(),
   eligibilityBasisType: z.enum(ELIGIBILITY_BASIS_TYPES),
+}).superRefine((value, ctx) => {
+  if (value.recipientType === 'custom') {
+    const parsedIds = customRecipientIdsSchema.safeParse(value.personIds);
+    if (!parsedIds.success) {
+      for (const issue of parsedIds.error.issues) {
+        ctx.addIssue({
+          ...issue,
+          path: ['personIds', ...issue.path],
+        });
+      }
+    }
+    return;
+  }
+
+  if (value.personIds && value.personIds.length > 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['personIds'],
+      message: 'personIds may only be provided for custom recipient selection',
+    });
+  }
 });
 
 const sendNotificationsSchema = z.object({
@@ -55,12 +79,70 @@ export type Recipient = {
   designation: string | null;
 };
 
+function validateEventId(eventId: string): string {
+  const parsed = eventIdSchema.safeParse(eventId);
+  if (!parsed.success) {
+    throw new Error('Invalid event ID');
+  }
+
+  return parsed.data;
+}
+
+function uniqueIds(ids: string[]): string[] {
+  return [...new Set(ids)];
+}
+
+async function validateCustomRecipientIds(eventId: string, personIds: string[]): Promise<string[]> {
+  const scopedPersonIds = uniqueIds(personIds);
+  const rows = await db
+    .select({ personId: eventPeople.personId })
+    .from(eventPeople)
+    .where(and(eq(eventPeople.eventId, eventId), inArray(eventPeople.personId, scopedPersonIds))!);
+
+  if (rows.length !== scopedPersonIds.length) {
+    throw new Error('One or more recipients do not belong to this event');
+  }
+
+  return scopedPersonIds;
+}
+
+async function validateNotificationCertificateIds(
+  eventId: string,
+  certificateIds: string[],
+): Promise<string[]> {
+  const scopedCertificateIds = uniqueIds(certificateIds);
+  const rows = await db
+    .select({
+      id: issuedCertificates.id,
+      status: issuedCertificates.status,
+    })
+    .from(issuedCertificates)
+    .where(
+      withEventScope(
+        issuedCertificates.eventId,
+        eventId,
+        inArray(issuedCertificates.id, scopedCertificateIds),
+      ),
+    );
+
+  if (rows.length !== scopedCertificateIds.length) {
+    throw new Error('One or more certificates do not belong to this event');
+  }
+
+  if (rows.some((row) => row.status !== 'issued')) {
+    throw new Error('Only currently issued certificates can be notified');
+  }
+
+  return scopedCertificateIds;
+}
+
 // ── Get eligible recipients ─────────────────────────────────
 export async function getEligibleRecipients(
   eventId: string,
   input: unknown,
 ): Promise<Recipient[]> {
-  await assertEventAccess(eventId);
+  const scopedEventId = validateEventId(eventId);
+  await assertEventAccess(scopedEventId);
   const validated = getRecipientsSchema.parse(input);
 
   switch (validated.recipientType) {
@@ -77,7 +159,7 @@ export async function getEligibleRecipients(
         .where(
           withEventScope(
             eventRegistrations.eventId,
-            eventId,
+            scopedEventId,
             and(
               eq(eventRegistrations.status, 'confirmed'),
               eq(eventRegistrations.category, 'delegate'),
@@ -97,7 +179,7 @@ export async function getEligibleRecipients(
         })
         .from(sessionAssignments)
         .innerJoin(people, eq(sessionAssignments.personId, people.id))
-        .where(eq(sessionAssignments.eventId, eventId));
+        .where(eq(sessionAssignments.eventId, scopedEventId));
       return rows;
     }
 
@@ -111,7 +193,7 @@ export async function getEligibleRecipients(
         })
         .from(attendanceRecords)
         .innerJoin(people, eq(attendanceRecords.personId, people.id))
-        .where(eq(attendanceRecords.eventId, eventId));
+        .where(eq(attendanceRecords.eventId, scopedEventId));
       return rows;
     }
 
@@ -129,7 +211,7 @@ export async function getEligibleRecipients(
         })
         .from(people)
         .innerJoin(eventPeople, eq(eventPeople.personId, people.id))
-        .where(and(eq(eventPeople.eventId, eventId), inArray(people.id, validated.personIds))!);
+        .where(and(eq(eventPeople.eventId, scopedEventId), inArray(people.id, validated.personIds))!);
       return rows;
     }
   }
@@ -154,17 +236,22 @@ export async function bulkGenerateCertificates(
   eventId: string,
   input: unknown,
 ): Promise<BulkGenerateQueuedResult> {
+  const scopedEventId = validateEventId(eventId);
   // Feature flag check
-  try {
-    const enabled = await isCertificateGenerationEnabled();
-    if (!enabled) throw new Error('Certificate generation is currently disabled');
-  } catch (err) {
-    if (err instanceof Error && err.message.includes('currently disabled')) throw err;
+  const enabled = await isCertificateGenerationEnabled().catch(() => {
+    throw new Error('Certificate generation availability could not be verified');
+  });
+  if (!enabled) {
+    throw new Error('Certificate generation is currently disabled');
   }
 
-  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, role } = await assertEventAccess(scopedEventId, { requireWrite: true });
   assertCertificateWriteRole(role);
   const validated = bulkGenerateRequestSchema.parse(input);
+  const validatedPersonIds =
+    validated.recipientType === 'custom'
+      ? await validateCustomRecipientIds(scopedEventId, validated.personIds ?? [])
+      : undefined;
 
   // Quick validation: template must exist and be active
   const [template] = await db
@@ -173,7 +260,7 @@ export async function bulkGenerateCertificates(
     .where(
       withEventScope(
         certificateTemplates.eventId,
-        eventId,
+        scopedEventId,
         and(
           eq(certificateTemplates.id, validated.templateId),
           eq(certificateTemplates.status, 'active'),
@@ -187,11 +274,11 @@ export async function bulkGenerateCertificates(
   const inngestEvent = {
     name: 'bulk/certificates.generate',
     data: {
-      eventId,
+      eventId: scopedEventId,
       userId,
       templateId: validated.templateId,
       recipientType: validated.recipientType,
-      personIds: validated.personIds,
+      personIds: validatedPersonIds,
       eligibilityBasisType: validated.eligibilityBasisType,
     },
   };
@@ -215,16 +302,21 @@ export async function sendCertificateNotifications(
   eventId: string,
   input: unknown,
 ): Promise<NotificationQueuedResult> {
-  const { role } = await assertEventAccess(eventId, { requireWrite: true });
+  const scopedEventId = validateEventId(eventId);
+  const { role } = await assertEventAccess(scopedEventId, { requireWrite: true });
   assertCertificateWriteRole(role);
   const validated = sendNotificationsSchema.parse(input);
+  const scopedCertificateIds = await validateNotificationCertificateIds(
+    scopedEventId,
+    validated.certificateIds,
+  );
 
   // Dispatch to Inngest — emails batched (20 + 30s sleep), WhatsApp per-message (2s sleep)
   const inngestEvent = {
     name: 'bulk/certificates.notify',
     data: {
-      eventId,
-      certificateIds: validated.certificateIds,
+      eventId: scopedEventId,
+      certificateIds: scopedCertificateIds,
       channel: validated.channel,
     },
   };
@@ -233,6 +325,6 @@ export async function sendCertificateNotifications(
 
   return {
     queued: true,
-    message: `Notification delivery queued for ${validated.certificateIds.length} certificates via ${validated.channel}.`,
+    message: `Notification delivery queued for ${scopedCertificateIds.length} certificates via ${validated.channel}.`,
   };
 }

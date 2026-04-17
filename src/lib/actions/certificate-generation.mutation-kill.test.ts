@@ -57,6 +57,8 @@ import {
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 const TEMPLATE_ID = '660e8400-e29b-41d4-a716-446655440001';
 const PERSON_1 = '770e8400-e29b-41d4-a716-446655440001';
+const CERT_ID = '880e8400-e29b-41d4-a716-446655440001';
+const CERT_ID_2 = '880e8400-e29b-41d4-a716-446655440002';
 
 function chainedSelect(rows: unknown[]) {
   const chain: any = {
@@ -259,17 +261,15 @@ describe('bulkGenerateCertificates — inngest event shape and flag check', () =
     ).rejects.toThrow('Certificate generation is currently disabled');
   });
 
-  it('does not throw when isCertificateGenerationEnabled rejects with unrelated error (L160 LogicalOperator)', async () => {
-    // The catch block should swallow non-"currently disabled" errors
+  it('fails closed when isCertificateGenerationEnabled rejects with unrelated error (L160 LogicalOperator)', async () => {
     mockIsCertificateGenerationEnabled.mockRejectedValueOnce(new Error('Redis connection failed'));
-    mockDb.select.mockReturnValueOnce(chainedSelect([mockTemplate]));
-
-    const result = await bulkGenerateCertificates(EVENT_ID, {
-      templateId: TEMPLATE_ID,
-      recipientType: 'all_delegates',
-      eligibilityBasisType: 'registration',
-    });
-    expect(result.queued).toBe(true);
+    await expect(
+      bulkGenerateCertificates(EVENT_ID, {
+        templateId: TEMPLATE_ID,
+        recipientType: 'all_delegates',
+        eligibilityBasisType: 'registration',
+      }),
+    ).rejects.toThrow('Certificate generation availability could not be verified');
   });
 
   it('Inngest event name is bulk/certificates.generate (L80,81 StringLiteral)', async () => {
@@ -296,9 +296,8 @@ describe('bulkGenerateCertificates — inngest event shape and flag check', () =
 // ── sendCertificateNotifications — ObjectLiteral, BooleanLiteral, StringLiteral kills ──
 
 describe('sendCertificateNotifications — exact shape assertions', () => {
-  const CERT_ID = '880e8400-e29b-41d4-a716-446655440001';
-
   it('returns exact queued result shape (L213 ObjectLiteral)', async () => {
+    mockDb.select.mockReturnValueOnce(chainedSelect([{ id: CERT_ID, status: 'issued' }]));
     const result = await sendCertificateNotifications(EVENT_ID, {
       certificateIds: [CERT_ID],
       channel: 'email',
@@ -310,6 +309,7 @@ describe('sendCertificateNotifications — exact shape assertions', () => {
   });
 
   it('queued is true (not false — L213 BooleanLiteral)', async () => {
+    mockDb.select.mockReturnValueOnce(chainedSelect([{ id: CERT_ID, status: 'issued' }]));
     const result = await sendCertificateNotifications(EVENT_ID, {
       certificateIds: [CERT_ID],
       channel: 'email',
@@ -318,7 +318,12 @@ describe('sendCertificateNotifications — exact shape assertions', () => {
   });
 
   it('message includes certificate count and channel (L228 StringLiteral)', async () => {
-    const CERT_ID_2 = '880e8400-e29b-41d4-a716-446655440002';
+    mockDb.select.mockReturnValueOnce(
+      chainedSelect([
+        { id: CERT_ID, status: 'issued' },
+        { id: CERT_ID_2, status: 'issued' },
+      ]),
+    );
     const result = await sendCertificateNotifications(EVENT_ID, {
       certificateIds: [CERT_ID, CERT_ID_2],
       channel: 'whatsapp',
@@ -327,6 +332,7 @@ describe('sendCertificateNotifications — exact shape assertions', () => {
   });
 
   it('sends Inngest event with name bulk/certificates.notify', async () => {
+    mockDb.select.mockReturnValueOnce(chainedSelect([{ id: CERT_ID, status: 'issued' }]));
     await sendCertificateNotifications(EVENT_ID, {
       certificateIds: [CERT_ID],
       channel: 'both',
@@ -336,6 +342,7 @@ describe('sendCertificateNotifications — exact shape assertions', () => {
   });
 
   it('Inngest event data matches validated input exactly', async () => {
+    mockDb.select.mockReturnValueOnce(chainedSelect([{ id: CERT_ID, status: 'issued' }]));
     await sendCertificateNotifications(EVENT_ID, {
       certificateIds: [CERT_ID],
       channel: 'email',
@@ -573,7 +580,7 @@ describe('bulkGenerateCertificates — return value assertion', () => {
 
 describe('sendCertificateNotifications — return value assertion', () => {
   it('returns object with exactly queued=true and non-empty message', async () => {
-    const CERT_ID = '880e8400-e29b-41d4-a716-446655440001';
+    mockDb.select.mockReturnValueOnce(chainedSelect([{ id: CERT_ID, status: 'issued' }]));
     const result = await sendCertificateNotifications(EVENT_ID, {
       certificateIds: [CERT_ID],
       channel: 'email',
