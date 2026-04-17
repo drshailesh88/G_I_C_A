@@ -158,7 +158,7 @@ export async function getDashboardMetrics(eventId: string): Promise<DashboardMet
         pending: flagsPending.count,
       },
     };
-  });
+  }, { isolationLevel: 'repeatable read' });
 }
 
 export async function getNeedsAttention(eventId: string): Promise<NeedsAttentionItem[]> {
@@ -184,7 +184,7 @@ export async function getNeedsAttention(eventId: string): Promise<NeedsAttention
         type: 'red_flags',
         label: 'Red flags need review',
         count: flagsPending.count,
-        href: `/events/${eventId}/red-flags`,
+        href: `/events/${eventId}/flags`,
       });
     }
 
@@ -205,7 +205,7 @@ export async function getNeedsAttention(eventId: string): Promise<NeedsAttention
         type: 'failed_notifications',
         label: 'Failed notifications',
         count: notifFailed.count,
-        href: `/events/${eventId}/communications?status=failed`,
+        href: `/events/${eventId}/communications/failed`,
       });
     }
 
@@ -226,10 +226,10 @@ export async function getNeedsAttention(eventId: string): Promise<NeedsAttention
         type: 'pending_faculty',
         label: 'Faculty awaiting response',
         count: Number(pendingFaculty.count),
-        href: `/events/${eventId}/program?tab=invites`,
+        href: `/events/${eventId}/faculty/invite`,
       });
     }
 
     return items;
-  });
+  }, { isolationLevel: 'repeatable read' });
 }

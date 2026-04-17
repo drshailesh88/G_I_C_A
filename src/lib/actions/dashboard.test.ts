@@ -67,6 +67,13 @@ beforeEach(() => {
 });
 
 describe('7C-1: getDashboardMetrics', () => {
+  it('rejects a malformed route eventId before auth or database access', async () => {
+    await expect(getDashboardMetrics('not-a-uuid')).rejects.toThrow();
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.transaction).not.toHaveBeenCalled();
+  });
+
   it('returns all metric categories with correct counts', async () => {
     const tx = makeTxChain([
       { count: 42 },  // registrations total
@@ -133,9 +140,32 @@ describe('7C-1: getDashboardMetrics', () => {
     // Should make 9 select calls (one per metric)
     expect(tx.select).toHaveBeenCalledTimes(9);
   });
+
+  it('uses repeatable-read isolation so concurrent writes cannot tear dashboard metrics', async () => {
+    const tx = makeTxChain([
+      { count: 1 }, { count: 1 }, { count: 1 }, { count: 1 },
+      { count: 1 }, { count: 1 }, { count: 1 }, { count: 1 },
+      { count: 1 },
+    ]);
+    mockDb.transaction.mockImplementation((fn) => fn(tx));
+
+    await getDashboardMetrics(EVENT_ID);
+
+    expect(mockDb.transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ isolationLevel: 'repeatable read' }),
+    );
+  });
 });
 
 describe('7C-1: getNeedsAttention', () => {
+  it('rejects a malformed route eventId before auth or database access', async () => {
+    await expect(getNeedsAttention('not-a-uuid')).rejects.toThrow();
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.transaction).not.toHaveBeenCalled();
+  });
+
   it('returns red flags item when there are unreviewed flags', async () => {
     const tx = makeTxChain([
       { count: 5 },  // red flags
@@ -197,12 +227,26 @@ describe('7C-1: getNeedsAttention', () => {
     const items = await getNeedsAttention(EVENT_ID);
 
     const redFlagsItem = items.find(i => i.type === 'red_flags')!;
-    expect(redFlagsItem.href).toBe(`/events/${EVENT_ID}/red-flags`);
+    expect(redFlagsItem.href).toBe(`/events/${EVENT_ID}/flags`);
 
     const failedItem = items.find(i => i.type === 'failed_notifications')!;
-    expect(failedItem.href).toBe(`/events/${EVENT_ID}/communications?status=failed`);
+    expect(failedItem.href).toBe(`/events/${EVENT_ID}/communications/failed`);
 
     const facultyItem = items.find(i => i.type === 'pending_faculty')!;
-    expect(facultyItem.href).toBe(`/events/${EVENT_ID}/program?tab=invites`);
+    expect(facultyItem.href).toBe(`/events/${EVENT_ID}/faculty/invite`);
+  });
+
+  it('uses repeatable-read isolation so concurrent writes cannot tear attention counts', async () => {
+    const tx = makeTxChain([
+      { count: 1 }, { count: 1 }, { count: 1 },
+    ]);
+    mockDb.transaction.mockImplementation((fn) => fn(tx));
+
+    await getNeedsAttention(EVENT_ID);
+
+    expect(mockDb.transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ isolationLevel: 'repeatable read' }),
+    );
   });
 });

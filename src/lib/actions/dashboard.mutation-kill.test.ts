@@ -69,6 +69,18 @@ beforeEach(() => {
 });
 
 describe('getDashboardMetrics — eq/inArray status filter assertions', () => {
+  it('uses repeatable-read isolation for the dashboard metrics transaction', async () => {
+    const tx = makeTxChain(Array(9).fill({ count: 1 }));
+    mockDb.transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(tx));
+
+    await getDashboardMetrics(EVENT_ID);
+
+    expect(mockDb.transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ isolationLevel: 'repeatable read' }),
+    );
+  });
+
   it('filters registrations and certificates by confirmed status', async () => {
     const tx = makeTxChain(Array(9).fill({ count: 1 }));
     mockDb.transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(tx));
@@ -192,5 +204,20 @@ describe('getNeedsAttention — assertEventAccess, eq/inArray, label assertions'
 
     const item = items.find((i) => i.type === 'pending_faculty')!;
     expect(item.label).toBe('Faculty awaiting response');
+  });
+
+  it('uses repeatable-read isolation and current event workspace routes for attention links', async () => {
+    const tx = makeTxChain([{ count: 2 }, { count: 2 }, { count: 2 }]);
+    mockDb.transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(tx));
+
+    const items = await getNeedsAttention(EVENT_ID);
+
+    expect(mockDb.transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ isolationLevel: 'repeatable read' }),
+    );
+    expect(items.find((i) => i.type === 'red_flags')?.href).toBe(`/events/${EVENT_ID}/flags`);
+    expect(items.find((i) => i.type === 'failed_notifications')?.href).toBe(`/events/${EVENT_ID}/communications/failed`);
+    expect(items.find((i) => i.type === 'pending_faculty')?.href).toBe(`/events/${EVENT_ID}/faculty/invite`);
   });
 });

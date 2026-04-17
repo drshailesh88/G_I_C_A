@@ -9,6 +9,7 @@
 - Read actions must validate the route `eventId` before auth/database access and reject body/route `eventId` mismatches, or malformed/stale requests can bypass Zod until after DB work starts.
 - Event-scoped read joins must scope every joined event table, not just the base table. Joining by globally unique IDs alone can leak cross-event metadata from bad or legacy rows.
 - Multi-query aggregate dashboards need a stable snapshot (`repeatable read` or a single aggregate query). A default Postgres transaction can still produce torn stats under concurrent writes.
+- Action-generated workspace hrefs can silently rot after route refactors. Treat dashboard/action-returned links as production behavior and lock them to live route paths with regression tests.
 - Attendance/check-in mutations must event-scope optional `sessionId` foreign keys before inserting attendance rows, or offline/manual flows can attach active-event attendance to another event's session.
 - Session-aware check-in reads must validate optional `sessionId` parameters for UUID shape and active-event membership before using them to shape attendance state, or stale/foreign session IDs can bypass validation and mislead operators.
 - Check-in write actions must validate the route `eventId` before auth/database work, reject body/route `eventId` mismatches, and event-scope optional `sessionId`s before duplicate detection or inserts. Otherwise direct calls can create or probe attendance under stale or foreign scopes.
@@ -85,3 +86,9 @@
 - Attacks tried: 9
 - Bugs found: 3
 - Key finding: the QR/manual write actions trusted malformed route IDs, stale body event IDs, and arbitrary session IDs, so direct callers could reach auth/DB work before validation and attach attendance to foreign session scopes.
+
+## 2026-04-17T08:13:52Z — src/lib/actions/dashboard.ts — dashboard snapshot and route hardening
+- Verdict: hardened
+- Attacks tried: 9
+- Bugs found: 2
+- Key finding: dashboard reads could return torn aggregate snapshots under concurrent writes, and the attention cards linked to stale event workspace routes that no longer exist.
