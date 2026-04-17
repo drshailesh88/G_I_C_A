@@ -29,6 +29,8 @@ import {
   type FlagReader,
 } from './flags';
 
+const VALID_EVENT_ID = '11111111-1111-4111-8111-111111111111';
+
 describe('Feature Flags (flags.ts)', () => {
   let svc: FlagReader;
 
@@ -75,19 +77,19 @@ describe('Feature Flags (flags.ts)', () => {
   it('event flags are scoped by eventId', async () => {
     mockGet.mockResolvedValue('0');
 
-    const result = await svc.getEventFlag('event-abc', 'registration_open');
+    const result = await svc.getEventFlag(VALID_EVENT_ID, 'registration_open');
 
     expect(result).toBe(false);
-    expect(mockGet).toHaveBeenCalledWith('flags:event:event-abc:registration_open');
+    expect(mockGet).toHaveBeenCalledWith(`flags:event:${VALID_EVENT_ID}:registration_open`);
   });
 
   // ── Test 5: setEventFlag writes per-event key ──
   it('setEventFlag writes event-scoped key', async () => {
     mockSet.mockResolvedValue('OK');
 
-    await svc.setEventFlag('event-xyz', 'registration_open', false);
+    await svc.setEventFlag(VALID_EVENT_ID, 'registration_open', false);
 
-    expect(mockSet).toHaveBeenCalledWith('flags:event:event-xyz:registration_open', '0');
+    expect(mockSet).toHaveBeenCalledWith(`flags:event:${VALID_EVENT_ID}:registration_open`, '0');
   });
 
   // ── Test 6: getAllGlobalFlags uses pipeline ──
@@ -136,10 +138,10 @@ describe('Feature Flags (flags.ts)', () => {
   it('isRegistrationOpen checks per-event flag', async () => {
     mockGet.mockResolvedValue('0');
 
-    const result = await isRegistrationOpen('event-123', svc);
+    const result = await isRegistrationOpen(VALID_EVENT_ID, svc);
 
     expect(result).toBe(false);
-    expect(mockGet).toHaveBeenCalledWith('flags:event:event-123:registration_open');
+    expect(mockGet).toHaveBeenCalledWith(`flags:event:${VALID_EVENT_ID}:registration_open`);
   });
 
   // ── Test 11: isMaintenanceMode ──
@@ -155,9 +157,51 @@ describe('Feature Flags (flags.ts)', () => {
   it('getAllEventFlags returns per-event flags via pipeline', async () => {
     mockPipelineExec.mockResolvedValue(['0']);
 
-    const flags = await svc.getAllEventFlags('event-abc');
+    const flags = await svc.getAllEventFlags(VALID_EVENT_ID);
 
     expect(flags.registration_open).toBe(false);
     expect(mockPipelineGet).toHaveBeenCalledTimes(EVENT_FLAGS.length);
+  });
+
+  it('rejects non-canonical event IDs before reading event flags', async () => {
+    await expect(
+      svc.getEventFlag(' 11111111-1111-4111-8111-111111111111 ', 'registration_open'),
+    ).rejects.toThrow('Invalid event ID');
+
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-canonical event IDs before writing event flags', async () => {
+    await expect(
+      svc.setEventFlag(
+        '11111111-1111-4111-8111-111111111111\n',
+        'registration_open',
+        false,
+      ),
+    ).rejects.toThrow('Invalid event ID');
+
+    expect(mockSet).not.toHaveBeenCalled();
+  });
+
+  it('rejects runtime prototype keys instead of falling through to truthy defaults', async () => {
+    await expect(svc.getGlobalFlag('__proto__' as never)).rejects.toThrow(
+      'Invalid global flag: __proto__',
+    );
+
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('uses immutable null-prototype registries for exported flag metadata', () => {
+    expect(Object.getPrototypeOf(FLAG_DEFAULTS)).toBeNull();
+    expect((FLAG_DEFAULTS as Record<string, unknown>)['__proto__']).toBeUndefined();
+    expect(Object.isFrozen(FLAG_DEFAULTS)).toBe(true);
+    expect(Object.isFrozen(GLOBAL_FLAGS)).toBe(true);
+    expect(Object.isFrozen(EVENT_FLAGS)).toBe(true);
+
+    expect(() => (GLOBAL_FLAGS as unknown as string[]).push('pwned')).toThrow(TypeError);
+    expect(Reflect.set(FLAG_DEFAULTS as Record<string, boolean>, 'registration_open', false)).toBe(
+      false,
+    );
+    expect(FLAG_DEFAULTS.registration_open).toBe(true);
   });
 });

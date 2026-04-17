@@ -38,6 +38,8 @@ import {
   type FlagReader,
 } from './flags';
 
+const VALID_EVENT_ID = '11111111-1111-4111-8111-111111111111';
+
 beforeEach(() => {
   vi.clearAllMocks();
   _resetDefaultFlagService();
@@ -141,27 +143,27 @@ describe('getEventFlag key format and value parsing', () => {
   it('constructs key as flags:event:{eventId}:{flag}', async () => {
     const svc = createFlagService();
     mockGet.mockResolvedValue('1');
-    await svc.getEventFlag('evt-42', 'registration_open');
-    expect(mockGet).toHaveBeenCalledWith('flags:event:evt-42:registration_open');
+    await svc.getEventFlag(VALID_EVENT_ID, 'registration_open');
+    expect(mockGet).toHaveBeenCalledWith(`flags:event:${VALID_EVENT_ID}:registration_open`);
   });
 
   it('returns true when Redis value is "1"', async () => {
     const svc = createFlagService();
     mockGet.mockResolvedValue('1');
-    expect(await svc.getEventFlag('evt-42', 'registration_open')).toBe(true);
+    expect(await svc.getEventFlag(VALID_EVENT_ID, 'registration_open')).toBe(true);
   });
 
   it('returns false when Redis value is "0"', async () => {
     const svc = createFlagService();
     mockGet.mockResolvedValue('0');
-    expect(await svc.getEventFlag('evt-42', 'registration_open')).toBe(false);
+    expect(await svc.getEventFlag(VALID_EVENT_ID, 'registration_open')).toBe(false);
   });
 
   it('returns default when Redis returns null', async () => {
     const svc = createFlagService();
     mockGet.mockResolvedValue(null);
     // registration_open default is true
-    expect(await svc.getEventFlag('evt-42', 'registration_open')).toBe(true);
+    expect(await svc.getEventFlag(VALID_EVENT_ID, 'registration_open')).toBe(true);
   });
 });
 
@@ -189,15 +191,15 @@ describe('setEventFlag key format', () => {
   it('writes to flags:event:{eventId}:{flag} key with "1"', async () => {
     const svc = createFlagService();
     mockSet.mockResolvedValue('OK');
-    await svc.setEventFlag('evt-99', 'registration_open', true);
-    expect(mockSet).toHaveBeenCalledWith('flags:event:evt-99:registration_open', '1');
+    await svc.setEventFlag(VALID_EVENT_ID, 'registration_open', true);
+    expect(mockSet).toHaveBeenCalledWith(`flags:event:${VALID_EVENT_ID}:registration_open`, '1');
   });
 
   it('writes "0" for false', async () => {
     const svc = createFlagService();
     mockSet.mockResolvedValue('OK');
-    await svc.setEventFlag('evt-99', 'registration_open', false);
-    expect(mockSet).toHaveBeenCalledWith('flags:event:evt-99:registration_open', '0');
+    await svc.setEventFlag(VALID_EVENT_ID, 'registration_open', false);
+    expect(mockSet).toHaveBeenCalledWith(`flags:event:${VALID_EVENT_ID}:registration_open`, '0');
   });
 });
 
@@ -232,21 +234,21 @@ describe('getAllEventFlags pipeline parsing', () => {
   it('null pipeline value falls back to default (registration_open=true)', async () => {
     const svc = createFlagService();
     mockPipelineExec.mockResolvedValue([null]);
-    const flags = await svc.getAllEventFlags('evt-1');
+    const flags = await svc.getAllEventFlags(VALID_EVENT_ID);
     expect(flags.registration_open).toBe(true);
   });
 
   it('"1" pipeline value returns true', async () => {
     const svc = createFlagService();
     mockPipelineExec.mockResolvedValue(['1']);
-    const flags = await svc.getAllEventFlags('evt-1');
+    const flags = await svc.getAllEventFlags(VALID_EVENT_ID);
     expect(flags.registration_open).toBe(true);
   });
 
   it('"0" pipeline value returns false', async () => {
     const svc = createFlagService();
     mockPipelineExec.mockResolvedValue(['0']);
-    const flags = await svc.getAllEventFlags('evt-1');
+    const flags = await svc.getAllEventFlags(VALID_EVENT_ID);
     expect(flags.registration_open).toBe(false);
   });
 });
@@ -310,8 +312,8 @@ describe('isRegistrationOpen', () => {
   it('reads event-scoped registration_open flag', async () => {
     const svc = createFlagService();
     mockGet.mockResolvedValue('0');
-    await isRegistrationOpen('evt-77', svc);
-    expect(mockGet).toHaveBeenCalledWith('flags:event:evt-77:registration_open');
+    await isRegistrationOpen(VALID_EVENT_ID, svc);
+    expect(mockGet).toHaveBeenCalledWith(`flags:event:${VALID_EVENT_ID}:registration_open`);
   });
 });
 
@@ -379,9 +381,9 @@ describe('convenience helpers use provided flagService', () => {
       setGlobalFlag: vi.fn(),
       setEventFlag: vi.fn(),
     };
-    const result = await isRegistrationOpen('evt-1', mockSvc);
+    const result = await isRegistrationOpen(VALID_EVENT_ID, mockSvc);
     expect(result).toBe(true);
-    expect(mockSvc.getEventFlag).toHaveBeenCalledWith('evt-1', 'registration_open');
+    expect(mockSvc.getEventFlag).toHaveBeenCalledWith(VALID_EVENT_ID, 'registration_open');
   });
 
   it('isMaintenanceMode uses injected service', async () => {

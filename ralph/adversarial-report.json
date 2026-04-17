@@ -2623,5 +2623,57 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/flags.ts",
+    "module": "src/lib/flags.ts",
+    "attacked_at": "2026-04-17T16:29:09Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "whitespace-padded and non-canonical UUID eventIds passed to getEventFlag/setEventFlag",
+        "result": "succeeded"
+      },
+      {
+        "category": "prototype_pollution",
+        "payload": "runtime flag key '__proto__' against FLAG_DEFAULTS-backed lookups",
+        "result": "succeeded"
+      },
+      {
+        "category": "shared_state_mutation",
+        "payload": "mutate exported GLOBAL_FLAGS/EVENT_FLAGS/FLAG_DEFAULTS at runtime before later requests",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized arbitrary eventId strings used directly in Redis key builders",
+        "result": "blocked"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "invoke createFlagService helpers directly without Clerk context",
+        "result": "not_applicable_helper_module_has_no_auth_surface"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "The per-event flag helper trusted raw runtime event IDs. Whitespace-padded or otherwise non-canonical UUID strings produced different Redis keys, so reads missed the real flag and fell back to the default `registration_open=true`, while writes could silently create alias keys instead of updating the active event's flag.",
+        "fix": "Validated canonical event UUIDs inside getEventFlag, getAllEventFlags, and setEventFlag before building Redis keys.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/flags.test.ts > rejects non-canonical event IDs before reading event flags"
+      },
+      {
+        "severity": "medium",
+        "category": "prototype_pollution",
+        "description": "FLAG_DEFAULTS and the exported flag registries were plain mutable objects/arrays. A runtime caller could resolve prototype keys like `__proto__` through the defaults map and receive a truthy object instead of a boolean, and any importer could mutate the allowed flags or defaults for later requests.",
+        "fix": "Moved defaults and lookup registries onto frozen null-prototype objects, froze the exported flag arrays, and added runtime flag validation before Redis access.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/flags.test.ts > uses immutable null-prototype registries for exported flag metadata"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
