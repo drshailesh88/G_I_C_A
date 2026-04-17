@@ -6,15 +6,36 @@ const hexColor = z
   .regex(/^#[0-9a-fA-F]{6}$/, 'Must be a valid hex color (e.g. #1E40AF)')
   .or(z.literal(''));
 
+function defaultStringField(maxLength: number) {
+  return z.preprocess(
+    (value) => (value == null ? undefined : value),
+    z.string().max(maxLength).optional().default(''),
+  );
+}
+
+function defaultTrimmedStringField(maxLength: number) {
+  return z.preprocess(
+    (value) => (value == null ? undefined : value),
+    z.string().trim().max(maxLength).optional().default(''),
+  );
+}
+
+function defaultHexColorField(defaultValue: string) {
+  return z.preprocess(
+    (value) => (value == null ? undefined : value),
+    hexColor.optional().default(defaultValue),
+  );
+}
+
 /** Branding configuration shape stored in events.branding JSONB */
 export const eventBrandingSchema = z.object({
-  logoStorageKey: z.string().max(500).optional().default(''),
-  headerImageStorageKey: z.string().max(500).optional().default(''),
-  primaryColor: hexColor.optional().default('#1E40AF'),
-  secondaryColor: hexColor.optional().default('#9333EA'),
-  emailSenderName: z.string().trim().max(100).optional().default(''),
-  emailFooterText: z.string().trim().max(500).optional().default(''),
-  whatsappPrefix: z.string().trim().max(200).optional().default(''),
+  logoStorageKey: defaultStringField(500),
+  headerImageStorageKey: defaultStringField(500),
+  primaryColor: defaultHexColorField('#1E40AF'),
+  secondaryColor: defaultHexColorField('#9333EA'),
+  emailSenderName: defaultTrimmedStringField(100),
+  emailFooterText: defaultTrimmedStringField(500),
+  whatsappPrefix: defaultTrimmedStringField(200),
 });
 
 export type EventBranding = z.infer<typeof eventBrandingSchema>;
@@ -60,8 +81,13 @@ export function buildBrandingStorageKey(
   imageType: 'logo' | 'header',
   filename: string,
 ): string {
-  // Sanitize filename: keep only alphanumeric, dots, hyphens
-  const safe = filename.replace(/[^a-zA-Z0-9.\-]/g, '_').slice(0, 100);
+  const basename = filename
+    .replace(/\0/g, '')
+    .split(/[\\/]/)
+    .pop() ?? '';
+  const strippedLeadingDots = basename.replace(/^\.+/, '');
+  const collapsedDots = strippedLeadingDots.replace(/\.{2,}/g, '.');
+  const safe = collapsedDots.replace(/[^a-zA-Z0-9.\-]/g, '_').slice(0, 100) || 'file';
   const ts = Date.now().toString(36);
   return `branding/${eventId}/${imageType}/${ts}-${safe}`;
 }

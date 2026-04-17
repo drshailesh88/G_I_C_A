@@ -27,6 +27,7 @@
 - Read actions must validate the route `eventId` before auth/database access and reject body/route `eventId` mismatches, or malformed/stale requests can bypass Zod until after DB work starts.
 - Logistics action modules cannot rely on generic event access alone. Travel data is ops-owned, so direct server-action calls need module-specific role allowlists or `org:event_coordinator` can bypass the UI and operate on logistics records.
 - Event-scoped read joins must scope every joined event table, not just the base table. Joining by globally unique IDs alone can leak cross-event metadata from bad or legacy rows.
+- Stored JSONB/config validators must normalize per-field `null` values instead of failing the entire object. One null-poisoned legacy field otherwise crashes config reads or silently drops unrelated valid settings back to defaults in downstream consumers.
 - Multi-query aggregate dashboards need a stable snapshot (`repeatable read` or a single aggregate query). A default Postgres transaction can still produce torn stats under concurrent writes.
 - Action-generated workspace hrefs can silently rot after route refactors. Treat dashboard/action-returned links as production behavior and lock them to live route paths with regression tests.
 - Attendance/check-in mutations must event-scope optional `sessionId` foreign keys before inserting attendance rows, or offline/manual flows can attach active-event attendance to another event's session.
@@ -453,3 +454,9 @@
 - Attacks tried: 6
 - Bugs found: 2
 - Key finding: the accommodation validator trusted `new Date(...)` coercion and permissive update date strings, so direct callers could slip impossible or empty dates past the schema and into downstream accommodation writes.
+
+## 2026-04-17T20:08:07Z — src/lib/validations/branding.ts — branding validation hardening
+- Verdict: hardened
+- Attacks tried: 8
+- Bugs found: 2
+- Key finding: one null-poisoned branding field could make the full branding payload fail validation, crashing reads or resetting valid notification branding to defaults, while traversal-style filenames could still generate poisoned storage keys before later cleanup.

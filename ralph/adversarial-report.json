@@ -3862,5 +3862,72 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/validations/branding.ts",
+    "module": "src/lib/validations/branding.ts",
+    "attacked_at": "2026-04-17T20:08:07Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "persisted/custom branding JSON with null logo/header/text/color fields mixed with otherwise valid values",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "branding payload containing valid colors/sender plus one null field flowing through eventBrandingSchema consumers",
+        "result": "succeeded"
+      },
+      {
+        "category": "path_traversal",
+        "payload": "../../secrets/.env and .. filenames through buildBrandingStorageKey",
+        "result": "succeeded"
+      },
+      {
+        "category": "prototype_pollution",
+        "payload": "__proto__ and constructor keys in branding payloads",
+        "result": "blocked_by_zod_unknown_key_stripping"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "500+ char storage keys and oversized filenames into branding schemas/key builder",
+        "result": "blocked_by_existing_max_lengths_and_truncation"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not_applicable_module_has_no_event_scope_queries_or_writes",
+        "result": "not_applicable"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "not_applicable_module_has_no_auth_or_role_boundary",
+        "result": "not_applicable"
+      },
+      {
+        "category": "race_condition",
+        "payload": "not_applicable_pure_validation_module_has_no_shared_mutation_path",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "eventBrandingSchema rejected any branding payload containing a single null field, so legacy or malformed persisted/custom branding JSON could crash consumers such as getEventBranding or force notification branding loaders to discard otherwise valid sibling values back to defaults.",
+        "fix": "Normalized nullish storage/text/color fields to their per-field defaults before validation so one bad persisted field no longer poisons the whole branding object.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/branding.test.ts > treats null persisted fields as missing instead of failing the full branding payload; src/lib/validations/branding.test.ts > defaults nullable color and sender fields without dropping valid sibling values"
+      },
+      {
+        "severity": "low",
+        "category": "path_traversal",
+        "description": "buildBrandingStorageKey trusted attacker-controlled filenames and preserved basename traversal markers or hidden-file prefixes, producing keys like .../.env or .../.. that later violated the scoped-key contract and forced unnecessary upload/delete churn.",
+        "fix": "Strip path segments, null bytes, leading dots, and repeated traversal-style dots before generating the branding storage key, with a safe fallback filename when sanitization empties the name.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/branding.test.ts > strips path segments and leading dots from attacker-controlled filenames; src/lib/validations/branding.test.ts > falls back to a safe filename when sanitization would otherwise empty the name"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
