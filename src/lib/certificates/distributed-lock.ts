@@ -14,9 +14,14 @@
  */
 
 import { Redis } from '@upstash/redis';
+import { CERTIFICATE_TYPES } from '@/lib/validations/certificate';
 
 const LOCK_PREFIX = 'cert:lock:';
 const DEFAULT_LOCK_TTL_SECONDS = 600; // 10 minutes
+const MAX_LOCK_TTL_SECONDS = 3600; // 1 hour hard cap for crash-recovery safety
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const CERTIFICATE_TYPE_SET = new Set<string>(CERTIFICATE_TYPES);
 
 export type LockHandle = {
   key: string;
@@ -32,14 +37,47 @@ export type DistributedLock = {
   renew(handle: LockHandle, ttlSeconds?: number): Promise<boolean>;
 };
 
+function normalizeEventId(eventId: string): string {
+  if (typeof eventId !== 'string') {
+    throw new Error('eventId is required for lock key');
+  }
+
+  const normalized = eventId.trim().toLowerCase();
+  if (!UUID_PATTERN.test(normalized)) {
+    throw new Error('Invalid eventId for lock key');
+  }
+
+  return normalized;
+}
+
+function normalizeCertificateType(certificateType: string): string {
+  if (typeof certificateType !== 'string') {
+    throw new Error('certificateType is required for lock key');
+  }
+
+  const normalized = certificateType.trim().toLowerCase();
+  if (!CERTIFICATE_TYPE_SET.has(normalized)) {
+    throw new Error('Invalid certificateType for lock key');
+  }
+
+  return normalized;
+}
+
+function validateTtlSeconds(ttlSeconds: number): number {
+  if (!Number.isSafeInteger(ttlSeconds) || ttlSeconds < 1 || ttlSeconds > MAX_LOCK_TTL_SECONDS) {
+    throw new Error(
+      `ttlSeconds must be a safe integer between 1 and ${MAX_LOCK_TTL_SECONDS}`,
+    );
+  }
+
+  return ttlSeconds;
+}
+
 /**
  * Build the Redis key for a certificate operation lock.
  */
 export function buildLockKey(eventId: string, certificateType: string): string {
-  if (!eventId || !certificateType) {
-    throw new Error('eventId and certificateType are required for lock key');
-  }
-  return `${LOCK_PREFIX}${eventId}:${certificateType}`;
+  return `${LOCK_PREFIX}${normalizeEventId(eventId)}:${normalizeCertificateType(certificateType)}`;
 }
 
 /**
@@ -74,8 +112,9 @@ export function createRedisLock(): DistributedLock {
     async acquire(eventId, certificateType, ttlSeconds = DEFAULT_LOCK_TTL_SECONDS) {
       const redis = getRedisClient();
       const key = buildLockKey(eventId, certificateType);
+      const validatedTtlSeconds = validateTtlSeconds(ttlSeconds);
       const ownerToken = crypto.randomUUID();
-      const result = await redis.set(key, ownerToken, { nx: true, ex: ttlSeconds });
+      const result = await redis.set(key, ownerToken, { nx: true, ex: validatedTtlSeconds });
       if (result === 'OK') {
         return { key, ownerToken };
       }
@@ -89,7 +128,8 @@ export function createRedisLock(): DistributedLock {
 
     async renew(handle, ttlSeconds = DEFAULT_LOCK_TTL_SECONDS) {
       const redis = getRedisClient();
-      const result = await redis.eval(RENEW_LUA, [handle.key], [handle.ownerToken, ttlSeconds]);
+      const validatedTtlSeconds = validateTtlSeconds(ttlSeconds);
+      const result = await redis.eval(RENEW_LUA, [handle.key], [handle.ownerToken, validatedTtlSeconds]);
       return result === 1;
     },
   };
@@ -102,8 +142,9 @@ export function createTestLock(redis: Redis): DistributedLock {
   return {
     async acquire(eventId, certificateType, ttlSeconds = DEFAULT_LOCK_TTL_SECONDS) {
       const key = buildLockKey(eventId, certificateType);
+      const validatedTtlSeconds = validateTtlSeconds(ttlSeconds);
       const ownerToken = crypto.randomUUID();
-      const result = await redis.set(key, ownerToken, { nx: true, ex: ttlSeconds });
+      const result = await redis.set(key, ownerToken, { nx: true, ex: validatedTtlSeconds });
       if (result === 'OK') {
         return { key, ownerToken };
       }
@@ -115,7 +156,8 @@ export function createTestLock(redis: Redis): DistributedLock {
     },
 
     async renew(handle, ttlSeconds = DEFAULT_LOCK_TTL_SECONDS) {
-      const result = await redis.eval(RENEW_LUA, [handle.key], [handle.ownerToken, ttlSeconds]);
+      const validatedTtlSeconds = validateTtlSeconds(ttlSeconds);
+      const result = await redis.eval(RENEW_LUA, [handle.key], [handle.ownerToken, validatedTtlSeconds]);
       return result === 1;
     },
   };

@@ -2159,5 +2159,62 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/certificates/distributed-lock.ts",
+    "module": "src/lib/certificates/distributed-lock.ts",
+    "attacked_at": "2026-04-17T15:34:07Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "acquire the same logical event/type lock with whitespace-padded and mixed-case scope values",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "build raw ':'-delimited lock scopes such as eventId='event:scope', type='type' versus eventId='event', type='scope:type'",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "acquire or renew with ttlSeconds=3601 and ttlSeconds=Infinity",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "release a stale handle after another owner re-acquires the same lock",
+        "result": "blocked_by_owner_token_compare_and_delete"
+      },
+      {
+        "category": "stale_state",
+        "payload": "renew after lock ownership changes or the lock disappears",
+        "result": "blocked_by_owner_token_compare_and_expire"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "invoke the helper without Clerk role checks",
+        "result": "not_applicable_internal_lock_helper_has_no_auth_surface"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "malformed_input",
+        "description": "The lock key builder concatenated raw eventId and certificateType strings. Mixed-case or whitespace-padded scope values created parallel locks for the same logical certificate job, and raw ':' segments could alias unrelated event/type combinations onto the same Redis key.",
+        "fix": "Canonicalized eventId and certificateType segments before key generation and rejected malformed/unknown scope values so every logical certificate scope maps to one safe Redis key.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/certificates/distributed-lock.test.ts > canonicalizes scope values so whitespace and case cannot bypass the same lock; src/lib/certificates/distributed-lock.test.ts > treats canonicalized scope variants as the same lock"
+      },
+      {
+        "severity": "medium",
+        "category": "resource_exhaustion",
+        "description": "The helper accepted arbitrary ttlSeconds values, including oversized and non-finite numbers. A caller could request a crash-persistent stale lock window far beyond the intended safety net or send broken expiry values down to Redis.",
+        "fix": "Added strict TTL validation for acquire and renew, limiting lock lifetimes to safe positive integers within a one-hour ceiling.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/certificates/distributed-lock.test.ts > rejects invalid TTL values before calling Redis SET; src/lib/certificates/distributed-lock.test.ts > rejects invalid TTL values before calling Redis EVAL during renewal"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

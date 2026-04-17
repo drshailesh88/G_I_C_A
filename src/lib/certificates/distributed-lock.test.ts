@@ -24,17 +24,27 @@ describe('buildLockKey', () => {
   });
 
   it('produces different keys for different events', () => {
-    const key1 = buildLockKey('event-1', CERT_TYPE);
-    const key2 = buildLockKey('event-2', CERT_TYPE);
+    const key1 = buildLockKey(EVENT_ID, CERT_TYPE);
+    const key2 = buildLockKey('660e8400-e29b-41d4-a716-446655440000', CERT_TYPE);
     expect(key1).not.toBe(key2);
   });
 
   it('throws when eventId is empty', () => {
-    expect(() => buildLockKey('', CERT_TYPE)).toThrow('required');
+    expect(() => buildLockKey('', CERT_TYPE)).toThrow('Invalid eventId');
   });
 
   it('throws when certificateType is empty', () => {
-    expect(() => buildLockKey(EVENT_ID, '')).toThrow('required');
+    expect(() => buildLockKey(EVENT_ID, '')).toThrow('Invalid certificateType');
+  });
+
+  it('canonicalizes scope values so whitespace and case cannot bypass the same lock', () => {
+    expect(buildLockKey(` ${EVENT_ID.toUpperCase()} `, ' Delegate_Attendance ')).toBe(
+      buildLockKey(EVENT_ID, CERT_TYPE),
+    );
+  });
+
+  it('rejects malformed certificateType values that could alias another lock scope', () => {
+    expect(() => buildLockKey(EVENT_ID, 'delegate:attendance')).toThrow('Invalid certificateType');
   });
 });
 
@@ -79,6 +89,12 @@ describe('createStubLock', () => {
     await lock.acquire(EVENT_ID, 'delegate_attendance');
     const other = await lock.acquire(EVENT_ID, 'faculty_participation');
     expect(other).not.toBeNull();
+  });
+
+  it('treats canonicalized scope variants as the same lock', async () => {
+    await lock.acquire(` ${EVENT_ID.toUpperCase()} `, ' Delegate_Attendance ');
+    const second = await lock.acquire(EVENT_ID, CERT_TYPE);
+    expect(second).toBeNull();
   });
 
   it('tracks held locks in the locks map', async () => {
@@ -154,5 +170,28 @@ describe('createTestLock', () => {
       expect.any(String),
       { nx: true, ex: 900 },
     );
+  });
+
+  it('rejects invalid TTL values before calling Redis SET', async () => {
+    const mockRedis = {
+      set: vi.fn(),
+      eval: vi.fn(),
+    };
+    const lock = createTestLock(mockRedis as any);
+
+    await expect(lock.acquire(EVENT_ID, CERT_TYPE, 3601)).rejects.toThrow('ttlSeconds');
+    expect(mockRedis.set).not.toHaveBeenCalled();
+  });
+
+  it('rejects invalid TTL values before calling Redis EVAL during renewal', async () => {
+    const mockRedis = {
+      set: vi.fn().mockResolvedValue('OK'),
+      eval: vi.fn(),
+    };
+    const lock = createTestLock(mockRedis as any);
+    const handle = await lock.acquire(EVENT_ID, CERT_TYPE);
+
+    await expect(lock.renew(handle!, Number.POSITIVE_INFINITY)).rejects.toThrow('ttlSeconds');
+    expect(mockRedis.eval).not.toHaveBeenCalled();
   });
 });
