@@ -11,7 +11,7 @@
  * All functions are DB-free for unit testing.
  */
 
-import type { CertificateType, CertificateStatus, EligibilityBasisType } from '@/lib/validations/certificate';
+import type { CertificateType } from '@/lib/validations/certificate';
 
 // ── Types ────────────────────────────────────────────────────
 export type IssuedCertificateRecord = {
@@ -30,6 +30,40 @@ export type EligibilityCheckResult = {
   eligible: boolean;
   reason?: string;
 };
+
+const CERTIFICATE_PREFIX_PATTERN = /^[A-Z]{3}$/;
+const MAX_CERTIFICATE_SEQUENCE = 99_999;
+
+function assertValidCertificatePrefix(prefix: string): void {
+  if (!CERTIFICATE_PREFIX_PATTERN.test(prefix)) {
+    throw new Error('Invalid certificate prefix');
+  }
+}
+
+function assertValidCertificateYear(year: number): void {
+  if (!Number.isSafeInteger(year) || year < 1000 || year > 9999) {
+    throw new Error('Invalid certificate year');
+  }
+}
+
+function formatPlannedCertificateNumber(
+  prefix: string,
+  year: number,
+  sequence: number,
+): string {
+  assertValidCertificatePrefix(prefix);
+  assertValidCertificateYear(year);
+
+  if (!Number.isSafeInteger(sequence) || sequence < 1) {
+    throw new Error('Invalid certificate sequence');
+  }
+
+  if (sequence > MAX_CERTIFICATE_SEQUENCE) {
+    throw new Error('Certificate number sequence exhausted');
+  }
+
+  return `GEM${year}-${prefix}-${String(sequence).padStart(5, '0')}`;
+}
 
 // ── Supersession Logic ───────────────────────────────────────
 
@@ -253,6 +287,7 @@ export function getNextSequence(
   existingNumbers: string[],
   prefix: string,
 ): number {
+  assertValidCertificatePrefix(prefix);
   let maxSeq = 0;
   const pattern = new RegExp(`^GEM\\d{4}-${prefix}-(\\d{5})$`);
 
@@ -264,7 +299,12 @@ export function getNextSequence(
     }
   }
 
-  return maxSeq + 1;
+  const nextSeq = maxSeq + 1;
+  if (nextSeq > MAX_CERTIFICATE_SEQUENCE) {
+    throw new Error('Certificate number sequence exhausted');
+  }
+
+  return nextSeq;
 }
 
 // ── Bulk Generation Helpers ──────────────────────────────────
@@ -296,12 +336,18 @@ export function planBulkGeneration(
 ): BulkGenerationPlan {
   const toIssue: BulkGenerationPlan['toIssue'] = [];
   const skipped: BulkGenerationPlan['skipped'] = [];
+  assertValidCertificatePrefix(prefix);
+  assertValidCertificateYear(year);
   let nextSeq = getNextSequence(existingNumbers, prefix);
+
+  if (personIds.length > MAX_CERTIFICATE_SEQUENCE - nextSeq + 1) {
+    throw new Error('Certificate number sequence exhausted');
+  }
 
   for (const personId of personIds) {
     const current = findCurrentCertificate(existingCerts, personId, eventId, certificateType);
 
-    const certNumber = `GEM${year}-${prefix}-${String(nextSeq).padStart(5, '0')}`;
+    const certNumber = formatPlannedCertificateNumber(prefix, year, nextSeq);
     nextSeq++;
 
     toIssue.push({

@@ -293,8 +293,16 @@ describe('getNextSequence', () => {
     expect(getNextSequence(['invalid', 'GEM2026-ATT-00002'], 'ATT')).toBe(3);
   });
 
-  it('handles large sequences', () => {
-    expect(getNextSequence(['GEM2026-ATT-99999'], 'ATT')).toBe(100000);
+  it('handles high but still valid sequences', () => {
+    expect(getNextSequence(['GEM2026-ATT-99998'], 'ATT')).toBe(99999);
+  });
+
+  it('rejects malformed prefixes instead of treating them as regex fragments', () => {
+    expect(() => getNextSequence(['GEM2026-FAC-00010'], 'ATT|FAC')).toThrow('Invalid certificate prefix');
+  });
+
+  it('fails closed when the certificate number sequence is exhausted', () => {
+    expect(() => getNextSequence(['GEM2026-ATT-99999'], 'ATT')).toThrow('Certificate number sequence exhausted');
   });
 });
 
@@ -371,6 +379,20 @@ describe('planBulkGeneration', () => {
     expect(plan.toIssue[0].supersedes).toBeNull(); // A: no existing
     expect(plan.toIssue[1].supersedes).toBe('cert-b'); // B: supersedes
     expect(plan.toIssue[2].supersedes).toBeNull(); // C: revoked, doesn't count
+  });
+
+  it('fails closed instead of planning impossible six-digit certificate numbers', () => {
+    expect(() =>
+      planBulkGeneration(
+        [PERSON_A, PERSON_B],
+        EVENT_ID,
+        'delegate_attendance',
+        [],
+        'ATT',
+        ['GEM2026-ATT-99998'],
+        2026,
+      ),
+    ).toThrow('Certificate number sequence exhausted');
   });
 });
 
