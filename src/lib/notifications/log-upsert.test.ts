@@ -79,9 +79,11 @@ vi.mock('drizzle-orm', () => ({
 import { upsertLogEntry } from './log-queries';
 import type { CreateLogEntryInput } from './types';
 
+const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
+
 function makeInput(overrides: Partial<CreateLogEntryInput> = {}): CreateLogEntryInput {
   return {
-    eventId: 'evt-1',
+    eventId: EVENT_ID,
     personId: 'person-1',
     templateId: null,
     templateKeySnapshot: 'welcome',

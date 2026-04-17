@@ -66,9 +66,13 @@ import {
   listFailedLogs,
 } from './log-queries';
 
+const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
+const LOG_ID = '550e8400-e29b-41d4-a716-446655440001';
+const OTHER_LOG_ID = '550e8400-e29b-41d4-a716-446655440099';
+
 beforeEach(() => {
   vi.clearAllMocks();
-  const mockRow = { id: 'log-1', eventId: 'evt-1', status: 'queued' };
+  const mockRow = { id: LOG_ID, eventId: EVENT_ID, status: 'queued' };
   mockReturning.mockResolvedValue([mockRow]);
   mockLimit.mockReturnValue(dbChain);
   mockOffset.mockReturnValue(dbChain);
@@ -80,7 +84,7 @@ beforeEach(() => {
 describe('createLogEntry', () => {
   it('maps all input fields to db.insert().values()', async () => {
     const input = {
-      eventId: 'evt-1',
+      eventId: EVENT_ID,
       personId: 'person-1',
       templateId: 'tpl-1',
       templateKeySnapshot: 'registration_confirmation',
@@ -107,7 +111,7 @@ describe('createLogEntry', () => {
     await createLogEntry(input);
 
     const valuesArg = mockValues.mock.calls[0][0];
-    expect(valuesArg.eventId).toBe('evt-1');
+    expect(valuesArg.eventId).toBe(EVENT_ID);
     expect(valuesArg.personId).toBe('person-1');
     expect(valuesArg.templateId).toBe('tpl-1');
     expect(valuesArg.templateKeySnapshot).toBe('registration_confirmation');
@@ -133,7 +137,7 @@ describe('createLogEntry', () => {
 
   it('applies ?? null defaults for optional fields', async () => {
     await createLogEntry({
-      eventId: 'evt-1',
+      eventId: EVENT_ID,
       personId: 'person-1',
       templateId: null,
       templateKeySnapshot: 'key',
@@ -162,7 +166,7 @@ describe('createLogEntry', () => {
 
   it('returns the first inserted row', async () => {
     const result = await createLogEntry({
-      eventId: 'evt-1',
+      eventId: EVENT_ID,
       personId: 'p',
       templateId: null,
       templateKeySnapshot: 'k',
@@ -174,13 +178,13 @@ describe('createLogEntry', () => {
       renderedBody: 'body',
     } as any);
 
-    expect(result).toEqual({ id: 'log-1', eventId: 'evt-1', status: 'queued' });
+    expect(result).toEqual({ id: LOG_ID, eventId: EVENT_ID, status: 'queued' });
   });
 });
 
 describe('updateLogStatus', () => {
   it('sets status and provider fields', async () => {
-    await updateLogStatus('log-1', 'evt-1', {
+    await updateLogStatus(LOG_ID, EVENT_ID, {
       status: 'sent',
       providerMessageId: 'msg-1',
       providerConversationId: 'conv-1',
@@ -197,7 +201,7 @@ describe('updateLogStatus', () => {
   });
 
   it('sets error fields on failure', async () => {
-    await updateLogStatus('log-1', 'evt-1', {
+    await updateLogStatus(LOG_ID, EVENT_ID, {
       status: 'failed',
       lastErrorCode: 'PROVIDER_TIMEOUT',
       lastErrorMessage: 'Timed out',
@@ -214,7 +218,7 @@ describe('updateLogStatus', () => {
   it('returns null when log not found', async () => {
     mockReturning.mockResolvedValueOnce([]);
 
-    const result = await updateLogStatus('nonexistent', 'evt-1', {
+    const result = await updateLogStatus(OTHER_LOG_ID, EVENT_ID, {
       status: 'sent',
     });
 
@@ -224,7 +228,7 @@ describe('updateLogStatus', () => {
   it('scopes update by logId AND eventId', async () => {
     const { eq, and } = await import('drizzle-orm');
 
-    await updateLogStatus('log-1', 'evt-1', { status: 'sent' });
+    await updateLogStatus(LOG_ID, EVENT_ID, { status: 'sent' });
 
     expect(and).toHaveBeenCalled();
     expect(eq).toHaveBeenCalled();
@@ -233,7 +237,7 @@ describe('updateLogStatus', () => {
 
 describe('markAsRetrying', () => {
   it('sets status to retrying with timestamps', async () => {
-    await markAsRetrying('log-1', 'evt-1');
+    await markAsRetrying(LOG_ID, EVENT_ID);
 
     const setArg = mockSet.mock.calls[0][0];
     expect(setArg.status).toBe('retrying');
@@ -244,7 +248,7 @@ describe('markAsRetrying', () => {
   it('uses optimistic lock (status = failed)', async () => {
     const { eq } = await import('drizzle-orm');
 
-    await markAsRetrying('log-1', 'evt-1');
+    await markAsRetrying(LOG_ID, EVENT_ID);
 
     // eq should be called with status = 'failed' for the optimistic lock
     expect(eq).toHaveBeenCalled();
@@ -253,7 +257,7 @@ describe('markAsRetrying', () => {
   it('returns null when lock fails', async () => {
     mockReturning.mockResolvedValueOnce([]);
 
-    const result = await markAsRetrying('log-1', 'evt-1');
+    const result = await markAsRetrying(LOG_ID, EVENT_ID);
 
     expect(result).toBeNull();
   });
@@ -261,17 +265,17 @@ describe('markAsRetrying', () => {
 
 describe('getLogById', () => {
   it('returns log scoped by eventId', async () => {
-    mockLimit.mockReturnValue(Promise.resolve([{ id: 'log-1' }]));
+    mockLimit.mockReturnValue(Promise.resolve([{ id: LOG_ID }]));
 
-    const result = await getLogById('log-1', 'evt-1');
+    const result = await getLogById(LOG_ID, EVENT_ID);
 
-    expect(result).toEqual({ id: 'log-1' });
+    expect(result).toEqual({ id: LOG_ID });
   });
 
   it('returns null when not found', async () => {
     mockLimit.mockReturnValue(Promise.resolve([]));
 
-    const result = await getLogById('nonexistent', 'evt-1');
+    const result = await getLogById(OTHER_LOG_ID, EVENT_ID);
 
     expect(result).toBeNull();
   });
@@ -280,17 +284,17 @@ describe('getLogById', () => {
 describe('listFailedLogs', () => {
   it('lists failed logs with default limit and offset', async () => {
     // Make chain resolve as array at the end
-    mockOffset.mockReturnValue(Promise.resolve([{ id: 'log-1' }]));
+    mockOffset.mockReturnValue(Promise.resolve([{ id: LOG_ID }]));
 
-    const result = await listFailedLogs('evt-1');
+    const result = await listFailedLogs(EVENT_ID);
 
-    expect(result).toEqual([{ id: 'log-1' }]);
+    expect(result).toEqual([{ id: LOG_ID }]);
   });
 
   it('applies custom limit and offset', async () => {
     mockOffset.mockReturnValue(Promise.resolve([]));
 
-    await listFailedLogs('evt-1', { limit: 20, offset: 10 });
+    await listFailedLogs(EVENT_ID, { limit: 20, offset: 10 });
 
     expect(mockLimit).toHaveBeenCalledWith(20);
     expect(mockOffset).toHaveBeenCalledWith(10);
@@ -299,7 +303,7 @@ describe('listFailedLogs', () => {
   it('applies channel filter', async () => {
     mockOffset.mockReturnValue(Promise.resolve([]));
 
-    await listFailedLogs('evt-1', { channel: 'email' });
+    await listFailedLogs(EVENT_ID, { channel: 'email' });
 
     expect(mockWhere).toHaveBeenCalled();
   });
@@ -307,7 +311,7 @@ describe('listFailedLogs', () => {
   it('applies templateKey filter', async () => {
     mockOffset.mockReturnValue(Promise.resolve([]));
 
-    await listFailedLogs('evt-1', { templateKey: 'registration_confirmation' });
+    await listFailedLogs(EVENT_ID, { templateKey: 'registration_confirmation' });
 
     expect(mockWhere).toHaveBeenCalled();
   });
@@ -315,7 +319,7 @@ describe('listFailedLogs', () => {
   it('applies both channel and templateKey filters', async () => {
     mockOffset.mockReturnValue(Promise.resolve([]));
 
-    await listFailedLogs('evt-1', {
+    await listFailedLogs(EVENT_ID, {
       channel: 'whatsapp',
       templateKey: 'travel_update',
     });

@@ -2999,5 +2999,65 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/log-queries.ts",
+    "module": "src/lib/notifications/log-queries.ts",
+    "attacked_at": "2026-04-17T17:29:49Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "reuse event A's `idempotencyKey` while upserting or beginning a send attempt under event B",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "failed-log list request with `offset=10001` or `limit=201`",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "whitespace-padded `idempotencyKey` and non-UUID event/log identifiers passed directly to the helper",
+        "result": "succeeded"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "template filter like `registration' OR 1=1 --`",
+        "result": "blocked_by_parameterized_query_builder"
+      },
+      {
+        "category": "race_condition",
+        "payload": "concurrent retry/send attempts against the same failed log idempotency key",
+        "result": "no_new_exploitable_failure_found_beyond_existing_idempotency_guards"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "The notification-log upsert helpers used the globally unique `idempotency_key` as their only conflict scope. A direct caller could reuse another event's key and either mutate that foreign row in place during `upsertLogEntry` or block a new begin-attempt path for the wrong tenant.",
+        "fix": "Scoped idempotency conflict updates to the matching `eventId` and fail closed when a reserved key belongs to a different event instead of updating or reusing the foreign row.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/log-queries.adversarial.test.ts > rejects cross-event idempotency conflicts during upsert instead of updating a foreign row; src/lib/notifications/log-queries.adversarial.test.ts > rejects cross-event idempotency conflicts before beginning another send attempt"
+      },
+      {
+        "severity": "medium",
+        "category": "resource_exhaustion",
+        "description": "The failed-log listing helper accepted attacker-controlled pagination without a local ceiling, so direct callers and the notifications action could force extremely deep offsets or oversized page sizes against the retry-screen query.",
+        "fix": "Added helper-level pagination validation that caps failed-log requests to 200 rows per page and a 10,000-row offset budget before touching the database.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/log-queries.adversarial.test.ts > fails closed on oversized failed-log pagination requests"
+      },
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "The helper trusted raw tenant and row identifiers plus whitespace-padded idempotency keys. Malformed values reached UUID-backed queries directly, and whitespace variants created parallel idempotency namespaces that bypassed expected duplicate suppression semantics.",
+        "fix": "Validated canonical event/log IDs at the helper boundary and rejected blank or whitespace-padded idempotency keys before issuing any insert, select, or update.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/log-queries.adversarial.test.ts > rejects whitespace-padded idempotency keys before inserting a log row; src/lib/notifications/log-queries.adversarial.test.ts > rejects malformed event IDs before reaching the database"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
