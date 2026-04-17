@@ -3,6 +3,7 @@
 ## Attack Patterns
 
 <!-- Recurring attack vectors + their fixes. Agent writes here. -->
+- Request-scoped telemetry helpers must explicitly clear Sentry user context on anonymous/system captures. In a warm Node process, only setting `setUser` on authenticated paths leaks the previous request's user ID onto later errors and poisons incident forensics across tenants or background jobs.
 - Webhook ingest handlers must normalize provider timestamps and only persist delivery/audit rows after a compare-and-set status update succeeds. Writing the forensic row before CAS lets duplicate, regressive, or replayed webhooks grow unbounded event tables, while malformed timestamps can loop valid signed payloads into the DLQ.
 - DLQ and queue-drain helpers must validate queued record shape per item, preserve partial success when later items are corrupt, and cap caller-controlled batch sizes. One poison entry or oversized batch count otherwise turns recovery code into a data-loss and Redis-churn path.
 - Code-seeded registries must be deeply frozen before export. Mutable module-level arrays and nested lists let one runtime caller poison later seed/render behavior for the whole process and can even grow the shared registry with forged entries.
@@ -432,3 +433,9 @@
 - Attacks tried: 5
 - Bugs found: 1
 - Key finding: the WhatsApp media adapter trusted arbitrary event-scoped storage keys, so a direct caller could sign another event's private attachment and send it over WhatsApp.
+
+## 2026-04-17T19:48:23Z — src/lib/sentry.ts — stale user context hardening
+- Verdict: hardened
+- Attacks tried: 6
+- Bugs found: 1
+- Key finding: `captureError()` only set Sentry user context for authenticated calls, so a later anonymous/system error in the same warm process inherited the previous request's user ID and corrupted security/incident attribution.

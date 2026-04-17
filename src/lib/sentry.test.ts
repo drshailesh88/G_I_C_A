@@ -29,17 +29,25 @@ describe('captureError', () => {
 
   it('does not call setUser when userId is absent', () => {
     captureError(new Error());
-    expect(mockSetUser).not.toHaveBeenCalled();
+    expect(mockSetUser).toHaveBeenCalledWith(null);
   });
 
   it('does not call setUser when userId is null', () => {
     captureError(new Error(), { userId: null });
-    expect(mockSetUser).not.toHaveBeenCalled();
+    expect(mockSetUser).toHaveBeenCalledWith(null);
   });
 
   it('calls setUser with { id: userId } when userId is a non-empty string', () => {
     captureError(new Error(), { userId: 'user_abc123' });
     expect(mockSetUser).toHaveBeenCalledWith({ id: 'user_abc123' });
+  });
+
+  it('clears a previous user context before capturing an anonymous error', () => {
+    captureError(new Error('first'), { userId: 'user_abc123' });
+    captureError(new Error('second'));
+
+    expect(mockSetUser).toHaveBeenNthCalledWith(1, { id: 'user_abc123' });
+    expect(mockSetUser).toHaveBeenNthCalledWith(2, null);
   });
 
   it('passes tags object with module when module is provided', () => {

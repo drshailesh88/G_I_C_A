@@ -27,10 +27,9 @@ type CaptureErrorOptions = {
 export function captureError(error: unknown, options: CaptureErrorOptions = {}): void {
   const { userId, module, tags, extra } = options;
 
-  // Set Clerk user context (ID only — no PII)
-  if (userId) {
-    Sentry.setUser({ id: userId });
-  }
+  // Reset per-request Sentry user context so warm server processes do not
+  // leak one request's user onto a later anonymous/system error.
+  Sentry.setUser(userId ? { id: userId } : null);
 
   Sentry.captureException(error, {
     tags: {
