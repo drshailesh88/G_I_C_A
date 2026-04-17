@@ -75,7 +75,7 @@ function multiSelect(...responses: unknown[][]) {
   });
 }
 
-const EVENT_ID = 'event-1';
+const EVENT_ID = '550e8400-e29b-41d4-a716-446655440099';
 const UUID = '550e8400-e29b-41d4-a716-446655440000';
 const UUID2 = '550e8400-e29b-41d4-a716-446655440001';
 
@@ -473,7 +473,7 @@ describe('revalidation paths — kill StringLiteral mutations', () => {
   });
 
   it('createAssignment revalidates /sessions AND /schedule', async () => {
-    multiSelect([{ id: UUID }], []);
+    multiSelect([{ id: UUID }], [{ id: UUID2 }], []);
     chainedInsert([{ id: 'a1' }]);
     await createAssignment(EVENT_ID, { sessionId: UUID, personId: UUID2, role: 'speaker' });
     expect(mockRevalidatePath).toHaveBeenCalledWith(`/events/${EVENT_ID}/sessions`);
@@ -481,7 +481,7 @@ describe('revalidation paths — kill StringLiteral mutations', () => {
   });
 
   it('createFacultyInvite revalidates /sessions', async () => {
-    multiSelect([]);
+    multiSelect([{ id: UUID }], []);
     chainedInsert([{ id: 'inv1', status: 'sent' }]);
     await createFacultyInvite(EVENT_ID, { personId: UUID });
     expect(mockRevalidatePath).toHaveBeenCalledWith(`/events/${EVENT_ID}/sessions`);
@@ -514,7 +514,7 @@ describe('createFacultyInvite — token generation', () => {
   });
 
   it('inserts with token, status "sent", and sentAt date', async () => {
-    multiSelect([]);
+    multiSelect([{ id: UUID }], []);
     const insertChain = chainedInsert([{ id: 'inv1', status: 'sent', token: 'abc' }]);
     await createFacultyInvite(EVENT_ID, { personId: UUID });
     const vals = insertChain.values.mock.calls[0][0];

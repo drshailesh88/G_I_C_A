@@ -1109,5 +1109,106 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/program.ts",
+    "module": "src/lib/actions/program.ts",
+    "attacked_at": "2026-04-17T09:07:49Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "role_escalation",
+        "payload": "call program reads and writes with org:ops through direct server-action access",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "route eventId=not-a-uuid on program actions and public schedule reads",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "concurrent updateSession after another editor changed the same session row",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "concurrent updateSessionStatus transition after the session status changed in another request",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "concurrent updateFacultyInviteStatus accept/expire race against the same invite row",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "assign or invite an archived/anonymized person by UUID",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "foreign hallId and parentSessionId on create/update paths",
+        "result": "blocked_by_existing_event_scoping"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "foreign sessionId on role requirement and assignment paths",
+        "result": "blocked_by_existing_event_scoping"
+      },
+      {
+        "category": "injection",
+        "payload": "HTML/SQL metacharacters in titles, notes, presentationTitle, and invite token",
+        "result": "blocked_by_zod_and_parameterized_queries"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized descriptions, notes, and publish metadata",
+        "result": "blocked_by_schema_limits"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "role_escalation",
+        "description": "Program actions trusted generic assertEventAccess, so org:ops callers could bypass the hidden UI and create/edit sessions, assignments, invites, and published versions, and could also read protected program data.",
+        "fix": "Added program-module read/write role allowlists on top of event access. Reads now require super_admin, event_coordinator, or read_only; writes require super_admin or event_coordinator.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/program.test.ts > rejects org:ops writes for program actions; rejects org:ops reads for protected program actions"
+      },
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "Program actions and the public schedule accepted malformed route event IDs and reached auth/database work before any UUID validation.",
+        "fix": "Validated eventId at the action boundary before auth or database access and reused the scoped value throughout the module.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/program.test.ts > rejects malformed event IDs before auth or database access; rejects malformed event IDs in public schedule reads before database access"
+      },
+      {
+        "severity": "high",
+        "category": "stale_state",
+        "description": "updateSession and updateSessionStatus fetched the session under event scope but wrote back without optimistic-lock guards, so stale editors or concurrent transitions could overwrite newer session state.",
+        "fix": "Added compare-and-swap filters on eventId/status/updatedAt for session writes so stale session edits and transitions fail loudly instead of clobbering newer state.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/program.test.ts > blocks stale concurrent session edits; updateSessionStatus (cancelledAt) > blocks stale concurrent status transitions"
+      },
+      {
+        "severity": "medium",
+        "category": "stale_state",
+        "description": "updateFacultyInviteStatus fetched an invite and then updated by id only, so concurrent accept/decline/expire requests could revive or overwrite terminal invite state.",
+        "fix": "Added compare-and-swap filters on invite status and updatedAt so stale invite responses are rejected.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/program.test.ts > updateFacultyInviteStatus > blocks stale concurrent status updates"
+      },
+      {
+        "severity": "medium",
+        "category": "stale_state",
+        "description": "createAssignment and createFacultyInvite accepted any UUID-shaped person reference, allowing direct callers to attach archived or anonymized people back into active program workflows.",
+        "fix": "Required an active, non-archived, non-anonymized person lookup before creating assignments or faculty invites.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/program.test.ts > createAssignment > rejects archived or anonymized people; createFacultyInvite > rejects archived or anonymized people"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

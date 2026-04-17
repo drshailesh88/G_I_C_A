@@ -62,7 +62,7 @@ function multiSelect(...responses: unknown[][]) {
   });
 }
 
-const EVENT_ID = 'event-1';
+const EVENT_ID = '550e8400-e29b-41d4-a716-446655440099';
 const UUID = '550e8400-e29b-41d4-a716-446655440000';
 const UUID2 = '550e8400-e29b-41d4-a716-446655440001';
 
@@ -502,7 +502,7 @@ describe('createAssignment — presentationDurationMinutes', () => {
   });
 
   it('sets presentationDurationMinutes to value when provided', async () => {
-    multiSelect([{ id: UUID }], []);
+    multiSelect([{ id: UUID }], [{ id: UUID2 }], []);
     const insertChain = chainedInsert([{ id: 'a1' }]);
     await createAssignment(EVENT_ID, { sessionId: UUID, personId: UUID2, role: 'speaker', presentationDurationMinutes: 15 });
     expect(insertChain.values).toHaveBeenCalledWith(
@@ -511,7 +511,7 @@ describe('createAssignment — presentationDurationMinutes', () => {
   });
 
   it('sets presentationTitle to value when provided', async () => {
-    multiSelect([{ id: UUID }], []);
+    multiSelect([{ id: UUID }], [{ id: UUID2 }], []);
     const insertChain = chainedInsert([{ id: 'a1' }]);
     await createAssignment(EVENT_ID, { sessionId: UUID, personId: UUID2, role: 'speaker', presentationTitle: 'My Talk' });
     expect(insertChain.values).toHaveBeenCalledWith(
@@ -520,7 +520,7 @@ describe('createAssignment — presentationDurationMinutes', () => {
   });
 
   it('sets notes to value when provided', async () => {
-    multiSelect([{ id: UUID }], []);
+    multiSelect([{ id: UUID }], [{ id: UUID2 }], []);
     const insertChain = chainedInsert([{ id: 'a1' }]);
     await createAssignment(EVENT_ID, { sessionId: UUID, personId: UUID2, role: 'speaker', notes: 'Important' });
     expect(insertChain.values).toHaveBeenCalledWith(
@@ -540,39 +540,39 @@ describe('createFacultyInvite — active status combinations', () => {
   });
 
   it('no existing invite → creates successfully', async () => {
-    multiSelect([]);
+    multiSelect([{ id: UUID }], []);
     chainedInsert([{ id: 'inv1', status: 'sent' }]);
     const r = await createFacultyInvite(EVENT_ID, { personId: UUID });
     expect(r.status).toBe('sent');
   });
 
   it('existing "sent" invite blocks new invite', async () => {
-    multiSelect([{ id: 'inv1', status: 'sent' }]);
+    multiSelect([{ id: UUID }], [{ id: 'inv1', status: 'sent' }]);
     await expect(createFacultyInvite(EVENT_ID, { personId: UUID }))
       .rejects.toThrow('An active invite already exists');
   });
 
   it('existing "opened" invite blocks new invite', async () => {
-    multiSelect([{ id: 'inv1', status: 'opened' }]);
+    multiSelect([{ id: UUID }], [{ id: 'inv1', status: 'opened' }]);
     await expect(createFacultyInvite(EVENT_ID, { personId: UUID }))
       .rejects.toThrow('An active invite already exists');
   });
 
   it('existing "accepted" invite blocks new invite', async () => {
-    multiSelect([{ id: 'inv1', status: 'accepted' }]);
+    multiSelect([{ id: UUID }], [{ id: 'inv1', status: 'accepted' }]);
     await expect(createFacultyInvite(EVENT_ID, { personId: UUID }))
       .rejects.toThrow('An active invite already exists');
   });
 
   it('existing "expired" invite allows new invite', async () => {
-    multiSelect([{ id: 'inv1', status: 'expired' }]);
+    multiSelect([{ id: UUID }], [{ id: 'inv1', status: 'expired' }]);
     chainedInsert([{ id: 'inv2', status: 'sent' }]);
     const r = await createFacultyInvite(EVENT_ID, { personId: UUID });
     expect(r.status).toBe('sent');
   });
 
   it('existing "declined" invite allows new invite', async () => {
-    multiSelect([{ id: 'inv1', status: 'declined' }]);
+    multiSelect([{ id: UUID }], [{ id: 'inv1', status: 'declined' }]);
     chainedInsert([{ id: 'inv2', status: 'sent' }]);
     const r = await createFacultyInvite(EVENT_ID, { personId: UUID });
     expect(r.status).toBe('sent');

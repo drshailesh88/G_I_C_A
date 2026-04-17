@@ -26,6 +26,9 @@
 - Global admin actions that do not yet have an `eventId` still need explicit Clerk role enforcement. Checking only `userId` lets `org:ops` or `org:read_only` bypass UI-disabled writes and create top-level resources directly.
 - Module-specific communications actions cannot rely on generic `assertEventAccess(..., { requireWrite: true })`. `org:ops` inherits broad event write access there, so communications reads/writes need their own role allowlists to block PII leakage and resend control bypasses.
 - People-directory actions need their own module RBAC even when they are not event-scoped. Bare `auth().userId` checks let `org:ops` mutate the master people table, and event-roster helpers still need UUID validation plus event access before reading or forging `event_people` links.
+- Program actions cannot rely on generic event write access. Halls, sessions, assignments, invites, versioning, and schedule reads need program-specific role allowlists or `org:ops` can bypass the UI and operate on scientific-program data directly.
+- Session and invite lifecycle writes need optimistic-lock filters on `updatedAt` plus current status. Fetch-then-update by bare id lets stale editors or racing responders overwrite newer program state.
+- Program assignment/invite creation must reject archived or anonymized people. UUID shape plus a valid FK is not enough when the people record has been retired from active use.
 
 ## Iteration log
 
@@ -113,3 +116,9 @@
 - Attacks tried: 9
 - Bugs found: 2
 - Key finding: dashboard reads could return torn aggregate snapshots under concurrent writes, and the attention cards linked to stale event workspace routes that no longer exist.
+
+## 2026-04-17T09:07:49Z — src/lib/actions/program.ts — program RBAC and stale-state hardening
+- Verdict: hardened
+- Attacks tried: 10
+- Bugs found: 5
+- Key finding: generic event access let `org:ops` drive program actions directly, and stale session/invite writes could overwrite newer state while archived people could still be reattached to active program workflows.

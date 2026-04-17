@@ -106,7 +106,22 @@ function chainedDelete(rows: unknown[]) {
   return chain;
 }
 
-const EVENT_ID = 'event-1';
+function multiSelect(...responses: unknown[][]) {
+  let callCount = 0;
+  mockDb.select.mockImplementation(() => {
+    callCount++;
+    const rows = responses[Math.min(callCount - 1, responses.length - 1)];
+    const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+    chain.from = vi.fn().mockReturnValue(chain);
+    chain.where = vi.fn().mockImplementation(() => Object.assign(Promise.resolve(rows), chain));
+    chain.limit = vi.fn().mockResolvedValue(rows);
+    chain.orderBy = vi.fn().mockImplementation(() => Object.assign(Promise.resolve(rows), chain));
+    chain.innerJoin = vi.fn().mockReturnValue(chain);
+    return chain;
+  });
+}
+
+const EVENT_ID = '550e8400-e29b-41d4-a716-446655440099';
 
 // ══════════════════════════════════════════════════════════════
 // HALLS
@@ -414,7 +429,11 @@ describe('createAssignment', () => {
       chain.from = vi.fn().mockReturnValue(chain);
       chain.where = vi.fn().mockReturnValue(chain);
       chain.limit = vi.fn().mockResolvedValue(
-        selectCallCount === 1 ? [{ id: sessionId }] : [],
+        selectCallCount === 1
+          ? [{ id: sessionId }]
+          : selectCallCount === 2
+            ? [{ id: personId }]
+            : [],
       );
       chain.innerJoin = vi.fn().mockReturnValue(chain);
       return chain;
@@ -439,7 +458,11 @@ describe('createAssignment', () => {
       chain.from = vi.fn().mockReturnValue(chain);
       chain.where = vi.fn().mockReturnValue(chain);
       chain.limit = vi.fn().mockResolvedValue(
-        selectCallCount === 1 ? [{ id: sessionId }] : [{ id: 'existing-assign' }],
+        selectCallCount === 1
+          ? [{ id: sessionId }]
+          : selectCallCount === 2
+            ? [{ id: personId }]
+            : [{ id: 'existing-assign' }],
       );
       chain.innerJoin = vi.fn().mockReturnValue(chain);
       return chain;
@@ -448,6 +471,25 @@ describe('createAssignment', () => {
     await expect(
       createAssignment(EVENT_ID, { sessionId, personId, role: 'speaker' }),
     ).rejects.toThrow('already assigned');
+  });
+
+  it('rejects archived or anonymized people', async () => {
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+      chain.from = vi.fn().mockReturnValue(chain);
+      chain.where = vi.fn().mockReturnValue(chain);
+      chain.limit = vi.fn().mockResolvedValue(
+        selectCallCount === 1 ? [{ id: sessionId }] : [],
+      );
+      chain.innerJoin = vi.fn().mockReturnValue(chain);
+      return chain;
+    });
+
+    await expect(
+      createAssignment(EVENT_ID, { sessionId, personId, role: 'speaker' }),
+    ).rejects.toThrow('Person not found');
   });
 });
 
@@ -627,8 +669,7 @@ describe('createFacultyInvite', () => {
   });
 
   it('creates invite for new person', async () => {
-    // No existing invite
-    chainedSelect([]);
+    multiSelect([{ id: personId }], []);
 
     const newInvite = { id: 'invite-1', eventId: EVENT_ID, personId, token: 'abc', status: 'sent' };
     chainedInsert([newInvite]);
@@ -638,7 +679,7 @@ describe('createFacultyInvite', () => {
   });
 
   it('throws if active invite already exists', async () => {
-    chainedSelect([{ id: 'existing-invite', status: 'sent' }]);
+    multiSelect([{ id: personId }], [{ id: 'existing-invite', status: 'sent' }]);
 
     await expect(
       createFacultyInvite(EVENT_ID, { personId }),
@@ -646,13 +687,21 @@ describe('createFacultyInvite', () => {
   });
 
   it('allows new invite if previous was expired', async () => {
-    chainedSelect([{ id: 'old-invite', status: 'expired' }]);
+    multiSelect([{ id: personId }], [{ id: 'old-invite', status: 'expired' }]);
 
     const newInvite = { id: 'invite-2', eventId: EVENT_ID, personId, status: 'sent' };
     chainedInsert([newInvite]);
 
     const result = await createFacultyInvite(EVENT_ID, { personId });
     expect(result.status).toBe('sent');
+  });
+
+  it('rejects archived or anonymized people', async () => {
+    chainedSelect([]);
+
+    await expect(
+      createFacultyInvite(EVENT_ID, { personId }),
+    ).rejects.toThrow('Person not found');
   });
 });
 
@@ -715,6 +764,24 @@ describe('updateFacultyInviteStatus', () => {
     await expect(
       updateFacultyInviteStatus(EVENT_ID, { inviteId, newStatus: 'opened', token: 'wrong-token' }),
     ).rejects.toThrow('Invalid token');
+  });
+
+  it('blocks stale concurrent status updates', async () => {
+    chainedSelect([{
+      id: inviteId,
+      status: 'sent',
+      token: validToken,
+      updatedAt: new Date('2026-05-15T09:00:00Z'),
+    }]);
+    chainedUpdate([]);
+
+    await expect(
+      updateFacultyInviteStatus(EVENT_ID, {
+        inviteId,
+        newStatus: 'accepted',
+        token: validToken,
+      }),
+    ).rejects.toThrow('stale conflict');
   });
 });
 
@@ -1306,5 +1373,71 @@ describe('updateSessionStatus (cancelledAt)', () => {
     const setCall = updateChain.set.mock.calls[0][0];
     expect(setCall.status).toBe('scheduled');
     expect(setCall.cancelledAt).toBeUndefined();
+  });
+
+  it('blocks stale concurrent status transitions', async () => {
+    const sessionId = '550e8400-e29b-41d4-a716-446655440000';
+    const session = {
+      id: sessionId,
+      status: 'scheduled',
+      updatedAt: new Date('2026-05-15T09:00:00Z'),
+    };
+    chainedSelect([session]);
+    chainedUpdate([]);
+
+    await expect(
+      updateSessionStatus(EVENT_ID, { sessionId, newStatus: 'completed' }),
+    ).rejects.toThrow('stale conflict');
+  });
+});
+
+describe('program action hardening', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('rejects org:ops writes for program actions', async () => {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:ops' });
+
+    await expect(
+      createHall(EVENT_ID, { name: 'Hall A' }),
+    ).rejects.toThrow('Forbidden');
+  });
+
+  it('rejects org:ops reads for protected program actions', async () => {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:ops' });
+
+    await expect(getSessions(EVENT_ID)).rejects.toThrow('Forbidden');
+  });
+
+  it('rejects malformed event IDs before auth or database access', async () => {
+    await expect(getSessions('not-a-uuid')).rejects.toThrow('Invalid event ID');
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed event IDs in public schedule reads before database access', async () => {
+    await expect(getPublicScheduleData('not-a-uuid')).rejects.toThrow('Invalid event ID');
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
+  it('blocks stale concurrent session edits', async () => {
+    mockAssertEventAccess.mockResolvedValue({
+      userId: 'user-1',
+      role: 'org:event_coordinator',
+    });
+    chainedSelect([{
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      parentSessionId: null,
+      updatedAt: new Date('2026-05-15T09:00:00Z'),
+    }]);
+    chainedUpdate([]);
+
+    await expect(
+      updateSession(EVENT_ID, {
+        sessionId: '550e8400-e29b-41d4-a716-446655440000',
+        title: 'Updated title',
+      }),
+    ).rejects.toThrow('stale conflict');
   });
 });

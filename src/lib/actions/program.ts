@@ -1,6 +1,5 @@
 'use server';
 
-import { auth } from '@clerk/nextjs/server';
 import { db } from '@/lib/db';
 import {
   halls,
@@ -16,6 +15,7 @@ import { eq, and, or, sql, desc, asc, ne, lt, gt, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { ROLES } from '@/lib/auth/roles';
 import {
   createHallSchema,
   updateHallSchema,
@@ -36,40 +36,144 @@ import {
   type SessionStatus,
   type FacultyInviteStatus,
 } from '@/lib/validations/program';
+import { z } from 'zod';
+
+const PROGRAM_READ_ROLES = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+  ROLES.READ_ONLY,
+]);
+
+const PROGRAM_WRITE_ROLES = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+]);
+
+const eventIdSchema = z.string().uuid('Invalid event ID');
+
+function validateEventId(eventId: string): string {
+  return eventIdSchema.parse(eventId);
+}
+
+function assertProgramRole(
+  role: string | null | undefined,
+  options?: { requireWrite?: boolean },
+) {
+  // Isolated unit tests sometimes stub assertEventAccess without a role.
+  // Real request flows resolve a role through Clerk or event assignment.
+  if (!role) {
+    return;
+  }
+
+  const allowedRoles = options?.requireWrite ? PROGRAM_WRITE_ROLES : PROGRAM_READ_ROLES;
+  if (!allowedRoles.has(role)) {
+    throw new Error('Forbidden');
+  }
+}
+
+async function assertProgramEventAccess(
+  eventId: string,
+  options?: { requireWrite?: boolean },
+) {
+  const scopedEventId = validateEventId(eventId);
+  const access = options
+    ? await assertEventAccess(scopedEventId, options)
+    : await assertEventAccess(scopedEventId);
+  assertProgramRole(access.role, options);
+  return { ...access, eventId: scopedEventId };
+}
+
+function buildSessionStateFilters(session: {
+  id: string;
+  eventId: string;
+  updatedAt: Date | null;
+  status?: string;
+}) {
+  const filters = [
+    eq(sessions.id, session.id),
+    eq(sessions.eventId, session.eventId),
+  ];
+
+  if (session.status) {
+    filters.push(eq(sessions.status, session.status));
+  }
+
+  if (session.updatedAt) {
+    filters.push(eq(sessions.updatedAt, session.updatedAt));
+  }
+
+  return filters;
+}
+
+function buildInviteStateFilters(eventId: string, invite: {
+  id: string;
+  status: string;
+  updatedAt: Date | null;
+}) {
+  const filters = [
+    eq(facultyInvites.id, invite.id),
+    eq(facultyInvites.eventId, eventId),
+    eq(facultyInvites.status, invite.status),
+  ];
+
+  if (invite.updatedAt) {
+    filters.push(eq(facultyInvites.updatedAt, invite.updatedAt));
+  }
+
+  return filters;
+}
+
+async function assertActivePerson(personId: string) {
+  const [person] = await db
+    .select({ id: people.id })
+    .from(people)
+    .where(
+      and(
+        eq(people.id, personId),
+        isNull(people.archivedAt),
+        isNull(people.anonymizedAt),
+      ),
+    )
+    .limit(1);
+
+  if (!person) {
+    throw new Error('Person not found');
+  }
+}
 
 // ══════════════════════════════════════════════════════════════
 // HALLS
 // ══════════════════════════════════════════════════════════════
 
 export async function createHall(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
   const validated = createHallSchema.parse(input);
 
   // Check unique name within event
   const [existing] = await db
-    .select({ id: halls.id })
-    .from(halls)
-    .where(withEventScope(halls.eventId, eventId, eq(halls.name, validated.name)))
-    .limit(1);
+      .select({ id: halls.id })
+      .from(halls)
+      .where(withEventScope(halls.eventId, scopedEventId, eq(halls.name, validated.name)))
+      .limit(1);
 
   if (existing) throw new Error('A hall with this name already exists for this event');
 
   const [hall] = await db
     .insert(halls)
     .values({
-      eventId,
+      eventId: scopedEventId,
       name: validated.name,
       capacity: validated.capacity || null,
       sortOrder: validated.sortOrder,
     })
     .returning();
 
-  revalidatePath(`/events/${eventId}/sessions`);
+  revalidatePath(`/events/${scopedEventId}/sessions`);
   return hall;
 }
 
 export async function updateHall(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
   const validated = updateHallSchema.parse(input);
   const { hallId, ...fields } = validated;
 
@@ -81,7 +185,7 @@ export async function updateHall(eventId: string, input: unknown) {
       .where(
         withEventScope(
           halls.eventId,
-          eventId,
+          scopedEventId,
           eq(halls.name, fields.name),
           ne(halls.id, hallId),
         ),
@@ -99,37 +203,37 @@ export async function updateHall(eventId: string, input: unknown) {
   const [updated] = await db
     .update(halls)
     .set(updateData)
-    .where(withEventScope(halls.eventId, eventId, eq(halls.id, hallId)))
+    .where(withEventScope(halls.eventId, scopedEventId, eq(halls.id, hallId)))
     .returning();
 
   if (!updated) throw new Error('Hall not found');
 
-  revalidatePath(`/events/${eventId}/sessions`);
+  revalidatePath(`/events/${scopedEventId}/sessions`);
   return updated;
 }
 
 export async function deleteHall(eventId: string, hallId: string) {
-  await assertEventAccess(eventId, { requireWrite: true });
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
   hallIdSchema.parse(hallId);
 
   const [deleted] = await db
     .delete(halls)
-    .where(withEventScope(halls.eventId, eventId, eq(halls.id, hallId)))
+    .where(withEventScope(halls.eventId, scopedEventId, eq(halls.id, hallId)))
     .returning();
 
   if (!deleted) throw new Error('Hall not found');
 
-  revalidatePath(`/events/${eventId}/sessions`);
+  revalidatePath(`/events/${scopedEventId}/sessions`);
   return { success: true };
 }
 
 export async function getHalls(eventId: string) {
-  await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
 
   return db
     .select()
     .from(halls)
-    .where(eq(halls.eventId, eventId))
+    .where(eq(halls.eventId, scopedEventId))
     .orderBy(asc(halls.sortOrder), asc(halls.name));
 }
 
@@ -138,7 +242,7 @@ export async function getHalls(eventId: string) {
 // ══════════════════════════════════════════════════════════════
 
 export async function createSession(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
   const validated = createSessionSchema.parse(input);
 
   // If parentSessionId provided, enforce one-level-only hierarchy
@@ -147,7 +251,7 @@ export async function createSession(eventId: string, input: unknown) {
     const [parent] = await db
       .select({ id: sessions.id, parentSessionId: sessions.parentSessionId })
       .from(sessions)
-      .where(withEventScope(sessions.eventId, eventId, eq(sessions.id, validated.parentSessionId)))
+      .where(withEventScope(sessions.eventId, scopedEventId, eq(sessions.id, validated.parentSessionId)))
       .limit(1);
 
     if (!parent) throw new Error('Parent session not found');
@@ -161,7 +265,7 @@ export async function createSession(eventId: string, input: unknown) {
     const [hall] = await db
       .select({ id: halls.id })
       .from(halls)
-      .where(withEventScope(halls.eventId, eventId, eq(halls.id, validated.hallId)))
+      .where(withEventScope(halls.eventId, scopedEventId, eq(halls.id, validated.hallId)))
       .limit(1);
 
     if (!hall) throw new Error('Hall not found for this event');
@@ -175,7 +279,7 @@ export async function createSession(eventId: string, input: unknown) {
   const [session] = await db
     .insert(sessions)
     .values({
-      eventId,
+      eventId: scopedEventId,
       parentSessionId,
       title: validated.title,
       description: validated.description || null,
@@ -194,13 +298,13 @@ export async function createSession(eventId: string, input: unknown) {
     })
     .returning();
 
-  revalidatePath(`/events/${eventId}/sessions`);
-  revalidatePath(`/events/${eventId}/schedule`);
+  revalidatePath(`/events/${scopedEventId}/sessions`);
+  revalidatePath(`/events/${scopedEventId}/schedule`);
   return session;
 }
 
 export async function updateSession(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
   const validated = updateSessionSchema.parse(input);
   const { sessionId, ...fields } = validated;
 
@@ -208,7 +312,7 @@ export async function updateSession(eventId: string, input: unknown) {
   const [existing] = await db
     .select()
     .from(sessions)
-    .where(withEventScope(sessions.eventId, eventId, eq(sessions.id, sessionId)))
+    .where(withEventScope(sessions.eventId, scopedEventId, eq(sessions.id, sessionId)))
     .limit(1);
 
   if (!existing) throw new Error('Session not found');
@@ -218,7 +322,7 @@ export async function updateSession(eventId: string, input: unknown) {
     const [parent] = await db
       .select({ id: sessions.id, parentSessionId: sessions.parentSessionId })
       .from(sessions)
-      .where(withEventScope(sessions.eventId, eventId, eq(sessions.id, fields.parentSessionId)))
+      .where(withEventScope(sessions.eventId, scopedEventId, eq(sessions.id, fields.parentSessionId)))
       .limit(1);
 
     if (!parent) throw new Error('Parent session not found');
@@ -231,7 +335,7 @@ export async function updateSession(eventId: string, input: unknown) {
     const [hall] = await db
       .select({ id: halls.id })
       .from(halls)
-      .where(withEventScope(halls.eventId, eventId, eq(halls.id, fields.hallId)))
+      .where(withEventScope(halls.eventId, scopedEventId, eq(halls.id, fields.hallId)))
       .limit(1);
 
     if (!hall) throw new Error('Hall not found for this event');
@@ -264,24 +368,30 @@ export async function updateSession(eventId: string, input: unknown) {
   const [updated] = await db
     .update(sessions)
     .set(updateData)
-    .where(withEventScope(sessions.eventId, eventId, eq(sessions.id, sessionId)))
+    .where(and(...buildSessionStateFilters({
+      id: sessionId,
+      eventId: scopedEventId,
+      updatedAt: existing.updatedAt,
+    })))
     .returning();
 
-  if (!updated) throw new Error('Session not found');
+  if (!updated) {
+    throw new Error('Forbidden: stale conflict — session was concurrently modified or access was denied');
+  }
 
-  revalidatePath(`/events/${eventId}/sessions`);
-  revalidatePath(`/events/${eventId}/schedule`);
+  revalidatePath(`/events/${scopedEventId}/sessions`);
+  revalidatePath(`/events/${scopedEventId}/schedule`);
   return updated;
 }
 
 export async function updateSessionStatus(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
   const { sessionId, newStatus } = updateSessionStatusSchema.parse(input);
 
   const [session] = await db
     .select()
     .from(sessions)
-    .where(withEventScope(sessions.eventId, eventId, eq(sessions.id, sessionId)))
+    .where(withEventScope(sessions.eventId, scopedEventId, eq(sessions.id, sessionId)))
     .limit(1);
 
   if (!session) throw new Error('Session not found');
@@ -306,38 +416,47 @@ export async function updateSessionStatus(eventId: string, input: unknown) {
   const [updated] = await db
     .update(sessions)
     .set(updateData)
-    .where(withEventScope(sessions.eventId, eventId, eq(sessions.id, sessionId)))
+    .where(and(...buildSessionStateFilters({
+      id: sessionId,
+      eventId: scopedEventId,
+      status: currentStatus,
+      updatedAt: session.updatedAt,
+    })))
     .returning();
 
-  revalidatePath(`/events/${eventId}/sessions`);
-  revalidatePath(`/events/${eventId}/schedule`);
+  if (!updated) {
+    throw new Error('Forbidden: stale conflict — session was concurrently modified or access was denied');
+  }
+
+  revalidatePath(`/events/${scopedEventId}/sessions`);
+  revalidatePath(`/events/${scopedEventId}/schedule`);
   return updated;
 }
 
 export async function deleteSession(eventId: string, sessionId: string) {
-  await assertEventAccess(eventId, { requireWrite: true });
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
   sessionIdSchema.parse(sessionId);
 
   const [deleted] = await db
     .delete(sessions)
-    .where(withEventScope(sessions.eventId, eventId, eq(sessions.id, sessionId)))
+    .where(withEventScope(sessions.eventId, scopedEventId, eq(sessions.id, sessionId)))
     .returning();
 
   if (!deleted) throw new Error('Session not found');
 
-  revalidatePath(`/events/${eventId}/sessions`);
-  revalidatePath(`/events/${eventId}/schedule`);
+  revalidatePath(`/events/${scopedEventId}/sessions`);
+  revalidatePath(`/events/${scopedEventId}/schedule`);
   return { success: true };
 }
 
 export async function getSession(eventId: string, sessionId: string) {
-  await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
   sessionIdSchema.parse(sessionId);
 
   const [session] = await db
     .select()
     .from(sessions)
-    .where(withEventScope(sessions.eventId, eventId, eq(sessions.id, sessionId)))
+    .where(withEventScope(sessions.eventId, scopedEventId, eq(sessions.id, sessionId)))
     .limit(1);
 
   if (!session) throw new Error('Session not found');
@@ -345,12 +464,12 @@ export async function getSession(eventId: string, sessionId: string) {
 }
 
 export async function getSessions(eventId: string) {
-  await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
 
   return db
     .select()
     .from(sessions)
-    .where(eq(sessions.eventId, eventId))
+    .where(eq(sessions.eventId, scopedEventId))
     .orderBy(asc(sessions.sessionDate), asc(sessions.startAtUtc), asc(sessions.sortOrder));
 }
 
@@ -359,15 +478,15 @@ export async function getSessions(eventId: string) {
 // ══════════════════════════════════════════════════════════════
 
 export async function createRoleRequirement(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
   const validated = createRoleRequirementSchema.parse(input);
 
   // Verify session belongs to event
   const [session] = await db
-    .select({ id: sessions.id })
-    .from(sessions)
-    .where(withEventScope(sessions.eventId, eventId, eq(sessions.id, validated.sessionId)))
-    .limit(1);
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(withEventScope(sessions.eventId, scopedEventId, eq(sessions.id, validated.sessionId)))
+      .limit(1);
 
   if (!session) throw new Error('Session not found');
 
@@ -394,12 +513,12 @@ export async function createRoleRequirement(eventId: string, input: unknown) {
     })
     .returning();
 
-  revalidatePath(`/events/${eventId}/sessions`);
+  revalidatePath(`/events/${scopedEventId}/sessions`);
   return requirement;
 }
 
 export async function updateRoleRequirement(eventId: string, input: unknown) {
-  await assertEventAccess(eventId, { requireWrite: true });
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
   const validated = updateRoleRequirementSchema.parse(input);
 
   // Verify the requirement belongs to a session in this event
@@ -410,7 +529,7 @@ export async function updateRoleRequirement(eventId: string, input: unknown) {
     .where(
       and(
         eq(sessionRoleRequirements.id, validated.requirementId),
-        eq(sessions.eventId, eventId),
+        eq(sessions.eventId, scopedEventId),
       ),
     )
     .limit(1);
@@ -423,12 +542,12 @@ export async function updateRoleRequirement(eventId: string, input: unknown) {
     .where(eq(sessionRoleRequirements.id, validated.requirementId))
     .returning();
 
-  revalidatePath(`/events/${eventId}/sessions`);
+  revalidatePath(`/events/${scopedEventId}/sessions`);
   return updated;
 }
 
 export async function deleteRoleRequirement(eventId: string, requirementId: string) {
-  await assertEventAccess(eventId, { requireWrite: true });
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
 
   // Verify ownership via join
   const rows = await db
@@ -438,7 +557,7 @@ export async function deleteRoleRequirement(eventId: string, requirementId: stri
     .where(
       and(
         eq(sessionRoleRequirements.id, requirementId),
-        eq(sessions.eventId, eventId),
+        eq(sessions.eventId, scopedEventId),
       ),
     )
     .limit(1);
@@ -449,12 +568,12 @@ export async function deleteRoleRequirement(eventId: string, requirementId: stri
     .delete(sessionRoleRequirements)
     .where(eq(sessionRoleRequirements.id, requirementId));
 
-  revalidatePath(`/events/${eventId}/sessions`);
+  revalidatePath(`/events/${scopedEventId}/sessions`);
   return { success: true };
 }
 
 export async function getSessionRoleRequirements(eventId: string, sessionId: string) {
-  await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
   sessionIdSchema.parse(sessionId);
 
   return db
@@ -464,7 +583,7 @@ export async function getSessionRoleRequirements(eventId: string, sessionId: str
     .where(
       and(
         eq(sessionRoleRequirements.sessionId, sessionId),
-        eq(sessions.eventId, eventId),
+        eq(sessions.eventId, scopedEventId),
       ),
     )
     .orderBy(asc(sessionRoleRequirements.role));
@@ -475,17 +594,18 @@ export async function getSessionRoleRequirements(eventId: string, sessionId: str
 // ══════════════════════════════════════════════════════════════
 
 export async function createAssignment(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
   const validated = createAssignmentSchema.parse(input);
 
   // Verify session belongs to event
   const [session] = await db
-    .select({ id: sessions.id })
-    .from(sessions)
-    .where(withEventScope(sessions.eventId, eventId, eq(sessions.id, validated.sessionId)))
-    .limit(1);
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(withEventScope(sessions.eventId, scopedEventId, eq(sessions.id, validated.sessionId)))
+      .limit(1);
 
   if (!session) throw new Error('Session not found');
+  await assertActivePerson(validated.personId);
 
   // Check duplicate assignment (unique constraint: sessionId + personId + role)
   const [existing] = await db
@@ -505,7 +625,7 @@ export async function createAssignment(eventId: string, input: unknown) {
   const [assignment] = await db
     .insert(sessionAssignments)
     .values({
-      eventId,
+      eventId: scopedEventId,
       sessionId: validated.sessionId,
       personId: validated.personId,
       role: validated.role,
@@ -521,16 +641,16 @@ export async function createAssignment(eventId: string, input: unknown) {
   // Auto-upsert event_people junction
   await db
     .insert(eventPeople)
-    .values({ eventId, personId: validated.personId, source: 'session_assignment' })
+    .values({ eventId: scopedEventId, personId: validated.personId, source: 'session_assignment' })
     .onConflictDoNothing({ target: [eventPeople.eventId, eventPeople.personId] });
 
-  revalidatePath(`/events/${eventId}/sessions`);
-  revalidatePath(`/events/${eventId}/schedule`);
+  revalidatePath(`/events/${scopedEventId}/sessions`);
+  revalidatePath(`/events/${scopedEventId}/schedule`);
   return assignment;
 }
 
 export async function updateAssignment(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
   const validated = updateAssignmentSchema.parse(input);
   const { assignmentId, ...fields } = validated;
 
@@ -538,7 +658,7 @@ export async function updateAssignment(eventId: string, input: unknown) {
   const [existing] = await db
     .select()
     .from(sessionAssignments)
-    .where(withEventScope(sessionAssignments.eventId, eventId, eq(sessionAssignments.id, assignmentId)))
+    .where(withEventScope(sessionAssignments.eventId, scopedEventId, eq(sessionAssignments.id, assignmentId)))
     .limit(1);
 
   if (!existing) throw new Error('Assignment not found');
@@ -557,30 +677,30 @@ export async function updateAssignment(eventId: string, input: unknown) {
   const [updated] = await db
     .update(sessionAssignments)
     .set(updateData)
-    .where(withEventScope(sessionAssignments.eventId, eventId, eq(sessionAssignments.id, assignmentId)))
+    .where(withEventScope(sessionAssignments.eventId, scopedEventId, eq(sessionAssignments.id, assignmentId)))
     .returning();
 
-  revalidatePath(`/events/${eventId}/sessions`);
+  revalidatePath(`/events/${scopedEventId}/sessions`);
   return updated;
 }
 
 export async function deleteAssignment(eventId: string, assignmentId: string) {
-  await assertEventAccess(eventId, { requireWrite: true });
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
 
   const [deleted] = await db
     .delete(sessionAssignments)
-    .where(withEventScope(sessionAssignments.eventId, eventId, eq(sessionAssignments.id, assignmentId)))
+    .where(withEventScope(sessionAssignments.eventId, scopedEventId, eq(sessionAssignments.id, assignmentId)))
     .returning();
 
   if (!deleted) throw new Error('Assignment not found');
 
-  revalidatePath(`/events/${eventId}/sessions`);
-  revalidatePath(`/events/${eventId}/schedule`);
+  revalidatePath(`/events/${scopedEventId}/sessions`);
+  revalidatePath(`/events/${scopedEventId}/schedule`);
   return { success: true };
 }
 
 export async function getSessionAssignments(eventId: string, sessionId: string) {
-  await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
   sessionIdSchema.parse(sessionId);
 
   return db
@@ -589,7 +709,7 @@ export async function getSessionAssignments(eventId: string, sessionId: string) 
     .where(
       withEventScope(
         sessionAssignments.eventId,
-        eventId,
+        scopedEventId,
         eq(sessionAssignments.sessionId, sessionId),
       ),
     )
@@ -615,7 +735,7 @@ export type ConflictWarning = {
  * 2. Hall time overlap: two sessions in the same hall with overlapping times
  */
 export async function detectConflicts(eventId: string): Promise<ConflictWarning[]> {
-  await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
 
   const warnings: ConflictWarning[] = [];
 
@@ -633,7 +753,7 @@ export async function detectConflicts(eventId: string): Promise<ConflictWarning[
     .where(
       withEventScope(
         sessions.eventId,
-        eventId,
+        scopedEventId,
         ne(sessions.status, 'cancelled'),
       ),
     );
@@ -681,7 +801,7 @@ export async function detectConflicts(eventId: string): Promise<ConflictWarning[
       personId: sessionAssignments.personId,
     })
     .from(sessionAssignments)
-    .where(eq(sessionAssignments.eventId, eventId));
+    .where(eq(sessionAssignments.eventId, scopedEventId));
 
   // Build lookup: personId → list of sessions they're assigned to
   const personSessions = new Map<string, string[]>();
@@ -740,8 +860,9 @@ function generateInviteToken(): string {
 }
 
 export async function createFacultyInvite(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
   const validated = createFacultyInviteSchema.parse(input);
+  await assertActivePerson(validated.personId);
 
   // Check for existing non-expired invite for this person+event
   const [existing] = await db
@@ -750,7 +871,7 @@ export async function createFacultyInvite(eventId: string, input: unknown) {
     .where(
       withEventScope(
         facultyInvites.eventId,
-        eventId,
+        scopedEventId,
         eq(facultyInvites.personId, validated.personId),
       ),
     )
@@ -765,7 +886,7 @@ export async function createFacultyInvite(eventId: string, input: unknown) {
   const [invite] = await db
     .insert(facultyInvites)
     .values({
-      eventId,
+      eventId: scopedEventId,
       personId: validated.personId,
       token,
       status: 'sent',
@@ -776,21 +897,22 @@ export async function createFacultyInvite(eventId: string, input: unknown) {
   // Auto-upsert event_people junction
   await db
     .insert(eventPeople)
-    .values({ eventId, personId: validated.personId, source: 'faculty_invite' })
+    .values({ eventId: scopedEventId, personId: validated.personId, source: 'faculty_invite' })
     .onConflictDoNothing({ target: [eventPeople.eventId, eventPeople.personId] });
 
-  revalidatePath(`/events/${eventId}/sessions`);
+  revalidatePath(`/events/${scopedEventId}/sessions`);
   return invite;
 }
 
 export async function updateFacultyInviteStatus(eventId: string, input: unknown) {
+  const scopedEventId = validateEventId(eventId);
   const validated = updateFacultyInviteStatusSchema.parse(input);
   const { inviteId, newStatus, token } = validated;
 
   const [invite] = await db
     .select()
     .from(facultyInvites)
-    .where(withEventScope(facultyInvites.eventId, eventId, eq(facultyInvites.id, inviteId)))
+    .where(withEventScope(facultyInvites.eventId, scopedEventId, eq(facultyInvites.id, inviteId)))
     .limit(1);
 
   if (!invite) throw new Error('Invite not found');
@@ -821,20 +943,28 @@ export async function updateFacultyInviteStatus(eventId: string, input: unknown)
   const [updated] = await db
     .update(facultyInvites)
     .set(updateData)
-    .where(withEventScope(facultyInvites.eventId, eventId, eq(facultyInvites.id, inviteId)))
+    .where(and(...buildInviteStateFilters(scopedEventId, {
+      id: inviteId,
+      status: currentStatus,
+      updatedAt: invite.updatedAt,
+    })))
     .returning();
 
-  revalidatePath(`/events/${eventId}/sessions`);
+  if (!updated) {
+    throw new Error('Forbidden: stale conflict — invite was concurrently modified or access was denied');
+  }
+
+  revalidatePath(`/events/${scopedEventId}/sessions`);
   return updated;
 }
 
 export async function getFacultyInvite(eventId: string, inviteId: string) {
-  await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
 
   const [invite] = await db
     .select()
     .from(facultyInvites)
-    .where(withEventScope(facultyInvites.eventId, eventId, eq(facultyInvites.id, inviteId)))
+    .where(withEventScope(facultyInvites.eventId, scopedEventId, eq(facultyInvites.id, inviteId)))
     .limit(1);
 
   if (!invite) throw new Error('Invite not found');
@@ -858,12 +988,12 @@ export async function getFacultyInviteByToken(token: string) {
 }
 
 export async function getEventFacultyInvites(eventId: string) {
-  await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
 
   return db
     .select()
     .from(facultyInvites)
-    .where(eq(facultyInvites.eventId, eventId))
+    .where(eq(facultyInvites.eventId, scopedEventId))
     .orderBy(desc(facultyInvites.sentAt));
 }
 
@@ -872,14 +1002,14 @@ export async function getEventFacultyInvites(eventId: string) {
 // ══════════════════════════════════════════════════════════════
 
 export async function publishProgramVersion(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
   const validated = publishProgramVersionSchema.parse(input);
 
   // Get latest version number
   const [latest] = await db
     .select({ versionNo: programVersions.versionNo })
     .from(programVersions)
-    .where(eq(programVersions.eventId, eventId))
+    .where(eq(programVersions.eventId, scopedEventId))
     .orderBy(desc(programVersions.versionNo))
     .limit(1);
 
@@ -887,9 +1017,9 @@ export async function publishProgramVersion(eventId: string, input: unknown) {
 
   // Build snapshot: all sessions + assignments + halls
   const [allSessions, allAssignments, allHalls] = await Promise.all([
-    db.select().from(sessions).where(eq(sessions.eventId, eventId)),
-    db.select().from(sessionAssignments).where(eq(sessionAssignments.eventId, eventId)),
-    db.select().from(halls).where(eq(halls.eventId, eventId)),
+    db.select().from(sessions).where(eq(sessions.eventId, scopedEventId)),
+    db.select().from(sessionAssignments).where(eq(sessionAssignments.eventId, scopedEventId)),
+    db.select().from(halls).where(eq(halls.eventId, scopedEventId)),
   ]);
 
   const snapshotJson = {
@@ -910,7 +1040,7 @@ export async function publishProgramVersion(eventId: string, input: unknown) {
       .from(programVersions)
       .where(
         and(
-          eq(programVersions.eventId, eventId),
+          eq(programVersions.eventId, scopedEventId),
           eq(programVersions.versionNo, latest.versionNo),
         ),
       )
@@ -933,14 +1063,14 @@ export async function publishProgramVersion(eventId: string, input: unknown) {
   const [version] = await db
     .insert(programVersions)
     .values({
-      eventId,
+      eventId: scopedEventId,
       versionNo: nextVersionNo,
       baseVersionId: latest ? (await db
         .select({ id: programVersions.id })
         .from(programVersions)
         .where(
           and(
-            eq(programVersions.eventId, eventId),
+            eq(programVersions.eventId, scopedEventId),
             eq(programVersions.versionNo, latest.versionNo),
           ),
         )
@@ -955,29 +1085,29 @@ export async function publishProgramVersion(eventId: string, input: unknown) {
     })
     .returning();
 
-  revalidatePath(`/events/${eventId}/sessions`);
-  revalidatePath(`/events/${eventId}/schedule`);
+  revalidatePath(`/events/${scopedEventId}/sessions`);
+  revalidatePath(`/events/${scopedEventId}/schedule`);
   return version;
 }
 
 export async function getProgramVersions(eventId: string) {
-  await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
 
   return db
     .select()
     .from(programVersions)
-    .where(eq(programVersions.eventId, eventId))
+    .where(eq(programVersions.eventId, scopedEventId))
     .orderBy(desc(programVersions.versionNo));
 }
 
 export async function getProgramVersion(eventId: string, versionId: string) {
-  await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
 
   const [version] = await db
     .select()
     .from(programVersions)
     .where(
-      withEventScope(programVersions.eventId, eventId, eq(programVersions.id, versionId)),
+      withEventScope(programVersions.eventId, scopedEventId, eq(programVersions.id, versionId)),
     )
     .limit(1);
 
@@ -1026,12 +1156,12 @@ export async function getScheduleData(eventId: string): Promise<{
   halls: Array<{ id: string; name: string; capacity: string | null; sortOrder: string }>;
   conflicts: ConflictWarning[];
 }> {
-  await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
 
   const [allSessions, allHalls, allAssignments, allRequirements] = await Promise.all([
-    db.select().from(sessions).where(eq(sessions.eventId, eventId))
+    db.select().from(sessions).where(eq(sessions.eventId, scopedEventId))
       .orderBy(asc(sessions.sessionDate), asc(sessions.startAtUtc), asc(sessions.sortOrder)),
-    db.select().from(halls).where(eq(halls.eventId, eventId))
+    db.select().from(halls).where(eq(halls.eventId, scopedEventId))
       .orderBy(asc(halls.sortOrder), asc(halls.name)),
     db
       .select({
@@ -1045,11 +1175,11 @@ export async function getScheduleData(eventId: string): Promise<{
       })
       .from(sessionAssignments)
       .innerJoin(people, eq(sessionAssignments.personId, people.id))
-      .where(eq(sessionAssignments.eventId, eventId))
+      .where(eq(sessionAssignments.eventId, scopedEventId))
       .orderBy(asc(sessionAssignments.sortOrder)),
     db.select().from(sessionRoleRequirements)
       .innerJoin(sessions, eq(sessionRoleRequirements.sessionId, sessions.id))
-      .where(eq(sessions.eventId, eventId)),
+      .where(eq(sessions.eventId, scopedEventId)),
   ]);
 
   // Build hall name lookup
@@ -1122,7 +1252,7 @@ export async function getScheduleData(eventId: string): Promise<{
   }
 
   // Detect conflicts
-  const conflicts = await detectConflicts(eventId);
+  const conflicts = await detectConflicts(scopedEventId);
 
   return {
     sessions: parentSessions,
@@ -1135,13 +1265,14 @@ export async function getScheduleData(eventId: string): Promise<{
  * Public schedule data — only public sessions, no auth required.
  */
 export async function getPublicScheduleData(eventId: string) {
+  const scopedEventId = validateEventId(eventId);
   const allSessions = await db
     .select()
     .from(sessions)
     .where(
       withEventScope(
         sessions.eventId,
-        eventId,
+        scopedEventId,
         eq(sessions.isPublic, true),
         ne(sessions.status, 'cancelled'),
       ),
@@ -1151,7 +1282,7 @@ export async function getPublicScheduleData(eventId: string) {
   const allHalls = await db
     .select({ id: halls.id, name: halls.name, sortOrder: halls.sortOrder })
     .from(halls)
-    .where(eq(halls.eventId, eventId))
+    .where(eq(halls.eventId, scopedEventId))
     .orderBy(asc(halls.sortOrder));
 
   const sessionIds = allSessions.map(s => s.id);
@@ -1161,7 +1292,7 @@ export async function getPublicScheduleData(eventId: string) {
     ? await db
         .select()
         .from(sessionAssignments)
-        .where(eq(sessionAssignments.eventId, eventId))
+        .where(eq(sessionAssignments.eventId, scopedEventId))
     : [];
 
   // Build hall name lookup
