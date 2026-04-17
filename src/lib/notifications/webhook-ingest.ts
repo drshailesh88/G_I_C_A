@@ -14,6 +14,12 @@ import { insertDeliveryEvent, findLogByProviderMessageId, updateLogStatus } from
 import { pushToDlq } from './webhook-dlq';
 import type { NotificationStatus, ProviderName } from './types';
 
+function normalizeWebhookTimestamp(timestamp: string): string {
+  return Number.isFinite(Date.parse(timestamp))
+    ? timestamp
+    : new Date().toISOString();
+}
+
 /**
  * Ingest an email status webhook from Resend.
  * Returns 200 to provider. On failure, pushes to DLQ.
@@ -77,15 +83,21 @@ async function processDeliveryEvent(
     // Channel mismatch guard
     if (logRow.channel !== expectedChannel) return;
 
-    // Always insert the delivery event (forensic/audit trail)
+    // Normalize malformed provider timestamps to the current time so
+    // bad-but-authentic payloads do not loop forever through the DLQ.
+    const normalizedTimestamp = normalizeWebhookTimestamp(timestamp);
+
+    // Advance status first. If CAS rejects the update, this webhook is a
+    // duplicate, regression, or lost a race to a newer status.
+    const updatedLog = await updateLogStatus(logRow.id, eventType, normalizedTimestamp);
+    if (!updatedLog) return;
+
+    // Record the accepted status transition for the forensic trail.
     await insertDeliveryEvent({
       notificationLogId: logRow.id,
       eventType,
       providerPayloadJson: rawPayload,
     });
-
-    // Advance status — CAS at DB level rejects regressions automatically
-    await updateLogStatus(logRow.id, eventType, timestamp);
   } catch (error) {
     // FIX #10: Push to DLQ instead of silently losing the event
     console.error('[webhook-ingest] Processing failed, pushing to DLQ:', error);

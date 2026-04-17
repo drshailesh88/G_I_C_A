@@ -3,6 +3,7 @@
 ## Attack Patterns
 
 <!-- Recurring attack vectors + their fixes. Agent writes here. -->
+- Webhook ingest handlers must normalize provider timestamps and only persist delivery/audit rows after a compare-and-set status update succeeds. Writing the forensic row before CAS lets duplicate, regressive, or replayed webhooks grow unbounded event tables, while malformed timestamps can loop valid signed payloads into the DLQ.
 - DLQ and queue-drain helpers must validate queued record shape per item, preserve partial success when later items are corrupt, and cap caller-controlled batch sizes. One poison entry or oversized batch count otherwise turns recovery code into a data-loss and Redis-churn path.
 - Code-seeded registries must be deeply frozen before export. Mutable module-level arrays and nested lists let one runtime caller poison later seed/render behavior for the whole process and can even grow the shared registry with forged entries.
 - Runtime lookup registries used for `key in registry` validation must use null-prototype, immutable objects. Plain object registries inherit `__proto__`, `constructor`, and `toString`, which lets malformed route params pass validation and lets one runtime caller poison metadata for later requests.
@@ -412,3 +413,9 @@
 - Attacks tried: 5
 - Bugs found: 2
 - Key finding: one poison DLQ value could make batch recovery drop already-popped valid webhooks, and unbounded pop counts let direct callers force oversized Redis drain loops.
+
+## 2026-04-17T19:33:04Z — src/lib/notifications/webhook-ingest.ts — replay and timestamp hardening
+- Verdict: hardened
+- Attacks tried: 6
+- Bugs found: 1
+- Key finding: webhook ingest wrote the forensic delivery row before the status CAS, so duplicate or regressive replays still grew `notification_delivery_events`, and malformed provider timestamps could keep otherwise valid signed payloads bouncing through error handling.

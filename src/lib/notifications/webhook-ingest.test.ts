@@ -63,7 +63,7 @@ describe('webhook ingest', () => {
       provider: 'resend',
     });
     insertDeliveryEvent.mockResolvedValue(undefined);
-    updateLogStatus.mockResolvedValue(undefined);
+    updateLogStatus.mockResolvedValue({ id: 'log-1', status: 'delivered' });
 
     await ingestEmailStatus({
       provider: 'resend',

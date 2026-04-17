@@ -3557,5 +3557,54 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/webhook-ingest.ts",
+    "module": "src/lib/notifications/webhook-ingest.ts",
+    "attacked_at": "2026-04-17T19:33:04Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "valid parsed email.delivery payload with timestamp='not-a-real-date'",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "two concurrent delivered/read webhook deliveries for the same providerMessageId racing the CAS update",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "out-of-order resend/evolution status replay after the log had already advanced to delivered/read",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "replay the same valid signed webhook repeatedly to append duplicate notification_delivery_events rows",
+        "result": "succeeded"
+      },
+      {
+        "category": "auth_bypass",
+        "payload": "not_applicable_module_has_no_auth_or_role_boundary",
+        "result": "not_applicable"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not_applicable_module_correlates_only_by_provider/providerMessageId",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "race_condition",
+        "description": "webhook-ingest inserted `notification_delivery_events` before the notification_log compare-and-set update, so duplicate, regressive, or replayed webhooks still appended forensic rows even when the status transition was rejected. The same ingest path also trusted malformed provider timestamps, which could turn an otherwise valid signed payload into repeated error/DLQ churn.",
+        "fix": "Normalized malformed provider timestamps to the current time, moved the status CAS ahead of the forensic insert, and only record a delivery event when the CAS accepts that transition.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/webhook-ingest.adversarial.test.ts > drops duplicate email replays before they can append extra delivery-event rows; src/lib/notifications/webhook-ingest.adversarial.test.ts > drops regressive whatsapp statuses that lose the CAS race to a newer state; src/lib/notifications/webhook-ingest.adversarial.test.ts > normalizes malformed provider timestamps before updating status"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
