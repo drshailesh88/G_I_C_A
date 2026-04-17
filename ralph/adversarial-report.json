@@ -3996,5 +3996,77 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/validations/event.ts",
+    "module": "src/lib/validations/event.ts",
+    "attacked_at": "2026-04-17T20:19:02Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "createEventSchema with startDate='2026-02-30' and endDate='2026-03-02'",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "createEventSchema with timezone='Mars/Olympus'",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "registrationSettingsSchema with cutoffDate='not-a-date' and cutoffDate='2026-02-30'",
+        "result": "succeeded"
+      },
+      {
+        "category": "unicode",
+        "payload": "whitespace-only event/venue names",
+        "result": "blocked_by_existing_trimmed_string_validation"
+      },
+      {
+        "category": "prototype_pollution",
+        "payload": "__proto__ / constructor keys inside moduleToggles and preferenceFields objects",
+        "result": "blocked_by_current_zod_object_validation_and_unknown_key_stripping"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized name, venue, address, city, and description strings",
+        "result": "blocked_by_existing_length_limits"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not_applicable_module_has_no_event_scope_queries_or_writes",
+        "result": "not_applicable"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "not_applicable_module_has_no_auth_or_role_boundary",
+        "result": "not_applicable"
+      },
+      {
+        "category": "race_condition",
+        "payload": "not_applicable_pure_validation_module_has_no_shared_mutation_path",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "malformed_input",
+        "description": "createEventSchema/updateEventSchema trusted raw date strings and `new Date(...)` coercion, so impossible values like `2026-02-30` were silently normalized and persisted; the same boundary also accepted forged timezone names like `Mars/Olympus`, which can later throw `RangeError` anywhere event times are formatted.",
+        "fix": "Replaced date coercion with strict canonical `YYYY-MM-DD` validation plus lexicographic range checks, and validated timezone strings against the platform IANA timezone registry before accepting them.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/event.test.ts > rejects impossible calendar dates instead of normalizing them; src/lib/validations/event.test.ts > rejects unsupported IANA timezones"
+      },
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "registrationSettingsSchema accepted arbitrary or impossible `cutoffDate` strings, letting direct callers persist malformed registration gate settings that did not map to a real calendar day.",
+        "fix": "Applied the same strict date-only validator to registration cutoff dates and normalized absent values to null only after validation.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/event.test.ts > rejects malformed cutoffDate strings; src/lib/validations/event.test.ts > rejects impossible cutoffDate values instead of normalizing them"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

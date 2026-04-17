@@ -80,6 +80,7 @@
 - Signed webhook verifiers must validate numeric timestamp freshness before accepting an HMAC. Otherwise any captured legitimate request can be replayed indefinitely to duplicate delivery events or rerun downstream status handling long after the original send.
 - Shared class-name merge helpers are security boundaries too: only honor own enumerable keys from object inputs and bound array traversal iteratively, or prototype-backed dictionaries can inject inherited classes and cyclic/deep arrays can crash render paths with stack overflows.
 - Validation modules must not trust `new Date(...)` coercion as a parser. JavaScript silently normalizes impossible calendar inputs like `2026-02-30`, and optional update date fields that accept `''` become malformed `Invalid Date` writes unless the schema enforces canonical non-empty ISO date/date-time strings and range checks itself.
+- Event and settings validation boundaries must validate real IANA timezone names too. Hidden form fields or direct JSON callers can otherwise persist poisoned timezone strings that later throw `RangeError` in date-formatting and dashboard reads.
 
 ## Iteration log
 
@@ -467,3 +468,9 @@
 - Attacks tried: 8
 - Bugs found: 2
 - Key finding: the validator accepted non-manual certificate issuance without any eligibility basis ID, so direct callers could request issuance detached from the registration/attendance/session record the certificate is supposed to prove.
+
+## 2026-04-17T20:19:02Z — src/lib/validations/event.ts — event validation calendar and timezone hardening
+- Verdict: hardened
+- Attacks tried: 8
+- Bugs found: 2
+- Key finding: the event validator accepted impossible calendar dates and forged timezone strings, so direct callers could persist normalized wrong dates or poisoned timezones that later break event formatting and registration cutoff logic.

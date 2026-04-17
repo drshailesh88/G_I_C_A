@@ -24,6 +24,51 @@ export const MODULE_KEYS = [
   'communications',
 ] as const;
 
+function isValidDateOnly(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const [year, month, day] = value.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+}
+
+function isValidTimeZone(value: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function requiredDateSchema(fieldLabel: string) {
+  return z
+    .string()
+    .trim()
+    .min(1, `${fieldLabel} is required`)
+    .refine(isValidDateOnly, `${fieldLabel} must be a valid date in YYYY-MM-DD format`);
+}
+
+const optionalDateSchema = z
+  .string()
+  .trim()
+  .refine(isValidDateOnly, 'Date must be a valid date in YYYY-MM-DD format');
+
+const timeZoneSchema = z
+  .string()
+  .trim()
+  .min(1, 'Timezone is required')
+  .max(100)
+  .refine(isValidTimeZone, 'Timezone must be a valid IANA timezone');
+
 export const moduleTogglesSchema = z.object(
   Object.fromEntries(MODULE_KEYS.map((key) => [key, z.boolean().default(true)])) as Record<
     (typeof MODULE_KEYS)[number],
@@ -33,9 +78,9 @@ export const moduleTogglesSchema = z.object(
 
 export const createEventSchema = z.object({
   name: z.string().trim().min(1, 'Event name is required').max(200),
-  startDate: z.string().min(1, 'Start date is required'),
-  endDate: z.string().min(1, 'End date is required'),
-  timezone: z.string().default('Asia/Kolkata'),
+  startDate: requiredDateSchema('Start date'),
+  endDate: requiredDateSchema('End date'),
+  timezone: timeZoneSchema.default('Asia/Kolkata'),
   venueName: z.string().trim().min(1, 'Venue is required').max(300),
   venueAddress: z.string().max(500).optional(),
   venueCity: z.string().max(100).optional(),
@@ -43,7 +88,7 @@ export const createEventSchema = z.object({
   description: z.string().max(2000).optional(),
   moduleToggles: moduleTogglesSchema,
 }).refine(
-  (data) => new Date(data.endDate) >= new Date(data.startDate),
+  (data) => data.endDate >= data.startDate,
   { message: 'End date must be on or after start date', path: ['endDate'] },
 );
 
@@ -60,7 +105,7 @@ export const registrationSettingsSchema = z.object({
   approvalRequired: z.boolean().default(false),
   maxCapacity: z.number().int().min(1).nullable().optional().transform((v) => v ?? null),
   waitlistEnabled: z.boolean().default(false),
-  cutoffDate: z.string().nullable().optional().transform((v) => v ?? null),
+  cutoffDate: optionalDateSchema.nullable().optional().transform((v) => v ?? null),
   preferenceFields: z.object({
     dietaryNeeds: z.boolean().default(true),
     travelPreferences: z.boolean().default(true),

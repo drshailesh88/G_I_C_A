@@ -3,6 +3,7 @@ import {
   createEventSchema,
   EVENT_TRANSITIONS,
   type EventStatus,
+  registrationSettingsSchema,
 } from './event';
 
 describe('createEventSchema', () => {
@@ -66,6 +67,45 @@ describe('createEventSchema', () => {
   it('defaults timezone to Asia/Kolkata', () => {
     const result = createEventSchema.parse(validInput);
     expect(result.timezone).toBe('Asia/Kolkata');
+  });
+
+  it('rejects impossible calendar dates instead of normalizing them', () => {
+    const result = createEventSchema.safeParse({
+      ...validInput,
+      startDate: '2026-02-30',
+      endDate: '2026-03-02',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects unsupported IANA timezones', () => {
+    const result = createEventSchema.safeParse({
+      ...validInput,
+      timezone: 'Mars/Olympus',
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('registrationSettingsSchema', () => {
+  it('rejects malformed cutoffDate strings', () => {
+    const result = registrationSettingsSchema.safeParse({
+      approvalRequired: false,
+      maxCapacity: 100,
+      waitlistEnabled: false,
+      cutoffDate: 'not-a-date',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects impossible cutoffDate values instead of normalizing them', () => {
+    const result = registrationSettingsSchema.safeParse({
+      approvalRequired: false,
+      maxCapacity: 100,
+      waitlistEnabled: false,
+      cutoffDate: '2026-02-30',
+    });
+    expect(result.success).toBe(false);
   });
 });
 
