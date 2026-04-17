@@ -189,6 +189,35 @@ describe('createNotificationTemplateSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('rejects required variables outside the allowed set', () => {
+    const result = createNotificationTemplateSchema.safeParse({
+      ...validEmail,
+      allowedVariablesJson: ['fullName'],
+      requiredVariablesJson: ['confirmationUrl'],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('trims variable identifiers with whitespace padding', () => {
+    const result = createNotificationTemplateSchema.safeParse({
+      ...validEmail,
+      allowedVariablesJson: ['  fullName  '],
+      requiredVariablesJson: ['fullName'],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.allowedVariablesJson).toEqual(['fullName']);
+    }
+  });
+
+  it('rejects reserved prototype-path variable identifiers', () => {
+    const result = createNotificationTemplateSchema.safeParse({
+      ...validEmail,
+      allowedVariablesJson: ['branding.__proto__'],
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 // ── updateNotificationTemplateSchema ─────────────────────────
@@ -231,5 +260,22 @@ describe('updateNotificationTemplateSchema', () => {
   it('accepts empty object (no changes)', () => {
     const result = updateNotificationTemplateSchema.safeParse({});
     expect(result.success).toBe(true);
+  });
+
+  it('rejects empty or whitespace-only variable identifiers in updates', () => {
+    expect(updateNotificationTemplateSchema.safeParse({
+      allowedVariablesJson: [''],
+    }).success).toBe(false);
+    expect(updateNotificationTemplateSchema.safeParse({
+      requiredVariablesJson: ['   '],
+    }).success).toBe(false);
+  });
+
+  it('rejects impossible required variable updates', () => {
+    const result = updateNotificationTemplateSchema.safeParse({
+      allowedVariablesJson: ['fullName'],
+      requiredVariablesJson: ['confirmationUrl'],
+    });
+    expect(result.success).toBe(false);
   });
 });

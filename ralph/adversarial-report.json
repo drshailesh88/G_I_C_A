@@ -4068,5 +4068,69 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/validations/notification-template.ts",
+    "module": "src/lib/validations/notification-template.ts",
+    "attacked_at": "2026-04-17T20:24:10Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "requiredVariablesJson=['confirmationUrl'] with allowedVariablesJson=['fullName']",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "allowedVariablesJson=['  fullName  '] and requiredVariablesJson=[' fullName ']",
+        "result": "succeeded"
+      },
+      {
+        "category": "prototype_pollution",
+        "payload": "allowedVariablesJson=['branding.__proto__']",
+        "result": "succeeded"
+      },
+      {
+        "category": "injection",
+        "payload": "template body/subject containing HTML and placeholder markup",
+        "result": "no_new_boundary_failure_found_in_this_schema_module"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized templateKey/templateName/subjectLine/notes payloads",
+        "result": "blocked_by_existing_length_limits"
+      },
+      {
+        "category": "unicode",
+        "payload": "whitespace-only templateKey and subjectLine",
+        "result": "blocked_by_existing_trimmed_string_validation"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not_applicable_module_has_no_event_scoped_queries_or_writes",
+        "result": "not_applicable"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "not_applicable_module_has_no_auth_or_role_boundary",
+        "result": "not_applicable"
+      },
+      {
+        "category": "race_condition",
+        "payload": "not_applicable_pure_validation_module_has_no_shared_mutation_path",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "malformed_input",
+        "description": "createNotificationTemplateSchema/updateNotificationTemplateSchema accepted whitespace-padded variable names, reserved prototype path segments, and required variables that were not present in the allowed-variable set. Direct callers could therefore persist templates that later fail required-variable checks or reference renderer-blocked paths such as `branding.__proto__`, turning a saved template into a send-time denial of service.",
+        "fix": "Introduced a canonical variable identifier schema that trims input, rejects empty and reserved-segment paths, enforces dot-separated identifier syntax, and added cross-field subset checks so requiredVariablesJson cannot exceed allowedVariablesJson.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/notification-template.test.ts > rejects required variables outside the allowed set; src/lib/validations/notification-template.test.ts > rejects reserved prototype-path variable identifiers"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

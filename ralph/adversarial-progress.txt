@@ -36,6 +36,7 @@
 - Branding and file-backed settings must event-scope stored object keys before signing URLs; direct server-action JSON updates can otherwise borrow another event's object.
 - Notification template render helpers are security boundaries too: validate canonical event IDs and template keys before any lookup, and only sign canonical `branding/<eventId>/<logo|header>/...` asset keys so forged branding JSON cannot borrow another event's files.
 - Template path resolvers must reject reserved segments like `__proto__`, `constructor`, and `prototype` even when they arrive as own JSON properties. Own-property checks alone still let malformed payloads interpolate or satisfy required-variable checks through prototype-shaped keys.
+- Notification-template validation boundaries must canonicalize placeholder variable identifiers and ensure `requiredVariablesJson` stays a subset of `allowedVariablesJson`. Otherwise direct callers can save templates that can never render or that reference reserved path segments blocked later by the renderer.
 - Timeout wrappers must validate finite integer durations before calling `setTimeout`. Negative, zero, `NaN`, `Infinity`, fractional, or overflowed values are coerced by Node timers into near-immediate 1ms aborts and can turn malformed configuration into a provider-wide denial of service.
 - Server actions must validate runtime enum parameters and uploaded file bytes. TypeScript unions and browser-provided MIME strings do not protect direct action callers.
 - JSON blob read-merge-write actions need compare-and-swap guards on `updatedAt`, or concurrent partial updates can silently clobber unrelated fields.
@@ -474,3 +475,9 @@
 - Attacks tried: 8
 - Bugs found: 2
 - Key finding: the event validator accepted impossible calendar dates and forged timezone strings, so direct callers could persist normalized wrong dates or poisoned timezones that later break event formatting and registration cutoff logic.
+
+## 2026-04-17T20:24:10Z — src/lib/validations/notification-template.ts — notification template invariant hardening
+- Verdict: hardened
+- Attacks tried: 9
+- Bugs found: 1
+- Key finding: the validator accepted whitespace-poisoned, reserved-segment, and impossible required variable identifiers, so direct callers could persist templates that later fail every render/send despite providing the documented variables.
