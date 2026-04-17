@@ -5,7 +5,8 @@ import { db } from '@/lib/db';
 import { attendanceRecords } from '@/lib/db/schema/attendance';
 import { eventRegistrations } from '@/lib/db/schema/registrations';
 import { people } from '@/lib/db/schema/people';
-import { eq, and, isNull } from 'drizzle-orm';
+import { sessions } from '@/lib/db/schema/program';
+import { eq } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
 import { offlineSyncBatchSchema } from '@/lib/validations/attendance';
@@ -23,6 +24,19 @@ export type BatchSyncResult = {
     syncedAt: string;
   }>;
 };
+
+const eventIdSchema = offlineSyncBatchSchema.shape.eventId;
+
+function validateBatchSyncForEvent(eventId: string, input: unknown) {
+  const scopedEventId = eventIdSchema.parse(eventId);
+  const validated = offlineSyncBatchSchema.parse(input);
+
+  if (validated.eventId.toLowerCase() !== scopedEventId.toLowerCase()) {
+    throw new Error('Event ID mismatch');
+  }
+
+  return { scopedEventId, validated };
+}
 
 function buildAttendanceRecordId(eventId: string, personId: string, sessionId: string | null): string {
   const hash = createHash('sha256')
@@ -50,8 +64,8 @@ export async function processBatchSync(
   eventId: string,
   input: unknown,
 ): Promise<BatchSyncResult> {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
-  const validated = offlineSyncBatchSchema.parse(input);
+  const { scopedEventId, validated } = validateBatchSyncForEvent(eventId, input);
+  const { userId } = await assertEventAccess(scopedEventId, { requireWrite: true });
 
   const syncedAt = new Date().toISOString();
   const batchResult: BatchSyncResult = {
@@ -78,7 +92,7 @@ export async function processBatchSync(
       continue;
     }
 
-    if (parsed.eventId.toLowerCase() !== eventId.toLowerCase()) {
+    if (parsed.eventId.toLowerCase() !== scopedEventId.toLowerCase()) {
       batchResult.errors++;
       batchResult.results.push({
         index: i,
@@ -90,6 +104,30 @@ export async function processBatchSync(
 
     // Wrap per-record processing in try/catch so one failure doesn't abort the batch
     try {
+      if (sessionId) {
+        const [session] = await db
+          .select({ id: sessions.id })
+          .from(sessions)
+          .where(
+            withEventScope(
+              sessions.eventId,
+              scopedEventId,
+              eq(sessions.id, sessionId),
+            ),
+          )
+          .limit(1);
+
+        if (!session) {
+          batchResult.errors++;
+          batchResult.results.push({
+            index: i,
+            result: { type: 'invalid', message: 'Session not found for this event.' },
+            syncedAt,
+          });
+          continue;
+        }
+      }
+
       // Look up registration
       const [registration] = await db
         .select({
@@ -104,7 +142,7 @@ export async function processBatchSync(
         .where(
           withEventScope(
             eventRegistrations.eventId,
-            eventId,
+            scopedEventId,
             eq(eventRegistrations.qrCodeToken, parsed.token),
           ),
         )
@@ -158,8 +196,8 @@ export async function processBatchSync(
       // Insert attendance record
       try {
         await db.insert(attendanceRecords).values({
-          id: buildAttendanceRecordId(eventId, registration.personId, sessionId),
-          eventId,
+          id: buildAttendanceRecordId(scopedEventId, registration.personId, sessionId),
+          eventId: scopedEventId,
           personId: registration.personId,
           registrationId: registration.id,
           sessionId,

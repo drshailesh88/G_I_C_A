@@ -132,6 +132,30 @@ function makeSyncInput(overrides: Partial<{
 }
 
 describe('processBatchSync', () => {
+  it('rejects a malformed route eventId before auth or database access', async () => {
+    await expect(processBatchSync('not-a-uuid', {
+      eventId: EVENT_ID,
+      records: [makeSyncInput()],
+    })).rejects.toThrow();
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('rejects body and route eventId mismatches before auth or database access', async () => {
+    const otherEventId = '550e8400-e29b-41d4-a716-446655440099';
+
+    await expect(processBatchSync(EVENT_ID, {
+      eventId: otherEventId,
+      records: [makeSyncInput()],
+    })).rejects.toThrow('Event ID mismatch');
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
   it('syncs a single valid record', async () => {
     chainedSelectSequence([
       [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
@@ -323,6 +347,30 @@ describe('processBatchSync', () => {
     );
   });
 
+  it('rejects a sessionId that is not scoped to the active event', async () => {
+    const otherEventSessionId = '660e8400-e29b-41d4-a716-446655440003';
+    chainedSelectSequence([
+      [], // session lookup is event-scoped and finds no row
+    ]);
+
+    const result = await processBatchSync(EVENT_ID, {
+      eventId: EVENT_ID,
+      records: [makeSyncInput({ sessionId: otherEventSessionId })],
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.synced).toBe(0);
+    expect(result.errors).toBe(1);
+    expect(result.results[0].result.type).toBe('invalid');
+    expect(result.results[0].result.message).toContain('Session');
+    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(mockWithEventScope).toHaveBeenCalledWith(
+      expect.anything(),
+      EVENT_ID,
+      expect.objectContaining({ kind: 'eq', right: otherEventSessionId }),
+    );
+  });
+
   it('handles cancelled registration', async () => {
     chainedSelectSequence([
       [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: new Date(), registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
@@ -434,6 +482,7 @@ describe('processBatchSync', () => {
     chainedSelectSequence([
       [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
       [{ fullName: 'Dr. Sharma' }],
+      [{ id: SESSION_ID }],
       [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
       [{ fullName: 'Dr. Sharma' }],
     ]);
@@ -501,8 +550,10 @@ describe('processBatchSync', () => {
     const SESSION_ID_1 = '660e8400-e29b-41d4-a716-446655440003';
     const SESSION_ID_2 = '770e8400-e29b-41d4-a716-446655440004';
     chainedSelectSequence([
+      [{ id: SESSION_ID_1 }],
       [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
       [{ fullName: 'Dr. Sharma' }],
+      [{ id: SESSION_ID_2 }],
       [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
       [{ fullName: 'Dr. Sharma' }],
     ]);
@@ -634,6 +685,7 @@ describe('processBatchSync', () => {
     // with &&, truthy sessionId is nulled out instead of preserved.
     const SESSION_ID = '660e8400-e29b-41d4-a716-446655440003';
     chainedSelectSequence([
+      [{ id: SESSION_ID }],
       [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
       [{ fullName: 'Dr. Sharma' }],
     ]);

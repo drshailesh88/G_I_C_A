@@ -161,5 +161,90 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/batch-sync.ts",
+    "module": "src/lib/actions/batch-sync.ts",
+    "attacked_at": "2026-04-17T05:30:18Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "route eventId=not-a-uuid with otherwise valid offline batch body",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "route eventId for event A with body eventId for event B",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "offline record with sessionId from another event while QR token belongs to the active event",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "QR payload eventId from another event",
+        "result": "blocked"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "call processBatchSync without write permission",
+        "result": "blocked"
+      },
+      {
+        "category": "race_condition",
+        "payload": "double-submit the same offline scan concurrently",
+        "result": "blocked_by_deterministic_id_and_duplicate_handling"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized batch, QR payload, and deviceId values",
+        "result": "blocked_by_zod_limits"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "SQL metacharacters inside QR payload and deviceId",
+        "result": "blocked_by_schema_and_parameterized_drizzle_queries"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "<script>alert(1)</script> in QR payload and deviceId",
+        "result": "no_exploitable_failure_in_action_layer"
+      },
+      {
+        "category": "info_leakage",
+        "payload": "force registration/person/insert database errors",
+        "result": "blocked_by_generic_per_record_error_messages"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "processBatchSync called assertEventAccess before validating the route eventId, so malformed route IDs reached auth work and then returned an item-level invalid result instead of rejecting the request.",
+        "fix": "Validate the route eventId with the offline sync eventId schema before auth or database work.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/batch-sync.test.ts > rejects a malformed route eventId before auth or database access"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "processBatchSync parsed input.eventId but never compared it to the route eventId, allowing stale or cross-event bodies to be accepted under a different route scope.",
+        "fix": "Reject body/route eventId mismatches before auth and use the validated scoped eventId for all QR comparisons, registration lookup, deterministic IDs, and inserts.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/batch-sync.test.ts > rejects body and route eventId mismatches before auth or database access"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "Offline sync accepted any UUID-shaped sessionId and inserted it into an attendance row for the active event without verifying that the session belonged to that event.",
+        "fix": "Validate non-null sessionId values with an event-scoped sessions lookup before registration lookup or attendance insert.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/batch-sync.test.ts > rejects a sessionId that is not scoped to the active event"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

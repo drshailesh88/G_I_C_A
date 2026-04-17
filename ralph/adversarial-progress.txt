@@ -9,10 +9,17 @@
 - Read actions must validate the route `eventId` before auth/database access and reject body/route `eventId` mismatches, or malformed/stale requests can bypass Zod until after DB work starts.
 - Event-scoped read joins must scope every joined event table, not just the base table. Joining by globally unique IDs alone can leak cross-event metadata from bad or legacy rows.
 - Multi-query aggregate dashboards need a stable snapshot (`repeatable read` or a single aggregate query). A default Postgres transaction can still produce torn stats under concurrent writes.
+- Attendance/check-in mutations must event-scope optional `sessionId` foreign keys before inserting attendance rows, or offline/manual flows can attach active-event attendance to another event's session.
 
 ## Iteration log
 
 <!-- Dated entries per feature attacked. -->
+## 2026-04-17T05:30:18Z — src/lib/actions/batch-sync.ts — offline batch sync hardening
+- Verdict: hardened
+- Attacks tried: 10
+- Bugs found: 3
+- Key finding: malformed route IDs and body/route mismatches were accepted until after auth, and session-scoped offline scans could attach attendance to a session outside the active event.
+
 ## 2026-04-17T05:22:08Z — src/lib/actions/attendance.ts — attendance read hardening
 - Verdict: hardened
 - Attacks tried: 8
