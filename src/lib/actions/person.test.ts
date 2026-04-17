@@ -1,7 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockAuth, mockDb, mockRevalidatePath } = vi.hoisted(() => ({
-  mockAuth: vi.fn(),
+const {
+  mockAuth,
+  mockAssertEventAccess,
+  mockDb,
+  mockRevalidatePath,
+} = vi.hoisted(() => ({
+  mockAuth: vi.fn(async () => ({ userId: 'user_123' })),
+  mockAssertEventAccess: vi.fn(async () => ({
+    userId: 'user_123',
+    role: 'org:event_coordinator',
+  })),
   mockDb: {
     select: vi.fn(),
     insert: vi.fn(),
@@ -18,6 +27,10 @@ vi.mock('@/lib/db', () => ({
   db: mockDb,
 }));
 
+vi.mock('@/lib/auth/event-access', () => ({
+  assertEventAccess: mockAssertEventAccess,
+}));
+
 vi.mock('next/cache', () => ({
   revalidatePath: mockRevalidatePath,
 }));
@@ -27,6 +40,9 @@ import {
   archivePerson, restorePerson, anonymizePerson,
   ensureEventPerson, importPeopleBatch, getEventPeople,
 } from './person';
+
+const VALID_EVENT_UUID = '660e8400-e29b-41d4-a716-446655440000';
+const VALID_PERSON_UUID = '770e8400-e29b-41d4-a716-446655440000';
 
 // Helper to chain select/insert/update queries
 function chainedSelect(rows: unknown[]) {
@@ -430,6 +446,10 @@ describe('getEventPeople', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockAuth.mockResolvedValue({ userId: 'user_123' });
+    mockAssertEventAccess.mockResolvedValue({
+      userId: 'user_123',
+      role: 'org:event_coordinator',
+    });
   });
 
   it('returns linked people', async () => {
@@ -443,7 +463,7 @@ describe('getEventPeople', () => {
     };
     mockDb.select.mockReturnValue(selectChain);
 
-    const result = await getEventPeople('event-1');
+    const result = await getEventPeople(VALID_EVENT_UUID);
     expect(result).toEqual(rows);
   });
 
@@ -455,10 +475,10 @@ describe('getEventPeople', () => {
     };
     mockDb.select.mockReturnValue(selectChain);
 
-    await getEventPeople('event-A');
+    await getEventPeople('660e8400-e29b-41d4-a716-446655440001');
     expect(selectChain.where).toHaveBeenCalledTimes(1);
 
-    await getEventPeople('event-B');
+    await getEventPeople('660e8400-e29b-41d4-a716-446655440002');
     expect(selectChain.where).toHaveBeenCalledTimes(2);
 
     const callA = selectChain.where.mock.calls[0][0];
@@ -467,22 +487,115 @@ describe('getEventPeople', () => {
   });
 
   it('throws when unauthenticated', async () => {
-    mockAuth.mockResolvedValue({ userId: null });
-    await expect(getEventPeople('event-1')).rejects.toThrow('Unauthorized');
+    mockAssertEventAccess.mockRejectedValue(new Error('Unauthorized'));
+    await expect(getEventPeople(VALID_EVENT_UUID)).rejects.toThrow('Unauthorized');
   });
 });
 
 describe('ensureEventPerson', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({
+      userId: 'user_123',
+      role: 'org:event_coordinator',
+    });
   });
 
   it('inserts event-person link with conflict ignore', async () => {
     const insertChain = chainedInsert([]);
 
-    await ensureEventPerson('event-1', 'person-1', 'registration');
+    await ensureEventPerson(VALID_EVENT_UUID, VALID_PERSON_UUID, 'registration');
 
     expect(mockDb.insert).toHaveBeenCalled();
     expect(insertChain.onConflictDoNothing).toHaveBeenCalled();
+  });
+});
+
+describe('person adversarial hardening', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAuth.mockResolvedValue({ userId: 'user_123' });
+    mockAssertEventAccess.mockResolvedValue({
+      userId: 'user_123',
+      role: 'org:event_coordinator',
+    });
+  });
+
+  it('blocks ops users from creating people directly', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'ops_user',
+      has: ({ role }: { role: string }) => role === 'org:ops',
+    });
+
+    await expect(
+      createPerson({ fullName: 'Ops Bypass', email: 'ops@example.com' }),
+    ).rejects.toThrow('Forbidden');
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('blocks ops users from reading the global people search', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'ops_user',
+      has: ({ role }: { role: string }) => role === 'org:ops',
+    });
+
+    await expect(searchPeople({ page: 1, limit: 25 })).rejects.toThrow('Forbidden');
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed event ids before event-roster auth or queries', async () => {
+    await expect(getEventPeople('not-a-uuid')).rejects.toThrow('Invalid event ID');
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
+  it('rejects forged event-person links without event write access', async () => {
+    mockAssertEventAccess.mockRejectedValue(new Error('Unauthorized'));
+
+    await expect(
+      ensureEventPerson(VALID_EVENT_UUID, VALID_PERSON_UUID, 'registration'),
+    ).rejects.toThrow('Unauthorized');
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed event-person link sources before insert', async () => {
+    await expect(
+      ensureEventPerson(VALID_EVENT_UUID, VALID_PERSON_UUID, '   '),
+    ).rejects.toThrow();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('blocks ops users from reading event rosters even with event access', async () => {
+    mockAssertEventAccess.mockResolvedValue({
+      userId: 'ops_user',
+      role: 'org:ops',
+    });
+
+    await expect(getEventPeople(VALID_EVENT_UUID)).rejects.toThrow('Forbidden');
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
+  it('refuses to edit archived or anonymized people', async () => {
+    const updateChain = chainedUpdate([]);
+
+    await expect(
+      updatePerson({
+        personId: '550e8400-e29b-41d4-a716-446655440000',
+        fullName: 'Resurrected Person',
+      }),
+    ).rejects.toThrow('Person not found');
+    expect(updateChain.where).toHaveBeenCalled();
+  });
+
+  it('rejects oversized import batches before doing per-row work', async () => {
+    const rows = Array.from({ length: 501 }, (_, index) => ({
+      rowNumber: index + 1,
+      fullName: `Person ${index + 1}`,
+      email: `person${index + 1}@example.com`,
+    }));
+
+    await expect(importPeopleBatch(rows)).rejects.toThrow('Import batch exceeds 500 rows');
+    expect(mockDb.select).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockAuth, mockDb, mockRevalidatePath, mockDrizzle } = vi.hoisted(() => ({
-  mockAuth: vi.fn(),
+const {
+  mockAuth,
+  mockAssertEventAccess,
+  mockDb,
+  mockRevalidatePath,
+  mockDrizzle,
+} = vi.hoisted(() => ({
+  mockAuth: vi.fn(async () => ({ userId: 'user_123' })),
+  mockAssertEventAccess: vi.fn(async () => ({
+    userId: 'user_123',
+    role: 'org:event_coordinator',
+  })),
   mockDb: {
     select: vi.fn(),
     insert: vi.fn(),
@@ -32,6 +42,10 @@ vi.mock('@clerk/nextjs/server', () => ({
 
 vi.mock('@/lib/db', () => ({
   db: mockDb,
+}));
+
+vi.mock('@/lib/auth/event-access', () => ({
+  assertEventAccess: mockAssertEventAccess,
 }));
 
 vi.mock('next/cache', () => ({
@@ -68,6 +82,8 @@ import {
 
 // ── Helpers ───────────────────────────────────────────────────
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
+const VALID_EVENT_UUID = '660e8400-e29b-41d4-a716-446655440000';
+const VALID_PERSON_UUID = '770e8400-e29b-41d4-a716-446655440000';
 
 function chainedSelect(rows: unknown[]) {
   const chain = {
@@ -1065,13 +1081,13 @@ describe('ensureEventPerson – mutation kills', () => {
   it('inserts with correct eventId, personId, source values', async () => {
     const insertChain = chainedInsert([]);
 
-    await ensureEventPerson('evt-1', 'per-1', 'registration');
+    await ensureEventPerson(VALID_EVENT_UUID, VALID_PERSON_UUID, 'registration');
 
     expect(mockDb.insert).toHaveBeenCalled();
     const valuesArg = insertChain.values.mock.calls[0][0];
     expect(valuesArg).toEqual({
-      eventId: 'evt-1',
-      personId: 'per-1',
+      eventId: VALID_EVENT_UUID,
+      personId: VALID_PERSON_UUID,
       source: 'registration',
     });
   });
@@ -1079,7 +1095,7 @@ describe('ensureEventPerson – mutation kills', () => {
   // L307: ArrayDeclaration / ObjectLiteral — onConflictDoNothing target
   it('uses onConflictDoNothing for upsert behavior', async () => {
     const insertChain = chainedInsert([]);
-    await ensureEventPerson('evt-1', 'per-1', 'import');
+    await ensureEventPerson(VALID_EVENT_UUID, VALID_PERSON_UUID, 'import');
     expect(insertChain.onConflictDoNothing).toHaveBeenCalled();
   });
 });
@@ -1317,7 +1333,7 @@ describe('getEventPeople – mutation kills', () => {
     };
     mockDb.select.mockReturnValue(selectChain);
 
-    const result = await getEventPeople('event-1');
+    const result = await getEventPeople(VALID_EVENT_UUID);
     expect(result).toHaveLength(2);
     expect(result[0]).toEqual({
       id: 'p1',
@@ -1341,7 +1357,7 @@ describe('getEventPeople – mutation kills', () => {
     };
     mockDb.select.mockReturnValue(selectChain);
 
-    const result = await getEventPeople('event-1');
+    const result = await getEventPeople(VALID_EVENT_UUID);
     expect(result).toEqual([]);
   });
 });
@@ -1876,7 +1892,7 @@ describe('getEventPeople – drizzle verification', () => {
     };
     mockDb.select.mockReturnValue(selectChain);
 
-    await getEventPeople('event-1');
+    await getEventPeople(VALID_EVENT_UUID);
 
     expect(mockDrizzle.and).toHaveBeenCalled();
     expect(mockDrizzle.eq).toHaveBeenCalled();
@@ -1891,7 +1907,7 @@ describe('ensureEventPerson – target verification', () => {
   it('passes correct target to onConflictDoNothing', async () => {
     const insertChain = chainedInsert([]);
 
-    await ensureEventPerson('evt-1', 'per-1', 'registration');
+    await ensureEventPerson(VALID_EVENT_UUID, VALID_PERSON_UUID, 'registration');
 
     expect(insertChain.onConflictDoNothing).toHaveBeenCalledWith(
       expect.objectContaining({ target: expect.any(Array) }),
@@ -2247,7 +2263,7 @@ describe('getEventPeople – select shape', () => {
     };
     mockDb.select.mockReturnValue(selectChain);
 
-    await getEventPeople('event-1');
+    await getEventPeople(VALID_EVENT_UUID);
 
     // select should be called with a non-empty argument (the field shape)
     expect(mockDb.select).toHaveBeenCalled();
@@ -2512,7 +2528,7 @@ describe('ensureEventPerson – target array kill', () => {
   // L307: ArrayDeclaration [] — the target array should not be empty
   it('onConflictDoNothing target is non-empty array', async () => {
     const insertChain = chainedInsert([]);
-    await ensureEventPerson('evt-1', 'per-1', 'registration');
+    await ensureEventPerson(VALID_EVENT_UUID, VALID_PERSON_UUID, 'registration');
     const arg = insertChain.onConflictDoNothing.mock.calls[0][0];
     expect(arg.target).toBeDefined();
     expect(arg.target.length).toBeGreaterThan(0);

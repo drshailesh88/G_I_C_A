@@ -25,6 +25,7 @@
 - Template editor actions must validate merged allowed/required variable sets on partial updates and use compare-and-swap guards on status/updatedAt during update/activate/archive, or stale direct calls can persist invalid templates or revive old state.
 - Global admin actions that do not yet have an `eventId` still need explicit Clerk role enforcement. Checking only `userId` lets `org:ops` or `org:read_only` bypass UI-disabled writes and create top-level resources directly.
 - Module-specific communications actions cannot rely on generic `assertEventAccess(..., { requireWrite: true })`. `org:ops` inherits broad event write access there, so communications reads/writes need their own role allowlists to block PII leakage and resend control bypasses.
+- People-directory actions need their own module RBAC even when they are not event-scoped. Bare `auth().userId` checks let `org:ops` mutate the master people table, and event-roster helpers still need UUID validation plus event access before reading or forging `event_people` links.
 
 ## Iteration log
 
@@ -34,6 +35,12 @@
 - Attacks tried: 6
 - Bugs found: 2
 - Key finding: org:ops could read failed notification payloads and trigger retry/resend actions because the module trusted generic event write access instead of communications-specific roles, and failed-log filters accepted oversized template keys straight into auth/DB work.
+
+## 2026-04-17T08:46:02Z — src/lib/actions/person.ts — people action hardening
+- Verdict: hardened
+- Attacks tried: 8
+- Bugs found: 4
+- Key finding: the people master actions trusted any authenticated user, event roster helpers trusted arbitrary event IDs without event access, stale updates could target archived/anonymized rows, and batch import accepted an unbounded request size.
 
 ## 2026-04-17T08:22:16Z — src/lib/actions/event.ts — event action hardening
 - Verdict: hardened

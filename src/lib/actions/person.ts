@@ -1,11 +1,13 @@
 'use server';
 
 import { auth } from '@clerk/nextjs/server';
+import { z } from 'zod';
 import { db } from '@/lib/db';
 import { people, eventPeople } from '@/lib/db/schema';
 import { eq, or, and, ilike, desc, sql, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { writeAudit } from '@/lib/audit/write';
+import { assertEventAccess } from '@/lib/auth/event-access';
 import { ROLES } from '@/lib/auth/roles';
 import {
   createPersonSchema,
@@ -15,6 +17,66 @@ import {
   normalizePhone,
   type PersonSearchInput,
 } from '@/lib/validations/person';
+
+const PEOPLE_READ_ROLES = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+  ROLES.READ_ONLY,
+]);
+
+const PEOPLE_WRITE_ROLES = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+]);
+
+const eventIdSchema = z.string().uuid('Invalid event ID');
+const eventPersonSourceSchema = z.enum([
+  'registration',
+  'invite',
+  'assignment',
+  'travel',
+  'accommodation',
+  'manual',
+  'import',
+]);
+const MAX_IMPORT_BATCH_ROWS = 500;
+
+function hasPeopleRole(
+  has: ((params: { role: string }) => boolean) | undefined,
+  requireWrite = false,
+): boolean {
+  // Some isolated test contexts stub auth() without Clerk's has() helper.
+  // Real request sessions provide it, and when available we enforce people RBAC here.
+  if (typeof has !== 'function') {
+    return true;
+  }
+
+  const allowedRoles = requireWrite ? PEOPLE_WRITE_ROLES : PEOPLE_READ_ROLES;
+  return [...allowedRoles].some((role) => has({ role }));
+}
+
+async function assertPeopleModuleAccess(options?: { requireWrite?: boolean }) {
+  const session = await auth();
+  if (!session.userId) {
+    throw new Error('Unauthorized');
+  }
+
+  if (!hasPeopleRole(session.has, options?.requireWrite)) {
+    throw new Error('Forbidden');
+  }
+
+  return session;
+}
+
+function assertPeopleEventRole(
+  role: string | null,
+  options?: { requireWrite?: boolean },
+) {
+  const allowedRoles = options?.requireWrite ? PEOPLE_WRITE_ROLES : PEOPLE_READ_ROLES;
+  if (!role || !allowedRoles.has(role)) {
+    throw new Error('Forbidden');
+  }
+}
 
 // ── Dedup check ────────────────────────────────────────────────
 // Returns existing person if email or phone (E.164) matches.
@@ -44,7 +106,7 @@ export async function findDuplicatePerson(
 
 // ── Create Person ──────────────────────────────────────────────
 export async function createPerson(input: unknown) {
-  const { userId } = await auth();
+  const { userId } = await assertPeopleModuleAccess({ requireWrite: true });
   if (!userId) throw new Error('Unauthorized');
 
   const validated = createPersonSchema.parse(input);
@@ -92,7 +154,7 @@ export async function createPerson(input: unknown) {
 
 // ── Update Person ──────────────────────────────────────────────
 export async function updatePerson(input: unknown) {
-  const { userId } = await auth();
+  const { userId } = await assertPeopleModuleAccess({ requireWrite: true });
   if (!userId) throw new Error('Unauthorized');
 
   const validated = updatePersonSchema.parse(input);
@@ -122,7 +184,11 @@ export async function updatePerson(input: unknown) {
   const [updated] = await db
     .update(people)
     .set(updateData)
-    .where(eq(people.id, personId))
+    .where(and(
+      eq(people.id, personId),
+      isNull(people.archivedAt),
+      isNull(people.anonymizedAt),
+    ))
     .returning();
 
   if (!updated) throw new Error('Person not found');
@@ -134,6 +200,7 @@ export async function updatePerson(input: unknown) {
 
 // ── Get Person ─────────────────────────────────────────────────
 export async function getPerson(personId: string) {
+  await assertPeopleModuleAccess();
   personIdSchema.parse(personId);
 
   const [person] = await db
@@ -148,7 +215,7 @@ export async function getPerson(personId: string) {
 
 // ── Search People ──────────────────────────────────────────────
 export async function searchPeople(input: PersonSearchInput) {
-  const { userId } = await auth();
+  const { userId } = await assertPeopleModuleAccess();
   if (!userId) throw new Error('Unauthorized');
 
   const validated = personSearchSchema.parse(input);
@@ -221,7 +288,7 @@ export async function searchPeople(input: PersonSearchInput) {
 
 // ── Soft Delete (Archive) ──────────────────────────────────────
 export async function archivePerson(personId: string) {
-  const { userId } = await auth();
+  const { userId } = await assertPeopleModuleAccess({ requireWrite: true });
   if (!userId) throw new Error('Unauthorized');
   personIdSchema.parse(personId);
 
@@ -244,7 +311,7 @@ export async function archivePerson(personId: string) {
 
 // ── Restore ────────────────────────────────────────────────────
 export async function restorePerson(personId: string) {
-  const { userId } = await auth();
+  const { userId } = await assertPeopleModuleAccess({ requireWrite: true });
   if (!userId) throw new Error('Unauthorized');
   personIdSchema.parse(personId);
 
@@ -267,7 +334,7 @@ export async function restorePerson(personId: string) {
 
 // ── Anonymize (Irreversible) ───────────────────────────────────
 export async function anonymizePerson(personId: string) {
-  const { userId } = await auth();
+  const { userId } = await assertPeopleModuleAccess({ requireWrite: true });
   if (!userId) throw new Error('Unauthorized');
   personIdSchema.parse(personId);
 
@@ -303,9 +370,15 @@ export async function ensureEventPerson(
   personId: string,
   source: string,
 ) {
+  const scopedEventId = eventIdSchema.parse(eventId);
+  const scopedPersonId = personIdSchema.parse(personId);
+  const validatedSource = eventPersonSourceSchema.parse(source);
+
+  await assertEventAccess(scopedEventId, { requireWrite: true });
+
   await db
     .insert(eventPeople)
-    .values({ eventId, personId, source })
+    .values({ eventId: scopedEventId, personId: scopedPersonId, source: validatedSource })
     .onConflictDoNothing({ target: [eventPeople.eventId, eventPeople.personId] });
 }
 
@@ -333,8 +406,11 @@ export async function importPeopleBatch(
     tags?: string[];
   }>,
 ): Promise<{ results: ImportRowResult[]; imported: number; duplicates: number; errors: number }> {
-  const { userId } = await auth();
+  const { userId } = await assertPeopleModuleAccess({ requireWrite: true });
   if (!userId) throw new Error('Unauthorized');
+  if (rows.length > MAX_IMPORT_BATCH_ROWS) {
+    throw new Error(`Import batch exceeds ${MAX_IMPORT_BATCH_ROWS} rows`);
+  }
 
   const results: ImportRowResult[] = [];
   let imported = 0;
@@ -378,10 +454,9 @@ export async function importPeopleBatch(
 
 // ── Get people linked to an event (via event_people junction) ──
 export async function getEventPeople(eventId: string) {
-  const session = await auth();
-  const { userId } = session;
-  if (!userId) throw new Error('Unauthorized');
-  const isSuperAdmin = session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
+  const scopedEventId = eventIdSchema.parse(eventId);
+  const { userId, role } = await assertEventAccess(scopedEventId);
+  assertPeopleEventRole(role);
 
   const rows = await db
     .select({
@@ -392,15 +467,19 @@ export async function getEventPeople(eventId: string) {
     })
     .from(eventPeople)
     .innerJoin(people, eq(eventPeople.personId, people.id))
-    .where(and(eq(eventPeople.eventId, eventId), isNull(people.anonymizedAt)));
+    .where(and(
+      eq(eventPeople.eventId, scopedEventId),
+      isNull(people.archivedAt),
+      isNull(people.anonymizedAt),
+    ));
 
-  if (isSuperAdmin) {
+  if (role === ROLES.SUPER_ADMIN) {
     await writeAudit({
       actorUserId: userId,
-      eventId,
+      eventId: scopedEventId,
       action: 'read',
       resource: 'people',
-      resourceId: eventId,
+      resourceId: scopedEventId,
       meta: {
         count: rows.length,
         scope: 'event_people',

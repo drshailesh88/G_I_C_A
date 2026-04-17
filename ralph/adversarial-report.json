@@ -1026,5 +1026,88 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/person.ts",
+    "module": "src/lib/actions/person.ts",
+    "attacked_at": "2026-04-17T08:46:02Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "role_escalation",
+        "payload": "call create/search/update/archive/anonymize people actions with an org:ops session instead of coordinator/admin",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "call getEventPeople for another event id while authenticated for a different event",
+        "result": "succeeded"
+      },
+      {
+        "category": "auth_bypass",
+        "payload": "call ensureEventPerson directly to forge an event_people link without proving event write access",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "non-UUID eventId/personId and arbitrary source strings on event roster/link helpers",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "submit updatePerson against an archived or anonymized row after the record lifecycle changed in another tab",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "submit a 501-row importPeopleBatch payload to amplify per-row duplicate checks/inserts",
+        "result": "succeeded"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "SQL metacharacters in search and create/update text fields",
+        "result": "blocked_by_zod_and_parameterized_queries"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "<script>alert(1)</script> in person profile fields",
+        "result": "no_exploitable_failure_in_action_layer"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "role_escalation",
+        "description": "The people master actions trusted any authenticated user, so org:ops callers could bypass the hidden/disabled UI and create, search, update, archive, restore, or anonymize people records directly.",
+        "fix": "Added people-module read/write role allowlists inside the action layer. Reads now require super_admin, event_coordinator, or read_only; writes require super_admin or event_coordinator.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/person.test.ts > blocks ops users from creating people directly; blocks ops users from reading the global people search"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "getEventPeople accepted arbitrary event IDs without validating the UUID or proving event membership, and ensureEventPerson allowed direct callers to forge event_people links without event-scoped write access.",
+        "fix": "Validated event/person IDs and source values, required assertEventAccess for event roster/link helpers, and blocked ops from reading event rosters by enforcing people-specific event read roles.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/person.test.ts > rejects malformed event ids before event-roster auth or queries; rejects forged event-person links without event write access; blocks ops users from reading event rosters even with event access"
+      },
+      {
+        "severity": "medium",
+        "category": "stale_state",
+        "description": "updatePerson wrote by bare person id, so a stale edit form could repopulate archived or anonymized records after another action had already removed them from active use, undermining the irreversible anonymization path.",
+        "fix": "Scoped updates to active rows only by requiring archivedAt and anonymizedAt to still be null before write-back.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/person.test.ts > refuses to edit archived or anonymized people"
+      },
+      {
+        "severity": "medium",
+        "category": "resource_exhaustion",
+        "description": "importPeopleBatch accepted an unbounded array, letting direct callers multiply duplicate checks and inserts into a single oversized server-action request.",
+        "fix": "Added a 500-row hard cap before any per-row auth, duplicate lookup, or insert work begins.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/person.test.ts > rejects oversized import batches before doing per-row work"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
