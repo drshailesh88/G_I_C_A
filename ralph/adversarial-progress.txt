@@ -1,0 +1,17 @@
+# Ralph Adversarial Progress Log
+
+## Attack Patterns
+
+<!-- Recurring attack vectors + their fixes. Agent writes here. -->
+- Logistics server actions cannot rely on UI-only filters. Enforce travel-first and event/person-scoped foreign keys inside the action or direct calls will create cross-tenant/invalid rows.
+- Logistics mutations must emit audit + cascade side effects from the server action itself. If the action only mutates the table, downstream flags/notifications are bypassable.
+- Fetch-then-update by bare `id` is unsafe in logistics flows. Include `eventId` and a compare-and-swap guard (`updatedAt` when available) in the write query to block stale concurrent writes.
+
+## Iteration log
+
+<!-- Dated entries per feature attacked. -->
+## 2026-04-17T05:09:58Z — src/lib/actions/accommodation.ts — logistics action hardening
+- Verdict: hardened
+- Attacks tried: 9
+- Bugs found: 4
+- Key finding: direct server-action calls bypassed the travel-first rule, accepted cross-event registrations, skipped audit/cascade side effects, and allowed stale concurrent writes.

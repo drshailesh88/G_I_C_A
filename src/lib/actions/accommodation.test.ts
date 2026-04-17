@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockDb, mockRevalidatePath, mockAssertEventAccess } = vi.hoisted(() => ({
+const {
+  mockDb,
+  mockRevalidatePath,
+  mockAssertEventAccess,
+  mockWriteAudit,
+  mockEmitCascadeEvent,
+} = vi.hoisted(() => ({
   mockDb: {
     select: vi.fn(),
     selectDistinctOn: vi.fn(),
@@ -9,6 +15,8 @@ const { mockDb, mockRevalidatePath, mockAssertEventAccess } = vi.hoisted(() => (
   },
   mockRevalidatePath: vi.fn(),
   mockAssertEventAccess: vi.fn(),
+  mockWriteAudit: vi.fn(),
+  mockEmitCascadeEvent: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -29,6 +37,14 @@ vi.mock('@/lib/db/with-event-scope', () => ({
 
 vi.mock('@/lib/auth/event-access', () => ({
   assertEventAccess: mockAssertEventAccess,
+}));
+
+vi.mock('@/lib/audit/write', () => ({
+  writeAudit: mockWriteAudit,
+}));
+
+vi.mock('@/lib/cascade/emit', () => ({
+  emitCascadeEvent: mockEmitCascadeEvent,
 }));
 
 import {
@@ -99,6 +115,8 @@ const validCreateInput = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:ops' });
+  mockWriteAudit.mockResolvedValue(undefined);
+  mockEmitCascadeEvent.mockResolvedValue({ handlersRun: 1, errors: [] });
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -117,6 +135,70 @@ describe('createAccommodationRecord', () => {
   it('throws when person not found', async () => {
     chainedSelect([]);
     await expect(createAccommodationRecord(EVENT_ID, validCreateInput)).rejects.toThrow('Person not found');
+  });
+
+  it('rejects creating accommodation without a non-cancelled travel record', async () => {
+    const personChain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn()
+        .mockResolvedValueOnce([{ id: PERSON_ID }])
+        .mockResolvedValueOnce([]),
+      orderBy: vi.fn().mockResolvedValue([]),
+      innerJoin: vi.fn().mockReturnThis(),
+    };
+    mockDb.select.mockReturnValue(personChain);
+
+    await expect(createAccommodationRecord(EVENT_ID, validCreateInput)).rejects.toThrow(
+      'Person must have an active travel record before accommodation can be created',
+    );
+  });
+
+  it('rejects registration IDs from another event/person', async () => {
+    const selectChain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn()
+        .mockResolvedValueOnce([{ id: PERSON_ID }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([{ id: 'travel-1' }]),
+      orderBy: vi.fn().mockResolvedValue([]),
+      innerJoin: vi.fn().mockReturnThis(),
+    };
+    mockDb.select.mockReturnValue(selectChain);
+
+    await expect(
+      createAccommodationRecord(EVENT_ID, {
+        ...validCreateInput,
+        registrationId: '550e8400-e29b-41d4-a716-446655440010',
+      }),
+    ).rejects.toThrow('Registration does not belong to this event/person');
+  });
+
+  it('writes an audit log and emits a cascade event on create', async () => {
+    chainedSelect([{ id: PERSON_ID }]);
+    chainedInsert([{ id: RECORD_ID, ...validCreateInput, eventId: EVENT_ID }]);
+
+    await createAccommodationRecord(EVENT_ID, validCreateInput);
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: 'user_123',
+        action: 'create',
+        resource: 'accommodation',
+        resourceId: RECORD_ID,
+        eventId: EVENT_ID,
+      }),
+    );
+    expect(mockEmitCascadeEvent).toHaveBeenCalledWith(
+      'conference/accommodation.created',
+      EVENT_ID,
+      { type: 'user', id: 'user_123' },
+      expect.objectContaining({
+        accommodationRecordId: RECORD_ID,
+        personId: PERSON_ID,
+      }),
+    );
   });
 
   it('rejects invalid input (missing hotelName)', async () => {
@@ -143,6 +225,7 @@ describe('updateAccommodationRecord', () => {
     personId: PERSON_ID,
     recordStatus: 'confirmed',
     hotelName: 'Hotel Leela',
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
   };
 
   it('updates an accommodation record', async () => {
@@ -183,6 +266,46 @@ describe('updateAccommodationRecord', () => {
       updateAccommodationRecord(EVENT_ID, { accommodationRecordId: RECORD_ID, hotelName: 'X' }),
     ).rejects.toThrow('Cannot update a cancelled accommodation record');
   });
+
+  it('blocks concurrent updates that changed the record after it was read', async () => {
+    chainedSelect([existingRecord]);
+    chainedUpdate([]);
+
+    await expect(
+      updateAccommodationRecord(EVENT_ID, { accommodationRecordId: RECORD_ID, hotelName: 'Hotel Taj' }),
+    ).rejects.toThrow('Accommodation record changed. Refresh and try again.');
+  });
+
+  it('writes audit and emits cascade only when trigger fields changed', async () => {
+    chainedSelect([existingRecord]);
+    chainedUpdate([{
+      ...existingRecord,
+      hotelName: 'Hotel Taj',
+      recordStatus: 'changed',
+      updatedAt: new Date('2026-01-02T00:00:00.000Z'),
+    }]);
+
+    await updateAccommodationRecord(EVENT_ID, {
+      accommodationRecordId: RECORD_ID,
+      hotelName: 'Hotel Taj',
+    });
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'update',
+        resourceId: RECORD_ID,
+      }),
+    );
+    expect(mockEmitCascadeEvent).toHaveBeenCalledWith(
+      'conference/accommodation.updated',
+      EVENT_ID,
+      { type: 'user', id: 'user_123' },
+      expect.objectContaining({
+        accommodationRecordId: RECORD_ID,
+        personId: PERSON_ID,
+      }),
+    );
+  });
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -201,7 +324,7 @@ describe('cancelAccommodationRecord', () => {
   });
 
   it('throws when cancelling already cancelled record', async () => {
-    chainedSelect([{ id: RECORD_ID, recordStatus: 'cancelled' }]);
+    chainedSelect([{ id: RECORD_ID, recordStatus: 'cancelled', updatedAt: new Date('2026-01-01T00:00:00.000Z') }]);
     await expect(
       cancelAccommodationRecord(EVENT_ID, { accommodationRecordId: RECORD_ID }),
     ).rejects.toThrow('Cannot cancel an accommodation record in "cancelled" status');
@@ -212,6 +335,42 @@ describe('cancelAccommodationRecord', () => {
     await expect(
       cancelAccommodationRecord(EVENT_ID, { accommodationRecordId: RECORD_ID }),
     ).rejects.toThrow('Accommodation record not found');
+  });
+
+  it('blocks concurrent cancellation when the row changed before update', async () => {
+    chainedSelect([{ id: RECORD_ID, personId: PERSON_ID, recordStatus: 'confirmed', notes: null, updatedAt: new Date('2026-01-01T00:00:00.000Z') }]);
+    chainedUpdate([]);
+
+    await expect(
+      cancelAccommodationRecord(EVENT_ID, { accommodationRecordId: RECORD_ID, reason: 'Guest changed plans' }),
+    ).rejects.toThrow('Accommodation record changed. Refresh and try again.');
+  });
+
+  it('writes audit and emits cascade on cancel', async () => {
+    chainedSelect([{ id: RECORD_ID, personId: PERSON_ID, recordStatus: 'confirmed', notes: null, updatedAt: new Date('2026-01-01T00:00:00.000Z') }]);
+    chainedUpdate([{ id: RECORD_ID, personId: PERSON_ID, recordStatus: 'cancelled', cancelledAt: new Date('2026-01-02T00:00:00.000Z') }]);
+
+    await cancelAccommodationRecord(EVENT_ID, {
+      accommodationRecordId: RECORD_ID,
+      reason: 'Guest changed plans',
+    });
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'delete',
+        resourceId: RECORD_ID,
+      }),
+    );
+    expect(mockEmitCascadeEvent).toHaveBeenCalledWith(
+      'conference/accommodation.cancelled',
+      EVENT_ID,
+      { type: 'user', id: 'user_123' },
+      expect.objectContaining({
+        accommodationRecordId: RECORD_ID,
+        personId: PERSON_ID,
+        reason: 'Guest changed plans',
+      }),
+    );
   });
 });
 

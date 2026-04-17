@@ -1,0 +1,90 @@
+[
+  {
+    "story_id": "src/lib/actions/accommodation.ts",
+    "module": "src/lib/actions/accommodation.ts",
+    "attacked_at": "2026-04-17T05:09:58Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "empty hotelName, checkout before checkin, oversized optional strings",
+        "result": "blocked"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "<script>alert(1)</script> in hotel/notes fields",
+        "result": "no_exploitable_failure_in_action_layer"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "call create/update/cancel with no write permission",
+        "result": "blocked"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "create accommodation in event A using registrationId from another event/person",
+        "result": "succeeded"
+      },
+      {
+        "category": "ui_bypass",
+        "payload": "call create action directly for a person with no active travel record",
+        "result": "succeeded"
+      },
+      {
+        "category": "audit_bypass",
+        "payload": "create/update/cancel accommodation and inspect side effects for audit write",
+        "result": "succeeded"
+      },
+      {
+        "category": "cascade_bypass",
+        "payload": "create/update/cancel accommodation and inspect side effects for cascade emission",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "concurrent update/cancel after stale read with unchanged row id but changed state",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "large rooming metadata strings within and above schema limits",
+        "result": "blocked"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "createAccommodationRecord accepted arbitrary registration IDs, allowing an accommodation row in one event to be linked to a registration from a different event or person.",
+        "fix": "Validated registrationId with eventId + personId scoping before insert.",
+        "fix_commit": "RED commit for this module",
+        "regression_test": "src/lib/actions/accommodation.test.ts > rejects registration IDs from another event/person"
+      },
+      {
+        "severity": "high",
+        "category": "auth_bypass",
+        "description": "The travel-first business rule only existed in the form picker, so direct server-action calls could create accommodation rows for people without any active travel record.",
+        "fix": "Added a server-side active-travel check before accommodation creation.",
+        "fix_commit": "RED commit for this module",
+        "regression_test": "src/lib/actions/accommodation.test.ts > rejects creating accommodation without a non-cancelled travel record"
+      },
+      {
+        "severity": "high",
+        "category": "audit_bypass",
+        "description": "Accommodation create, update, and cancel mutations completed without writing the required audit log entry or dispatching their cascade event, bypassing downstream notifications and flagging.",
+        "fix": "Wired create/update/cancel through writeAudit and emitCascadeEvent with accommodation-specific payloads; update emits only when trigger fields change.",
+        "fix_commit": "RED commit for this module",
+        "regression_test": "src/lib/actions/accommodation.test.ts > writes an audit log and emits a cascade event on create"
+      },
+      {
+        "severity": "medium",
+        "category": "race_condition",
+        "description": "updateAccommodationRecord and cancelAccommodationRecord fetched the row under event scope but wrote back by id only, so a concurrent status change could still be overwritten after the read.",
+        "fix": "Added compare-and-swap style update filters using eventId, non-cancelled status, and updatedAt when available; stale writes now fail loudly.",
+        "fix_commit": "RED commit for this module",
+        "regression_test": "src/lib/actions/accommodation.test.ts > blocks concurrent updates that changed the record after it was read"
+      }
+    ],
+    "verdict": "hardened"
+  }
+]

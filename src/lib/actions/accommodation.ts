@@ -1,11 +1,20 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { accommodationRecords, travelRecords, people, eventPeople } from '@/lib/db/schema';
-import { eq, and, desc, ne, sql } from 'drizzle-orm';
+import {
+  accommodationRecords,
+  travelRecords,
+  people,
+  eventPeople,
+  eventRegistrations,
+} from '@/lib/db/schema';
+import { eq, and, desc, ne } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { writeAudit } from '@/lib/audit/write';
+import { emitCascadeEvent } from '@/lib/cascade/emit';
+import { CASCADE_EVENTS } from '@/lib/cascade/events';
 import {
   createAccommodationRecordSchema,
   updateAccommodationRecordSchema,
@@ -13,7 +22,55 @@ import {
   accommodationRecordIdSchema,
   ACCOMMODATION_RECORD_TRANSITIONS,
   type AccommodationRecordStatus,
+  buildAccommodationChangeSummary,
+  hasAccomCascadeTriggerChanges,
 } from '@/lib/validations/accommodation';
+
+async function assertRegistrationBelongsToEventPerson(
+  eventId: string,
+  personId: string,
+  registrationId: string | null,
+) {
+  if (!registrationId) {
+    return;
+  }
+
+  const [registration] = await db
+    .select({ id: eventRegistrations.id })
+    .from(eventRegistrations)
+    .where(
+      withEventScope(
+        eventRegistrations.eventId,
+        eventId,
+        eq(eventRegistrations.id, registrationId),
+        eq(eventRegistrations.personId, personId),
+      ),
+    )
+    .limit(1);
+
+  if (!registration) {
+    throw new Error('Registration does not belong to this event/person');
+  }
+}
+
+async function assertPersonHasActiveTravelRecord(eventId: string, personId: string) {
+  const [travelRecord] = await db
+    .select({ id: travelRecords.id })
+    .from(travelRecords)
+    .where(
+      withEventScope(
+        travelRecords.eventId,
+        eventId,
+        eq(travelRecords.personId, personId),
+        ne(travelRecords.recordStatus, 'cancelled'),
+      ),
+    )
+    .limit(1);
+
+  if (!travelRecord) {
+    throw new Error('Person must have an active travel record before accommodation can be created');
+  }
+}
 
 // ── Create accommodation record ───────────────────────────────
 export async function createAccommodationRecord(eventId: string, input: unknown) {
@@ -28,6 +85,13 @@ export async function createAccommodationRecord(eventId: string, input: unknown)
     .limit(1);
 
   if (!person) throw new Error('Person not found');
+
+  await assertRegistrationBelongsToEventPerson(
+    eventId,
+    validated.personId,
+    validated.registrationId || null,
+  );
+  await assertPersonHasActiveTravelRecord(eventId, validated.personId);
 
   const [record] = await db
     .insert(accommodationRecords)
@@ -59,6 +123,35 @@ export async function createAccommodationRecord(eventId: string, input: unknown)
     .insert(eventPeople)
     .values({ eventId, personId: validated.personId, source: 'accommodation' })
     .onConflictDoNothing({ target: [eventPeople.eventId, eventPeople.personId] });
+
+  await writeAudit({
+    actorUserId: userId,
+    eventId,
+    action: 'create',
+    resource: 'accommodation',
+    resourceId: record.id,
+    meta: {
+      personId: record.personId,
+      registrationId: record.registrationId,
+      hotelName: record.hotelName,
+      recordStatus: record.recordStatus,
+    },
+  });
+
+  await emitCascadeEvent(
+    CASCADE_EVENTS.ACCOMMODATION_CREATED,
+    eventId,
+    { type: 'user', id: userId },
+      {
+        accommodationRecordId: record.id,
+        personId: record.personId,
+        registrationId: record.registrationId,
+        hotelName: record.hotelName,
+        checkInDate: new Date(record.checkInDate ?? validated.checkInDate).toISOString(),
+        checkOutDate: new Date(record.checkOutDate ?? validated.checkOutDate).toISOString(),
+        googleMapsUrl: record.googleMapsUrl,
+      },
+    );
 
   revalidatePath(`/events/${eventId}/accommodation`);
   return record;
@@ -103,11 +196,57 @@ export async function updateAccommodationRecord(eventId: string, input: unknown)
     updateData.recordStatus = 'changed';
   }
 
+  const updateFilters = [
+    eq(accommodationRecords.id, accommodationRecordId),
+    eq(accommodationRecords.eventId, eventId),
+    ne(accommodationRecords.recordStatus, 'cancelled'),
+  ];
+
+  if (existing.updatedAt) {
+    updateFilters.push(eq(accommodationRecords.updatedAt, existing.updatedAt));
+  }
+
   const [updated] = await db
     .update(accommodationRecords)
     .set(updateData)
-    .where(eq(accommodationRecords.id, accommodationRecordId))
+    .where(and(...updateFilters))
     .returning();
+
+  if (!updated) {
+    throw new Error('Accommodation record changed. Refresh and try again.');
+  }
+
+  const changeSummary = buildAccommodationChangeSummary(existing, updated);
+
+  await writeAudit({
+    actorUserId: userId,
+    eventId,
+    action: 'update',
+    resource: 'accommodation',
+    resourceId: updated.id,
+    meta: {
+      personId: updated.personId,
+      previousStatus: existing.recordStatus,
+      currentStatus: updated.recordStatus,
+      changeSummary,
+    },
+  });
+
+  if (hasAccomCascadeTriggerChanges(existing, updated)) {
+    await emitCascadeEvent(
+      CASCADE_EVENTS.ACCOMMODATION_UPDATED,
+      eventId,
+      { type: 'user', id: userId },
+      {
+        accommodationRecordId: updated.id,
+        personId: updated.personId,
+        previous: existing,
+        current: updated,
+        changeSummary,
+        sharedRoomGroup: updated.sharedRoomGroup,
+      },
+    );
+  }
 
   revalidatePath(`/events/${eventId}/accommodation`);
 
@@ -134,6 +273,16 @@ export async function cancelAccommodationRecord(eventId: string, input: unknown)
     throw new Error(`Cannot cancel an accommodation record in "${currentStatus}" status`);
   }
 
+  const cancelFilters = [
+    eq(accommodationRecords.id, validated.accommodationRecordId),
+    eq(accommodationRecords.eventId, eventId),
+    ne(accommodationRecords.recordStatus, 'cancelled'),
+  ];
+
+  if (existing.updatedAt) {
+    cancelFilters.push(eq(accommodationRecords.updatedAt, existing.updatedAt));
+  }
+
   const [cancelled] = await db
     .update(accommodationRecords)
     .set({
@@ -145,8 +294,38 @@ export async function cancelAccommodationRecord(eventId: string, input: unknown)
       updatedBy: userId,
       updatedAt: new Date(),
     })
-    .where(eq(accommodationRecords.id, validated.accommodationRecordId))
+    .where(and(...cancelFilters))
     .returning();
+
+  if (!cancelled) {
+    throw new Error('Accommodation record changed. Refresh and try again.');
+  }
+
+  await writeAudit({
+    actorUserId: userId,
+    eventId,
+    action: 'delete',
+    resource: 'accommodation',
+    resourceId: cancelled.id,
+    meta: {
+      personId: cancelled.personId,
+      previousStatus: existing.recordStatus,
+      currentStatus: cancelled.recordStatus,
+      reason: validated.reason || null,
+    },
+  });
+
+  await emitCascadeEvent(
+    CASCADE_EVENTS.ACCOMMODATION_CANCELLED,
+    eventId,
+    { type: 'user', id: userId },
+    {
+      accommodationRecordId: cancelled.id,
+      personId: cancelled.personId,
+      cancelledAt: cancelled.cancelledAt?.toISOString() ?? new Date().toISOString(),
+      reason: validated.reason || null,
+    },
+  );
 
   revalidatePath(`/events/${eventId}/accommodation`);
   return cancelled;

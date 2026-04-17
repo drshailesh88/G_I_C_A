@@ -13,7 +13,14 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockDb, mockRevalidatePath, mockAssertEventAccess, mockWithEventScope } = vi.hoisted(() => ({
+const {
+  mockDb,
+  mockRevalidatePath,
+  mockAssertEventAccess,
+  mockWithEventScope,
+  mockWriteAudit,
+  mockEmitCascadeEvent,
+} = vi.hoisted(() => ({
   mockDb: {
     select: vi.fn(),
     selectDistinctOn: vi.fn(),
@@ -23,6 +30,8 @@ const { mockDb, mockRevalidatePath, mockAssertEventAccess, mockWithEventScope } 
   mockRevalidatePath: vi.fn(),
   mockAssertEventAccess: vi.fn(),
   mockWithEventScope: vi.fn(),
+  mockWriteAudit: vi.fn(),
+  mockEmitCascadeEvent: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -46,6 +55,14 @@ vi.mock('@/lib/db/with-event-scope', () => ({
 
 vi.mock('@/lib/auth/event-access', () => ({
   assertEventAccess: mockAssertEventAccess,
+}));
+
+vi.mock('@/lib/audit/write', () => ({
+  writeAudit: mockWriteAudit,
+}));
+
+vi.mock('@/lib/cascade/emit', () => ({
+  emitCascadeEvent: mockEmitCascadeEvent,
 }));
 
 import {
@@ -114,6 +131,8 @@ const RECORD_ID = '550e8400-e29b-41d4-a716-446655440002';
 beforeEach(() => {
   vi.clearAllMocks();
   mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:ops' });
+  mockWriteAudit.mockResolvedValue(undefined);
+  mockEmitCascadeEvent.mockResolvedValue({ handlersRun: 1, errors: [] });
 });
 
 // ── CP-02: Auto-upsert event_people junction on create ──────

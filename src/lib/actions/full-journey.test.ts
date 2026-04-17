@@ -72,6 +72,9 @@ vi.mock('@/lib/flags', () => ({
 vi.mock('@/lib/notifications/send', () => ({
   sendNotification: vi.fn().mockResolvedValue({ success: true, logId: 'log-1' }),
 }));
+vi.mock('@/lib/audit/write', () => ({
+  writeAudit: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock('./person', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
   return { ...actual, findDuplicatePerson: vi.fn().mockResolvedValue(null) };
