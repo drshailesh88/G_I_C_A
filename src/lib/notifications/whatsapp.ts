@@ -12,6 +12,14 @@ import { createR2Provider } from '@/lib/certificates/storage';
 import { withTimeout, PROVIDER_TIMEOUTS } from './timeout';
 
 const ATTACHMENT_URL_EXPIRY_SECONDS = 900; // 15 minutes
+const EVENT_SCOPED_ATTACHMENT_ROOTS = new Set([
+  'certificates',
+  'branding',
+  'events',
+  'travel',
+  'accommodation',
+  'transport',
+]);
 
 function getConfig() {
   const baseUrl = process.env.EVOLUTION_API_BASE_URL;
@@ -40,7 +48,14 @@ export const evolutionWhatsAppProvider: WhatsAppProvider = {
 
     // If there are media attachments, send media message instead of text
     if (input.mediaAttachments && input.mediaAttachments.length > 0) {
-      return sendMediaMessage(baseUrl, apiKey, number, input.body, input.mediaAttachments);
+      return sendMediaMessage(
+        input.eventId,
+        baseUrl,
+        apiKey,
+        number,
+        input.body,
+        input.mediaAttachments,
+      );
     }
 
     const response = await withTimeout(
@@ -98,17 +113,34 @@ function sanitizeFileName(name: string): string {
 }
 
 /** Validate attachment before sending */
-function validateAttachment(att: AttachmentDescriptor): void {
+function validateAttachment(eventId: string, att: AttachmentDescriptor): void {
   if (!att.storageKey || att.storageKey.includes('\0')) {
     throw new Error(`Invalid attachment storageKey: "${att.storageKey}"`);
   }
   if (!att.fileName) {
     throw new Error('Attachment fileName is required');
   }
+  assertAttachmentEventScope(eventId, att.storageKey);
+}
+
+function assertAttachmentEventScope(eventId: string, storageKey: string): void {
+  const segments = storageKey.split('/');
+  if (segments.length < 2) {
+    return;
+  }
+
+  const [root, scopedEventId] = segments;
+  if (
+    EVENT_SCOPED_ATTACHMENT_ROOTS.has(root)
+    && scopedEventId !== eventId
+  ) {
+    throw new Error('Attachment storageKey is outside the active event scope');
+  }
 }
 
 /** Send a media message via Evolution API with R2 signed URL */
 async function sendMediaMessage(
+  eventId: string,
   baseUrl: string,
   apiKey: string,
   number: string,
@@ -125,7 +157,7 @@ async function sendMediaMessage(
   }
 
   const att = attachments[0];
-  validateAttachment(att);
+  validateAttachment(eventId, att);
   const signedUrl = await withTimeout(
     'r2_signed_url',
     PROVIDER_TIMEOUTS.R2_SIGNED_URL,

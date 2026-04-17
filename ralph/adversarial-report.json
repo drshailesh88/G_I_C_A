@@ -3655,5 +3655,49 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/whatsapp.ts",
+    "module": "src/lib/notifications/whatsapp.ts",
+    "attacked_at": "2026-04-17T19:43:58Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "media attachment storageKey=certificates/550e8400-e29b-41d4-a716-446655440999/... while send input eventId=550e8400-e29b-41d4-a716-446655440000",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "empty and null-byte storageKey plus empty fileName in media attachments",
+        "result": "blocked"
+      },
+      {
+        "category": "path_traversal",
+        "payload": "attachment fileName ../../etc/passwd and ../../../tmp/evil.sh",
+        "result": "blocked"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "multiple attachments in one WhatsApp send",
+        "result": "blocked_by_first_attachment_only_boundary"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "not_applicable_module_has_no_auth_or_role_boundary",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "The WhatsApp media adapter trusted arbitrary attachment storage keys and never checked that event-scoped roots like certificates/ or travel/ matched the active event. A direct caller could pass another event's private object key, receive a signed R2 URL for it, and send that foreign file over WhatsApp.",
+        "fix": "Added event-scope validation for attachment storage keys before signed URL generation or provider delivery, mirroring the hardened email adapter behavior.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/whatsapp.adversarial.test.ts > rejects attachment storage keys that point at another event"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

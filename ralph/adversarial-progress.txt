@@ -426,3 +426,9 @@
 - Attacks tried: 6
 - Bugs found: 1
 - Key finding: the webhook parsers trusted inherited payload fields and a plain-object Resend event registry, so malformed payloads like `type="__proto__"` or prototype-backed objects parsed as legitimate webhook status updates.
+
+## 2026-04-17T19:43:58Z — src/lib/notifications/whatsapp.ts — attachment scope hardening
+- Verdict: hardened
+- Attacks tried: 5
+- Bugs found: 1
+- Key finding: the WhatsApp media adapter trusted arbitrary event-scoped storage keys, so a direct caller could sign another event's private attachment and send it over WhatsApp.
