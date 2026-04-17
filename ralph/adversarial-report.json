@@ -4465,5 +4465,59 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/middleware.ts",
+    "module": "src/middleware.ts",
+    "attacked_at": "2026-04-17T21:22:11Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "auth_bypass",
+        "payload": "public-route prefix extensions like /loginfoo and /forgot-password-admin",
+        "result": "blocked"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "public-route subpaths and path variants like /verify/token123 and /register/annual-conf-2026",
+        "result": "blocked"
+      },
+      {
+        "category": "maintenance_bypass",
+        "payload": "authenticated GET/POST traffic to protected APIs such as /api/events/{eventId}/sessions while maintenance_mode=true",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "not_applicable_module_has_no_body_parsing_or_allocating_loop",
+        "result": "not_applicable"
+      },
+      {
+        "category": "stale_state",
+        "payload": "warm-process Sentry user leakage across authenticated and anonymous requests",
+        "result": "blocked"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "middleware-level route gating before downstream eventId validation",
+        "result": "not_applicable_module_has_no_event_scoped_query_or_route_param_use"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "middleware only performs auth boundary checks; role enforcement stays downstream",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "maintenance_bypass",
+        "description": "The maintenance-mode guard exempted every /api/* request instead of just health, webhook, and test/inngest probe endpoints. Any authenticated caller could keep hitting protected API routes such as /api/events/{eventId}/sessions during maintenance and continue reading or mutating data while the UI was locked behind the maintenance page.",
+        "fix": "Replaced the blanket /api/* exemption with an explicit maintenance allowlist for operational endpoints, and return a 503 JSON maintenance response for non-exempt API/trpc requests while leaving page requests on the maintenance rewrite path.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/middleware.mutation-kill.test.ts > protected API routes are checked instead of bypassing maintenance; src/middleware.mutation-kill.test.ts > returns 503 JSON for protected API routes when maintenance mode is active"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

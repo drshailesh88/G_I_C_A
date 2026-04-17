@@ -8,12 +8,18 @@ const shared = vi.hoisted(() => {
   const isMaintenanceMock = vi.fn();
   const sentrySetUser = vi.fn();
   const nextResponseRewrite = vi.fn((_url: unknown) => ({ type: 'rewrite' as const }));
+  const nextResponseJson = vi.fn((body: unknown, init?: { status?: number }) => ({
+    type: 'json' as const,
+    body,
+    status: init?.status ?? 200,
+  }));
 
   return {
     middlewareCallback: null as ((auth: any, request: any) => Promise<any>) | null,
     isMaintenanceMock,
     sentrySetUser,
     nextResponseRewrite,
+    nextResponseJson,
   };
 });
 
@@ -46,6 +52,7 @@ vi.mock('@sentry/nextjs', () => ({
 vi.mock('next/server', () => ({
   NextResponse: {
     rewrite: (url: unknown) => shared.nextResponseRewrite(url),
+    json: (body: unknown, init?: { status?: number }) => shared.nextResponseJson(body, init),
   },
 }));
 
@@ -83,13 +90,18 @@ describe('middleware — maintenance mode exemptions', () => {
     expect(shared.isMaintenanceMock).not.toHaveBeenCalled();
   });
 
-  it('/api/inngest is exempt (any /api/ prefix) — isMaintenanceMode NOT checked', async () => {
+  it('/api/inngest is exempt — isMaintenanceMode NOT checked', async () => {
     await shared.middlewareCallback!(makeAuth(), makeRequest('/api/inngest'));
     expect(shared.isMaintenanceMock).not.toHaveBeenCalled();
   });
 
   it('/api/webhooks/email is exempt — isMaintenanceMode NOT checked', async () => {
     await shared.middlewareCallback!(makeAuth(), makeRequest('/api/webhooks/email'));
+    expect(shared.isMaintenanceMock).not.toHaveBeenCalled();
+  });
+
+  it('/api/test/reset-db is exempt — isMaintenanceMode NOT checked', async () => {
+    await shared.middlewareCallback!(makeAuth(), makeRequest('/api/test/reset-db'));
     expect(shared.isMaintenanceMock).not.toHaveBeenCalled();
   });
 
@@ -100,6 +112,14 @@ describe('middleware — maintenance mode exemptions', () => {
 
   it('non-exempt path /events — isMaintenanceMode IS checked', async () => {
     await shared.middlewareCallback!(makeAuth(), makeRequest('/events'));
+    expect(shared.isMaintenanceMock).toHaveBeenCalledOnce();
+  });
+
+  it('protected API routes are checked instead of bypassing maintenance', async () => {
+    await shared.middlewareCallback!(
+      makeAuth(),
+      makeRequest('/api/events/550e8400-e29b-41d4-a716-446655440000/sessions'),
+    );
     expect(shared.isMaintenanceMock).toHaveBeenCalledOnce();
   });
 });
@@ -124,6 +144,26 @@ describe('middleware — maintenance mode active / inactive', () => {
     shared.isMaintenanceMock.mockResolvedValue(false);
     await shared.middlewareCallback!(makeAuth(), makeRequest('/dashboard'));
     expect(shared.nextResponseRewrite).not.toHaveBeenCalled();
+  });
+
+  it('returns 503 JSON for protected API routes when maintenance mode is active', async () => {
+    shared.isMaintenanceMock.mockResolvedValue(true);
+    const result = await shared.middlewareCallback!(
+      makeAuth(),
+      makeRequest('/api/events/550e8400-e29b-41d4-a716-446655440000/sessions'),
+    );
+
+    expect(shared.nextResponseJson).toHaveBeenCalledOnce();
+    expect(shared.nextResponseJson).toHaveBeenCalledWith(
+      { error: 'maintenance_mode' },
+      { status: 503 },
+    );
+    expect(shared.nextResponseRewrite).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      type: 'json',
+      body: { error: 'maintenance_mode' },
+      status: 503,
+    });
   });
 
   it('swallows isMaintenanceMode errors — request proceeds normally', async () => {

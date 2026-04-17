@@ -20,17 +20,51 @@ const isPublicRoute = createRouteMatcher([
   '/register/(.*)',
 ]);
 
-export default clerkMiddleware(async (auth, request) => {
-  // Maintenance mode check — skip for /maintenance itself, API health, and webhooks
-  const pathname = request.nextUrl.pathname;
-  const isMaintenanceExempt =
-    pathname === '/maintenance' ||
-    pathname.startsWith('/api/');
+const MAINTENANCE_EXEMPT_ROUTES = new Set([
+  '/maintenance',
+  '/api/health',
+  '/api/inngest',
+]);
 
-  if (!isMaintenanceExempt) {
+const MAINTENANCE_EXEMPT_PREFIXES = [
+  '/api/webhooks/',
+  '/api/test/',
+] as const;
+
+function isMaintenanceExemptRoute(pathname: string): boolean {
+  if (MAINTENANCE_EXEMPT_ROUTES.has(pathname)) {
+    return true;
+  }
+
+  return MAINTENANCE_EXEMPT_PREFIXES.some((prefix) =>
+    pathname.startsWith(prefix),
+  );
+}
+
+function isProgrammaticRoute(pathname: string): boolean {
+  return (
+    pathname === '/api' ||
+    pathname.startsWith('/api/') ||
+    pathname === '/trpc' ||
+    pathname.startsWith('/trpc/')
+  );
+}
+
+export default clerkMiddleware(async (auth, request) => {
+  // Maintenance mode stays open only for operational endpoints needed by probes/webhooks.
+  const pathname = request.nextUrl.pathname;
+
+  if (!isMaintenanceExemptRoute(pathname)) {
     try {
       const maintenance = await isMaintenanceMode();
       if (maintenance) {
+        if (isProgrammaticRoute(pathname)) {
+          return NextResponse.json(
+            { error: 'maintenance_mode' },
+            { status: 503 },
+          );
+        }
+
         const maintenanceUrl = new URL('/maintenance', request.url);
         return NextResponse.rewrite(maintenanceUrl);
       }

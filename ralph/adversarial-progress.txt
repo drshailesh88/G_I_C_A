@@ -3,6 +3,7 @@
 ## Attack Patterns
 
 <!-- Recurring attack vectors + their fixes. Agent writes here. -->
+- Maintenance-mode middleware must use an explicit operational allowlist. Blanket `/api/*` exemptions fail open: authenticated callers can keep using protected JSON endpoints during maintenance unless non-exempt API/trpc traffic is short-circuited separately from page rewrites.
 - Travel and logistics validators must treat UTC datetime strings as a canonical wire format, not as arbitrary inputs for `new Date(...)`. Impossible values like `2026-02-30T10:00:00Z`, local-space forms like `2026-05-01 10:00:00`, and offset-bearing variants like `2026-05-01T10:00:00+05:30` otherwise normalize to different instants, while update/import schemas often forget the same arrival-after-departure invariant enforced on create paths.
 - JSONB-backed validators must inspect the raw input object before any `z.record(...)`-style reconstruction. Reserved keys like `__proto__` can survive `JSON.parse` yet disappear into prototype mutation during record cloning, while `z.unknown()` values like `BigInt` still pass validation and only explode later during `jsonb` persistence.
 - Schedule validators must canonicalize date-only and time-only strings instead of trusting `new Date(...)` coercion, and update validators must require date/time fields as one atomic group. Otherwise impossible calendar values, timezone-suffixed times, or partial schedule patches can pass validation and only fail later during timestamp construction or silently no-op in the action layer.
@@ -516,3 +517,9 @@
 - Attacks tried: 8
 - Bugs found: 2
 - Key finding: the travel validator trusted arbitrary timestamp strings and only partially enforced arrival-after-departure, so direct callers could slip impossible or local/offset datetimes through create/update/import paths and let JavaScript normalize them into the wrong instant or accept inverted travel windows.
+
+## 2026-04-17T21:22:11Z — src/middleware.ts — maintenance API bypass hardening
+- Verdict: hardened
+- Attacks tried: 7
+- Bugs found: 1
+- Key finding: maintenance mode failed open for every `/api/*` request, so authenticated callers could keep using protected API routes while the UI was locked behind the maintenance page.
