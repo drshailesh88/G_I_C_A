@@ -19,6 +19,15 @@ const KEY_PREFIX = 'notif:circuit:';
 const FAILURE_THRESHOLD = 5;
 const OPEN_DURATION_MS = 60_000; // 60 seconds
 const KEY_TTL_SECONDS = 300;     // 5-minute TTL for auto-cleanup
+const VALID_CIRCUIT_PROVIDERS = Object.freeze(
+  Object.assign(Object.create(null), {
+    resend: true,
+    evolution_api: true,
+    waba: true,
+  } as const),
+);
+
+type CircuitProvider = keyof typeof VALID_CIRCUIT_PROVIDERS;
 
 export type CircuitState = 'closed' | 'open' | 'half-open';
 
@@ -32,6 +41,13 @@ export class CircuitOpenError extends Error {
   constructor(provider: string) {
     super(`Circuit breaker is open for provider "${provider}"`);
     this.name = 'CircuitOpenError';
+  }
+}
+
+export class InvalidCircuitProviderError extends Error {
+  constructor(provider: unknown) {
+    super(`Unknown notification provider ${describeProvider(provider)}`);
+    this.name = 'InvalidCircuitProviderError';
   }
 }
 
@@ -52,9 +68,29 @@ function probeKey(provider: string): string {
   return `${KEY_PREFIX}${provider}:probe`;
 }
 
+function describeProvider(provider: unknown): string {
+  if (typeof provider !== 'string') {
+    return `(type ${typeof provider})`;
+  }
+
+  if (provider.length <= 64) {
+    return JSON.stringify(provider);
+  }
+
+  return `${JSON.stringify(provider.slice(0, 64))}... (${provider.length} chars)`;
+}
+
+function assertValidProvider(provider: unknown): asserts provider is CircuitProvider {
+  if (typeof provider !== 'string' || !Object.hasOwn(VALID_CIRCUIT_PROVIDERS, provider)) {
+    throw new InvalidCircuitProviderError(provider);
+  }
+}
+
 export function createCircuitBreaker(redis: Redis): CircuitBreakerService {
   return {
     async checkCircuit(provider: string): Promise<CircuitState> {
+      assertValidProvider(provider);
+
       const failures = (await redis.get<number>(failuresKey(provider))) ?? 0;
 
       if (failures < FAILURE_THRESHOLD) {
@@ -82,6 +118,8 @@ export function createCircuitBreaker(redis: Redis): CircuitBreakerService {
     },
 
     async recordSuccess(provider: string): Promise<void> {
+      assertValidProvider(provider);
+
       // Reset the circuit completely — delete all keys
       await Promise.all([
         redis.del(failuresKey(provider)),
@@ -91,6 +129,8 @@ export function createCircuitBreaker(redis: Redis): CircuitBreakerService {
     },
 
     async recordFailure(provider: string): Promise<void> {
+      assertValidProvider(provider);
+
       // Atomic increment — no read-modify-write race
       const newCount = await redis.incr(failuresKey(provider));
       // Set TTL on the failures key so stale breakers auto-clear
@@ -105,6 +145,8 @@ export function createCircuitBreaker(redis: Redis): CircuitBreakerService {
     },
 
     async getStatus(provider: string): Promise<CircuitStatus> {
+      assertValidProvider(provider);
+
       const failures = (await redis.get<number>(failuresKey(provider))) ?? 0;
       const opened = await redis.get<number>(openedKey(provider));
 

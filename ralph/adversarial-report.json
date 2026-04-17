@@ -2810,5 +2810,59 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/circuit-breaker.ts",
+    "module": "src/lib/notifications/circuit-breaker.ts",
+    "attacked_at": "2026-04-17T17:03:58Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "provider names with trailing whitespace, empty-like variants, and non-canonical runtime values",
+        "result": "succeeded"
+      },
+      {
+        "category": "key_injection",
+        "payload": "reuse an open resend circuit via a parallel Redis namespace such as 'resend '",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized provider strings creating arbitrarily large Redis keys and error payloads",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "concurrent half-open probe claims and failure increments",
+        "result": "blocked_by_existing_nx_probe_lock_and_atomic_incr"
+      },
+      {
+        "category": "stale_state",
+        "payload": "probe reset/open cooldown transitions after success and failure",
+        "result": "blocked_by_existing_reset_and_openedAt_refresh_logic"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not applicable to this provider-scoped Redis helper",
+        "result": "not_applicable"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "not applicable to this non-auth Redis helper",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "key_injection",
+        "description": "The circuit breaker trusted any runtime provider string and built Redis keys directly from it. A caller could open the 'resend' circuit, then bypass it with 'resend ' or another unknown variant, which created a parallel namespace that read as closed; oversized names also sprayed unbounded Redis keys.",
+        "fix": "Added an exact-match null-prototype provider allowlist and fail-closed runtime validation on every public method, plus truncated invalid-provider error rendering so oversized payloads cannot bloat logs.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/circuit-breaker.test.ts > rejects whitespace-padded provider names instead of treating them as a separate circuit namespace; src/lib/notifications/circuit-breaker.test.ts > rejects oversized unknown provider names before creating Redis keys"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

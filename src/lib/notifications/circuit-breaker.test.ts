@@ -94,6 +94,7 @@ import {
   createCircuitBreaker,
   CircuitOpenError,
   FAILURE_THRESHOLD,
+  InvalidCircuitProviderError,
   OPEN_DURATION_MS,
   type CircuitBreakerService,
 } from './circuit-breaker';
@@ -284,6 +285,24 @@ describe('CircuitBreaker', () => {
 
     const status = await breaker.getStatus('resend');
     expect(status.failures).toBe(2);
+  });
+
+  it('rejects whitespace-padded provider names instead of treating them as a separate circuit namespace', async () => {
+    for (let i = 0; i < FAILURE_THRESHOLD; i++) {
+      await breaker.recordFailure('resend');
+    }
+
+    await expect(breaker.checkCircuit('resend ')).rejects.toThrow(InvalidCircuitProviderError);
+    expect(redis.store.has('notif:circuit:resend :failures')).toBe(false);
+    expect(redis.store.has('notif:circuit:resend :opened')).toBe(false);
+    expect(redis.store.has('notif:circuit:resend :probe')).toBe(false);
+  });
+
+  it('rejects oversized unknown provider names before creating Redis keys', async () => {
+    const oversizedProvider = `resend${'x'.repeat(10_000)}`;
+
+    await expect(breaker.recordFailure(oversizedProvider)).rejects.toThrow(InvalidCircuitProviderError);
+    expect(redis.store.size).toBe(0);
   });
 });
 

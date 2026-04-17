@@ -4,6 +4,7 @@
 
 <!-- Recurring attack vectors + their fixes. Agent writes here. -->
 - Runtime lookup registries used for `key in registry` validation must use null-prototype, immutable objects. Plain object registries inherit `__proto__`, `constructor`, and `toString`, which lets malformed route params pass validation and lets one runtime caller poison metadata for later requests.
+- Redis-backed provider/state helpers must exact-match a small allowlist before building keys. Whitespace-padded, unknown, or oversized provider strings otherwise create parallel key namespaces, bypass open-circuit state, and spray unbounded Redis keys.
 - CSV import helpers are security boundaries too: reject dangerous object-prototype header names, fail closed on mapped `__proto__`/`constructor` lookups, and block spreadsheet-formula payloads before imported text can crash previews or become stored export-time formula injection.
 - Redis-backed feature-flag helpers are security boundaries too: validate canonical `eventId` segments and runtime flag keys before building keys, or malformed tenant IDs will miss to default-open flags and prototype-chain/default-registry lookups can return truthy non-booleans.
 - Storage helpers must validate object-key canonical form and signed-URL TTLs before touching the S3/R2 SDK. Otherwise traversal-style keys or overlong expiries can bypass higher-level event scoping assumptions and turn private files into long-lived download URLs.
@@ -308,3 +309,9 @@
 - Attacks tried: 7
 - Bugs found: 3
 - Key finding: the background worker trusted raw Inngest payloads and cleanup lock keys, and its archive path still buffered whole ZIPs in memory, so forged events could delete unrelated Redis keys or crash large archive jobs with avoidable memory pressure.
+
+## 2026-04-17T17:03:58Z — src/lib/notifications/circuit-breaker.ts — provider namespace hardening
+- Verdict: hardened
+- Attacks tried: 7
+- Bugs found: 1
+- Key finding: the Redis-backed breaker trusted raw provider strings, so whitespace-padded or oversized names created parallel key namespaces that bypassed an open circuit and could spray unbounded Redis keys.
