@@ -9,6 +9,7 @@ import { assertEventAccess } from '@/lib/auth/event-access';
 import { assertCertificateWriteRole } from './certificate-rbac';
 import { CERTIFICATE_TYPES } from '@/lib/validations/certificate';
 import {
+  MAX_AGGREGATE_SIZE_BYTES,
   validateBulkZipInput,
   buildBulkZipStorageKey,
   createZipArchive,
@@ -18,9 +19,59 @@ import {
 import type { StorageProvider } from '@/lib/certificates/storage';
 import type { DistributedLock } from '@/lib/certificates/distributed-lock';
 
+const MAX_CERTIFICATES_PER_ZIP = 500;
+
+const eventIdSchema = z.string().uuid('Invalid event ID');
+
 const bulkZipRequestSchema = z.object({
+  eventId: z.string().uuid('Invalid event ID').optional(),
   certificateType: z.enum(CERTIFICATE_TYPES),
-});
+}).strict();
+
+function isCertificateStorageKeyForScope(
+  storageKey: string,
+  eventId: string,
+  certificateType: string,
+): boolean {
+  const expectedPrefix = `certificates/${eventId}/${certificateType}/`;
+  if (!storageKey.startsWith(expectedPrefix)) return false;
+
+  const objectName = storageKey.slice(expectedPrefix.length);
+  return (
+    objectName.length > 4 &&
+    objectName.endsWith('.pdf') &&
+    !objectName.includes('/') &&
+    !objectName.includes('\\') &&
+    !objectName.includes('..') &&
+    !objectName.includes('\0')
+  );
+}
+
+function formatBytesAsMb(bytes: number): number {
+  return Math.round(bytes / 1024 / 1024);
+}
+
+async function renewBulkZipLockOrThrow(
+  lock: DistributedLock,
+  lockHandle: Awaited<ReturnType<DistributedLock['acquire']>>,
+) {
+  if (!lockHandle) {
+    throw new Error(
+      'Bulk certificate generation lock was lost during ZIP creation. Please try again.',
+    );
+  }
+
+  try {
+    const renewed = await lock.renew(lockHandle);
+    if (!renewed) {
+      throw new Error('lost');
+    }
+  } catch {
+    throw new Error(
+      'Bulk certificate generation lock was lost during ZIP creation. Please try again.',
+    );
+  }
+}
 
 /**
  * Generate a bulk ZIP of all current (issued) certificates for a given type.
@@ -46,9 +97,14 @@ export async function bulkZipDownload(
     lock?: DistributedLock;
   },
 ): Promise<BulkZipResult> {
-  const { role } = await assertEventAccess(eventId, { requireWrite: true });
-  assertCertificateWriteRole(role);
+  const scopedEventId = eventIdSchema.parse(eventId);
   const validated = bulkZipRequestSchema.parse(input);
+  if (validated.eventId && validated.eventId !== scopedEventId) {
+    throw new Error('eventId mismatch');
+  }
+
+  const { role } = await assertEventAccess(scopedEventId, { requireWrite: true });
+  assertCertificateWriteRole(role);
 
   // Acquire distributed lock — prevents concurrent bulk generation
   const lock = deps?.lock
@@ -56,7 +112,7 @@ export async function bulkZipDownload(
 
   let lockHandle: Awaited<ReturnType<typeof lock.acquire>>;
   try {
-    lockHandle = await lock.acquire(eventId, validated.certificateType);
+    lockHandle = await lock.acquire(scopedEventId, validated.certificateType);
   } catch (err) {
     throw new Error(
       'Unable to check bulk generation lock (Redis unavailable). Please try again later.',
@@ -89,10 +145,22 @@ export async function bulkZipDownload(
             eq(issuedCertificates.status, 'issued'),
           )!,
         ),
-      );
+      )
+      .limit(MAX_CERTIFICATES_PER_ZIP + 1);
 
     // Filter to only certs with generated PDFs
     const downloadable = certs.filter(c => c.storageKey);
+
+    const invalidStorageKey = downloadable.find(
+      c => !isCertificateStorageKeyForScope(
+        c.storageKey,
+        scopedEventId,
+        validated.certificateType,
+      ),
+    );
+    if (invalidStorageKey) {
+      throw new Error('Invalid certificate storage key for event scope');
+    }
 
     // Calculate aggregate size for validation
     const totalSizeBytes = downloadable.reduce(
@@ -102,7 +170,7 @@ export async function bulkZipDownload(
 
     // Validate (includes count limit and aggregate size check)
     const validationError = validateBulkZipInput({
-      eventId,
+      eventId: scopedEventId,
       certificateType: validated.certificateType,
       certificates: downloadable.map(c => ({
         storageKey: c.storageKey,
@@ -126,25 +194,47 @@ export async function bulkZipDownload(
 
     // Create ZIP with periodic lock renewal to prevent TTL expiry on large jobs
     let filesProcessed = 0;
+    let downloadedSizeBytes = 0;
     const renewingFetchPdf = async (storageKey: string) => {
       const buffer = await fetchPdf(storageKey);
+      downloadedSizeBytes += buffer.length;
+      if (downloadedSizeBytes > MAX_AGGREGATE_SIZE_BYTES) {
+        throw new Error(
+          `Downloaded PDF size (${formatBytesAsMb(downloadedSizeBytes)}MB) exceeds maximum (${formatBytesAsMb(MAX_AGGREGATE_SIZE_BYTES)}MB)`,
+        );
+      }
+
       filesProcessed++;
       if (filesProcessed % 10 === 0 && lockHandle) {
-        await lock.renew(lockHandle).catch(() => {});
+        await renewBulkZipLockOrThrow(lock, lockHandle);
       }
       return buffer;
     };
 
-    const zipKey = buildBulkZipStorageKey(eventId, validated.certificateType);
+    const zipKey = buildBulkZipStorageKey(scopedEventId, validated.certificateType);
     const zipEntries = downloadable.map(c => ({ storageKey: c.storageKey, fileName: c.fileName }));
 
     // Use streaming upload if provider supports it (avoids buffering full ZIP in memory)
     let zipSizeBytes: number;
     if (provider.uploadStream) {
       const { stream, done } = createZipStream(zipEntries, renewingFetchPdf);
-      const uploadResult = await provider.uploadStream(zipKey, stream, 'application/zip');
-      await done;
-      zipSizeBytes = uploadResult.fileSizeBytes;
+      const guardedDone = done.catch((err) => {
+        stream.destroy(err instanceof Error ? err : new Error(String(err)));
+        throw err;
+      });
+      const uploadPromise = provider.uploadStream(zipKey, stream, 'application/zip');
+
+      try {
+        const [uploadResult] = await Promise.all([
+          uploadPromise,
+          guardedDone.then(() => undefined),
+        ]);
+        zipSizeBytes = uploadResult.fileSizeBytes;
+      } catch (err) {
+        stream.destroy(err instanceof Error ? err : undefined);
+        await uploadPromise.catch(() => {});
+        throw err;
+      }
     } else {
       const zipBuffer = await createZipArchive(zipEntries, renewingFetchPdf);
       await provider.upload(zipKey, zipBuffer, 'application/zip');

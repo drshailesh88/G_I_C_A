@@ -34,10 +34,15 @@ import { createStubLock } from '@/lib/certificates/distributed-lock';
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 
+function certificateStorageKey(id: string, certificateType = 'delegate_attendance') {
+  return `certificates/${EVENT_ID}/${certificateType}/${id}.pdf`;
+}
+
 function chainedSelect(rows: unknown[]) {
   const chain: any = {
     from: vi.fn().mockImplementation(() => chain),
     where: vi.fn().mockImplementation(() => chain),
+    limit: vi.fn().mockImplementation(() => chain),
     then: (resolve: (val: unknown) => void) => Promise.resolve(rows).then(resolve),
   };
   mockDb.select.mockReturnValue(chain);
@@ -57,7 +62,7 @@ describe('bulkZipDownload — optional chaining kills', () => {
   it('uses injected lock when deps.lock is provided (L52)', async () => {
     const lock = createStubLock();
     const certs = [
-      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+      { id: 'c1', storageKey: certificateStorageKey('c1'), fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
     ];
     chainedSelect(certs);
 
@@ -81,7 +86,7 @@ describe('bulkZipDownload — optional chaining kills', () => {
 
   it('uses injected storageProvider when provided (L114)', async () => {
     const certs = [
-      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+      { id: 'c1', storageKey: certificateStorageKey('c1'), fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
     ];
     chainedSelect(certs);
 
@@ -103,7 +108,7 @@ describe('bulkZipDownload — optional chaining kills', () => {
 
   it('uses injected fetchPdf when provided (L118)', async () => {
     const certs = [
-      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+      { id: 'c1', storageKey: certificateStorageKey('c1'), fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
     ];
     chainedSelect(certs);
 
@@ -119,7 +124,7 @@ describe('bulkZipDownload — optional chaining kills', () => {
       lock: createStubLock(),
     });
 
-    expect(mockFetchPdf).toHaveBeenCalledWith('certs/c1.pdf');
+    expect(mockFetchPdf).toHaveBeenCalledWith(certificateStorageKey('c1'));
   });
 });
 
@@ -128,7 +133,7 @@ describe('bulkZipDownload — optional chaining kills', () => {
 describe('bulkZipDownload — select shape assertions', () => {
   it('returns result with zipStorageKey, zipUrl, fileCount, zipSizeBytes (L73)', async () => {
     const certs = [
-      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+      { id: 'c1', storageKey: certificateStorageKey('c1'), fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
     ];
     chainedSelect(certs);
 
@@ -158,7 +163,7 @@ describe('bulkZipDownload — select shape assertions', () => {
 describe('bulkZipDownload — string literal kills', () => {
   it('zipStorageKey contains "bulk/" prefix (L87)', async () => {
     const certs = [
-      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+      { id: 'c1', storageKey: certificateStorageKey('c1'), fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
     ];
     chainedSelect(certs);
 
@@ -177,7 +182,7 @@ describe('bulkZipDownload — string literal kills', () => {
 
   it('upload called with "application/zip" content type (L143,148)', async () => {
     const certs = [
-      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+      { id: 'c1', storageKey: certificateStorageKey('c1'), fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
     ];
     chainedSelect(certs);
 
@@ -225,7 +230,7 @@ describe('bulkZipDownload — lock renewal logic', () => {
     // Create 11 certs to trigger at least one renewal (at file 10)
     const certs = Array.from({ length: 11 }, (_, i) => ({
       id: `c${i}`,
-      storageKey: `certs/c${i}.pdf`,
+      storageKey: certificateStorageKey(`c${i}`),
       fileName: `cert-${i}.pdf`,
       status: 'issued',
       fileSizeBytes: 100,
@@ -252,7 +257,7 @@ describe('bulkZipDownload — lock renewal logic', () => {
   it('does NOT renew lock before 10 files are processed', async () => {
     const certs = Array.from({ length: 9 }, (_, i) => ({
       id: `c${i}`,
-      storageKey: `certs/c${i}.pdf`,
+      storageKey: certificateStorageKey(`c${i}`),
       fileName: `cert-${i}.pdf`,
       status: 'issued',
       fileSizeBytes: 100,
@@ -278,7 +283,7 @@ describe('bulkZipDownload — lock renewal logic', () => {
   it('renews lock twice for 20 files (L130 ArithmeticOperator kill)', async () => {
     const certs = Array.from({ length: 21 }, (_, i) => ({
       id: `c${i}`,
-      storageKey: `certs/c${i}.pdf`,
+      storageKey: certificateStorageKey(`c${i}`),
       fileName: `cert-${i}.pdf`,
       status: 'issued',
       fileSizeBytes: 100,
@@ -309,8 +314,8 @@ describe('bulkZipDownload — lock renewal logic', () => {
 describe('bulkZipDownload — aggregate size check', () => {
   it('calculates totalSizeBytes from fileSizeBytes, treating null as 0', async () => {
     const certs = [
-      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
-      { id: 'c2', storageKey: 'certs/c2.pdf', fileName: 'cert-002.pdf', status: 'issued', fileSizeBytes: null },
+      { id: 'c1', storageKey: certificateStorageKey('c1'), fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+      { id: 'c2', storageKey: certificateStorageKey('c2'), fileName: 'cert-002.pdf', status: 'issued', fileSizeBytes: null },
     ];
     chainedSelect(certs);
 
@@ -337,7 +342,7 @@ describe('bulkZipDownload — block statement kills', () => {
     const releaseSpy = vi.spyOn(lock, 'release');
 
     const certs = [
-      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+      { id: 'c1', storageKey: certificateStorageKey('c1'), fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
     ];
     chainedSelect(certs);
 
@@ -364,7 +369,7 @@ describe('bulkZipDownload — filesProcessed increment', () => {
     // If mutated to --, it would go negative and never equal 10
     const certs = Array.from({ length: 10 }, (_, i) => ({
       id: `c${i}`,
-      storageKey: `certs/c${i}.pdf`,
+      storageKey: certificateStorageKey(`c${i}`),
       fileName: `cert-${i}.pdf`,
       status: 'issued',
       fileSizeBytes: 100,
@@ -394,7 +399,7 @@ describe('bulkZipDownload — filesProcessed increment', () => {
 describe('bulkZipDownload — uploadStream content type', () => {
   it('uploadStream also receives "application/zip" content type (L143)', async () => {
     const certs = [
-      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+      { id: 'c1', storageKey: certificateStorageKey('c1'), fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
     ];
     chainedSelect(certs);
 
@@ -431,7 +436,7 @@ describe('bulkZipDownload — uploadStream content type', () => {
 describe('bulkZipDownload — select argument verification', () => {
   it('passes non-empty select shape to db.select (L73)', async () => {
     const certs = [
-      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+      { id: 'c1', storageKey: certificateStorageKey('c1'), fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
     ];
     chainedSelect(certs);
 
@@ -459,7 +464,7 @@ describe('bulkZipDownload — select argument verification', () => {
 describe('bulkZipDownload — zipStorageKey format', () => {
   it('zipStorageKey is non-empty string (L87)', async () => {
     const certs = [
-      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+      { id: 'c1', storageKey: certificateStorageKey('c1'), fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
     ];
     chainedSelect(certs);
 
@@ -483,7 +488,7 @@ describe('bulkZipDownload — zipStorageKey format', () => {
 describe('bulkZipDownload — buffered upload content type (L148)', () => {
   it('buffered upload uses "application/zip" content type', async () => {
     const certs = [
-      { id: 'c1', storageKey: 'certs/c1.pdf', fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
+      { id: 'c1', storageKey: certificateStorageKey('c1'), fileName: 'cert-001.pdf', status: 'issued', fileSizeBytes: 1000 },
     ];
     chainedSelect(certs);
 

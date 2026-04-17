@@ -13,10 +13,17 @@
 - Branding and file-backed settings must event-scope stored object keys before signing URLs; direct server-action JSON updates can otherwise borrow another event's object.
 - Server actions must validate runtime enum parameters and uploaded file bytes. TypeScript unions and browser-provided MIME strings do not protect direct action callers.
 - JSON blob read-merge-write actions need compare-and-swap guards on `updatedAt`, or concurrent partial updates can silently clobber unrelated fields.
+- Long-running bulk jobs cannot ignore distributed-lock renew failures. If the lock expires or ownership is lost mid-flight, abort instead of continuing duplicate work without exclusivity.
 
 ## Iteration log
 
 <!-- Dated entries per feature attacked. -->
+## 2026-04-17T06:28:08Z — src/lib/actions/certificate-bulk-zip.ts — certificate bulk ZIP lock hardening
+- Verdict: hardened
+- Attacks tried: 9
+- Bugs found: 1
+- Key finding: ZIP generation silently continued after lock-renew failure, so an expired or stolen lock could allow concurrent duplicate bulk jobs for the same event/type.
+
 ## 2026-04-17T05:49:35Z — src/lib/actions/branding.ts — branding action hardening
 - Verdict: hardened
 - Attacks tried: 12

@@ -349,5 +349,69 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/certificate-bulk-zip.ts",
+    "module": "src/lib/actions/certificate-bulk-zip.ts",
+    "attacked_at": "2026-04-17T06:28:08Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "route eventId=not-a-uuid and body eventId mismatch against the route scope",
+        "result": "blocked"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "issued certificate row whose storageKey points at another event/type prefix",
+        "result": "blocked"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "call bulkZipDownload without a certificate write role",
+        "result": "blocked"
+      },
+      {
+        "category": "race_condition",
+        "payload": "distributed lock renew() returns false after 10 files, simulating TTL expiry or ownership loss mid-generation",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "second request while the event/type lock is already held",
+        "result": "blocked"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "501 issued certificates in one ZIP request",
+        "result": "blocked"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "metadata says tiny PDFs but downloaded bytes exceed the 200MB aggregate ceiling",
+        "result": "blocked"
+      },
+      {
+        "category": "injection_path_traversal",
+        "payload": "certificate storageKey containing another event prefix or path traversal markers",
+        "result": "blocked"
+      },
+      {
+        "category": "info_leakage",
+        "payload": "invalid storage object / Redis failure paths",
+        "result": "no_additional_exploitable_failure_in_action_layer"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "race_condition",
+        "description": "bulkZipDownload renewed its distributed lock every 10 files but swallowed both renew() failures and false returns. Once the lock expired or ownership moved to another process, the original request kept generating the ZIP, allowing concurrent duplicate bulk jobs for the same event/type.",
+        "fix": "Fail closed on lock-renew loss. bulkZipDownload now aborts the job when renew() fails or returns false instead of continuing without exclusivity.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/certificate-bulk-zip.test.ts > aborts when the distributed lock can no longer be renewed mid-generation"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
