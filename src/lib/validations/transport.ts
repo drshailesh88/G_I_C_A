@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizePhone } from './person';
 
 // ═══════════════════════════════════════════════════════════════
 // BATCH STATUS MACHINE
@@ -61,36 +62,199 @@ export type BatchSource = (typeof BATCH_SOURCES)[number];
 // SCHEMAS
 // ═══════════════════════════════════════════════════════════════
 
+function trimString(value: unknown): unknown {
+  return typeof value === 'string' ? value.trim() : value;
+}
+
+function isValidDateOnly(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const [year, month, day] = value.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+}
+
+function parseUtcTimestamp(value: string): Date | null {
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.(\d{1,3}))?Z$/,
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const [, yearPart, monthPart, dayPart, hourPart, minutePart, secondPart, , millisPart] = match;
+  const year = Number(yearPart);
+  const month = Number(monthPart);
+  const day = Number(dayPart);
+  const hour = Number(hourPart);
+  const minute = Number(minutePart);
+  const second = Number(secondPart);
+  const millisecond = millisPart ? Number(millisPart.padEnd(3, '0')) : 0;
+
+  if (
+    month < 1 || month > 12
+    || day < 1 || day > 31
+    || hour > 23
+    || minute > 59
+    || second > 59
+  ) {
+    return null;
+  }
+
+  const parsed = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  if (
+    parsed.getUTCFullYear() !== year
+    || parsed.getUTCMonth() !== month - 1
+    || parsed.getUTCDate() !== day
+    || parsed.getUTCHours() !== hour
+    || parsed.getUTCMinutes() !== minute
+    || parsed.getUTCSeconds() !== second
+    || parsed.getUTCMilliseconds() !== millisecond
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function isValidServiceDate(value: string): boolean {
+  return isValidDateOnly(value) || parseUtcTimestamp(value) !== null;
+}
+
+function isValidUtcTimestamp(value: string): boolean {
+  return parseUtcTimestamp(value) !== null;
+}
+
+function getTimestampMillis(value: string): number | null {
+  return parseUtcTimestamp(value)?.getTime() ?? null;
+}
+
+const requiredServiceDateSchema = z.preprocess(
+  trimString,
+  z
+    .string()
+    .min(1, 'Service date is required')
+    .refine(isValidServiceDate, 'Service date must be a valid date'),
+);
+
+const optionalServiceDateSchema = z.preprocess(
+  trimString,
+  z
+    .string()
+    .min(1, 'Service date must be a valid date')
+    .refine(isValidServiceDate, 'Service date must be a valid date')
+    .optional(),
+);
+
+const requiredUtcTimestampSchema = (label: string) =>
+  z.preprocess(
+    trimString,
+    z
+      .string()
+      .min(1, `${label} is required`)
+      .refine(isValidUtcTimestamp, `${label} must be a valid UTC timestamp`),
+  );
+
+const optionalUtcTimestampSchema = (label: string) =>
+  z.preprocess(
+    trimString,
+    z.union([
+      z.literal(''),
+      z
+        .string()
+        .min(1, `${label} must be a valid UTC timestamp`)
+        .refine(isValidUtcTimestamp, `${label} must be a valid UTC timestamp`),
+    ]).optional(),
+  );
+
+const optionalTransportPhoneSchema = (label: string) =>
+  z.preprocess(
+    trimString,
+    z
+      .union([
+        z.literal(''),
+        z
+          .string()
+          .max(20)
+          .refine((value) => {
+            try {
+              normalizePhone(value);
+              return true;
+            } catch {
+              return false;
+            }
+          }, `Invalid ${label}`)
+          .transform((value) => normalizePhone(value)),
+      ])
+      .optional(),
+  );
+
 // ── Create transport batch ────────────────────────────────────
 export const createBatchSchema = z.object({
   movementType: z.enum(MOVEMENT_TYPES),
   batchSource: z.enum(BATCH_SOURCES).default('manual'),
-  serviceDate: z.string().min(1, 'Service date is required'),
-  timeWindowStart: z.string().min(1, 'Start time is required'),
-  timeWindowEnd: z.string().min(1, 'End time is required'),
+  serviceDate: requiredServiceDateSchema,
+  timeWindowStart: requiredUtcTimestampSchema('Start time'),
+  timeWindowEnd: requiredUtcTimestampSchema('End time'),
   sourceCity: z.string().trim().min(1, 'Source city is required').max(200),
   pickupHub: z.string().trim().min(1, 'Pickup hub is required').max(300),
   pickupHubType: z.enum(HUB_TYPES).default('other'),
   dropHub: z.string().trim().min(1, 'Drop hub is required').max(300),
   dropHubType: z.enum(HUB_TYPES).default('other'),
   notes: z.string().trim().max(2000).optional().or(z.literal('')),
-}).refine(
-  (data) => new Date(data.timeWindowEnd) > new Date(data.timeWindowStart),
-  { message: 'End time must be after start time', path: ['timeWindowEnd'] },
-);
+}).superRefine((data, ctx) => {
+  const startMillis = getTimestampMillis(data.timeWindowStart);
+  const endMillis = getTimestampMillis(data.timeWindowEnd);
+
+  if (startMillis !== null && endMillis !== null && endMillis <= startMillis) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'End time must be after start time',
+      path: ['timeWindowEnd'],
+    });
+  }
+});
 
 // ── Update transport batch ────────────────────────────────────
 export const updateBatchSchema = z.object({
   batchId: z.string().uuid('Invalid batch ID'),
-  serviceDate: z.string().optional(),
-  timeWindowStart: z.string().optional(),
-  timeWindowEnd: z.string().optional(),
+  serviceDate: optionalServiceDateSchema,
+  timeWindowStart: optionalUtcTimestampSchema('Start time'),
+  timeWindowEnd: optionalUtcTimestampSchema('End time'),
   sourceCity: z.string().trim().min(1).max(200).optional(),
   pickupHub: z.string().trim().min(1).max(300).optional(),
   pickupHubType: z.enum(HUB_TYPES).optional(),
   dropHub: z.string().trim().min(1).max(300).optional(),
   dropHubType: z.enum(HUB_TYPES).optional(),
   notes: z.string().trim().max(2000).optional().or(z.literal('')),
+}).superRefine((data, ctx) => {
+  if (!data.timeWindowStart || !data.timeWindowEnd) {
+    return;
+  }
+
+  const startMillis = getTimestampMillis(data.timeWindowStart);
+  const endMillis = getTimestampMillis(data.timeWindowEnd);
+
+  if (startMillis !== null && endMillis !== null && endMillis <= startMillis) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'End time must be after start time',
+      path: ['timeWindowEnd'],
+    });
+  }
 });
 
 // ── Create vehicle assignment ─────────────────────────────────
@@ -100,13 +264,28 @@ export const createVehicleSchema = z.object({
   vehicleType: z.enum(VEHICLE_TYPES),
   plateNumber: z.string().trim().max(20).optional().or(z.literal('')),
   vendorName: z.string().trim().max(200).optional().or(z.literal('')),
-  vendorContactE164: z.string().trim().max(20).optional().or(z.literal('')),
+  vendorContactE164: optionalTransportPhoneSchema('vendor contact number'),
   driverName: z.string().trim().max(200).optional().or(z.literal('')),
-  driverMobileE164: z.string().trim().max(20).optional().or(z.literal('')),
+  driverMobileE164: optionalTransportPhoneSchema('driver mobile number'),
   capacity: z.coerce.number().int().min(1, 'Capacity must be at least 1').max(100),
-  scheduledPickupAtUtc: z.string().optional().or(z.literal('')),
-  scheduledDropAtUtc: z.string().optional().or(z.literal('')),
+  scheduledPickupAtUtc: optionalUtcTimestampSchema('Scheduled pickup time'),
+  scheduledDropAtUtc: optionalUtcTimestampSchema('Scheduled drop time'),
   notes: z.string().trim().max(2000).optional().or(z.literal('')),
+}).superRefine((data, ctx) => {
+  if (!data.scheduledPickupAtUtc || !data.scheduledDropAtUtc) {
+    return;
+  }
+
+  const pickupMillis = getTimestampMillis(data.scheduledPickupAtUtc);
+  const dropMillis = getTimestampMillis(data.scheduledDropAtUtc);
+
+  if (pickupMillis !== null && dropMillis !== null && dropMillis <= pickupMillis) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Scheduled drop time must be after pickup time',
+      path: ['scheduledDropAtUtc'],
+    });
+  }
 });
 
 // ── Update vehicle assignment ─────────────────────────────────
@@ -116,13 +295,28 @@ export const updateVehicleSchema = z.object({
   vehicleType: z.enum(VEHICLE_TYPES).optional(),
   plateNumber: z.string().trim().max(20).optional().or(z.literal('')),
   vendorName: z.string().trim().max(200).optional().or(z.literal('')),
-  vendorContactE164: z.string().trim().max(20).optional().or(z.literal('')),
+  vendorContactE164: optionalTransportPhoneSchema('vendor contact number'),
   driverName: z.string().trim().max(200).optional().or(z.literal('')),
-  driverMobileE164: z.string().trim().max(20).optional().or(z.literal('')),
+  driverMobileE164: optionalTransportPhoneSchema('driver mobile number'),
   capacity: z.coerce.number().int().min(1).max(100).optional(),
-  scheduledPickupAtUtc: z.string().optional().or(z.literal('')),
-  scheduledDropAtUtc: z.string().optional().or(z.literal('')),
+  scheduledPickupAtUtc: optionalUtcTimestampSchema('Scheduled pickup time'),
+  scheduledDropAtUtc: optionalUtcTimestampSchema('Scheduled drop time'),
   notes: z.string().trim().max(2000).optional().or(z.literal('')),
+}).superRefine((data, ctx) => {
+  if (!data.scheduledPickupAtUtc || !data.scheduledDropAtUtc) {
+    return;
+  }
+
+  const pickupMillis = getTimestampMillis(data.scheduledPickupAtUtc);
+  const dropMillis = getTimestampMillis(data.scheduledDropAtUtc);
+
+  if (pickupMillis !== null && dropMillis !== null && dropMillis <= pickupMillis) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Scheduled drop time must be after pickup time',
+      path: ['scheduledDropAtUtc'],
+    });
+  }
 });
 
 // ── Assign passenger to batch/vehicle ─────────────────────────

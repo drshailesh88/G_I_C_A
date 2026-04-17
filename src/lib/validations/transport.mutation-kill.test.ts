@@ -498,13 +498,14 @@ describe('createVehicleSchema — exact error messages and boundaries', () => {
   });
 
   it('trims vendorContactE164', () => {
-    const result = createVehicleSchema.parse({ ...base, vendorContactE164: ' +91999 ' });
-    expect(result.vendorContactE164).toBe('+91999');
+    const result = createVehicleSchema.parse({ ...base, vendorContactE164: ' +91 98765 43210 ' });
+    expect(result.vendorContactE164).toBe('+919876543210');
   });
 
-  it('accepts vendorContactE164 at 20 chars', () => {
-    const result = createVehicleSchema.parse({ ...base, vendorContactE164: 'C'.repeat(20) });
-    expect(result.vendorContactE164).toHaveLength(20);
+  it('rejects malformed vendorContactE164 values even under the length limit', () => {
+    expect(() => createVehicleSchema.parse({ ...base, vendorContactE164: 'C'.repeat(20) })).toThrow(
+      'Invalid vendor contact number',
+    );
   });
 
   it('rejects vendorContactE164 at 21 chars', () => {
@@ -526,13 +527,14 @@ describe('createVehicleSchema — exact error messages and boundaries', () => {
   });
 
   it('trims driverMobileE164', () => {
-    const result = createVehicleSchema.parse({ ...base, driverMobileE164: ' +919876 ' });
-    expect(result.driverMobileE164).toBe('+919876');
+    const result = createVehicleSchema.parse({ ...base, driverMobileE164: ' 9876543210 ' });
+    expect(result.driverMobileE164).toBe('+919876543210');
   });
 
-  it('accepts driverMobileE164 at 20 chars', () => {
-    const result = createVehicleSchema.parse({ ...base, driverMobileE164: 'M'.repeat(20) });
-    expect(result.driverMobileE164).toHaveLength(20);
+  it('rejects malformed driverMobileE164 values even under the length limit', () => {
+    expect(() => createVehicleSchema.parse({ ...base, driverMobileE164: 'M'.repeat(20) })).toThrow(
+      'Invalid driver mobile number',
+    );
   });
 
   it('rejects driverMobileE164 at 21 chars', () => {
@@ -651,13 +653,17 @@ describe('updateVehicleSchema — exact validation', () => {
   });
 
   it('trims vendorContactE164 in update', () => {
-    const result = updateVehicleSchema.parse({ vehicleAssignmentId: VALID_UUID, vendorContactE164: ' +91 ' });
-    expect(result.vendorContactE164).toBe('+91');
+    const result = updateVehicleSchema.parse({
+      vehicleAssignmentId: VALID_UUID,
+      vendorContactE164: ' +91 98765 43210 ',
+    });
+    expect(result.vendorContactE164).toBe('+919876543210');
   });
 
-  it('accepts vendorContactE164 at 20 chars in update', () => {
-    const result = updateVehicleSchema.parse({ vehicleAssignmentId: VALID_UUID, vendorContactE164: 'C'.repeat(20) });
-    expect(result.vendorContactE164).toHaveLength(20);
+  it('rejects malformed vendorContactE164 values in update', () => {
+    expect(() =>
+      updateVehicleSchema.parse({ vehicleAssignmentId: VALID_UUID, vendorContactE164: 'C'.repeat(20) }),
+    ).toThrow('Invalid vendor contact number');
   });
 
   it('rejects vendorContactE164 at 21 chars in update', () => {
@@ -683,13 +689,17 @@ describe('updateVehicleSchema — exact validation', () => {
   });
 
   it('trims driverMobileE164 in update', () => {
-    const result = updateVehicleSchema.parse({ vehicleAssignmentId: VALID_UUID, driverMobileE164: ' +91 ' });
-    expect(result.driverMobileE164).toBe('+91');
+    const result = updateVehicleSchema.parse({
+      vehicleAssignmentId: VALID_UUID,
+      driverMobileE164: ' 9876543210 ',
+    });
+    expect(result.driverMobileE164).toBe('+919876543210');
   });
 
-  it('accepts driverMobileE164 at 20 chars in update', () => {
-    const result = updateVehicleSchema.parse({ vehicleAssignmentId: VALID_UUID, driverMobileE164: 'M'.repeat(20) });
-    expect(result.driverMobileE164).toHaveLength(20);
+  it('rejects malformed driverMobileE164 values in update', () => {
+    expect(() =>
+      updateVehicleSchema.parse({ vehicleAssignmentId: VALID_UUID, driverMobileE164: 'M'.repeat(20) }),
+    ).toThrow('Invalid driver mobile number');
   });
 
   it('rejects driverMobileE164 at 21 chars in update', () => {

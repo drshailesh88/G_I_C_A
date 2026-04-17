@@ -4323,5 +4323,80 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/validations/transport.ts",
+    "module": "src/lib/validations/transport.ts",
+    "attacked_at": "2026-04-17T21:03:25Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "injection",
+        "payload": "SQL/XSS metacharacters in sourceCity/pickupHub/notes and transport contact fields",
+        "result": "no_exploitable_failure_in_validation_layer"
+      },
+      {
+        "category": "auth_bypass",
+        "payload": "not_applicable_module_has_no_auth_boundary",
+        "result": "not_applicable"
+      },
+      {
+        "category": "race_condition",
+        "payload": "not_applicable_pure_validation_module_has_no_concurrent_state_transition",
+        "result": "not_applicable"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized notes/phone/timestamp strings beyond schema limits",
+        "result": "blocked"
+      },
+      {
+        "category": "stale_state",
+        "payload": "not_applicable_module_has_no_persisted_state_or_compare_and_swap_logic",
+        "result": "not_applicable"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "impossible serviceDate, malformed UTC timestamps, inverted scheduled pickup/drop, raw local and garbage phone strings",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not_applicable_module_has_no_eventid_input_or_event_scoped_query",
+        "result": "not_applicable"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "not_applicable_module_has_no_role_boundary",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "createBatchSchema and updateBatchSchema treated serviceDate and time-window fields as arbitrary strings and relied on JavaScript Date coercion. Direct callers could pass impossible calendar values like `2026-02-30` or malformed timestamps, which either normalized to a different day or only failed later during action-layer `new Date(...)` writes with misleading errors.",
+        "fix": "Added explicit service-date and UTC timestamp validators that reject impossible calendar values before transport actions construct Date objects, and guarded the time-window ordering check so malformed timestamps no longer masquerade as end-before-start errors.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/transport.test.ts > rejects impossible service dates instead of normalizing them; src/lib/validations/transport.test.ts > rejects malformed time-window timestamps before they reach Date coercion"
+      },
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "createVehicleSchema and updateVehicleSchema accepted arbitrary scheduled pickup/drop strings, so impossible timestamps and inverted pickup/drop windows could pass validation and only fail later during Date construction or persist an impossible vehicle timeline.",
+        "fix": "Validated scheduled pickup/drop fields as real UTC timestamps and enforced that scheduled drop is strictly after pickup when both are supplied.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/transport.test.ts > rejects impossible scheduled pickup timestamps instead of normalizing them; src/lib/validations/transport.test.ts > rejects scheduled drop times that are not after pickup; src/lib/validations/transport.test.ts > updateVehicleSchema rejects inverted pickup and drop timestamps"
+      },
+      {
+        "severity": "medium",
+        "category": "data_integrity",
+        "description": "Transport vehicle contact fields only trimmed strings, so direct callers could persist garbage or non-canonical local phone numbers instead of the required E.164 format for vendor and driver contacts.",
+        "fix": "Reused libphonenumber-based normalization at the validation boundary so transport contact numbers are either normalized to E.164 or rejected before persistence.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/transport.test.ts > normalizes phone inputs to E.164 on input; src/lib/validations/transport.test.ts > rejects invalid driver mobile numbers; src/lib/validations/transport.test.ts > updateVehicleSchema normalizes vendor contact numbers to E.164"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

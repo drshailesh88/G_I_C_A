@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createBatchSchema,
   createVehicleSchema,
+  updateVehicleSchema,
   assignPassengerSchema,
   movePassengerSchema,
   updateBatchSchema,
@@ -147,6 +148,18 @@ describe('createBatchSchema', () => {
       createBatchSchema.parse({ ...validInput, pickupHub: '' }),
     ).toThrow();
   });
+
+  it('rejects impossible service dates instead of normalizing them', () => {
+    expect(() =>
+      createBatchSchema.parse({ ...validInput, serviceDate: '2026-02-30' }),
+    ).toThrow('Service date must be a valid date');
+  });
+
+  it('rejects malformed time-window timestamps before they reach Date coercion', () => {
+    expect(() =>
+      createBatchSchema.parse({ ...validInput, timeWindowStart: 'not-a-date' }),
+    ).toThrow('Start time must be a valid UTC timestamp');
+  });
 });
 
 // ── createVehicleSchema ───────────────────────────────────────
@@ -182,6 +195,54 @@ describe('createVehicleSchema', () => {
         capacity: 4,
       }),
     ).toThrow();
+  });
+
+  it('normalizes phone inputs to E.164 on input', () => {
+    const result = createVehicleSchema.parse({
+      batchId: '550e8400-e29b-41d4-a716-446655440000',
+      vehicleLabel: 'Van-1',
+      vehicleType: 'van',
+      driverMobileE164: '9876543210',
+      capacity: 12,
+    });
+    expect(result.driverMobileE164).toBe('+919876543210');
+  });
+
+  it('rejects invalid driver mobile numbers', () => {
+    expect(() =>
+      createVehicleSchema.parse({
+        batchId: '550e8400-e29b-41d4-a716-446655440000',
+        vehicleLabel: 'Van-1',
+        vehicleType: 'van',
+        driverMobileE164: '+91',
+        capacity: 12,
+      }),
+    ).toThrow('Invalid driver mobile number');
+  });
+
+  it('rejects impossible scheduled pickup timestamps instead of normalizing them', () => {
+    expect(() =>
+      createVehicleSchema.parse({
+        batchId: '550e8400-e29b-41d4-a716-446655440000',
+        vehicleLabel: 'Van-1',
+        vehicleType: 'van',
+        capacity: 12,
+        scheduledPickupAtUtc: '2026-02-30T08:00:00Z',
+      }),
+    ).toThrow('Scheduled pickup time must be a valid UTC timestamp');
+  });
+
+  it('rejects scheduled drop times that are not after pickup', () => {
+    expect(() =>
+      createVehicleSchema.parse({
+        batchId: '550e8400-e29b-41d4-a716-446655440000',
+        vehicleLabel: 'Van-1',
+        vehicleType: 'van',
+        capacity: 12,
+        scheduledPickupAtUtc: '2026-05-01T10:00:00Z',
+        scheduledDropAtUtc: '2026-05-01T09:00:00Z',
+      }),
+    ).toThrow('Scheduled drop time must be after pickup time');
   });
 });
 
@@ -278,6 +339,33 @@ describe('Schema defaults', () => {
         capacity: 101,
       }),
     ).toThrow();
+  });
+
+  it('updateBatchSchema rejects impossible service dates', () => {
+    expect(() =>
+      updateBatchSchema.parse({
+        batchId: '550e8400-e29b-41d4-a716-446655440000',
+        serviceDate: '2026-02-30',
+      }),
+    ).toThrow('Service date must be a valid date');
+  });
+
+  it('updateVehicleSchema normalizes vendor contact numbers to E.164', () => {
+    const result = updateVehicleSchema.parse({
+      vehicleAssignmentId: '550e8400-e29b-41d4-a716-446655440000',
+      vendorContactE164: ' +91 98765 43210 ',
+    });
+    expect(result.vendorContactE164).toBe('+919876543210');
+  });
+
+  it('updateVehicleSchema rejects inverted pickup and drop timestamps', () => {
+    expect(() =>
+      updateVehicleSchema.parse({
+        vehicleAssignmentId: '550e8400-e29b-41d4-a716-446655440000',
+        scheduledPickupAtUtc: '2026-05-01T10:00:00Z',
+        scheduledDropAtUtc: '2026-05-01T09:00:00Z',
+      }),
+    ).toThrow('Scheduled drop time must be after pickup time');
   });
 });
 

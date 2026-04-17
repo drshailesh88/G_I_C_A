@@ -85,6 +85,7 @@
 - Validation modules must not trust `new Date(...)` coercion as a parser. JavaScript silently normalizes impossible calendar inputs like `2026-02-30`, and optional update date fields that accept `''` become malformed `Invalid Date` writes unless the schema enforces canonical non-empty ISO date/date-time strings and range checks itself.
 - Event and settings validation boundaries must validate real IANA timezone names too. Hidden form fields or direct JSON callers can otherwise persist poisoned timezone strings that later throw `RangeError` in date-formatting and dashboard reads.
 - Contact-method validators must normalize or validate trimmed phone inputs before using truthy/length checks for "at least one contact" rules. Whitespace-only phone strings otherwise satisfy the refinement, normalize to empty later, and let direct callers persist unreachable person records or clear every usable contact channel.
+- Logistics validation boundaries must treat service dates and UTC timestamps as structured fields and normalize transport contact numbers at parse time. Otherwise impossible dates silently normalize, malformed timestamps reach downstream `new Date(...)` writes, and driver/vendor phones persist as unusable non-E.164 strings.
 
 ## Iteration log
 
@@ -502,3 +503,9 @@
 - Attacks tried: 6
 - Bugs found: 2
 - Key finding: the public registration validator accepted invalid phone strings, boolean-coerced ages, and unsafe `preferences` objects, so direct callers could bypass the intended E.164/JSONB boundary and only fail later during normalization or persistence.
+
+## 2026-04-17T21:03:25Z — src/lib/validations/transport.ts — transport validation boundary hardening
+- Verdict: hardened
+- Attacks tried: 8
+- Bugs found: 3
+- Key finding: the transport validator accepted impossible service dates, malformed or inverted UTC schedule fields, and raw transport contact strings, so direct callers could normalize to the wrong calendar day, hit later Date-write failures, or persist unusable non-E.164 driver/vendor numbers.
