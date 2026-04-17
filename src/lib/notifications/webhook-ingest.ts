@@ -12,7 +12,7 @@
 import { parseResendWebhook, parseEvolutionWebhook } from './webhook-parsers';
 import { insertDeliveryEvent, findLogByProviderMessageId, updateLogStatus } from './delivery-event-queries';
 import { pushToDlq } from './webhook-dlq';
-import type { NotificationStatus } from './types';
+import type { NotificationStatus, ProviderName } from './types';
 
 /**
  * Ingest an email status webhook from Resend.
@@ -68,10 +68,10 @@ async function processDeliveryEvent(
   timestamp: string,
   rawPayload: unknown,
   expectedChannel: 'email' | 'whatsapp',
-  provider: string,
+  provider: ProviderName,
 ): Promise<void> {
   try {
-    const logRow = await findLogByProviderMessageId(providerMessageId);
+    const logRow = await findLogByProviderMessageId(providerMessageId, provider);
     if (!logRow) return;
 
     // Channel mismatch guard

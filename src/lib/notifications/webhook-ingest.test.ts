@@ -50,6 +50,7 @@ describe('webhook ingest', () => {
       },
     });
 
+    expect(findLogByProviderMessageId).toHaveBeenCalledWith('shared-provider-id', 'evolution_api');
     expect(insertDeliveryEvent).not.toHaveBeenCalled();
     expect(updateLogStatus).not.toHaveBeenCalled();
   });
@@ -72,6 +73,7 @@ describe('webhook ingest', () => {
       },
     });
 
+    expect(findLogByProviderMessageId).toHaveBeenCalledWith('msg-1', 'resend');
     expect(insertDeliveryEvent).toHaveBeenCalledWith({
       notificationLogId: 'log-1',
       eventType: 'delivered',
@@ -122,6 +124,26 @@ describe('webhook ingest', () => {
       },
     });
 
+    expect(findLogByProviderMessageId).toHaveBeenCalledWith('unknown-msg', 'resend');
+    expect(insertDeliveryEvent).not.toHaveBeenCalled();
+    expect(updateLogStatus).not.toHaveBeenCalled();
+  });
+
+  it('should ignore a WhatsApp webhook that resolves to a different WhatsApp provider log', async () => {
+    findLogByProviderMessageId.mockResolvedValue(null);
+
+    await ingestWhatsAppStatus({
+      provider: 'evolution_api',
+      rawPayload: {
+        event: 'messages.update',
+        data: {
+          key: { id: 'shared-provider-id' },
+          update: { status: 3 },
+        },
+      },
+    });
+
+    expect(findLogByProviderMessageId).toHaveBeenCalledWith('shared-provider-id', 'evolution_api');
     expect(insertDeliveryEvent).not.toHaveBeenCalled();
     expect(updateLogStatus).not.toHaveBeenCalled();
   });

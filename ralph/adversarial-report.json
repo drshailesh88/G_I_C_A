@@ -2864,5 +2864,54 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/delivery-event-queries.ts",
+    "module": "src/lib/notifications/delivery-event-queries.ts",
+    "attacked_at": "2026-04-17T17:09:14Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "provider_scope_confusion",
+        "payload": "two whatsapp providers (`evolution_api` and `waba`) sharing the same upstream `providerMessageId`",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "list delivery events for a log under the wrong eventId",
+        "result": "blocked_by_existing_withEventScope_guard"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "providerMessageId containing SQL metacharacters and quote payloads",
+        "result": "blocked_by_parameterized_drizzle_queries"
+      },
+      {
+        "category": "race_condition",
+        "payload": "concurrent webhook status regressions against the same log id",
+        "result": "blocked_by_existing_db_level_status_cas"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized raw provider payload JSON inserted into delivery-event rows",
+        "result": "no_concrete_failure_reproduced_in_this_query_layer"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "not applicable to this non-auth notification query helper",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "provider_scope_confusion",
+        "description": "findLogByProviderMessageId queried `notification_log` by `providerMessageId` alone even though the schema only guarantees uniqueness on `(provider, provider_message_id)`. If `evolution_api` and `waba` emitted the same upstream message ID, a WhatsApp webhook could correlate to the other provider's log, append a delivery event, and advance the wrong notification status because the channel check still passed.",
+        "fix": "Scoped provider-message lookup by both `providerMessageId` and `provider`, and updated webhook ingest to pass the verified provider through that lookup path.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/delivery-event-queries.mutation-kill.test.ts > scopes the lookup by provider as well as provider message id; src/lib/notifications/webhook-ingest.test.ts > should ignore a WhatsApp webhook that resolves to a different WhatsApp provider log; src/lib/notifications/webhook-ingest.mutation-kill.test.ts > does not correlate a whatsapp webhook across providers that share a message id"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

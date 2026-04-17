@@ -48,6 +48,7 @@ vi.mock('@/lib/db/schema', () => ({
     eventId: 'eventId',
     status: 'status',
     providerMessageId: 'providerMessageId',
+    provider: 'provider',
   },
 }));
 
@@ -148,7 +149,7 @@ describe('findLogByProviderMessageId', () => {
   it('returns log when found', async () => {
     mockLimit.mockResolvedValueOnce([{ id: 'log-1', providerMessageId: 'msg-1' }]);
 
-    const result = await findLogByProviderMessageId('msg-1');
+    const result = await findLogByProviderMessageId('msg-1', 'resend');
 
     expect(result).toEqual({ id: 'log-1', providerMessageId: 'msg-1' });
   });
@@ -156,9 +157,27 @@ describe('findLogByProviderMessageId', () => {
   it('returns null when not found', async () => {
     mockLimit.mockResolvedValueOnce([]);
 
-    const result = await findLogByProviderMessageId('nonexistent');
+    const result = await findLogByProviderMessageId('nonexistent', 'resend');
 
     expect(result).toBeNull();
+  });
+
+  it('scopes the lookup by provider as well as provider message id', async () => {
+    await findLogByProviderMessageId('shared-provider-id', 'waba');
+
+    expect(mockWhere).toHaveBeenCalledWith(expect.objectContaining({
+      _type: 'and',
+      args: expect.arrayContaining([
+        expect.objectContaining({
+          _type: 'eq',
+          args: ['providerMessageId', 'shared-provider-id'],
+        }),
+        expect.objectContaining({
+          _type: 'eq',
+          args: ['provider', 'waba'],
+        }),
+      ]),
+    }));
   });
 });
 

@@ -10,7 +10,7 @@ import { db } from '@/lib/db';
 import { notificationDeliveryEvents, notificationLog } from '@/lib/db/schema';
 import { eq, desc, and, sql } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
-import type { NotificationStatus } from './types';
+import type { NotificationStatus, ProviderName } from './types';
 
 export type InsertDeliveryEventInput = {
   notificationLogId: string;
@@ -61,11 +61,17 @@ export async function listDeliveryEventsForLog(
  * Find a notification_log row by provider message ID.
  * Returns the log row or null if not found.
  */
-export async function findLogByProviderMessageId(providerMessageId: string) {
+export async function findLogByProviderMessageId(
+  providerMessageId: string,
+  provider: ProviderName,
+) {
   const [row] = await db
     .select()
     .from(notificationLog)
-    .where(eq(notificationLog.providerMessageId, providerMessageId))
+    .where(and(
+      eq(notificationLog.providerMessageId, providerMessageId),
+      eq(notificationLog.provider, provider),
+    ))
     .limit(1);
 
   return row ?? null;

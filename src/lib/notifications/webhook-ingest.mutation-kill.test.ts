@@ -58,6 +58,7 @@ describe('ingestEmailStatus', () => {
 
     await ingestEmailStatus({ provider: 'resend', rawPayload: {} });
 
+    expect(mockedFindLog).toHaveBeenCalledWith('msg-1', 'resend');
     expect(mockedInsertDeliveryEvent).not.toHaveBeenCalled();
   });
 
@@ -74,6 +75,7 @@ describe('ingestEmailStatus', () => {
 
     await ingestEmailStatus({ provider: 'resend', rawPayload: {} });
 
+    expect(mockedFindLog).toHaveBeenCalledWith('msg-1', 'resend');
     expect(mockedInsertDeliveryEvent).not.toHaveBeenCalled();
   });
 
@@ -90,6 +92,7 @@ describe('ingestEmailStatus', () => {
 
     await ingestEmailStatus({ provider: 'resend', rawPayload: { type: 'email.delivered' } });
 
+    expect(mockedFindLog).toHaveBeenCalledWith('msg-1', 'resend');
     expect(mockedInsertDeliveryEvent).toHaveBeenCalledWith({
       notificationLogId: 'log-1',
       eventType: 'delivered',
@@ -108,6 +111,7 @@ describe('ingestEmailStatus', () => {
 
     await ingestEmailStatus({ provider: 'resend', rawPayload: { type: 'email.sent' } });
 
+    expect(mockedFindLog).toHaveBeenCalledWith('msg-1', 'resend');
     expect(mockedPushToDlq).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: 'resend',
@@ -141,6 +145,7 @@ describe('ingestWhatsAppStatus', () => {
 
     await ingestWhatsAppStatus({ provider: 'evolution_api', rawPayload: { event: 'messages.update' } });
 
+    expect(mockedFindLog).toHaveBeenCalledWith('wa-msg-1', 'evolution_api');
     expect(mockedInsertDeliveryEvent).toHaveBeenCalledWith({
       notificationLogId: 'log-1',
       eventType: 'delivered',
@@ -161,6 +166,7 @@ describe('ingestWhatsAppStatus', () => {
 
     await ingestWhatsAppStatus({ provider: 'evolution_api', rawPayload: {} });
 
+    expect(mockedFindLog).toHaveBeenCalledWith('wa-msg-1', 'evolution_api');
     expect(mockedInsertDeliveryEvent).not.toHaveBeenCalled();
   });
 
@@ -174,6 +180,7 @@ describe('ingestWhatsAppStatus', () => {
 
     await ingestWhatsAppStatus({ provider: 'evolution_api', rawPayload: {} });
 
+    expect(mockedFindLog).toHaveBeenCalledWith('wa-msg-1', 'evolution_api');
     expect(mockedPushToDlq).toHaveBeenCalledWith(
       expect.objectContaining({
         provider: 'evolution_api',
@@ -181,5 +188,20 @@ describe('ingestWhatsAppStatus', () => {
         errorMessage: 'string error',
       }),
     );
+  });
+
+  it('does not correlate a whatsapp webhook across providers that share a message id', async () => {
+    mockedParseEvolution.mockReturnValue({
+      providerMessageId: 'shared-provider-id',
+      eventType: 'delivered',
+      timestamp: '2026-01-01T00:00:00Z',
+    });
+    mockedFindLog.mockResolvedValue(null);
+
+    await ingestWhatsAppStatus({ provider: 'waba', rawPayload: { event: 'messages.update' } });
+
+    expect(mockedFindLog).toHaveBeenCalledWith('shared-provider-id', 'waba');
+    expect(mockedInsertDeliveryEvent).not.toHaveBeenCalled();
+    expect(mockedUpdateLogStatus).not.toHaveBeenCalled();
   });
 });
