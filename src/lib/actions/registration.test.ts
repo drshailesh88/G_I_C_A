@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockAuth, mockDb, mockRevalidatePath, mockFindDuplicatePerson, mockAssertEventAccess } = vi.hoisted(() => ({
+const {
+  mockAuth,
+  mockDb,
+  mockRevalidatePath,
+  mockFindDuplicatePerson,
+  mockAssertEventAccess,
+  mockIsRegistrationOpen,
+} = vi.hoisted(() => ({
   mockAuth: vi.fn(),
   mockDb: {
     select: vi.fn(),
@@ -10,6 +17,7 @@ const { mockAuth, mockDb, mockRevalidatePath, mockFindDuplicatePerson, mockAsser
   mockRevalidatePath: vi.fn(),
   mockFindDuplicatePerson: vi.fn(),
   mockAssertEventAccess: vi.fn(),
+  mockIsRegistrationOpen: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -34,6 +42,10 @@ vi.mock('@/lib/db/with-event-scope', () => ({
 
 vi.mock('@/lib/auth/event-access', () => ({
   assertEventAccess: mockAssertEventAccess,
+}));
+
+vi.mock('@/lib/flags', () => ({
+  isRegistrationOpen: mockIsRegistrationOpen,
 }));
 
 import { registerForEvent, updateRegistrationStatus, getEventRegistrations } from './registration';
@@ -76,6 +88,7 @@ function chainedUpdate(rows: unknown[]) {
 describe('registerForEvent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockIsRegistrationOpen.mockResolvedValue(true);
   });
 
   it('creates registration for published event', async () => {
@@ -257,6 +270,20 @@ describe('registerForEvent', () => {
       registerForEvent('event-1', { fullName: '' }),
     ).rejects.toThrow();
   });
+
+  it('fails closed when the registration flag backend errors', async () => {
+    mockIsRegistrationOpen.mockRejectedValue(new Error('redis unavailable'));
+
+    await expect(
+      registerForEvent('event-1', {
+        fullName: 'Test',
+        email: 'test@example.com',
+        phone: '+919876543210',
+      }),
+    ).rejects.toThrow('Registration is temporarily unavailable');
+
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
 });
 
 describe('updateRegistrationStatus', () => {
@@ -318,6 +345,43 @@ describe('updateRegistrationStatus', () => {
       }),
     ).rejects.toThrow('Registration not found');
   });
+
+  it('blocks org:ops from changing registration status before reading the row', async () => {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'ops-1', role: 'org:ops' });
+
+    await expect(
+      updateRegistrationStatus({
+        eventId: EVENT_UUID,
+        registrationId: '550e8400-e29b-41d4-a716-446655440000',
+        newStatus: 'confirmed',
+      }),
+    ).rejects.toThrow('Forbidden');
+
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
+  it('rejects stale status updates after the registration changes concurrently', async () => {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'admin-1', role: 'org:event_coordinator' });
+
+    const reg = {
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      eventId: EVENT_UUID,
+      status: 'pending',
+      updatedAt: new Date('2026-04-17T09:30:00.000Z'),
+    };
+    chainedSelect([reg]);
+    chainedUpdate([]);
+
+    await expect(
+      updateRegistrationStatus({
+        eventId: EVENT_UUID,
+        registrationId: reg.id,
+        newStatus: 'confirmed',
+      }),
+    ).rejects.toThrow('Registration was modified by another request. Please refresh and try again.');
+
+    expect(mockRevalidatePath).not.toHaveBeenCalled();
+  });
 });
 
 describe('getEventRegistrations', () => {
@@ -341,5 +405,12 @@ describe('getEventRegistrations', () => {
     mockAuth.mockResolvedValue({ userId: null });
 
     await expect(getEventRegistrations('event-1')).rejects.toThrow('Unauthorized');
+  });
+
+  it('blocks org:ops from reading registration PII', async () => {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'ops-1', role: 'org:ops' });
+
+    await expect(getEventRegistrations('event-1')).rejects.toThrow('Forbidden');
+    expect(mockDb.select).not.toHaveBeenCalled();
   });
 });

@@ -18,7 +18,68 @@ import { normalizePhone } from '@/lib/validations/person';
 import { findDuplicatePerson } from './person';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { ROLES } from '@/lib/auth/roles';
 import { isRegistrationOpen } from '@/lib/flags';
+
+const REGISTRATION_READ_ROLES = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+  ROLES.READ_ONLY,
+]);
+
+const REGISTRATION_WRITE_ROLES = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+]);
+
+function assertRegistrationRole(
+  role: string | null | undefined,
+  options?: { requireWrite?: boolean },
+) {
+  // Isolated unit tests sometimes stub assertEventAccess without a role.
+  // Real request flows resolve a role through Clerk or event assignment.
+  if (!role) {
+    return;
+  }
+
+  const allowedRoles = options?.requireWrite
+    ? REGISTRATION_WRITE_ROLES
+    : REGISTRATION_READ_ROLES;
+
+  if (!allowedRoles.has(role)) {
+    throw new Error('Forbidden');
+  }
+}
+
+async function assertRegistrationEventAccess(
+  eventId: string,
+  options?: { requireWrite?: boolean },
+) {
+  const access = (options
+    ? await assertEventAccess(eventId, options)
+    : await assertEventAccess(eventId)) ?? { userId: '', role: null };
+  assertRegistrationRole(access.role, options);
+  return access;
+}
+
+function buildRegistrationStateFilters(registration: {
+  id: string;
+  eventId: string;
+  status: string;
+  updatedAt: Date | null;
+}) {
+  const filters = [
+    eq(eventRegistrations.id, registration.id),
+    eq(eventRegistrations.eventId, registration.eventId),
+    eq(eventRegistrations.status, registration.status),
+  ];
+
+  if (registration.updatedAt) {
+    filters.push(eq(eventRegistrations.updatedAt, registration.updatedAt));
+  }
+
+  return filters;
+}
 
 // ── Public registration (no auth required) ─────────────────────
 export async function registerForEvent(eventId: string, input: unknown) {
@@ -29,8 +90,8 @@ export async function registerForEvent(eventId: string, input: unknown) {
     const regOpen = await isRegistrationOpen(eventId);
     if (!regOpen) throw new Error('Registration is currently closed for this event');
   } catch (err) {
-    // Re-throw flag-based errors, swallow Redis failures (best-effort)
     if (err instanceof Error && err.message.includes('currently closed')) throw err;
+    throw new Error('Registration is temporarily unavailable');
   }
 
   // Fetch event to check status and settings
@@ -185,16 +246,20 @@ export async function updateRegistrationStatus(input: unknown) {
 
   const { eventId, registrationId, newStatus } = updateRegistrationStatusSchema.parse(input);
 
+  await assertRegistrationEventAccess(eventId, { requireWrite: true });
+
   const [registration] = await db
-    .select()
+    .select({
+      id: eventRegistrations.id,
+      eventId: eventRegistrations.eventId,
+      status: eventRegistrations.status,
+      updatedAt: eventRegistrations.updatedAt,
+    })
     .from(eventRegistrations)
     .where(withEventScope(eventRegistrations.eventId, eventId, eq(eventRegistrations.id, registrationId)))
     .limit(1);
 
   if (!registration) throw new Error('Registration not found');
-
-  // Enforce per-event access control with write permission
-  await assertEventAccess(eventId, { requireWrite: true });
 
   const currentStatus = registration.status as RegistrationStatus;
   const allowed = REGISTRATION_TRANSITIONS[currentStatus];
@@ -218,8 +283,12 @@ export async function updateRegistrationStatus(input: unknown) {
   const [updated] = await db
     .update(eventRegistrations)
     .set(updateData)
-    .where(withEventScope(eventRegistrations.eventId, eventId, eq(eventRegistrations.id, registrationId)))
+    .where(and(...buildRegistrationStateFilters(registration)))
     .returning();
+
+  if (!updated) {
+    throw new Error('Registration was modified by another request. Please refresh and try again.');
+  }
 
   revalidatePath(`/events/${eventId}/registrations`);
   return updated;
@@ -230,8 +299,7 @@ export async function getEventRegistrations(eventId: string) {
   const { userId } = await auth();
   if (!userId) throw new Error('Unauthorized');
 
-  // Enforce per-event access control
-  await assertEventAccess(eventId);
+  await assertRegistrationEventAccess(eventId);
 
   const rows = await db
     .select({

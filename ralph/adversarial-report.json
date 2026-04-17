@@ -1210,5 +1210,83 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/registration.ts",
+    "module": "src/lib/actions/registration.ts",
+    "attacked_at": "2026-04-17T10:30:54Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "role_escalation",
+        "payload": "call getEventRegistrations and updateRegistrationStatus with org:ops event access",
+        "result": "succeeded"
+      },
+      {
+        "category": "feature_flag_fail_open",
+        "payload": "make isRegistrationOpen throw Redis/provider errors during public registration",
+        "result": "succeeded"
+      },
+      {
+        "category": "info_leakage",
+        "payload": "probe updateRegistrationStatus with a valid eventId/registrationId pair before authorization completes",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "concurrent registration status transition after the row changed in another request",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "use a registrationId from another event while targeting the active eventId",
+        "result": "blocked_by_existing_event_scope"
+      },
+      {
+        "category": "injection",
+        "payload": "HTML/SQL metacharacters in public registration name/email/organization fields",
+        "result": "blocked_by_zod_and_parameterized_queries"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized public registration strings beyond schema limits",
+        "result": "blocked_by_schema_limits"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "role_escalation",
+        "description": "Registration actions trusted generic assertEventAccess, so org:ops callers could bypass the hidden UI and read registration PII or directly transition attendee statuses.",
+        "fix": "Added registration-module read/write role allowlists on top of event access. Reads now require super_admin, event_coordinator, or read_only; writes require super_admin or event_coordinator.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/registration.test.ts > blocks org:ops from changing registration status before reading the row; blocks org:ops from reading registration PII"
+      },
+      {
+        "severity": "medium",
+        "category": "feature_flag_fail_open",
+        "description": "registerForEvent swallowed registration_open backend failures, so a Redis/provider outage silently reopened public registration instead of failing closed.",
+        "fix": "Changed public registration to rethrow explicit closed-state errors and fail closed with a temporary-unavailable error for all other flag backend failures.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/registration.test.ts > fails closed when the registration flag backend errors"
+      },
+      {
+        "severity": "medium",
+        "category": "info_leakage",
+        "description": "updateRegistrationStatus fetched the registration before enforcing event/module authorization, allowing unauthorized callers to distinguish missing rows from forbidden access and causing unnecessary DB work before the permission check.",
+        "fix": "Moved registration access enforcement ahead of the registration lookup so forbidden callers are rejected before any row read.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/registration.test.ts > blocks org:ops from changing registration status before reading the row"
+      },
+      {
+        "severity": "medium",
+        "category": "stale_state",
+        "description": "updateRegistrationStatus fetched the row under event scope but wrote back without any optimistic-lock guard, so a stale transition could overwrite a newer status change from another request.",
+        "fix": "Added compare-and-swap filters on registration id/eventId/status/updatedAt and fail loudly when a concurrent writer changed the row first.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/registration.test.ts > rejects stale status updates after the registration changes concurrently"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

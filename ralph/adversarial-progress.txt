@@ -29,6 +29,9 @@
 - Program actions cannot rely on generic event write access. Halls, sessions, assignments, invites, versioning, and schedule reads need program-specific role allowlists or `org:ops` can bypass the UI and operate on scientific-program data directly.
 - Session and invite lifecycle writes need optimistic-lock filters on `updatedAt` plus current status. Fetch-then-update by bare id lets stale editors or racing responders overwrite newer program state.
 - Program assignment/invite creation must reject archived or anonymized people. UUID shape plus a valid FK is not enough when the people record has been retired from active use.
+- Registration actions cannot rely on generic event access. Without module-specific role allowlists, `org:ops` can read attendee PII and mutate registration status directly.
+- Public flag gates must fail closed when the provider/backend errors. Swallowing `registration_open` lookup failures silently reopens registration during outages.
+- Registration status transitions must enforce access before the row lookup and update with compare-and-swap filters on `eventId`/`status`/`updatedAt`, or unauthorized callers can probe existence and stale editors can clobber newer state.
 
 ## Iteration log
 
@@ -122,3 +125,9 @@
 - Attacks tried: 10
 - Bugs found: 5
 - Key finding: generic event access let `org:ops` drive program actions directly, and stale session/invite writes could overwrite newer state while archived people could still be reattached to active program workflows.
+
+## 2026-04-17T10:30:54Z — src/lib/actions/registration.ts — registration RBAC, fail-closed flag, and stale-state hardening
+- Verdict: hardened
+- Attacks tried: 7
+- Bugs found: 4
+- Key finding: generic event access let `org:ops` read registration PII and mutate statuses, the public registration gate failed open when the flag backend errored, and status transitions could both probe existence before auth and overwrite newer state.
