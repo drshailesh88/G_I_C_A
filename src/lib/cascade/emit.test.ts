@@ -1,9 +1,20 @@
 // Mock Inngest client (not used in test mode, but imported by emit.ts)
+const mockSend = vi.fn().mockResolvedValue({ ids: ['test-id'] });
+const mockCaptureInngestEvent = vi.fn().mockResolvedValue(undefined);
+const mockAttachVariablesSnapshotIfNeeded = vi.fn(async (_eventName: unknown, payload: unknown) => payload);
+const mockCaptureCascadeError = vi.fn();
+
 vi.mock('../inngest/client', () => ({
-  inngest: { send: vi.fn().mockResolvedValue({ ids: ['test-id'] }) },
+  inngest: { send: (...args: unknown[]) => mockSend(...args) },
+}));
+vi.mock('../inngest/captured-events', () => ({
+  captureInngestEvent: (...args: unknown[]) => mockCaptureInngestEvent(...args),
+}));
+vi.mock('./variables-snapshot', () => ({
+  attachVariablesSnapshotIfNeeded: (...args: unknown[]) => mockAttachVariablesSnapshotIfNeeded(...args),
 }));
 vi.mock('../sentry', () => ({
-  captureCascadeError: vi.fn(),
+  captureCascadeError: (...args: unknown[]) => mockCaptureCascadeError(...args),
 }));
 
 import { beforeEach, afterAll, describe, expect, it, vi } from 'vitest';
@@ -22,6 +33,14 @@ enableTestMode();
 
 beforeEach(() => {
   clearCascadeHandlers();
+  mockSend.mockReset();
+  mockSend.mockResolvedValue({ ids: ['test-id'] });
+  mockCaptureInngestEvent.mockReset();
+  mockCaptureInngestEvent.mockResolvedValue(undefined);
+  mockAttachVariablesSnapshotIfNeeded.mockReset();
+  mockAttachVariablesSnapshotIfNeeded.mockImplementation(async (_eventName: unknown, payload: unknown) => payload);
+  mockCaptureCascadeError.mockReset();
+  enableTestMode();
 });
 
 afterAll(() => {
@@ -126,5 +145,88 @@ describe('Cascade event emitter', () => {
 
     expect(travelHandler).toHaveBeenCalledOnce();
     expect(accomHandler).not.toHaveBeenCalled();
+  });
+
+  it('blocks malformed production payloads before they reach Inngest', async () => {
+    disableTestMode();
+
+    const result = await emitCascadeEvent(
+      CASCADE_EVENTS.TRAVEL_UPDATED,
+      'event-1',
+      { type: 'user', id: 'user_123' },
+      { travelRecordId: 'tr-1', changeSummary: { city: { from: 'A', to: 'B' } } },
+    );
+
+    expect(mockSend).not.toHaveBeenCalled();
+    expect(mockCaptureInngestEvent).not.toHaveBeenCalled();
+    expect(result.handlersRun).toBe(0);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toMatch(/validation failed/i);
+    expect(mockCaptureCascadeError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        handler: 'inngest-emit',
+        eventId: 'event-1',
+        cascadeEvent: CASCADE_EVENTS.TRAVEL_UPDATED,
+      }),
+    );
+  });
+
+  it('rejects registration payloads whose nested eventId does not match the envelope', async () => {
+    disableTestMode();
+
+    const result = await emitCascadeEvent(
+      CASCADE_EVENTS.REGISTRATION_CREATED,
+      'event-1',
+      { type: 'system', id: 'system:cascade' },
+      {
+        registrationId: 'reg-1',
+        personId: 'person-1',
+        eventId: 'event-2',
+      },
+    );
+
+    expect(mockSend).not.toHaveBeenCalled();
+    expect(result.handlersRun).toBe(0);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toMatch(/must match the envelope eventId/i);
+  });
+
+  it('falls back to the original payload when variable snapshot enrichment fails', async () => {
+    disableTestMode();
+    mockAttachVariablesSnapshotIfNeeded.mockRejectedValueOnce(new Error('snapshot offline'));
+
+    const payload = {
+      travelRecordId: 'tr-1',
+      personId: 'person-1',
+      changeSummary: { city: { from: 'A', to: 'B' } },
+    };
+
+    const result = await emitCascadeEvent(
+      CASCADE_EVENTS.TRAVEL_UPDATED,
+      'event-1',
+      { type: 'user', id: 'user_123' },
+      payload,
+    );
+
+    expect(result).toEqual({ handlersRun: 1, errors: [] });
+    expect(mockSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: CASCADE_EVENTS.TRAVEL_UPDATED,
+        data: {
+          eventId: 'event-1',
+          actor: { type: 'user', id: 'user_123' },
+          payload,
+        },
+      }),
+    );
+    expect(mockCaptureCascadeError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        handler: 'cascade-emit-variables-snapshot',
+        eventId: 'event-1',
+        cascadeEvent: CASCADE_EVENTS.TRAVEL_UPDATED,
+      }),
+    );
   });
 });

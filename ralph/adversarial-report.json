@@ -1802,5 +1802,70 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/cascade/emit.ts",
+    "module": "src/lib/cascade/emit.ts",
+    "attacked_at": "2026-04-17T13:25:16Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "conference/travel.updated with missing personId but otherwise plausible changeSummary payload",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "conference/registration.created with envelope eventId=A and payload.eventId=B",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "variables snapshot lookup throws before enqueue while the base cascade payload is otherwise valid",
+        "result": "succeeded"
+      },
+      {
+        "category": "injection",
+        "payload": "HTML/SQL metacharacters inside payload strings at the emit boundary",
+        "result": "no_exploitable_failure_in_emitter_layer"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "invoke emitter with synthetic actor identities",
+        "result": "not_applicable_no_auth_surface_in_internal_helper"
+      },
+      {
+        "category": "race_condition",
+        "payload": "concurrent duplicate emits for the same payload",
+        "result": "no_emitter_local_dedupe_bug_beyond_downstream_idempotency_risks"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "malformed_input",
+        "description": "emitCascadeEvent queued any record-shaped payload to Inngest without checking the event-specific required fields, so direct callers could enqueue malformed cascade jobs that only failed later in workers after polluting captured-event state and retry paths.",
+        "fix": "Added per-event production-time payload validation at the emit boundary and reject malformed envelopes before send/capture.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/cascade/emit.test.ts > blocks malformed production payloads before they reach Inngest"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "conference/registration.created accepted a nested payload.eventId that could differ from the envelope eventId, allowing a forged cross-tenant registration payload to be queued under another event scope.",
+        "fix": "Require registration cascade payload.eventId to match the emitted envelope eventId before enqueue.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/cascade/emit.test.ts > rejects registration payloads whose nested eventId does not match the envelope"
+      },
+      {
+        "severity": "medium",
+        "category": "availability",
+        "description": "Optional variable-snapshot enrichment happened before inngest.send and any lookup failure aborted the entire cascade emit, dropping required downstream flags and notifications instead of sending the base event.",
+        "fix": "Wrapped snapshot attachment in a fail-open fallback that captures the error and sends the original payload when enrichment is unavailable.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/cascade/emit.test.ts > falls back to the original payload when variable snapshot enrichment fails"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

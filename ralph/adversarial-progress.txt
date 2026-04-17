@@ -38,6 +38,8 @@
 - Registration status transitions must enforce access before the row lookup and update with compare-and-swap filters on `eventId`/`status`/`updatedAt`, or unauthorized callers can probe existence and stale editors can clobber newer state.
 - Clerk organization-membership invariants cannot trust a single 100-row page or a bare read-before-write. Paginate membership queries fully and serialize destructive org membership mutations, or large orgs and concurrent admin changes can strip the last super admin.
 - Transport assignment actions must event-scope both the `travelRecordId`/`personId` pair and the target `vehicleAssignmentId`/`batchId` pair. UUID-shaped foreign keys alone let direct calls graft passengers onto another event’s travel or the wrong batch.
+- Cascade emitters must validate event-specific payload shape and any duplicated tenant identifiers before enqueueing background work. Trusting downstream handlers lets malformed or cross-tenant events pollute Inngest/captured-event state before they fail.
+- Optional enrichment at emit time must fail open. If snapshot/contact lookups throw before enqueue, the durable cascade side effects are lost even though the base event was otherwise valid.
 - QR payload helpers must enforce the same length budget and canonical URL shape as the attendance validators. If they trust URL normalization or unbounded base URLs, malformed `../checkin`/duplicate-param payloads and self-invalidating oversized QR codes slip through.
 - Shared event auth helpers must validate UUID event scopes themselves and require a real event row even for super-admin bypasses. Trusting callers or bypassing existence checks lets malformed or phantom event IDs reach downstream auth/DB code.
 - Automation payload sanitizers must recurse through nested objects and arrays. Top-level-only filtering leaks tokens/passwords into template variables and persisted notification logs.
@@ -188,3 +190,9 @@
 - Attacks tried: 5
 - Bugs found: 2
 - Key finding: the automation utility treated non-plain objects like `Date` and `Map` as equal to `{}`, and its raw `|`-delimited idempotency keys let malformed present values collide with missing or adjacent segments, suppressing distinct notifications.
+
+## 2026-04-17T13:25:16Z — src/lib/cascade/emit.ts — emit boundary validation and fail-open snapshot hardening
+- Verdict: hardened
+- Attacks tried: 6
+- Bugs found: 3
+- Key finding: the emitter trusted any record-shaped payload and nested registration event scope, and it dropped whole cascade jobs when optional snapshot enrichment failed before `inngest.send`.
