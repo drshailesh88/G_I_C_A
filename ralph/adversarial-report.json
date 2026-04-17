@@ -2436,5 +2436,75 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/exports/emergency-kit.ts",
+    "module": "src/lib/exports/emergency-kit.ts",
+    "attacked_at": "2026-04-17T16:06:05Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "non-UUID eventId values passed directly to storage-key builders and export helpers",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "session row in event A referencing hallId from event B during program export",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "generateEmergencyKit(event A, storageKeyOverride=events/eventB/emergency-kit/pre-event-backup.zip)",
+        "result": "succeeded"
+      },
+      {
+        "category": "csv_injection",
+        "payload": "formula payloads starting with =, +, -, @ in exported CSV fields",
+        "result": "blocked_existing_csv_escaping"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "large empty/full export sets and fallback buffered ZIP path",
+        "result": "no_concrete_failure_reproduced_in_module_tests"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "invoke helper directly without Clerk context",
+        "result": "not_applicable_internal_export_helper_has_no_auth_surface"
+      },
+      {
+        "category": "stale_state",
+        "payload": "concurrent source-table changes during emergency-kit generation",
+        "result": "no_deterministic_failure_reproduced"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "The emergency-kit helper trusted raw eventId strings in its own exported builders and query helpers. Direct callers could build poisoned `events/<payload>/emergency-kit/...` object keys and reach UUID-backed export queries before the module itself failed closed.",
+        "fix": "Added canonical event UUID validation at the emergency-kit module boundary and reused the validated eventId across every exported helper and storage-key builder.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/exports/emergency-kit.test.ts > buildEmergencyKitStorageKey rejects a malformed eventId; src/lib/exports/emergency-kit.test.ts > generateAttendeeCsv rejects a malformed eventId before database access"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "generateProgramJson joined halls by hallId only. A bad or legacy session row in the active event could leak another event's hall name into `program.json` if it referenced a foreign hall UUID.",
+        "fix": "Scoped the hall join with withEventScope(halls.eventId, eventId, eq(sessions.hallId, halls.id)) so program exports only resolve hall metadata from the active event.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/exports/emergency-kit.test.ts > generateProgramJson event-scopes joined halls to prevent cross-event leakage"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "generateEmergencyKit accepted arbitrary storageKeyOverride values. A direct caller could upload and presign an emergency-kit ZIP under another event's `events/<other-event>/emergency-kit/...` prefix, overwriting or borrowing a foreign tenant path.",
+        "fix": "Added strict override-key validation so only canonical `events/{eventId}/emergency-kit/<safe>.zip` paths for the active event are accepted.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/exports/emergency-kit.test.ts > generateEmergencyKit rejects a cross-event storageKeyOverride before exports or storage access"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

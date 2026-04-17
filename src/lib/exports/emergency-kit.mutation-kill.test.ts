@@ -80,7 +80,7 @@ vi.mock('@/lib/db/schema', () => {
       eventId: col('event_id'), sessionId: col('session_id'),
       personId: col('person_id'), role: col('role'),
     },
-    halls: { id: col('id'), name: col('name') },
+    halls: { id: col('id'), eventId: col('hall_event_id'), name: col('name') },
     issuedCertificates: {
       eventId: col('event_id'), storageKey: col('storage_key'),
       fileName: col('file_name'), certificateType: col('cert_type'),
@@ -138,7 +138,7 @@ import {
 
 // ── Helpers ───────────────────────────────────────────────────────
 
-const EID = 'evt-mk-001';
+const EID = '22222222-2222-4222-8222-222222222222';
 
 function createChain(rows: unknown[]) {
   const chain: Record<string, ReturnType<typeof vi.fn>> = {};
@@ -192,13 +192,20 @@ describe('emergency-kit mutation-kill', () => {
 
   describe('buildCronBackupStorageKey', () => {
     it('returns deterministic key with fixed filename', () => {
-      expect(buildCronBackupStorageKey('evt-abc')).toBe(
-        'events/evt-abc/emergency-kit/pre-event-backup.zip',
+      expect(buildCronBackupStorageKey(EID)).toBe(
+        'events/22222222-2222-4222-8222-222222222222/emergency-kit/pre-event-backup.zip',
       );
     });
 
     it('different eventIds produce different keys', () => {
-      expect(buildCronBackupStorageKey('evt-1')).not.toBe(buildCronBackupStorageKey('evt-2'));
+      expect(buildCronBackupStorageKey(EID)).not.toBe(
+        buildCronBackupStorageKey('33333333-3333-4333-8333-333333333333'),
+      );
+    });
+
+    it('rejects malformed event ids', () => {
+      expect(() => buildEmergencyKitStorageKey('not-a-uuid')).toThrow('Invalid event ID');
+      expect(() => buildCronBackupStorageKey('not-a-uuid')).toThrow('Invalid event ID');
     });
   });
 
@@ -786,6 +793,23 @@ describe('emergency-kit mutation-kill', () => {
       const data = JSON.parse((await generateProgramJson(EID)).toString());
       expect(data.sessions.map((s: { id: string }) => s.id)).toEqual(['a', 'b', 'c']);
     });
+
+    it('event-scopes hall joins so foreign hall ids cannot leak names', async () => {
+      setupDb(
+        [{ id: 's1', title: 'T', sessionType: 'talk', sessionDate: new Date('2026-04-10'), startAtUtc: null, endAtUtc: null, hallName: 'Hall A', track: null, status: 'scheduled', cmeCredits: null, parentSessionId: null }],
+        [],
+      );
+
+      await generateProgramJson(EID);
+
+      const hallJoinScoped = mockWithEventScope.mock.calls.some(
+        ([column, scopedEventId]) =>
+          (column as { name?: string } | undefined)?.name === 'hall_event_id'
+          && scopedEventId === EID,
+      );
+
+      expect(hallJoinScoped).toBe(true);
+    });
   });
 
   // ── generateCertificateKeysJson (L357, L359) ──────────────────
@@ -842,9 +866,23 @@ describe('emergency-kit mutation-kill', () => {
       const result = await generateEmergencyKit({
         eventId: EID,
         storageProvider: storage,
-        storageKeyOverride: 'events/evt-mk-001/emergency-kit/pre-event-backup.zip',
+        storageKeyOverride: 'events/22222222-2222-4222-8222-222222222222/emergency-kit/pre-event-backup.zip',
       });
-      expect(result.storageKey).toBe('events/evt-mk-001/emergency-kit/pre-event-backup.zip');
+      expect(result.storageKey).toBe('events/22222222-2222-4222-8222-222222222222/emergency-kit/pre-event-backup.zip');
+    });
+
+    it('rejects cross-event storageKeyOverride before export queries or storage calls', async () => {
+      const storage = stubStorageNoStream();
+
+      await expect(generateEmergencyKit({
+        eventId: EID,
+        storageProvider: storage,
+        storageKeyOverride: 'events/33333333-3333-4333-8333-333333333333/emergency-kit/pre-event-backup.zip',
+      })).rejects.toThrow(/invalid emergency kit storage key/i);
+
+      expect(mockDb.select).not.toHaveBeenCalled();
+      expect(storage.upload).not.toHaveBeenCalled();
+      expect(storage.getSignedUrl).not.toHaveBeenCalled();
     });
 
     it('fallback path: sizeBytes reflects actual buffer length (L419 ArrowFunction kill)', async () => {

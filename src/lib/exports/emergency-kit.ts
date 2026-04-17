@@ -33,6 +33,7 @@ import {
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { eq, and, gte, lte, ne, inArray } from 'drizzle-orm';
 import type { StorageProvider } from '@/lib/certificates/storage';
+import { eventIdSchema } from '@/lib/validations/event';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -43,6 +44,45 @@ export type EmergencyKitResult = {
   sizeBytes: number;
 };
 
+const EMERGENCY_KIT_STORAGE_KEY_CONTROL_CHAR_PATTERN = /[\x00-\x1F\x7F]/;
+const EMERGENCY_KIT_FILENAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}\.zip$/;
+
+function validateEmergencyKitEventId(eventId: string): string {
+  return eventIdSchema.parse(eventId);
+}
+
+function assertScopedEmergencyKitStorageKey(eventId: string, storageKey: string): void {
+  if (
+    typeof storageKey !== 'string'
+    || storageKey.length === 0
+    || storageKey !== storageKey.trim()
+    || storageKey.length > 1024
+    || storageKey.startsWith('/')
+    || storageKey.endsWith('/')
+    || storageKey.includes('\\')
+    || EMERGENCY_KIT_STORAGE_KEY_CONTROL_CHAR_PATTERN.test(storageKey)
+  ) {
+    throw new Error('Invalid emergency kit storage key for event');
+  }
+
+  const segments = storageKey.split('/');
+  if (segments.length !== 4) {
+    throw new Error('Invalid emergency kit storage key for event');
+  }
+
+  const scopedEventId = validateEmergencyKitEventId(eventId);
+  const [root, keyEventId, folder, fileName] = segments;
+
+  if (
+    root !== 'events'
+    || keyEventId !== scopedEventId
+    || folder !== 'emergency-kit'
+    || !EMERGENCY_KIT_FILENAME_PATTERN.test(fileName)
+  ) {
+    throw new Error('Invalid emergency kit storage key for event');
+  }
+}
+
 // ── Storage Key Builder ───────────────────────────────────────
 
 /**
@@ -50,9 +90,10 @@ export type EmergencyKitResult = {
  * Uses timestamp + random suffix for uniqueness.
  */
 export function buildEmergencyKitStorageKey(eventId: string): string {
+  const scopedEventId = validateEmergencyKitEventId(eventId);
   const timestamp = Date.now();
   const random = Math.random().toString(36).slice(2, 10);
-  return `events/${eventId}/emergency-kit/kit-${timestamp}-${random}.zip`;
+  return `events/${scopedEventId}/emergency-kit/kit-${timestamp}-${random}.zip`;
 }
 
 /**
@@ -61,7 +102,8 @@ export function buildEmergencyKitStorageKey(eventId: string): string {
  * duplicating when the 48h window catches the same event twice.
  */
 export function buildCronBackupStorageKey(eventId: string): string {
-  return `events/${eventId}/emergency-kit/pre-event-backup.zip`;
+  const scopedEventId = validateEmergencyKitEventId(eventId);
+  return `events/${scopedEventId}/emergency-kit/pre-event-backup.zip`;
 }
 
 // ── CSV Helpers ───────────────────────────────────────────────
@@ -94,6 +136,7 @@ function toCsvBuffer(headers: string[], rows: string[][]): Buffer {
 // ── 1. Attendee CSV ───────────────────────────────────────────
 
 export async function generateAttendeeCsv(eventId: string): Promise<Buffer> {
+  const scopedEventId = validateEmergencyKitEventId(eventId);
   const rows = await db
     .select({
       regNumber: eventRegistrations.registrationNumber,
@@ -110,7 +153,7 @@ export async function generateAttendeeCsv(eventId: string): Promise<Buffer> {
     })
     .from(eventRegistrations)
     .innerJoin(people, eq(eventRegistrations.personId, people.id))
-    .where(withEventScope(eventRegistrations.eventId, eventId));
+    .where(withEventScope(eventRegistrations.eventId, scopedEventId));
 
   return toCsvBuffer(
     ['Reg #', 'Name', 'Email', 'Phone', 'Category', 'Status', 'Designation', 'Specialty', 'Organization', 'City', 'Registered At'],
@@ -125,6 +168,7 @@ export async function generateAttendeeCsv(eventId: string): Promise<Buffer> {
 // ── 2. Travel CSV ─────────────────────────────────────────────
 
 export async function generateTravelCsv(eventId: string): Promise<Buffer> {
+  const scopedEventId = validateEmergencyKitEventId(eventId);
   const rows = await db
     .select({
       fullName: people.fullName,
@@ -143,7 +187,7 @@ export async function generateTravelCsv(eventId: string): Promise<Buffer> {
     })
     .from(travelRecords)
     .innerJoin(people, eq(travelRecords.personId, people.id))
-    .where(withEventScope(travelRecords.eventId, eventId, ne(travelRecords.recordStatus, 'cancelled')));
+    .where(withEventScope(travelRecords.eventId, scopedEventId, ne(travelRecords.recordStatus, 'cancelled')));
 
   return toCsvBuffer(
     ['Name', 'Email', 'Phone', 'Direction', 'Mode', 'From', 'To', 'Departure', 'Arrival', 'Carrier', 'Flight/Train #', 'PNR', 'Status'],
@@ -158,6 +202,7 @@ export async function generateTravelCsv(eventId: string): Promise<Buffer> {
 // ── 3. Rooming CSV ────────────────────────────────────────────
 
 export async function generateRoomingCsv(eventId: string): Promise<Buffer> {
+  const scopedEventId = validateEmergencyKitEventId(eventId);
   const rows = await db
     .select({
       fullName: people.fullName,
@@ -173,7 +218,7 @@ export async function generateRoomingCsv(eventId: string): Promise<Buffer> {
     })
     .from(accommodationRecords)
     .innerJoin(people, eq(accommodationRecords.personId, people.id))
-    .where(withEventScope(accommodationRecords.eventId, eventId, ne(accommodationRecords.recordStatus, 'cancelled')));
+    .where(withEventScope(accommodationRecords.eventId, scopedEventId, ne(accommodationRecords.recordStatus, 'cancelled')));
 
   return toCsvBuffer(
     ['Hotel', 'Name', 'Email', 'Phone', 'Room Type', 'Room #', 'Shared Group', 'Check-In', 'Check-Out', 'Status'],
@@ -190,6 +235,7 @@ export async function generateRoomingCsv(eventId: string): Promise<Buffer> {
 // batches, vehicles, passengers so empty batches/vehicles still appear.
 
 export async function generateTransportCsv(eventId: string): Promise<Buffer> {
+  const scopedEventId = validateEmergencyKitEventId(eventId);
   // Fetch batches (excluding cancelled)
   const batchRows = await db
     .select({
@@ -201,7 +247,7 @@ export async function generateTransportCsv(eventId: string): Promise<Buffer> {
       batchStatus: transportBatches.batchStatus,
     })
     .from(transportBatches)
-    .where(withEventScope(transportBatches.eventId, eventId, ne(transportBatches.batchStatus, 'cancelled')));
+    .where(withEventScope(transportBatches.eventId, scopedEventId, ne(transportBatches.batchStatus, 'cancelled')));
 
   // Fetch vehicles
   const vehicleRows = await db
@@ -212,7 +258,7 @@ export async function generateTransportCsv(eventId: string): Promise<Buffer> {
       vehicleType: vehicleAssignments.vehicleType,
     })
     .from(vehicleAssignments)
-    .where(withEventScope(vehicleAssignments.eventId, eventId));
+    .where(withEventScope(vehicleAssignments.eventId, scopedEventId));
 
   // Fetch passengers
   const passengerRows = await db
@@ -225,7 +271,7 @@ export async function generateTransportCsv(eventId: string): Promise<Buffer> {
     })
     .from(transportPassengerAssignments)
     .innerJoin(people, eq(transportPassengerAssignments.personId, people.id))
-    .where(withEventScope(transportPassengerAssignments.eventId, eventId));
+    .where(withEventScope(transportPassengerAssignments.eventId, scopedEventId));
 
   // Build denormalized rows: batch → vehicle → passenger.
   // Empty batches (no vehicles) and empty vehicles (no passengers) each get a row.
@@ -278,6 +324,7 @@ export async function generateTransportCsv(eventId: string): Promise<Buffer> {
 // ── 5. Program JSON ───────────────────────────────────────────
 
 export async function generateProgramJson(eventId: string): Promise<Buffer> {
+  const scopedEventId = validateEmergencyKitEventId(eventId);
   const sessionRows = await db
     .select({
       id: sessions.id,
@@ -293,8 +340,8 @@ export async function generateProgramJson(eventId: string): Promise<Buffer> {
       parentSessionId: sessions.parentSessionId,
     })
     .from(sessions)
-    .leftJoin(halls, eq(sessions.hallId, halls.id))
-    .where(withEventScope(sessions.eventId, eventId));
+    .leftJoin(halls, withEventScope(halls.eventId, scopedEventId, eq(sessions.hallId, halls.id)))
+    .where(withEventScope(sessions.eventId, scopedEventId));
 
   const assignments = await db
     .select({
@@ -305,7 +352,7 @@ export async function generateProgramJson(eventId: string): Promise<Buffer> {
     })
     .from(sessionAssignments)
     .innerJoin(people, eq(sessionAssignments.personId, people.id))
-    .where(withEventScope(sessionAssignments.eventId, eventId));
+    .where(withEventScope(sessionAssignments.eventId, scopedEventId));
 
   // Group assignments by session
   const assignmentsBySession = new Map<string, Array<{ name: string; email: string | null; role: string }>>();
@@ -346,6 +393,7 @@ export async function generateProgramJson(eventId: string): Promise<Buffer> {
 // ── 6. Certificate Keys JSON ──────────────────────────────────
 
 export async function generateCertificateKeysJson(eventId: string): Promise<Buffer> {
+  const scopedEventId = validateEmergencyKitEventId(eventId);
   const rows = await db
     .select({
       storageKey: issuedCertificates.storageKey,
@@ -354,7 +402,7 @@ export async function generateCertificateKeysJson(eventId: string): Promise<Buff
       status: issuedCertificates.status,
     })
     .from(issuedCertificates)
-    .where(withEventScope(issuedCertificates.eventId, eventId, eq(issuedCertificates.status, 'issued')));
+    .where(withEventScope(issuedCertificates.eventId, scopedEventId, eq(issuedCertificates.status, 'issued')));
 
   return Buffer.from(JSON.stringify({ generatedAt: new Date().toISOString(), certificates: rows }, null, 2), 'utf-8');
 }
@@ -370,15 +418,20 @@ export type EmergencyKitOptions = {
 
 export async function generateEmergencyKit(options: EmergencyKitOptions): Promise<EmergencyKitResult> {
   const { eventId, storageProvider, storageKeyOverride } = options;
+  const scopedEventId = validateEmergencyKitEventId(eventId);
+
+  if (storageKeyOverride !== undefined) {
+    assertScopedEmergencyKitStorageKey(scopedEventId, storageKeyOverride);
+  }
 
   // Generate all exports in parallel
   const [attendeeCsv, travelCsv, roomingCsv, transportCsv, programJson, certKeysJson] = await Promise.all([
-    generateAttendeeCsv(eventId),
-    generateTravelCsv(eventId),
-    generateRoomingCsv(eventId),
-    generateTransportCsv(eventId),
-    generateProgramJson(eventId),
-    generateCertificateKeysJson(eventId),
+    generateAttendeeCsv(scopedEventId),
+    generateTravelCsv(scopedEventId),
+    generateRoomingCsv(scopedEventId),
+    generateTransportCsv(scopedEventId),
+    generateProgramJson(scopedEventId),
+    generateCertificateKeysJson(scopedEventId),
   ]);
 
   // Create streaming ZIP archive
@@ -406,7 +459,7 @@ export async function generateEmergencyKit(options: EmergencyKitOptions): Promis
   const finalizePromise = archive.finalize();
 
   // Upload ZIP to R2
-  const storageKey = storageKeyOverride ?? buildEmergencyKitStorageKey(eventId);
+  const storageKey = storageKeyOverride ?? buildEmergencyKitStorageKey(scopedEventId);
 
   let sizeBytes: number;
   if (storageProvider.uploadStream) {

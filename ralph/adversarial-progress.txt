@@ -267,3 +267,9 @@
 - Attacks tried: 7
 - Bugs found: 2
 - Key finding: the archive helper trusted raw `eventId` strings at its own boundary and joined halls by bare UUID, so direct callers could poison archive storage keys with malformed tenant IDs and a bad session row could leak another event's hall metadata into the exported agenda.
+
+## 2026-04-17T16:06:05Z — src/lib/exports/emergency-kit.ts — emergency-kit scope and storage-key hardening
+- Verdict: hardened
+- Attacks tried: 7
+- Bugs found: 3
+- Key finding: the emergency-kit helper trusted raw `eventId` strings and arbitrary override keys, and its program export joined halls by bare UUID, so direct callers could poison ZIP object keys, overwrite another event's emergency-kit path, or leak foreign hall metadata into `program.json`.

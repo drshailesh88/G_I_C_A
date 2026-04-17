@@ -46,7 +46,7 @@ vi.mock('@/lib/db/schema', () => {
     transportPassengerAssignments: { id: col('id'), vehicleAssignmentId: col('va_id'), personId: col('person_id'), assignmentStatus: col('a_status') },
     sessions: { id: col('id'), eventId: col('event_id'), title: col('title'), sessionType: col('type'), sessionDate: col('date'), startAtUtc: col('start'), endAtUtc: col('end'), hallId: col('hall_id'), track: col('track'), status: col('status'), cmeCredits: col('cme'), parentSessionId: col('parent') },
     sessionAssignments: { eventId: col('event_id'), sessionId: col('session_id'), personId: col('person_id'), role: col('role') },
-    halls: { id: col('id'), name: col('name') },
+    halls: { id: col('id'), eventId: col('hall_event_id'), name: col('name') },
     issuedCertificates: { eventId: col('event_id'), storageKey: col('storage_key'), fileName: col('file_name'), certificateType: col('cert_type'), status: col('status') },
   };
 });
@@ -98,7 +98,7 @@ import {
 
 // ── Helpers ────────────────────────────────────────────────────
 
-const EVENT_ID = 'event-bbb-bbb';
+const EVENT_ID = '11111111-1111-4111-8111-111111111111';
 
 function createChain(rows: unknown[]) {
   const chain: Record<string, ReturnType<typeof vi.fn>> = {};
@@ -144,8 +144,12 @@ describe('Pre-Event Emergency Kit (8B-4)', () => {
 
   // Test 1: Storage key format
   it('buildEmergencyKitStorageKey produces correct key format', () => {
-    const key = buildEmergencyKitStorageKey('evt-123');
-    expect(key).toMatch(/^events\/evt-123\/emergency-kit\/kit-\d+-[a-z0-9]+\.zip$/);
+    const key = buildEmergencyKitStorageKey(EVENT_ID);
+    expect(key).toMatch(/^events\/11111111-1111-4111-8111-111111111111\/emergency-kit\/kit-\d+-[a-z0-9]+\.zip$/);
+  });
+
+  it('buildEmergencyKitStorageKey rejects a malformed eventId', () => {
+    expect(() => buildEmergencyKitStorageKey('not-a-uuid')).toThrow('Invalid event ID');
   });
 
   // Test 2: Full kit generation with data
@@ -176,7 +180,7 @@ describe('Pre-Event Emergency Kit (8B-4)', () => {
     const storage = createStubStorage();
     const result = await generateEmergencyKit({ eventId: EVENT_ID, storageProvider: storage });
 
-    expect(result.storageKey).toMatch(/^events\/event-bbb-bbb\/emergency-kit\/kit-/);
+    expect(result.storageKey).toMatch(/^events\/11111111-1111-4111-8111-111111111111\/emergency-kit\/kit-/);
     expect(result.downloadUrl).toContain('stub-r2.example.com');
     expect(result.fileCount).toBe(6);
 
@@ -283,6 +287,28 @@ describe('Pre-Event Emergency Kit (8B-4)', () => {
     expect(data.generatedAt).toBeTruthy();
   });
 
+  it('generateProgramJson event-scopes joined halls to prevent cross-event leakage', async () => {
+    setupDbReturn(
+      [{ id: 'sess-1', title: 'Panel Discussion', sessionType: 'panel', sessionDate: new Date('2026-04-10'), startAtUtc: new Date('2026-04-10T06:00:00Z'), endAtUtc: new Date('2026-04-10T07:30:00Z'), hallName: 'Hall B', track: 'Cardiology', status: 'scheduled', cmeCredits: 1, parentSessionId: null }],
+      [],
+    );
+
+    await generateProgramJson(EVENT_ID);
+
+    const hallJoinScoped = mockWithEventScope.mock.calls.some(
+      ([column, scopedEventId]) =>
+        (column as { name?: string } | undefined)?.name === 'hall_event_id'
+        && scopedEventId === EVENT_ID,
+    );
+
+    expect(hallJoinScoped).toBe(true);
+  });
+
+  it('generateAttendeeCsv rejects a malformed eventId before database access', async () => {
+    await expect(generateAttendeeCsv('not-a-uuid')).rejects.toThrow('Invalid event ID');
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
   // Test CP-129: generateCertificateKeysJson produces correct structure
   it('generateCertificateKeysJson returns JSON with certificates array and generatedAt (CP-129)', async () => {
     const certRows = [
@@ -345,9 +371,28 @@ describe('Pre-Event Emergency Kit (8B-4)', () => {
     vi.clearAllMocks();
     setupDbReturn([], [], [], [], [], [], [], [], []);
     const storage = createStubStorage();
-    const kit = await generateEmergencyKit({ eventId: 'evt-manual-trigger', storageProvider: storage });
-    expect(kit.storageKey).toMatch(/^events\/evt-manual-trigger\/emergency-kit\//);
+    const kit = await generateEmergencyKit({
+      eventId: '22222222-2222-4222-8222-222222222222',
+      storageProvider: storage,
+    });
+    expect(kit.storageKey).toMatch(/^events\/22222222-2222-4222-8222-222222222222\/emergency-kit\//);
     expect(kit.fileCount).toBe(6);
     expect(kit.downloadUrl).toContain('stub-r2.example.com');
+  });
+
+  it('generateEmergencyKit rejects a cross-event storageKeyOverride before exports or storage access', async () => {
+    const storage = createStubStorage();
+
+    await expect(
+      generateEmergencyKit({
+        eventId: EVENT_ID,
+        storageProvider: storage,
+        storageKeyOverride: 'events/22222222-2222-4222-8222-222222222222/emergency-kit/pre-event-backup.zip',
+      }),
+    ).rejects.toThrow(/invalid emergency kit storage key/i);
+
+    expect(mockDb.select).not.toHaveBeenCalled();
+    expect(storage.upload).not.toHaveBeenCalled();
+    expect(storage.getSignedUrl).not.toHaveBeenCalled();
   });
 });
