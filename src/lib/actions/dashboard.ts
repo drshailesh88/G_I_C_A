@@ -8,8 +8,9 @@ import {
   issuedCertificates,
   notificationLog,
   redFlags,
+  people,
 } from '@/lib/db/schema';
-import { eq, and, count, sql, gte, inArray } from 'drizzle-orm';
+import { eq, and, count, sql, gte, inArray, desc, not } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
 import { eventIdSchema } from '@/lib/validations/event';
@@ -159,6 +160,92 @@ export async function getDashboardMetrics(eventId: string): Promise<DashboardMet
       },
     };
   }, { isolationLevel: 'repeatable read' });
+}
+
+export type RecentNotificationItem = {
+  id: string;
+  subject: string;
+  recipientName: string;
+  recipientContact: string | null;
+  channel: string;
+  status: string;
+  queuedAt: Date;
+  isUnread: boolean;
+};
+
+export async function getRecentNotifications(
+  eventId: string,
+): Promise<{ items: RecentNotificationItem[]; unreadCount: number }> {
+  eventIdSchema.parse(eventId);
+  await assertEventAccess(eventId, { requireWrite: false });
+
+  const [rows, [countRow]] = await Promise.all([
+    db
+      .select({
+        id: notificationLog.id,
+        renderedSubject: notificationLog.renderedSubject,
+        templateKeySnapshot: notificationLog.templateKeySnapshot,
+        recipientEmail: notificationLog.recipientEmail,
+        recipientPhoneE164: notificationLog.recipientPhoneE164,
+        channel: notificationLog.channel,
+        status: notificationLog.status,
+        queuedAt: notificationLog.queuedAt,
+        personFullName: people.fullName,
+      })
+      .from(notificationLog)
+      .leftJoin(people, eq(notificationLog.personId, people.id))
+      .where(withEventScope(notificationLog.eventId, eventId))
+      .orderBy(desc(notificationLog.queuedAt))
+      .limit(20),
+    db
+      .select({ count: count() })
+      .from(notificationLog)
+      .where(withEventScope(notificationLog.eventId, eventId, not(eq(notificationLog.status, 'read')))),
+  ]);
+
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      subject:
+        row.renderedSubject ??
+        row.templateKeySnapshot?.replace(/_/g, ' ') ??
+        'Notification',
+      recipientName: row.personFullName ?? 'Unknown',
+      recipientContact: row.recipientEmail ?? row.recipientPhoneE164 ?? null,
+      channel: row.channel,
+      status: row.status,
+      queuedAt: row.queuedAt,
+      isUnread: row.status !== 'read',
+    })),
+    unreadCount: countRow?.count ?? 0,
+  };
+}
+
+export async function getNotificationUnreadCount(eventId: string): Promise<number> {
+  eventIdSchema.parse(eventId);
+  await assertEventAccess(eventId, { requireWrite: false });
+
+  const [row] = await db
+    .select({ count: count() })
+    .from(notificationLog)
+    .where(withEventScope(notificationLog.eventId, eventId, not(eq(notificationLog.status, 'read'))));
+
+  return row?.count ?? 0;
+}
+
+export async function markAllNotificationsRead(eventId: string): Promise<void> {
+  eventIdSchema.parse(eventId);
+  await assertEventAccess(eventId, { requireWrite: true });
+
+  await db
+    .update(notificationLog)
+    .set({ status: 'read', readAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(
+        eq(notificationLog.eventId, eventId),
+        not(inArray(notificationLog.status, ['read', 'failed', 'retrying', 'sending'])),
+      ),
+    );
 }
 
 export async function getNeedsAttention(eventId: string): Promise<NeedsAttentionItem[]> {

@@ -19,9 +19,11 @@ import { useEffect, useState, useTransition, useCallback } from 'react';
 import {
   getDashboardMetrics,
   getNeedsAttention,
+  getNotificationUnreadCount,
   type DashboardMetrics,
   type NeedsAttentionItem,
 } from '@/lib/actions/dashboard';
+import { NotificationDrawer } from './notification-drawer';
 
 interface EventOption {
   id: string;
@@ -67,18 +69,22 @@ export function DashboardClient({ events }: DashboardClientProps) {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [attention, setAttention] = useState<NeedsAttentionItem[]>([]);
   const [isPending, startTransition] = useTransition();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // Fetch metrics when event changes
   const fetchMetrics = useCallback(
     (eventId: string) => {
       startTransition(async () => {
         try {
-          const [m, a] = await Promise.all([
+          const [m, a, uc] = await Promise.all([
             getDashboardMetrics(eventId),
             getNeedsAttention(eventId),
+            getNotificationUnreadCount(eventId),
           ]);
           setMetrics(m);
           setAttention(a);
+          setUnreadCount(uc);
         } catch {
           setMetrics(null);
           setAttention([]);
@@ -111,8 +117,17 @@ export function DashboardClient({ events }: DashboardClientProps) {
           <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
         </div>
         <div className="flex items-center gap-3">
-          <button className="rounded-full p-2 hover:bg-border/50">
+          <button
+            className="relative rounded-full p-2 hover:bg-border/50"
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open notifications"
+          >
             <Bell className="h-5 w-5 text-text-secondary" />
+            {unreadCount > 0 && (
+              <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
           </button>
           <UserButton afterSignOutUrl="/login" />
         </div>
@@ -287,6 +302,15 @@ export function DashboardClient({ events }: DashboardClientProps) {
             Create Event
           </Link>
         </div>
+      )}
+
+      {selectedEventId && (
+        <NotificationDrawer
+          eventId={selectedEventId}
+          open={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          onUnreadCountChange={setUnreadCount}
+        />
       )}
     </div>
   );
