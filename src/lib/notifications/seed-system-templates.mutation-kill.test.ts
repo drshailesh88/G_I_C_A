@@ -6,12 +6,13 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockReturning, mockLimit, mockWhere, mockValues, mockFrom, dbChain } = vi.hoisted(() => {
+const { mockReturning, mockLimit, mockWhere, mockValues, mockFrom, mockExecute, dbChain } = vi.hoisted(() => {
   const mockReturning = vi.fn();
   const mockLimit = vi.fn();
   const mockWhere = vi.fn();
   const mockValues = vi.fn();
   const mockFrom = vi.fn();
+  const mockExecute = vi.fn();
 
   const chain: Record<string, any> = {};
   chain.insert = vi.fn().mockReturnValue(chain);
@@ -21,14 +22,16 @@ const { mockReturning, mockLimit, mockWhere, mockValues, mockFrom, dbChain } = v
   chain.where = mockWhere.mockReturnValue(chain);
   chain.returning = mockReturning;
   chain.limit = mockLimit;
+  chain.execute = mockExecute;
 
-  return { mockReturning, mockLimit, mockWhere, mockValues, mockFrom, dbChain: chain };
+  return { mockReturning, mockLimit, mockWhere, mockValues, mockFrom, mockExecute, dbChain: chain };
 });
 
 vi.mock('@/lib/db', () => ({
   db: {
     insert: dbChain.insert,
     select: dbChain.select,
+    transaction: vi.fn(async (callback: (tx: typeof dbChain) => unknown) => callback(dbChain)),
   },
 }));
 
@@ -45,6 +48,7 @@ vi.mock('drizzle-orm', () => ({
   eq: vi.fn((...args: unknown[]) => ({ _type: 'eq', args })),
   and: vi.fn((...args: unknown[]) => ({ _type: 'and', args })),
   isNull: vi.fn((col: unknown) => ({ _type: 'isNull', col })),
+  sql: vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values })),
 }));
 
 import { seedSystemTemplates } from './seed-system-templates';
@@ -56,6 +60,7 @@ beforeEach(() => {
   mockReturning.mockResolvedValue([{ id: 'new-tpl' }]);
   mockWhere.mockReturnValue(dbChain);
   mockFrom.mockReturnValue(dbChain);
+  mockExecute.mockResolvedValue(undefined);
 });
 
 describe('seedSystemTemplates', () => {
@@ -98,6 +103,14 @@ describe('seedSystemTemplates', () => {
     expect(firstValues.bodyContent).toBeTruthy();
   });
 
+  it('trims the actorId before writing audit fields', async () => {
+    await seedSystemTemplates('  admin-1  ');
+
+    const firstValues = mockValues.mock.calls[0][0];
+    expect(firstValues.createdBy).toBe('admin-1');
+    expect(firstValues.updatedBy).toBe('admin-1');
+  });
+
   it('handles mixed existing/new templates', async () => {
     let callCount = 0;
     mockLimit.mockImplementation(() => {
@@ -110,5 +123,11 @@ describe('seedSystemTemplates', () => {
 
     expect(result.inserted).toBe(12);
     expect(result.skipped).toBe(12);
+  });
+
+  it('acquires a transaction-scoped advisory lock before seeding', async () => {
+    await seedSystemTemplates('admin-1');
+
+    expect(mockExecute).toHaveBeenCalledTimes(1);
   });
 });

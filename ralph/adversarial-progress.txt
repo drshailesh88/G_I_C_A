@@ -63,6 +63,7 @@
 - Shared certificate/template registries must be exported as immutable data. Returning live config objects lets one caller mutate required variables or prefixes and poison later requests handled by the same server process.
 - Fixed-format identifier helpers must validate both namespace membership and numeric bounds. Accepting unknown certificate prefixes or overflowed/fractional sequence numbers creates forged or impossible IDs that downstream code may treat as legitimate.
 - Background workers and queue consumers are security boundaries too. Validate queued payload enums and tenant IDs, cap batch sizes, refuse forged cleanup lock keys, and stream large archive uploads instead of buffering whole artifacts in memory.
+- Global seeders that create `eventId = null` defaults cannot rely on a partial `(event_id, channel, key)` unique index plus read-then-insert loops. Postgres permits multiple `NULL` keys there, so concurrent seed runs need transaction-scoped locking and atomic rollback or they will duplicate global rows and leave half-seeded state on failure.
 
 ## Iteration log
 
@@ -342,3 +343,9 @@
 - Attacks tried: 5
 - Bugs found: 3
 - Key finding: the notification-log helpers trusted globally unique idempotency keys, oversized pagination, and malformed identifiers, so a direct caller could mutate another event’s log row, force expensive retry-screen scans, or push bad tenant IDs into UUID-backed queries.
+
+## 2026-04-17T17:39:53Z — src/lib/notifications/seed-system-templates.ts — seeding race and rollback hardening
+- Verdict: hardened
+- Attacks tried: 5
+- Bugs found: 3
+- Key finding: the global template seeder trusted raw actor IDs and performed read-then-insert work outside a transaction, so concurrent seed runs could create duplicate `eventId = null` templates and mid-run failures could leave the system half-seeded.

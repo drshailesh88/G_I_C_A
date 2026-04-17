@@ -3059,5 +3059,65 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/seed-system-templates.ts",
+    "module": "src/lib/notifications/seed-system-templates.ts",
+    "attacked_at": "2026-04-17T17:39:53Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "blank and control-character actorId values passed to the seeder helper",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "run seedSystemTemplates twice concurrently against an empty global template set",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "force an insert failure after earlier seeds succeeded to simulate a dropped connection / half-completed seed run",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "probe for event-scoped leakage by reusing existing event-specific templates while seeding global defaults",
+        "result": "not_applicable_global_templates_use_eventId_null_only"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "actorId containing SQL metacharacters",
+        "result": "blocked_by_parameterized_insert_path"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "seedSystemTemplates accepted blank or control-character actor IDs and wrote them directly into createdBy/updatedBy, polluting the audit trail for every seeded global template.",
+        "fix": "Trimmed and validated actorId length/content before starting any database work, rejecting blank, oversized, and control-character values.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/seed-system-templates.adversarial.test.ts > rejects blank actor IDs before writing audit metadata"
+      },
+      {
+        "severity": "high",
+        "category": "race_condition",
+        "description": "The helper checked for an existing global template and then inserted outside any lock or transaction. Two concurrent seed runs against `eventId = null` rows could both observe an empty result and create duplicate active system templates because the existing partial unique index does not prevent duplicate NULL-scoped keys.",
+        "fix": "Wrapped the seed loop in one transaction and acquired a transaction-scoped Postgres advisory lock before any existence checks so concurrent runs serialize safely.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/seed-system-templates.adversarial.test.ts > serializes concurrent seed runs so duplicate global templates are not created"
+      },
+      {
+        "severity": "medium",
+        "category": "stale_state",
+        "description": "A mid-loop insert failure left earlier system templates committed because the seeder autocommitted each insert independently, producing a half-seeded global template set after a transient database error or dropped connection.",
+        "fix": "Moved the entire seeding operation into a single transaction so any later failure rolls back earlier inserts instead of leaving partial state behind.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/seed-system-templates.adversarial.test.ts > rolls back earlier inserts when a later seed fails"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
