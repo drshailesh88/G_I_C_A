@@ -3316,5 +3316,49 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/template-utils.ts",
+    "module": "src/lib/notifications/template-utils.ts",
+    "attacked_at": "2026-04-17T18:48:09Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "prototype_pollution",
+        "payload": "JSON variables with own __proto__ payload interpolated as {{__proto__.polluted}}",
+        "result": "succeeded"
+      },
+      {
+        "category": "prototype_pollution",
+        "payload": "JSON variables with own constructor.prototype payload interpolated as {{constructor.prototype.polluted}}",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "requiredVariables entry constructor.prototype.isAdmin against JSON variables carrying the same own-path payload",
+        "result": "succeeded"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "<script>alert(1)</script> and HTML payloads in ordinary template variable strings",
+        "result": "no_exploitable_failure_in_pure_string_interpolation"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "deep nested ordinary paths and missing values in interpolation/validation",
+        "result": "blocked_by_existing_undefined_short_circuiting"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "prototype_pollution",
+        "description": "resolvePath only blocked inherited prototype lookups. If template variables arrived from JSON with own properties named __proto__ or constructor.prototype, interpolation and required-variable validation still traversed those reserved keys instead of failing closed.",
+        "fix": "Rejected reserved path segments (`__proto__`, `constructor`, `prototype`) before any own-property lookup so malformed JSON payloads cannot be resolved through template paths.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/template-utils.adversarial.test.ts > blocks own __proto__ payloads parsed from JSON; src/lib/notifications/template-utils.adversarial.test.ts > blocks own constructor.prototype payloads parsed from JSON; src/lib/notifications/template-utils.adversarial.test.ts > treats reserved-key required variables as missing even when present as own JSON properties"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
