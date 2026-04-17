@@ -3805,5 +3805,62 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/validations/accommodation.ts",
+    "module": "src/lib/validations/accommodation.ts",
+    "attacked_at": "2026-04-17T20:00:32Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "create/update payloads with impossible calendar dates, empty date strings, and check-out-before-check-in ranges",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized hotel/address/url/request/note strings and long date strings",
+        "result": "blocked"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "<script>alert(1)</script> in hotel/notes fields and javascript: URLs in free-text URL fields",
+        "result": "no_exploitable_failure_in_module"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not_applicable_module_has_no_event_scope_queries_or_writes",
+        "result": "not_applicable"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "not_applicable_module_has_no_auth_or_role_boundary",
+        "result": "not_applicable"
+      },
+      {
+        "category": "race_condition",
+        "payload": "not_applicable_pure_schema_module_has_no_shared_mutation_path",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "createAccommodationRecordSchema relied on JavaScript Date coercion for range checks, so impossible calendar inputs like 2026-02-30 were silently normalized into a different real date instead of being rejected at the validation boundary.",
+        "fix": "Added canonical accommodation date validators that accept only valid ISO dates/date-times before running the range comparison.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/accommodation.test.ts > rejects impossible calendar dates instead of coercing them"
+      },
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "updateAccommodationRecordSchema accepted empty or malformed date strings and never rejected an inverted check-in/check-out range when both fields were supplied, letting direct callers bypass the form-level date contract and push bad date payloads into the action layer.",
+        "fix": "Require non-empty valid ISO date/date-time strings for update date fields and reject update payloads where check-out is not after check-in.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/accommodation.test.ts > rejects empty check-in dates in updates; src/lib/validations/accommodation.test.ts > rejects impossible check-in/check-out ranges in updates"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

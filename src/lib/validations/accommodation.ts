@@ -16,6 +16,29 @@ export const ACCOMMODATION_RECORD_TRANSITIONS: Record<AccommodationRecordStatus,
 export const ROOM_TYPES = ['single', 'double', 'twin', 'triple', 'suite', 'dormitory', 'other'] as const;
 export type RoomType = (typeof ROOM_TYPES)[number];
 
+const isoDateSchema = z.string().trim().date('Invalid accommodation date');
+const isoDateTimeSchema = z.string().trim().datetime('Invalid accommodation date-time');
+
+function isValidAccommodationDateInput(value: string): boolean {
+  return isoDateSchema.safeParse(value).success || isoDateTimeSchema.safeParse(value).success;
+}
+
+function parseAccommodationDateInput(value: string): number {
+  return new Date(value).getTime();
+}
+
+const requiredAccommodationDateSchema = (requiredMessage: string, invalidMessage: string) =>
+  z.string().trim().min(1, requiredMessage).refine(
+    isValidAccommodationDateInput,
+    invalidMessage,
+  );
+
+const optionalAccommodationDateSchema = (invalidMessage: string) =>
+  z.string().trim().min(1, invalidMessage).refine(
+    isValidAccommodationDateInput,
+    invalidMessage,
+  );
+
 // ── Create accommodation record schema ────────────────────────
 export const createAccommodationRecordSchema = z.object({
   personId: z.string().uuid('Invalid person ID'),
@@ -27,14 +50,24 @@ export const createAccommodationRecordSchema = z.object({
   roomType: z.enum(ROOM_TYPES).optional(),
   roomNumber: z.string().trim().max(50).optional().or(z.literal('')),
   sharedRoomGroup: z.string().trim().max(100).optional().or(z.literal('')),
-  checkInDate: z.string().min(1, 'Check-in date is required'),
-  checkOutDate: z.string().min(1, 'Check-out date is required'),
+  checkInDate: requiredAccommodationDateSchema(
+    'Check-in date is required',
+    'Invalid check-in date',
+  ),
+  checkOutDate: requiredAccommodationDateSchema(
+    'Check-out date is required',
+    'Invalid check-out date',
+  ),
   bookingReference: z.string().trim().max(100).optional().or(z.literal('')),
   attachmentUrl: z.string().trim().max(500).optional().or(z.literal('')),
   specialRequests: z.string().trim().max(2000).optional().or(z.literal('')),
   notes: z.string().trim().max(2000).optional().or(z.literal('')),
 }).refine(
-  (data) => new Date(data.checkOutDate) > new Date(data.checkInDate),
+  (data) => (
+    isValidAccommodationDateInput(data.checkInDate)
+    && isValidAccommodationDateInput(data.checkOutDate)
+    && parseAccommodationDateInput(data.checkOutDate) > parseAccommodationDateInput(data.checkInDate)
+  ),
   { message: 'Check-out must be after check-in', path: ['checkOutDate'] },
 );
 
@@ -48,12 +81,24 @@ export const updateAccommodationRecordSchema = z.object({
   roomType: z.enum(ROOM_TYPES).optional(),
   roomNumber: z.string().trim().max(50).optional().or(z.literal('')),
   sharedRoomGroup: z.string().trim().max(100).optional().or(z.literal('')),
-  checkInDate: z.string().optional(),
-  checkOutDate: z.string().optional(),
+  checkInDate: optionalAccommodationDateSchema('Invalid check-in date').optional(),
+  checkOutDate: optionalAccommodationDateSchema('Invalid check-out date').optional(),
   bookingReference: z.string().trim().max(100).optional().or(z.literal('')),
   attachmentUrl: z.string().trim().max(500).optional().or(z.literal('')),
   specialRequests: z.string().trim().max(2000).optional().or(z.literal('')),
   notes: z.string().trim().max(2000).optional().or(z.literal('')),
+}).superRefine((data, ctx) => {
+  if (
+    data.checkInDate
+    && data.checkOutDate
+    && parseAccommodationDateInput(data.checkOutDate) <= parseAccommodationDateInput(data.checkInDate)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Check-out must be after check-in',
+      path: ['checkOutDate'],
+    });
+  }
 });
 
 // ── Cancel accommodation record schema ────────────────────────

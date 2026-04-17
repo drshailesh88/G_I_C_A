@@ -86,6 +86,15 @@ describe('createAccommodationRecordSchema', () => {
     ).toThrow('Check-out must be after check-in');
   });
 
+  it('rejects impossible calendar dates instead of coercing them', () => {
+    expect(() =>
+      createAccommodationRecordSchema.parse({
+        ...validInput,
+        checkInDate: '2026-02-30',
+      }),
+    ).toThrow('Invalid check-in date');
+  });
+
   it('trims whitespace from hotel name', () => {
     const result = createAccommodationRecordSchema.parse({
       ...validInput,
@@ -117,6 +126,25 @@ describe('updateAccommodationRecordSchema', () => {
     });
     expect(result.hotelName).toBe('Hotel Taj');
     expect(result.roomType).toBeUndefined();
+  });
+
+  it('rejects empty check-in dates in updates', () => {
+    expect(() =>
+      updateAccommodationRecordSchema.parse({
+        accommodationRecordId: '550e8400-e29b-41d4-a716-446655440000',
+        checkInDate: '',
+      }),
+    ).toThrow('Invalid check-in date');
+  });
+
+  it('rejects impossible check-in/check-out ranges in updates', () => {
+    expect(() =>
+      updateAccommodationRecordSchema.parse({
+        accommodationRecordId: '550e8400-e29b-41d4-a716-446655440000',
+        checkInDate: '2026-05-03',
+        checkOutDate: '2026-05-01',
+      }),
+    ).toThrow('Check-out must be after check-in');
   });
 });
 

@@ -77,6 +77,7 @@
 - Automation-trigger query helpers must validate runtime UUIDs and event-scope referenced template IDs themselves. Otherwise direct callers can persist triggers that point at another event's template or push malformed IDs into UUID-backed queries before action-layer Zod runs.
 - Signed webhook verifiers must validate numeric timestamp freshness before accepting an HMAC. Otherwise any captured legitimate request can be replayed indefinitely to duplicate delivery events or rerun downstream status handling long after the original send.
 - Shared class-name merge helpers are security boundaries too: only honor own enumerable keys from object inputs and bound array traversal iteratively, or prototype-backed dictionaries can inject inherited classes and cyclic/deep arrays can crash render paths with stack overflows.
+- Validation modules must not trust `new Date(...)` coercion as a parser. JavaScript silently normalizes impossible calendar inputs like `2026-02-30`, and optional update date fields that accept `''` become malformed `Invalid Date` writes unless the schema enforces canonical non-empty ISO date/date-time strings and range checks itself.
 
 ## Iteration log
 
@@ -446,3 +447,9 @@
 - Attacks tried: 6
 - Bugs found: 2
 - Key finding: `cn()` trusted inherited class-map keys from `clsx` and recursive array traversal, so malformed prototype-backed input could inject unexpected classes while cyclic or deeply nested arrays could crash the render path with a stack overflow.
+
+## 2026-04-17T20:00:32Z — src/lib/validations/accommodation.ts — accommodation date-boundary hardening
+- Verdict: hardened
+- Attacks tried: 6
+- Bugs found: 2
+- Key finding: the accommodation validator trusted `new Date(...)` coercion and permissive update date strings, so direct callers could slip impossible or empty dates past the schema and into downstream accommodation writes.
