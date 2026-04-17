@@ -35,7 +35,7 @@ vi.mock('@/lib/db/schema', () => {
       eventId: col('event_id'), sessionId: col('session_id'),
       personId: col('person_id'), role: col('role'),
     },
-    halls: { id: col('id'), name: col('name') },
+    halls: { id: col('id'), eventId: col('hall_event_id'), name: col('name') },
     people: {
       id: col('id'), fullName: col('full_name'), email: col('email'), phoneE164: col('phone'),
     },
@@ -92,7 +92,7 @@ import {
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-const EVENT_ID = 'evt-mk-001';
+const EVENT_ID = '550e8400-e29b-41d4-a716-446655440111';
 
 function createChain(rows: unknown[]) {
   const chain: Record<string, ReturnType<typeof vi.fn>> = {};

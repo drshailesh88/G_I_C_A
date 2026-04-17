@@ -28,7 +28,7 @@ vi.mock('@/lib/db/schema', () => {
     events: { id: col('id'), name: col('name'), startDate: col('start_date'), endDate: col('end_date'), venueName: col('venue_name') },
     sessions: { id: col('id'), eventId: col('event_id'), title: col('title'), sessionType: col('type'), sessionDate: col('date'), startAtUtc: col('start'), endAtUtc: col('end'), hallId: col('hall_id'), track: col('track'), status: col('status'), cmeCredits: col('cme') },
     sessionAssignments: { eventId: col('event_id'), sessionId: col('session_id'), personId: col('person_id'), role: col('role') },
-    halls: { id: col('id'), name: col('name') },
+    halls: { id: col('id'), eventId: col('hall_event_id'), name: col('name') },
     people: { id: col('id'), fullName: col('full_name'), email: col('email'), phoneE164: col('phone') },
     issuedCertificates: { eventId: col('event_id'), storageKey: col('storage_key'), fileName: col('file_name'), status: col('status') },
     notificationLog: { eventId: col('event_id'), personId: col('person_id'), channel: col('channel'), provider: col('provider'), status: col('status'), recipientEmail: col('email'), recipientPhoneE164: col('phone'), templateKeySnapshot: col('template_key'), triggerType: col('trigger'), sendMode: col('send_mode'), renderedSubject: col('subject'), attempts: col('attempts'), lastErrorCode: col('error_code'), lastErrorMessage: col('error_msg'), queuedAt: col('queued_at'), sentAt: col('sent_at'), deliveredAt: col('delivered_at'), failedAt: col('failed_at') },
@@ -79,7 +79,7 @@ import {
 
 // ── Helpers ────────────────────────────────────────────────────
 
-const EVENT_ID = 'event-aaa-aaa';
+const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 
 function createChain(rows: unknown[]) {
   const chain: Record<string, ReturnType<typeof vi.fn>> = {};
@@ -126,8 +126,8 @@ describe('Per-Event PDF Archive (6C-2)', () => {
 
   describe('buildArchiveStorageKey', () => {
     it('produces correct key format', () => {
-      const key = buildArchiveStorageKey('evt-123');
-      expect(key).toMatch(/^events\/evt-123\/archives\/archive-\d+-[a-z0-9]+\.zip$/);
+      const key = buildArchiveStorageKey(EVENT_ID);
+      expect(key).toMatch(/^events\/550e8400-e29b-41d4-a716-446655440000\/archives\/archive-\d+-[a-z0-9]+\.zip$/);
     });
   });
 
@@ -283,7 +283,7 @@ describe('Per-Event PDF Archive (6C-2)', () => {
         fetchCertificatePdf: fetchPdf,
       });
 
-      expect(result.archiveStorageKey).toMatch(/^events\/event-aaa-aaa\/archives\/archive-\d+-[a-z0-9]+\.zip$/);
+      expect(result.archiveStorageKey).toMatch(/^events\/550e8400-e29b-41d4-a716-446655440000\/archives\/archive-\d+-[a-z0-9]+\.zip$/);
       expect(result.archiveUrl).toContain('stub-r2.example.com');
       expect(result.fileCount).toBe(3); // agenda + csv + 1 cert PDF
 
@@ -369,6 +369,72 @@ describe('Per-Event PDF Archive (6C-2)', () => {
         (args) => args[1] === EVENT_ID,
       );
       expect(eventScopeCalls.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('event-scopes joined hall metadata to prevent cross-tenant leakage', async () => {
+      setupDbReturn(
+        [{ name: 'Event', startDate: new Date(), endDate: new Date(), venueName: null }],
+        [
+          {
+            title: 'Scoped Hall Session',
+            sessionType: 'panel',
+            sessionDate: new Date('2026-04-10'),
+            startAtUtc: new Date('2026-04-10T03:30:00Z'),
+            endAtUtc: new Date('2026-04-10T04:30:00Z'),
+            hallName: 'Hall A',
+            track: null,
+            status: 'scheduled',
+            cmeCredits: null,
+          },
+        ],
+      );
+
+      await generateAgendaExcel(EVENT_ID);
+
+      const hallJoinScoped = mockWithEventScope.mock.calls.some(
+        ([column, scopedEventId]) =>
+          (column as { name?: string } | undefined)?.name === 'hall_event_id' &&
+          scopedEventId === EVENT_ID,
+      );
+
+      expect(hallJoinScoped).toBe(true);
+    });
+  });
+
+  describe('ADVERSARIAL: malformed eventId boundary', () => {
+    it('buildArchiveStorageKey rejects a malformed eventId', () => {
+      expect(() => buildArchiveStorageKey('not-a-uuid')).toThrow('Invalid event ID');
+    });
+
+    it('generateAgendaExcel rejects a malformed eventId before database access', async () => {
+      await expect(generateAgendaExcel('not-a-uuid')).rejects.toThrow('Invalid event ID');
+      expect(mockDb.select).not.toHaveBeenCalled();
+    });
+
+    it('generateNotificationLogCsv rejects a malformed eventId before database access', async () => {
+      await expect(generateNotificationLogCsv('not-a-uuid')).rejects.toThrow('Invalid event ID');
+      expect(mockDb.select).not.toHaveBeenCalled();
+    });
+
+    it('getCertificateStorageKeys rejects a malformed eventId before database access', async () => {
+      await expect(getCertificateStorageKeys('not-a-uuid')).rejects.toThrow('Invalid event ID');
+      expect(mockDb.select).not.toHaveBeenCalled();
+    });
+
+    it('generateEventArchive rejects a malformed eventId before database or storage access', async () => {
+      const storage = createStubStorage();
+
+      await expect(
+        generateEventArchive({
+          eventId: 'not-a-uuid',
+          storageProvider: storage,
+          fetchCertificatePdf: vi.fn(),
+        }),
+      ).rejects.toThrow('Invalid event ID');
+
+      expect(mockDb.select).not.toHaveBeenCalled();
+      expect(storage.upload).not.toHaveBeenCalled();
+      expect(storage.getSignedUrl).not.toHaveBeenCalled();
     });
   });
 
@@ -494,7 +560,7 @@ describe('Per-Event PDF Archive (6C-2)', () => {
       // silently overwrite the other in R2.
       const keys = new Set<string>();
       for (let i = 0; i < 100; i++) {
-        keys.add(buildArchiveStorageKey('evt-collision'));
+        keys.add(buildArchiveStorageKey(EVENT_ID));
       }
       // If using Date.now(), many of these will collide in a tight loop.
       // A robust implementation uses crypto.randomUUID() or similar.

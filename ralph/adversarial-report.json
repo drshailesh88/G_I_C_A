@@ -2374,5 +2374,67 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/exports/archive.ts",
+    "module": "src/lib/exports/archive.ts",
+    "attacked_at": "2026-04-17T15:57:48Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "eventId='not-a-uuid' passed directly to buildArchiveStorageKey, generateAgendaExcel, generateNotificationLogCsv, getCertificateStorageKeys, and generateEventArchive",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized eventId string created by concatenating multiple UUIDs and whitespace padding",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "agenda export for event A with a session row pointing to a hallId owned by event B",
+        "result": "succeeded"
+      },
+      {
+        "category": "injection",
+        "payload": "CSV formula payloads beginning with =, +, -, and @ in notification log fields",
+        "result": "blocked_existing_csv_escaping"
+      },
+      {
+        "category": "path_traversal",
+        "payload": "certificate filenames using whitespace-padded ../ segments and null bytes",
+        "result": "blocked_existing_filename_sanitizer"
+      },
+      {
+        "category": "stale_state",
+        "payload": "concurrent session/notification/certificate changes during archive generation",
+        "result": "no_deterministic_failure_reproduced"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "invoke the helper module directly without Clerk context",
+        "result": "not_applicable_internal_export_helper_has_no_auth_surface"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "The archive helper exports accepted arbitrary eventId strings. Direct callers could build `events/<payload>/archives/...` storage keys and send malformed, whitespace-padded, or oversized tenant IDs into UUID-backed event lookups before any boundary validation ran.",
+        "fix": "Added canonical event UUID validation at the archive-module boundary and reused the validated eventId for every exported helper plus archive key generation.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/exports/archive.test.ts > ADVERSARIAL: malformed eventId boundary"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "generateAgendaExcel joined sessions to halls by hallId only. A bad or legacy session row in the active event could therefore leak another event's hall name into the exported agenda if it referenced a foreign hall UUID.",
+        "fix": "Scoped the joined hall row with withEventScope(halls.eventId, eventId, eq(sessions.hallId, halls.id)) so agenda exports only resolve hall metadata from the active event.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/exports/archive.test.ts > event-scopes joined hall metadata to prevent cross-tenant leakage"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

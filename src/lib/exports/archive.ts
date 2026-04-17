@@ -27,6 +27,7 @@ import {
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { eq } from 'drizzle-orm';
 import type { StorageProvider } from '@/lib/certificates/storage';
+import { eventIdSchema } from '@/lib/validations/event';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -37,12 +38,17 @@ export type ArchiveResult = {
   archiveSizeBytes: number;
 };
 
+function validateArchiveEventId(eventId: string): string {
+  return eventIdSchema.parse(eventId);
+}
+
 // ── Storage Key Builder ───────────────────────────────────────
 
 export function buildArchiveStorageKey(eventId: string): string {
+  const scopedEventId = validateArchiveEventId(eventId);
   const timestamp = Date.now();
   const random = Math.random().toString(36).slice(2, 10);
-  return `events/${eventId}/archives/archive-${timestamp}-${random}.zip`;
+  return `events/${scopedEventId}/archives/archive-${timestamp}-${random}.zip`;
 }
 
 // ── 1. Agenda Excel Buffer ────────────────────────────────────
@@ -91,11 +97,13 @@ function formatDateTime(d: Date | null | undefined): string {
 }
 
 export async function generateAgendaExcel(eventId: string): Promise<Buffer> {
+  const scopedEventId = validateArchiveEventId(eventId);
+
   // Fetch event info
   const [event] = await db
     .select({ name: events.name, startDate: events.startDate, endDate: events.endDate, venueName: events.venueName })
     .from(events)
-    .where(eq(events.id, eventId))
+    .where(eq(events.id, scopedEventId))
     .limit(1);
 
   // Fetch sessions with hall and assignments
@@ -112,8 +120,8 @@ export async function generateAgendaExcel(eventId: string): Promise<Buffer> {
       cmeCredits: sessions.cmeCredits,
     })
     .from(sessions)
-    .leftJoin(halls, eq(sessions.hallId, halls.id))
-    .where(withEventScope(sessions.eventId, eventId));
+    .leftJoin(halls, withEventScope(halls.eventId, scopedEventId, eq(sessions.hallId, halls.id)))
+    .where(withEventScope(sessions.eventId, scopedEventId));
 
   // Sort by date then start time
   sessionRows.sort((a, b) => {
@@ -180,6 +188,8 @@ export async function generateAgendaExcel(eventId: string): Promise<Buffer> {
 // ── 2. Notification Log CSV ───────────────────────────────────
 
 export async function generateNotificationLogCsv(eventId: string): Promise<Buffer> {
+  const scopedEventId = validateArchiveEventId(eventId);
+
   const rows = await db
     .select({
       channel: notificationLog.channel,
@@ -202,7 +212,7 @@ export async function generateNotificationLogCsv(eventId: string): Promise<Buffe
     })
     .from(notificationLog)
     .innerJoin(people, eq(notificationLog.personId, people.id))
-    .where(withEventScope(notificationLog.eventId, eventId));
+    .where(withEventScope(notificationLog.eventId, scopedEventId));
 
   const csvHeaders = [
     'Recipient', 'Email', 'Phone', 'Channel', 'Provider', 'Status',
@@ -252,13 +262,15 @@ function escapeCsvField(value: string | null | undefined): string {
 export async function getCertificateStorageKeys(eventId: string): Promise<
   Array<{ storageKey: string; fileName: string }>
 > {
+  const scopedEventId = validateArchiveEventId(eventId);
+
   const rows = await db
     .select({
       storageKey: issuedCertificates.storageKey,
       fileName: issuedCertificates.fileName,
     })
     .from(issuedCertificates)
-    .where(withEventScope(issuedCertificates.eventId, eventId, eq(issuedCertificates.status, 'issued')));
+    .where(withEventScope(issuedCertificates.eventId, scopedEventId, eq(issuedCertificates.status, 'issued')));
 
   return rows;
 }
@@ -273,12 +285,13 @@ export type ArchiveOptions = {
 
 export async function generateEventArchive(options: ArchiveOptions): Promise<ArchiveResult> {
   const { eventId, storageProvider, fetchCertificatePdf } = options;
+  const scopedEventId = validateArchiveEventId(eventId);
 
   // Generate agenda and notification CSV in parallel
   const [agendaBuffer, notifCsvBuffer, certKeys] = await Promise.all([
-    generateAgendaExcel(eventId),
-    generateNotificationLogCsv(eventId),
-    getCertificateStorageKeys(eventId),
+    generateAgendaExcel(scopedEventId),
+    generateNotificationLogCsv(scopedEventId),
+    getCertificateStorageKeys(scopedEventId),
   ]);
 
   // Create streaming ZIP archive
@@ -331,7 +344,7 @@ export async function generateEventArchive(options: ArchiveOptions): Promise<Arc
   const finalizePromise = archive.finalize();
 
   // Upload streaming ZIP to R2
-  const archiveKey = buildArchiveStorageKey(eventId);
+  const archiveKey = buildArchiveStorageKey(scopedEventId);
 
   let archiveSizeBytes: number;
   if (storageProvider.uploadStream) {
