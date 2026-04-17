@@ -2,7 +2,7 @@
   "version": 1,
   "pipeline": "ralph-packets",
   "updated_at": "2026-04-17T00:00:00Z",
-  "current_packet_id": "PKT-A-002",
+  "current_packet_id": "PKT-A-003",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -47,14 +47,14 @@
       "bucket": "A",
       "module": "registration",
       "priority": 3,
-      "status": "READY",
+      "status": "NEEDS_REVIEW",
       "packet_file": "ralph/packets/PKT-A-003-p2-registration-settings-ui.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
-      "build_commit": null,
+      "build_commit": "5d6e3b9",
       "qa_commit": null,
-      "last_status_at": null,
+      "last_status_at": "2026-04-17T23:20:00.000000Z",
       "depends_on": [
         "PKT-A-002"
       ]

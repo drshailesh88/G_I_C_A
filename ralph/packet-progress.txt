@@ -14,6 +14,20 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-17T23:20:00Z — PKT-A-003 — Per-event registration settings UI
+
+- Story ID: p2-registration-settings-ui
+- Implemented: `registrationSettingsSchema` (Zod) in validations; `updateRegistrationSettings` server action (validates eventId, asserts write access, validates input, persists registrationSettings JSONB, revalidates paths); `/events/[eventId]/registration-settings` server page; `RegistrationSettingsClient` form with approvalRequired, maxCapacity, waitlistEnabled, cutoffDate, preferenceFields (dietaryNeeds, travelPreferences, accessibilityRequirements); "Reg Settings" tile added to event workspace PEOPLE & REGISTRATION section.
+- Files changed:
+  - src/lib/validations/event.ts (added registrationSettingsSchema, RegistrationSettings type)
+  - src/lib/actions/registration-settings.ts (new)
+  - src/lib/actions/registration-settings.test.ts (new — 16 tests, all pass)
+  - src/app/(app)/events/[eventId]/registration-settings/page.tsx (new)
+  - src/app/(app)/events/[eventId]/registration-settings/registration-settings-client.tsx (new)
+  - src/app/(app)/events/[eventId]/event-workspace-client.tsx (added Reg Settings tile + SlidersHorizontal icon)
+- Tests run: `npm run test:run` — 16 new tests pass; 3 pre-existing failing test files (archive-bypass, travel-cascade, full-journey), unchanged.
+- Risks/follow-ups: cutoffDate enforcement on public registration form deferred (stored correctly, not yet enforced in form). preferenceFields visibility not yet consumed by public registration form — stored correctly for future use.
+
 ## 2026-04-17T23:15:40Z — PKT-A-002 — Event settings page and updateEvent action
 
 - Story ID: p1-event-edit-settings
