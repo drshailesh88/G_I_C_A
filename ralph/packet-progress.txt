@@ -14,6 +14,16 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-17T23:30:00Z — PKT-A-004 — Faculty acceptance creates or confirms registration
+
+- Story ID: p2-faculty-accept-creates-registration
+- Implemented: Extended `updateFacultyInviteStatus` in `program.ts` to create or confirm a faculty registration when `newStatus === 'accepted'`. On acceptance: (1) fetch event for slug, (2) check for existing registration, (3) if none exists create a new `confirmed` faculty registration with generated registration number and QR token, (4) if a `pending` registration exists update it to `confirmed`, (5) ensure `event_people` link via upsert. Non-accept transitions (opened, declined) are unaffected.
+- Files changed:
+  - src/lib/actions/program.ts (added `eventRegistrations`, `events` to schema imports; added `generateRegistrationNumber`, `generateQrToken` from validations/registration; extended accept branch in `updateFacultyInviteStatus`)
+  - src/lib/actions/program.faculty-accept.test.ts (new — 8 tests, all pass)
+- Tests run: `npm run test:run` — 8 new tests pass; 3 pre-existing failing test files (archive-bypass, travel-cascade, full-journey), unchanged.
+- Risks/follow-ups: Re-accept with a `cancelled` registration leaves it cancelled (not re-created); edge case deferred. Registration number sequence is not atomic (count-based) — collision risk under concurrent accepts is pre-existing pattern from public registration flow.
+
 ## 2026-04-17T23:20:00Z — PKT-A-003 — Per-event registration settings UI
 
 - Story ID: p2-registration-settings-ui

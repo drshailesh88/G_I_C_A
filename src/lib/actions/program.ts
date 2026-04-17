@@ -10,6 +10,8 @@ import {
   programVersions,
   eventPeople,
   people,
+  eventRegistrations,
+  events,
 } from '@/lib/db/schema';
 import { eq, and, or, sql, desc, asc, ne, lt, gt, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
@@ -37,6 +39,7 @@ import {
   type FacultyInviteStatus,
 } from '@/lib/validations/program';
 import { z } from 'zod';
+import { generateRegistrationNumber, generateQrToken } from '@/lib/validations/registration';
 
 const PROGRAM_READ_ROLES = new Set([
   ROLES.SUPER_ADMIN,
@@ -952,6 +955,77 @@ export async function updateFacultyInviteStatus(eventId: string, input: unknown)
 
   if (!updated) {
     throw new Error('Forbidden: stale conflict — invite was concurrently modified or access was denied');
+  }
+
+  if (newStatus === 'accepted') {
+    const [event] = await db
+      .select()
+      .from(events)
+      .where(eq(events.id, scopedEventId))
+      .limit(1);
+
+    if (!event) throw new Error('Event not found');
+
+    const [existingReg] = await db
+      .select()
+      .from(eventRegistrations)
+      .where(
+        withEventScope(
+          eventRegistrations.eventId,
+          scopedEventId,
+          eq(eventRegistrations.personId, invite.personId),
+        ),
+      )
+      .limit(1);
+
+    if (!existingReg) {
+      const [{ count: totalRegs }] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(eventRegistrations)
+        .where(eq(eventRegistrations.eventId, scopedEventId));
+
+      const registrationNumber = generateRegistrationNumber(
+        event.slug,
+        'faculty',
+        Number(totalRegs) + 1,
+      );
+      const qrCodeToken = generateQrToken();
+
+      await db
+        .insert(eventRegistrations)
+        .values({
+          eventId: scopedEventId,
+          personId: invite.personId,
+          registrationNumber,
+          category: 'faculty',
+          status: 'confirmed',
+          preferencesJson: {},
+          qrCodeToken,
+          createdBy: 'system:faculty-accept',
+          updatedBy: 'system:faculty-accept',
+        })
+        .returning();
+    } else if (existingReg.status === 'pending') {
+      await db
+        .update(eventRegistrations)
+        .set({
+          status: 'confirmed',
+          updatedAt: new Date(),
+          updatedBy: 'system:faculty-accept',
+        })
+        .where(
+          and(
+            eq(eventRegistrations.id, existingReg.id),
+            eq(eventRegistrations.eventId, scopedEventId),
+          ),
+        )
+        .returning();
+    }
+
+    await db
+      .insert(eventPeople)
+      .values({ eventId: scopedEventId, personId: invite.personId, source: 'faculty_invite' })
+      .onConflictDoNothing({ target: [eventPeople.eventId, eventPeople.personId] });
   }
 
   revalidatePath(`/events/${scopedEventId}/sessions`);
