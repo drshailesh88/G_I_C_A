@@ -27,6 +27,58 @@ export type StorageProvider = {
 
 /** Default signed URL expiration: 1 hour */
 const DEFAULT_SIGNED_URL_EXPIRY = 3600;
+const MAX_SIGNED_URL_EXPIRY = 3600;
+const MAX_STORAGE_KEY_LENGTH = 1024;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CERTIFICATE_TYPE_PATTERN = /^[a-z0-9]+(?:_[a-z0-9]+)*$/;
+const STORAGE_KEY_CONTROL_CHAR_PATTERN = /[\x00-\x1F\x7F]/;
+
+function assertValidCertificateEventId(eventId: string): void {
+  if (!UUID_PATTERN.test(eventId)) {
+    throw new Error('Invalid certificate event ID');
+  }
+}
+
+function assertValidCertificateType(certificateType: string): void {
+  if (!CERTIFICATE_TYPE_PATTERN.test(certificateType)) {
+    throw new Error('Invalid certificate type');
+  }
+}
+
+function assertValidCertificateId(certificateId: string): void {
+  if (!UUID_PATTERN.test(certificateId)) {
+    throw new Error('Invalid certificate ID');
+  }
+}
+
+function assertValidStorageKey(key: string): void {
+  if (typeof key !== 'string' || key.length === 0) {
+    throw new Error('Invalid storage key');
+  }
+
+  if (key !== key.trim() || key.length > MAX_STORAGE_KEY_LENGTH) {
+    throw new Error('Invalid storage key');
+  }
+
+  if (key.startsWith('/') || key.endsWith('/') || key.includes('\\') || STORAGE_KEY_CONTROL_CHAR_PATTERN.test(key)) {
+    throw new Error('Invalid storage key');
+  }
+
+  const segments = key.split('/');
+  if (segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')) {
+    throw new Error('Invalid storage key');
+  }
+}
+
+function assertValidSignedUrlExpiry(expiresInSeconds: number): void {
+  if (
+    !Number.isSafeInteger(expiresInSeconds)
+    || expiresInSeconds < 1
+    || expiresInSeconds > MAX_SIGNED_URL_EXPIRY
+  ) {
+    throw new Error(`Signed URL expiry must be an integer between 1 and ${MAX_SIGNED_URL_EXPIRY} seconds`);
+  }
+}
 
 /**
  * Build an R2 storage key for a certificate PDF.
@@ -39,6 +91,9 @@ export function buildCertificateStorageKey(
   certificateType: string,
   certificateId: string,
 ): string {
+  assertValidCertificateEventId(eventId);
+  assertValidCertificateType(certificateType);
+  assertValidCertificateId(certificateId);
   return `certificates/${eventId}/${certificateType}/${certificateId}.pdf`;
 }
 
@@ -51,6 +106,7 @@ export function createR2Provider(): StorageProvider {
   return {
     async upload(key, data, contentType) {
       try {
+        assertValidStorageKey(key);
         const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
         const crypto = await import('crypto');
 
@@ -86,6 +142,7 @@ export function createR2Provider(): StorageProvider {
 
     async uploadStream(key, stream, contentType) {
       try {
+        assertValidStorageKey(key);
         const { S3Client } = await import('@aws-sdk/client-s3');
         const { Upload } = await import('@aws-sdk/lib-storage');
         const cryptoModule = await import('crypto');
@@ -139,6 +196,8 @@ export function createR2Provider(): StorageProvider {
 
     async getSignedUrl(key, expiresInSeconds = DEFAULT_SIGNED_URL_EXPIRY) {
       try {
+        assertValidStorageKey(key);
+        assertValidSignedUrlExpiry(expiresInSeconds);
         const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
         const { getSignedUrl: s3GetSignedUrl } = await import('@aws-sdk/s3-request-presigner');
 
@@ -163,6 +222,7 @@ export function createR2Provider(): StorageProvider {
 
     async delete(key) {
       try {
+        assertValidStorageKey(key);
         const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
 
         const client = new S3Client({

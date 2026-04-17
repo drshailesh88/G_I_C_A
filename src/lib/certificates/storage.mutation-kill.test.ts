@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { Readable } from 'stream';
-import { createR2Provider, createStubStorageProvider } from './storage';
+import { buildCertificateStorageKey, createR2Provider, createStubStorageProvider } from './storage';
 
 // Mock sentry to capture and assert error reporting
 const mockCaptureStorageError = vi.fn();
@@ -117,11 +117,11 @@ describe('createR2Provider — S3Client config assertions', () => {
 describe('createR2Provider — getSignedUrl option assertions', () => {
   it('passes expiresIn to presigner so signed URLs expire at the requested time', async () => {
     const provider = createR2Provider();
-    await provider.getSignedUrl('certs/test.pdf', 7200);
+    await provider.getSignedUrl('certs/test.pdf', 3600);
     expect(mockGetSignedUrlFn).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
-      { expiresIn: 7200 },
+      { expiresIn: 3600 },
     );
   });
 
@@ -132,6 +132,14 @@ describe('createR2Provider — getSignedUrl option assertions', () => {
       Bucket: 'test-bucket',
       Key: 'certs/test.pdf',
     });
+  });
+
+  it('rejects unsafe storage keys and expiries before presigning', async () => {
+    const provider = createR2Provider();
+
+    await expect(provider.getSignedUrl('certs/../other.pdf', 300)).rejects.toThrow(/invalid storage key/i);
+    await expect(provider.getSignedUrl('certs/test.pdf', 3601)).rejects.toThrow(/between 1 and 3600 seconds/i);
+    expect(mockGetSignedUrlFn).not.toHaveBeenCalled();
   });
 });
 
@@ -197,5 +205,16 @@ describe('createStubStorageProvider — checksum format', () => {
     const provider = createStubStorageProvider();
     const result = await provider.upload('k.pdf', Buffer.from('mutation-kill-test'), 'application/pdf');
     expect(result.fileChecksumSha256).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
+describe('buildCertificateStorageKey — canonical segment assertions', () => {
+  it('rejects non-canonical event, type, and certificate ids', () => {
+    expect(() => buildCertificateStorageKey('not-a-uuid', 'delegate_attendance', '550e8400-e29b-41d4-a716-446655440001'))
+      .toThrow(/invalid certificate event id/i);
+    expect(() => buildCertificateStorageKey('550e8400-e29b-41d4-a716-446655440000', 'delegate/attendance', '550e8400-e29b-41d4-a716-446655440001'))
+      .toThrow(/invalid certificate type/i);
+    expect(() => buildCertificateStorageKey('550e8400-e29b-41d4-a716-446655440000', 'delegate_attendance', 'cert/../1'))
+      .toThrow(/invalid certificate id/i);
   });
 });

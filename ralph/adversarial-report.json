@@ -2273,5 +2273,57 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/certificates/storage.ts",
+    "module": "src/lib/certificates/storage.ts",
+    "attacked_at": "2026-04-17T15:47:07Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "buildCertificateStorageKey('not-a-uuid', '../delegate_attendance', '<uuid>/../other')",
+        "result": "succeeded"
+      },
+      {
+        "category": "path_traversal",
+        "payload": "getSignedUrl('certificates/event/type/../other.pdf', 300)",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "forge a non-canonical eventId into the certificate storage path builder",
+        "result": "succeeded"
+      },
+      {
+        "category": "info_leakage",
+        "payload": "getSignedUrl('certs/test.pdf', 3601)",
+        "result": "succeeded"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "invoke the helper without Clerk checks",
+        "result": "not_applicable_internal_helper_has_no_auth_surface"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "path_traversal",
+        "description": "The storage helper accepted raw event/type/certificate segments and traversal-style object keys, so direct callers could build or sign non-canonical R2 paths like '../other.pdf' that violated the expected certificates/{eventId}/{type}/{certificateId}.pdf layout and downstream event/type scoping assumptions.",
+        "fix": "Validated certificate event/type/id segments before building keys and rejected storage keys with traversal segments, empty path components, control characters, leading or trailing whitespace, backslashes, or overlong lengths before any R2 upload/sign/delete call.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/certificates/storage.test.ts > buildCertificateStorageKey > rejects malformed path segments that would poison certificate storage layout; src/lib/certificates/storage.test.ts > createR2Provider > rejects malformed storage keys before signing URLs"
+      },
+      {
+        "severity": "medium",
+        "category": "info_leakage",
+        "description": "getSignedUrl forwarded zero, fractional, and overlong expiry values directly to the presigner, so a caller could mint certificate or export download URLs that lived longer than the app's temporary-access policy instead of failing closed.",
+        "fix": "Bounded signed URL expiry to safe integers between 1 and 3600 seconds before calling the S3 presigner.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/certificates/storage.test.ts > createR2Provider > rejects non-integer or overlong signed URL expiries"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

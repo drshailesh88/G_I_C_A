@@ -53,6 +53,15 @@ describe('buildCertificateStorageKey', () => {
     const key = buildCertificateStorageKey(EVENT_ID, 'speaker_recognition', CERT_ID);
     expect(key).toContain('speaker_recognition');
   });
+
+  it('rejects malformed path segments that would poison certificate storage layout', () => {
+    expect(() => buildCertificateStorageKey('not-a-uuid', 'delegate_attendance', CERT_ID))
+      .toThrow(/invalid certificate event id/i);
+    expect(() => buildCertificateStorageKey(EVENT_ID, '../delegate_attendance', CERT_ID))
+      .toThrow(/invalid certificate type/i);
+    expect(() => buildCertificateStorageKey(EVENT_ID, 'delegate_attendance', `${CERT_ID}/../other`))
+      .toThrow(/invalid certificate id/i);
+  });
 });
 
 describe('createStubStorageProvider', () => {
@@ -134,6 +143,24 @@ describe('createR2Provider', () => {
     const url = await provider.getSignedUrl('certs/test.pdf', 3600);
 
     expect(url).toBe('https://r2.example.com/signed?token=abc');
+  });
+
+  it('rejects malformed storage keys before signing URLs', async () => {
+    const provider = createR2Provider();
+
+    await expect(provider.getSignedUrl('certificates/event/type/../other.pdf', 300))
+      .rejects.toThrow(/invalid storage key/i);
+  });
+
+  it('rejects non-integer or overlong signed URL expiries', async () => {
+    const provider = createR2Provider();
+
+    await expect(provider.getSignedUrl('certs/test.pdf', 0))
+      .rejects.toThrow(/between 1 and 3600 seconds/i);
+    await expect(provider.getSignedUrl('certs/test.pdf', 3601))
+      .rejects.toThrow(/between 1 and 3600 seconds/i);
+    await expect(provider.getSignedUrl('certs/test.pdf', 12.5))
+      .rejects.toThrow(/between 1 and 3600 seconds/i);
   });
 
   it('delete sends DeleteObjectCommand', async () => {

@@ -3,6 +3,7 @@
 ## Attack Patterns
 
 <!-- Recurring attack vectors + their fixes. Agent writes here. -->
+- Storage helpers must validate object-key canonical form and signed-URL TTLs before touching the S3/R2 SDK. Otherwise traversal-style keys or overlong expiries can bypass higher-level event scoping assumptions and turn private files into long-lived download URLs.
 - Idempotency-key builders must encode and presence-mark each segment. Raw delimiter concatenation and placeholder sentinels let malformed present values collide with missing fields or adjacent segments, suppressing distinct notifications.
 - Logistics server actions cannot rely on UI-only filters. Enforce travel-first and event/person-scoped foreign keys inside the action or direct calls will create cross-tenant/invalid rows.
 - Logistics mutations must emit audit + cascade side effects from the server action itself. If the action only mutates the table, downstream flags/notifications are bypassable.
@@ -246,3 +247,9 @@
 - Attacks tried: 6
 - Bugs found: 2
 - Key finding: the utility accepted regex-fragment prefixes and allowed the 5-digit certificate sequence to overflow, so malformed inputs could poison sequence selection or plan impossible six-digit certificate numbers.
+
+## 2026-04-17T15:47:07Z — src/lib/certificates/storage.ts — storage key and TTL hardening
+- Verdict: hardened
+- Attacks tried: 5
+- Bugs found: 2
+- Key finding: the storage helper signed traversal-style keys and accepted overlong signed-URL expiries, so direct callers could poison canonical R2 paths or mint private download URLs that outlived the app's temporary-access policy.
