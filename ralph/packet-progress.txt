@@ -14,6 +14,19 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-17T23:15:40Z — PKT-A-002 — Event settings page and updateEvent action
+
+- Story ID: p1-event-edit-settings
+- Implemented: `updateEventSchema` alias in validations; `updateEvent` server action (validates eventId, asserts write access, validates input, persists name/description/dates/venue/moduleToggles, revalidates paths); `/events/[eventId]/settings` server page (loads event, passes canWrite flag); `EventSettingsClient` form component with field-level error display, module toggle checkboxes, disabled state for read-only users.
+- Files changed:
+  - src/lib/validations/event.ts (added updateEventSchema, UpdateEventInput)
+  - src/lib/actions/event.ts (added updateEvent action, UpdateEventResult type)
+  - src/lib/actions/event-settings.test.ts (new — 16 tests, all pass)
+  - src/app/(app)/events/[eventId]/settings/page.tsx (new)
+  - src/app/(app)/events/[eventId]/settings/event-settings-client.tsx (new)
+- Tests run: `npm run test:run` — 16 new tests pass; 2 pre-existing failures in unrelated files (archive-bypass, travel-cascade), unchanged.
+- Risks/follow-ups: Settings page is accessible to all write roles (SUPER_ADMIN, EVENT_COORDINATOR, OPS) per assertEventAccess; ops users can currently edit event settings — a future packet may restrict settings to super_admin/coordinator only if needed.
+
 ## 2026-04-17T23:10:50Z — PKT-A-001 — Per-event user assignment UI and actions
 
 - Story ID: p2-per-event-user-assignment
