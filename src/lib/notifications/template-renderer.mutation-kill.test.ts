@@ -85,7 +85,7 @@ describe('resolveTemplate', () => {
   it('returns event-specific template when found', async () => {
     const mockTemplate = {
       id: 'tpl-1',
-      eventId: 'evt-1',
+      eventId: '11111111-1111-4111-8111-111111111111',
       channel: 'email',
       templateKey: 'welcome',
       status: 'active',
@@ -95,7 +95,7 @@ describe('resolveTemplate', () => {
     (db.limit as any).mockResolvedValueOnce([mockTemplate]);
 
     const { resolveTemplate } = await import('./template-renderer');
-    const result = await resolveTemplate('evt-1', 'email', 'welcome');
+    const result = await resolveTemplate('11111111-1111-4111-8111-111111111111', 'email', 'welcome');
     expect(result).toEqual(mockTemplate);
   });
 
@@ -114,7 +114,7 @@ describe('resolveTemplate', () => {
       .mockResolvedValueOnce([globalTemplate]); // global found
 
     const { resolveTemplate } = await import('./template-renderer');
-    const result = await resolveTemplate('evt-1', 'email', 'welcome');
+    const result = await resolveTemplate('11111111-1111-4111-8111-111111111111', 'email', 'welcome');
     expect(result).toEqual(globalTemplate);
   });
 
@@ -124,7 +124,7 @@ describe('resolveTemplate', () => {
       .mockResolvedValueOnce([]); // no global template
 
     const { resolveTemplate } = await import('./template-renderer');
-    const result = await resolveTemplate('evt-1', 'email', 'welcome');
+    const result = await resolveTemplate('11111111-1111-4111-8111-111111111111', 'email', 'welcome');
     expect(result).toBeNull();
   });
 });
@@ -150,7 +150,7 @@ describe('loadEventBranding', () => {
     });
 
     const { loadEventBranding } = await import('./template-renderer');
-    const result = await loadEventBranding('evt-1', 'custom', customBranding);
+    const result = await loadEventBranding('11111111-1111-4111-8111-111111111111', 'custom', customBranding);
 
     expect(result.primaryColor).toBe('#FF0000');
     expect(result.emailSenderName).toBe('Custom');
@@ -170,7 +170,7 @@ describe('loadEventBranding', () => {
     });
 
     const { loadEventBranding } = await import('./template-renderer');
-    const result = await loadEventBranding('evt-1', 'custom', null);
+    const result = await loadEventBranding('11111111-1111-4111-8111-111111111111', 'custom', null);
 
     // Should call safeParse with merged defaults (not crash on null)
     expect(eventBrandingSchema.safeParse).toHaveBeenCalled();
@@ -196,7 +196,7 @@ describe('loadEventBranding', () => {
     });
 
     const { loadEventBranding } = await import('./template-renderer');
-    const result = await loadEventBranding('evt-1', 'default', null);
+    const result = await loadEventBranding('11111111-1111-4111-8111-111111111111', 'default', null);
 
     expect(result.primaryColor).toBe('#123456');
     expect(result.emailSenderName).toBe('Event Org');
@@ -207,8 +207,8 @@ describe('loadEventBranding', () => {
 
     const { loadEventBranding } = await import('./template-renderer');
     await expect(
-      loadEventBranding('evt-missing', 'default', null),
-    ).rejects.toThrow('Event not found: evt-missing');
+      loadEventBranding('99999999-9999-4999-8999-999999999999', 'default', null),
+    ).rejects.toThrow('Event not found: 99999999-9999-4999-8999-999999999999');
   });
 
   it('resolves logo and header image URLs via getSignedUrlFn', async () => {
@@ -218,8 +218,8 @@ describe('loadEventBranding', () => {
       emailSenderName: 'GEM India',
       emailFooterText: '',
       whatsappPrefix: '',
-      logoStorageKey: 'logos/logo.png',
-      headerImageStorageKey: 'headers/header.jpg',
+      logoStorageKey: 'branding/11111111-1111-4111-8111-111111111111/logo/logo.png',
+      headerImageStorageKey: 'branding/11111111-1111-4111-8111-111111111111/header/header.jpg',
     };
 
     (db.limit as any).mockResolvedValueOnce([{ branding: brandingWithImages }]);
@@ -233,12 +233,12 @@ describe('loadEventBranding', () => {
       .mockResolvedValueOnce('https://cdn.example.com/header.jpg');
 
     const { loadEventBranding } = await import('./template-renderer');
-    const result = await loadEventBranding('evt-1', 'default', null, mockGetSignedUrl);
+    const result = await loadEventBranding('11111111-1111-4111-8111-111111111111', 'default', null, mockGetSignedUrl);
 
     expect(result.logoUrl).toBe('https://cdn.example.com/logo.png');
     expect(result.headerImageUrl).toBe('https://cdn.example.com/header.jpg');
-    expect(mockGetSignedUrl).toHaveBeenCalledWith('logos/logo.png', 3600);
-    expect(mockGetSignedUrl).toHaveBeenCalledWith('headers/header.jpg', 3600);
+    expect(mockGetSignedUrl).toHaveBeenCalledWith('branding/11111111-1111-4111-8111-111111111111/logo/logo.png', 3600);
+    expect(mockGetSignedUrl).toHaveBeenCalledWith('branding/11111111-1111-4111-8111-111111111111/header/header.jpg', 3600);
   });
 
   it('resolves only logo when headerImageStorageKey is null', async () => {
@@ -248,7 +248,7 @@ describe('loadEventBranding', () => {
       emailSenderName: 'GEM',
       emailFooterText: '',
       whatsappPrefix: '',
-      logoStorageKey: 'logos/logo.png',
+      logoStorageKey: 'branding/11111111-1111-4111-8111-111111111111/logo/logo.png',
       headerImageStorageKey: null,
     };
 
@@ -258,7 +258,7 @@ describe('loadEventBranding', () => {
     const mockGetSignedUrl = vi.fn().mockResolvedValueOnce('https://cdn.example.com/logo.png');
 
     const { loadEventBranding } = await import('./template-renderer');
-    const result = await loadEventBranding('evt-1', 'default', null, mockGetSignedUrl);
+    const result = await loadEventBranding('11111111-1111-4111-8111-111111111111', 'default', null, mockGetSignedUrl);
 
     expect(result.logoUrl).toBe('https://cdn.example.com/logo.png');
     expect(result.headerImageUrl).toBe('');
@@ -275,7 +275,7 @@ describe('loadEventBranding', () => {
     });
 
     const { loadEventBranding } = await import('./template-renderer');
-    const result = await loadEventBranding('evt-1', 'default', null);
+    const result = await loadEventBranding('11111111-1111-4111-8111-111111111111', 'default', null);
 
     expect(eventBrandingSchema.parse).toHaveBeenCalledWith(DEFAULT_BRANDING);
     expect(result).toBeDefined();
@@ -296,7 +296,7 @@ describe('loadEventBranding', () => {
     (eventBrandingSchema.safeParse as any).mockReturnValue({ success: true, data: branding });
 
     const { loadEventBranding } = await import('./template-renderer');
-    const result = await loadEventBranding('evt-1', 'default', null);
+    const result = await loadEventBranding('11111111-1111-4111-8111-111111111111', 'default', null);
 
     expect(result.emailSenderName).not.toContain('\r');
     expect(result.emailSenderName).not.toContain('\n');
@@ -317,7 +317,7 @@ describe('renderTemplate', () => {
     const { renderTemplate } = await import('./template-renderer');
     await expect(
       renderTemplate({
-        eventId: 'evt-1',
+        eventId: '11111111-1111-4111-8111-111111111111',
         channel: 'email',
         templateKey: 'nonexistent',
         variables: {},
@@ -333,12 +333,12 @@ describe('renderTemplate', () => {
     const { renderTemplate } = await import('./template-renderer');
     await expect(
       renderTemplate({
-        eventId: 'evt-99',
+        eventId: '99999999-9999-4999-8999-999999999998',
         channel: 'whatsapp',
         templateKey: 'missing_key',
         variables: {},
       }),
-    ).rejects.toThrow(/missing_key.*whatsapp.*evt-99/);
+    ).rejects.toThrow(/missing_key.*whatsapp.*99999999-9999-4999-8999-999999999998/);
   });
 
   it('throws when required variables are missing', async () => {
@@ -372,7 +372,7 @@ describe('renderTemplate', () => {
     const { renderTemplate } = await import('./template-renderer');
     await expect(
       renderTemplate({
-        eventId: 'evt-1',
+        eventId: '11111111-1111-4111-8111-111111111111',
         channel: 'email',
         templateKey: 'welcome',
         variables: { name: 'Alice' },
@@ -411,7 +411,7 @@ describe('renderTemplate', () => {
 
     const { renderTemplate } = await import('./template-renderer');
     const result = await renderTemplate({
-      eventId: 'evt-1',
+      eventId: '11111111-1111-4111-8111-111111111111',
       channel: 'whatsapp',
       templateKey: 'reminder',
       variables: {},
@@ -452,7 +452,7 @@ describe('renderTemplate', () => {
 
     const { renderTemplate } = await import('./template-renderer');
     const result = await renderTemplate({
-      eventId: 'evt-1',
+      eventId: '11111111-1111-4111-8111-111111111111',
       channel: 'email',
       templateKey: 'welcome',
       variables: {},
@@ -493,7 +493,7 @@ describe('renderTemplate', () => {
 
     const { renderTemplate } = await import('./template-renderer');
     const result = await renderTemplate({
-      eventId: 'evt-1',
+      eventId: '11111111-1111-4111-8111-111111111111',
       channel: 'email',
       templateKey: 'welcome',
       variables: {},

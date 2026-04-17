@@ -29,6 +29,7 @@
 - Session-aware check-in reads must validate optional `sessionId` parameters for UUID shape and active-event membership before using them to shape attendance state, or stale/foreign session IDs can bypass validation and mislead operators.
 - Check-in write actions must validate the route `eventId` before auth/database work, reject body/route `eventId` mismatches, and event-scope optional `sessionId`s before duplicate detection or inserts. Otherwise direct calls can create or probe attendance under stale or foreign scopes.
 - Branding and file-backed settings must event-scope stored object keys before signing URLs; direct server-action JSON updates can otherwise borrow another event's object.
+- Notification template render helpers are security boundaries too: validate canonical event IDs and template keys before any lookup, and only sign canonical `branding/<eventId>/<logo|header>/...` asset keys so forged branding JSON cannot borrow another event's files.
 - Server actions must validate runtime enum parameters and uploaded file bytes. TypeScript unions and browser-provided MIME strings do not protect direct action callers.
 - JSON blob read-merge-write actions need compare-and-swap guards on `updatedAt`, or concurrent partial updates can silently clobber unrelated fields.
 - Long-running bulk jobs cannot ignore distributed-lock renew failures. If the lock expires or ownership is lost mid-flight, abort instead of continuing duplicate work without exclusivity.
@@ -370,3 +371,9 @@
 - Attacks tried: 4
 - Bugs found: 2
 - Key finding: the helper exported an unscoped `getTemplateById` path and accepted malformed event/template IDs into query construction, while content edits used a read-then-write version bump that let concurrent updates collapse onto the same version number.
+
+## 2026-04-17T18:33:01Z — src/lib/notifications/template-renderer.ts — input and branding scope hardening
+- Verdict: hardened
+- Attacks tried: 5
+- Bugs found: 2
+- Key finding: the renderer trusted malformed event/template identifiers and blindly signed stored branding object keys, so direct callers could turn bad IDs into fail-open template misses and borrow another event's branding asset through a signed URL.

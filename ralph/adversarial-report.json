@@ -3264,5 +3264,57 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/template-renderer.ts",
+    "module": "src/lib/notifications/template-renderer.ts",
+    "attacked_at": "2026-04-17T18:33:01Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "resolveTemplate('not-a-uuid', 'email', 'registration_confirmation') and renderTemplate(validEventId, whitespace-only templateKey)",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "event branding JSON with logoStorageKey='branding/22222222-2222-4222-8222-222222222222/logo/private-logo.png' rendered under eventId='11111111-1111-4111-8111-111111111111'",
+        "result": "succeeded"
+      },
+      {
+        "category": "prototype_pollution",
+        "payload": "template placeholders using __proto__ and constructor paths",
+        "result": "blocked_by_own_property_path_resolution"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "<script> and HTML attribute payloads injected through template variables and branding text",
+        "result": "no_exploitable_failure_in_renderer_layer"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized templateKey values beyond the 100-character template contract",
+        "result": "succeeded"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "resolveTemplate, loadEventBranding, and renderTemplate trusted raw eventId/templateKey strings. Malformed UUIDs and whitespace-only or oversized template keys reached query construction and failed open as missed-template behavior instead of being rejected at the renderer boundary.",
+        "fix": "Added fail-closed UUID/template-key validation inside template-renderer entrypoints so malformed identifiers are rejected before any DB work or fallback logic runs.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/template-renderer.adversarial.test.ts > rejects malformed event IDs before template queries run; src/lib/notifications/template-renderer.adversarial.test.ts > rejects malformed template keys before rendering queries run"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "loadEventBranding would sign any stored branding object key. A forged or stale branding JSON blob could point at branding assets from another event and receive a usable signed URL for that foreign object.",
+        "fix": "Enforced canonical branding storage keys of the form branding/<eventId>/<logo|header>/... and rejected cross-event, malformed, or non-branding keys before signed-URL generation.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/template-renderer.adversarial.test.ts > blocks cross-event branding asset signing"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

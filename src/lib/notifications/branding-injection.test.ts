@@ -51,7 +51,7 @@ import { renderTemplate, loadEventBranding } from './template-renderer';
 function makeTemplate(overrides?: Record<string, unknown>) {
   return {
     id: 'tpl-1',
-    eventId: 'evt-1',
+    eventId: '11111111-1111-4111-8111-111111111111',
     templateKey: 'registration_confirmation',
     channel: 'email',
     templateName: 'Registration Confirmation',
@@ -129,7 +129,7 @@ describe('renderTemplate with branding injection', () => {
   it('injects custom branding colors and logo URL into rendered template', async () => {
     const template = makeTemplate();
     const eventBranding = makeEventRow({
-      logoStorageKey: 'branding/evt-1/logo/abc-logo.png',
+      logoStorageKey: 'branding/11111111-1111-4111-8111-111111111111/logo/abc-logo.png',
       primaryColor: '#FF0000',
       secondaryColor: '#00FF00',
       emailSenderName: 'GEM Conference',
@@ -144,7 +144,7 @@ describe('renderTemplate with branding injection', () => {
 
     const result = await renderTemplate(
       {
-        eventId: 'evt-1',
+        eventId: '11111111-1111-4111-8111-111111111111',
         channel: 'email',
         templateKey: 'registration_confirmation',
         variables: { fullName: 'Dr. Sharma', eventName: 'GEM 2026' },
@@ -153,11 +153,11 @@ describe('renderTemplate with branding injection', () => {
     );
 
     // Logo URL should be resolved via getSignedUrlFn
-    expect(mockGetSignedUrl).toHaveBeenCalledWith('branding/evt-1/logo/abc-logo.png', 3600);
+    expect(mockGetSignedUrl).toHaveBeenCalledWith('branding/11111111-1111-4111-8111-111111111111/logo/abc-logo.png', 3600);
 
     // Body should contain the injected branding values
     expect(result.body).toContain('#FF0000'); // primaryColor
-    expect(result.body).toContain('https://r2.example.com/signed/branding/evt-1/logo/abc-logo.png'); // logo URL
+    expect(result.body).toContain('https://r2.example.com/signed/branding/11111111-1111-4111-8111-111111111111/logo/abc-logo.png'); // logo URL
     expect(result.body).toContain('Powered by GEM India'); // footer
     expect(result.body).toContain('Dr. Sharma'); // regular variable still works
 
@@ -182,7 +182,7 @@ describe('renderTemplate with branding injection', () => {
 
     const result = await renderTemplate(
       {
-        eventId: 'evt-1',
+        eventId: '11111111-1111-4111-8111-111111111111',
         channel: 'email',
         templateKey: 'registration_confirmation',
         variables: { fullName: 'Alice', eventName: 'Test Event' },
@@ -218,7 +218,7 @@ describe('renderTemplate with branding injection', () => {
 
     const result1 = await renderTemplate(
       {
-        eventId: 'evt-1',
+        eventId: '11111111-1111-4111-8111-111111111111',
         channel: 'email',
         templateKey: 'registration_confirmation',
         variables: { fullName: 'Bob', eventName: 'Event' },
@@ -242,7 +242,7 @@ describe('renderTemplate with branding injection', () => {
 
     const result2 = await renderTemplate(
       {
-        eventId: 'evt-1',
+        eventId: '11111111-1111-4111-8111-111111111111',
         channel: 'email',
         templateKey: 'registration_confirmation',
         variables: { fullName: 'Bob', eventName: 'Event' },
@@ -274,7 +274,7 @@ describe('renderTemplate with branding injection', () => {
 
     const result = await renderTemplate(
       {
-        eventId: 'evt-1',
+        eventId: '11111111-1111-4111-8111-111111111111',
         channel: 'whatsapp',
         templateKey: 'registration_confirmation',
         variables: { fullName: 'Dr. Patel', eventName: 'GEM 2026' },
@@ -302,7 +302,7 @@ describe('renderTemplate with branding injection', () => {
 
     const result = await renderTemplate(
       {
-        eventId: 'evt-1',
+        eventId: '11111111-1111-4111-8111-111111111111',
         channel: 'email',
         templateKey: 'registration_confirmation',
         variables: { fullName: 'Alice', eventName: 'Test' },
@@ -319,7 +319,7 @@ describe('renderTemplate with branding injection', () => {
     const customBranding = {
       primaryColor: '#AABBCC',
       emailSenderName: 'Custom Sender',
-      logoStorageKey: 'custom/logo.png',
+      logoStorageKey: 'branding/11111111-1111-4111-8111-111111111111/logo/custom-logo.png',
     };
 
     const template = makeTemplate({
@@ -336,7 +336,7 @@ describe('renderTemplate with branding injection', () => {
 
     const result = await renderTemplate(
       {
-        eventId: 'evt-1',
+        eventId: '11111111-1111-4111-8111-111111111111',
         channel: 'email',
         templateKey: 'registration_confirmation',
         variables: { fullName: 'Charlie', eventName: 'Event' },
@@ -346,27 +346,27 @@ describe('renderTemplate with branding injection', () => {
 
     expect(result.body).toContain('#AABBCC');
     expect(result.brandingVars.emailSenderName).toBe('Custom Sender');
-    expect(mockGetSignedUrl).toHaveBeenCalledWith('custom/logo.png', 3600);
+    expect(mockGetSignedUrl).toHaveBeenCalledWith('branding/11111111-1111-4111-8111-111111111111/logo/custom-logo.png', 3600);
   });
 });
 
 describe('loadEventBranding', () => {
   it('resolves both logo and header image URLs when storage keys exist', async () => {
     const eventRow = makeEventRow({
-      logoStorageKey: 'branding/evt-1/logo/logo.png',
-      headerImageStorageKey: 'branding/evt-1/header/banner.jpg',
+      logoStorageKey: 'branding/11111111-1111-4111-8111-111111111111/logo/logo.png',
+      headerImageStorageKey: 'branding/11111111-1111-4111-8111-111111111111/header/banner.jpg',
       primaryColor: '#ABCDEF',
     });
 
     setupDbReturnsSequence([[eventRow]]);
 
-    const vars = await loadEventBranding('evt-1', 'event_branding', null, mockGetSignedUrl);
+    const vars = await loadEventBranding('11111111-1111-4111-8111-111111111111', 'event_branding', null, mockGetSignedUrl);
 
     expect(mockGetSignedUrl).toHaveBeenCalledTimes(2);
-    expect(mockGetSignedUrl).toHaveBeenCalledWith('branding/evt-1/logo/logo.png', 3600);
-    expect(mockGetSignedUrl).toHaveBeenCalledWith('branding/evt-1/header/banner.jpg', 3600);
-    expect(vars.logoUrl).toBe('https://r2.example.com/signed/branding/evt-1/logo/logo.png');
-    expect(vars.headerImageUrl).toBe('https://r2.example.com/signed/branding/evt-1/header/banner.jpg');
+    expect(mockGetSignedUrl).toHaveBeenCalledWith('branding/11111111-1111-4111-8111-111111111111/logo/logo.png', 3600);
+    expect(mockGetSignedUrl).toHaveBeenCalledWith('branding/11111111-1111-4111-8111-111111111111/header/banner.jpg', 3600);
+    expect(vars.logoUrl).toBe('https://r2.example.com/signed/branding/11111111-1111-4111-8111-111111111111/logo/logo.png');
+    expect(vars.headerImageUrl).toBe('https://r2.example.com/signed/branding/11111111-1111-4111-8111-111111111111/header/banner.jpg');
     expect(vars.primaryColor).toBe('#ABCDEF');
   });
 });
@@ -390,7 +390,7 @@ describe('sendNotification passes fromDisplayName from branding', () => {
 
     const result = await renderTemplate(
       {
-        eventId: 'evt-1',
+        eventId: '11111111-1111-4111-8111-111111111111',
         channel: 'email',
         templateKey: 'registration_confirmation',
         variables: { fullName: 'Test', eventName: 'Event' },
@@ -412,7 +412,7 @@ describe('adversarial: Codex-found bugs', () => {
     ]);
 
     await expect(
-      loadEventBranding('nonexistent-evt', 'event_branding', null, mockGetSignedUrl),
+      loadEventBranding('99999999-9999-4999-8999-999999999999', 'event_branding', null, mockGetSignedUrl),
     ).rejects.toThrow('Event not found');
   });
 
@@ -420,7 +420,7 @@ describe('adversarial: Codex-found bugs', () => {
     // When brandingMode is "custom" but customBrandingJson is null,
     // should use DEFAULT_BRANDING — not fall through to event branding query
     const result = await loadEventBranding(
-      'evt-1',
+      '11111111-1111-4111-8111-111111111111',
       'custom',
       null, // no custom JSON
       mockGetSignedUrl,
@@ -442,7 +442,7 @@ describe('adversarial: Codex-found bugs', () => {
       [eventWithBadBranding],
     ]);
 
-    const result = await loadEventBranding('evt-1', 'event_branding', null, mockGetSignedUrl);
+    const result = await loadEventBranding('11111111-1111-4111-8111-111111111111', 'event_branding', null, mockGetSignedUrl);
 
     // Should degrade to defaults, not throw
     expect(result.primaryColor).toBe('#1E40AF');
@@ -458,7 +458,7 @@ describe('adversarial: Codex-found bugs', () => {
       [eventBranding],
     ]);
 
-    const result = await loadEventBranding('evt-1', 'event_branding', null, mockGetSignedUrl);
+    const result = await loadEventBranding('11111111-1111-4111-8111-111111111111', 'event_branding', null, mockGetSignedUrl);
 
     // CRLF characters must be stripped
     expect(result.emailSenderName).not.toContain('\r');

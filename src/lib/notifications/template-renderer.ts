@@ -9,6 +9,7 @@
 import { db } from '@/lib/db';
 import { notificationTemplates, events } from '@/lib/db/schema';
 import { eq, and, isNull } from 'drizzle-orm';
+import { z } from 'zod';
 import type { Channel, TemplateRenderResult } from './types';
 import { interpolate, validateRequiredVariables } from './template-utils';
 import {
@@ -38,6 +39,64 @@ export type BrandingTemplateVars = {
   whatsappPrefix: string;
 };
 
+const eventIdSchema = z.string().uuid('Invalid event ID');
+const templateKeySchema = z.string().trim().min(1).max(100);
+const BRANDING_ASSET_TYPES = new Set(['logo', 'header']);
+
+function validateEventId(eventId: string): string {
+  const result = eventIdSchema.safeParse(eventId);
+  if (!result.success) {
+    throw new Error('Invalid event ID');
+  }
+
+  return result.data.toLowerCase();
+}
+
+function validateTemplateKey(templateKey: string): string {
+  const result = templateKeySchema.safeParse(templateKey);
+  if (!result.success) {
+    throw new Error('Invalid template key');
+  }
+
+  return result.data;
+}
+
+function assertBrandingStorageKeyScope(
+  eventId: string,
+  storageKey: string,
+  expectedAssetType: 'logo' | 'header',
+): void {
+  if (
+    storageKey.length === 0
+    || storageKey.length > 500
+    || storageKey !== storageKey.trim()
+    || storageKey.includes('\0')
+  ) {
+    throw new Error('Invalid branding storageKey');
+  }
+
+  const segments = storageKey.split('/');
+  if (
+    segments.length < 4
+    || segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')
+  ) {
+    throw new Error('Invalid branding storageKey');
+  }
+
+  const [root, scopedEventId, assetType] = segments;
+  if (
+    root !== 'branding'
+    || !BRANDING_ASSET_TYPES.has(assetType)
+    || assetType !== expectedAssetType
+  ) {
+    throw new Error('Invalid branding storageKey');
+  }
+
+  if (scopedEventId.toLowerCase() !== eventId) {
+    throw new Error('Branding storageKey is outside the active event scope');
+  }
+}
+
 /**
  * Resolve template: event-specific override first, then global default.
  * Only active templates are considered.
@@ -47,15 +106,18 @@ export async function resolveTemplate(
   channel: Channel,
   templateKey: string,
 ) {
+  const scopedEventId = validateEventId(eventId);
+  const scopedTemplateKey = validateTemplateKey(templateKey);
+
   // Try event-specific override first
   const eventTemplates = await db
     .select()
     .from(notificationTemplates)
     .where(
       and(
-        eq(notificationTemplates.eventId, eventId),
+        eq(notificationTemplates.eventId, scopedEventId),
         eq(notificationTemplates.channel, channel),
-        eq(notificationTemplates.templateKey, templateKey),
+        eq(notificationTemplates.templateKey, scopedTemplateKey),
         eq(notificationTemplates.status, 'active'),
       ),
     )
@@ -73,7 +135,7 @@ export async function resolveTemplate(
       and(
         isNull(notificationTemplates.eventId),
         eq(notificationTemplates.channel, channel),
-        eq(notificationTemplates.templateKey, templateKey),
+        eq(notificationTemplates.templateKey, scopedTemplateKey),
         eq(notificationTemplates.status, 'active'),
       ),
     )
@@ -109,6 +171,7 @@ export async function loadEventBranding(
   /** Injected for testability — resolves an R2 storageKey to a signed URL */
   getSignedUrlFn?: (storageKey: string, expirySeconds: number) => Promise<string>,
 ): Promise<BrandingTemplateVars> {
+  const scopedEventId = validateEventId(eventId);
   let branding: EventBranding;
 
   if (brandingMode === 'custom') {
@@ -122,7 +185,7 @@ export async function loadEventBranding(
     const [event] = await db
       .select({ branding: events.branding })
       .from(events)
-      .where(eq(events.id, eventId))
+      .where(eq(events.id, scopedEventId))
       .limit(1);
 
     // FIX #1: Missing event row → throw instead of silently using defaults
@@ -149,9 +212,11 @@ export async function loadEventBranding(
     const BRANDING_URL_EXPIRY = 3600; // 1 hour
 
     if (branding.logoStorageKey) {
+      assertBrandingStorageKeyScope(scopedEventId, branding.logoStorageKey, 'logo');
       logoUrl = await resolveUrl(branding.logoStorageKey, BRANDING_URL_EXPIRY);
     }
     if (branding.headerImageStorageKey) {
+      assertBrandingStorageKeyScope(scopedEventId, branding.headerImageStorageKey, 'header');
       headerImageUrl = await resolveUrl(branding.headerImageStorageKey, BRANDING_URL_EXPIRY);
     }
   }
@@ -185,21 +250,24 @@ export async function renderTemplate(
   templateVersionNo: number;
   brandingVars: BrandingTemplateVars;
 }> {
+  const scopedEventId = validateEventId(input.eventId);
+  const scopedTemplateKey = validateTemplateKey(input.templateKey);
+
   const template = await resolveTemplate(
-    input.eventId,
+    scopedEventId,
     input.channel,
-    input.templateKey,
+    scopedTemplateKey,
   );
 
   if (!template) {
     throw new Error(
-      `No active template found for key="${input.templateKey}" channel="${input.channel}" eventId="${input.eventId}"`,
+      `No active template found for key="${scopedTemplateKey}" channel="${input.channel}" eventId="${scopedEventId}"`,
     );
   }
 
   // Load event branding based on template's brandingMode
   const brandingVars = await loadEventBranding(
-    input.eventId,
+    scopedEventId,
     template.brandingMode,
     template.customBrandingJson,
     overrides?.getSignedUrlFn,
