@@ -46,6 +46,8 @@ export const ELIGIBILITY_BASIS_TYPES = [
 ] as const;
 export type EligibilityBasisType = (typeof ELIGIBILITY_BASIS_TYPES)[number];
 
+const REQUIRED_VARIABLES_MESSAGE = 'All required variables must be included in allowed variables';
+
 // ── Create certificate template ──────────────────────────────
 export const createCertificateTemplateSchema = z.object({
   templateName: z.string().trim().min(1, 'Template name is required').max(200),
@@ -67,7 +69,7 @@ export const createCertificateTemplateSchema = z.object({
     const allowed = new Set(data.allowedVariablesJson);
     return data.requiredVariablesJson.every((v) => allowed.has(v));
   },
-  { message: 'All required variables must be included in allowed variables', path: ['requiredVariablesJson'] },
+  { message: REQUIRED_VARIABLES_MESSAGE, path: ['requiredVariablesJson'] },
 );
 
 export type CreateCertificateTemplateInput = z.infer<typeof createCertificateTemplateSchema>;
@@ -87,6 +89,17 @@ export const updateCertificateTemplateSchema = z.object({
   qrVerificationEnabled: z.boolean().optional(),
   verificationText: z.string().trim().max(500).optional(),
   notes: z.string().trim().max(2000).optional(),
+}).superRefine((data, ctx) => {
+  if (data.allowedVariablesJson && data.requiredVariablesJson) {
+    const allowed = new Set(data.allowedVariablesJson);
+    if (!data.requiredVariablesJson.every((variable) => allowed.has(variable))) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: REQUIRED_VARIABLES_MESSAGE,
+        path: ['requiredVariablesJson'],
+      });
+    }
+  }
 });
 
 export type UpdateCertificateTemplateInput = z.infer<typeof updateCertificateTemplateSchema>;
@@ -116,6 +129,25 @@ export const issueCertificateSchema = z.object({
   eligibilityBasisType: z.enum(ELIGIBILITY_BASIS_TYPES),
   eligibilityBasisId: z.string().uuid().optional(),
   renderedVariablesJson: z.record(z.unknown()),
+}).superRefine((data, ctx) => {
+  if (data.eligibilityBasisType === 'manual') {
+    if (data.eligibilityBasisId !== undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Manual eligibility cannot reference another record',
+        path: ['eligibilityBasisId'],
+      });
+    }
+    return;
+  }
+
+  if (!data.eligibilityBasisId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'eligibilityBasisId is required unless eligibilityBasisType is manual',
+      path: ['eligibilityBasisId'],
+    });
+  }
 });
 
 export type IssueCertificateInput = z.infer<typeof issueCertificateSchema>;

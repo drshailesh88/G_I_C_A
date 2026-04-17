@@ -43,6 +43,7 @@
 - Async queue entrypoints must validate event-scoped resource IDs before dispatch. If they trust the worker to filter later, cross-event or stale IDs still queue misleading background jobs.
 - Feature-flag checks for destructive bulk actions must fail closed on provider/Redis errors. Swallowing lookup failures turns an outage into a gate bypass.
 - Certificate issuance must bind active templates and polymorphic eligibility basis IDs to the requested event/person/type. Admin override does not mean arbitrary cross-event backing records or mismatched template snapshots are safe.
+- Certificate validation boundaries must enforce cross-field eligibility invariants themselves. If `eligibilityBasisType` and `eligibilityBasisId` are independently optional, direct callers can request unbacked issuance for non-manual certificates or sneak foreign record references onto manual issuance before downstream scoping checks run.
 - Certificate supersession must clear the old current row with a status-scoped compare-and-swap before inserting the replacement, or the partial one-current unique index and concurrent regenerations can break the chain.
 - Notification idempotency keys for certificate sends must be stable per certificate/channel. Timestamped keys convert rapid duplicate clicks into distinct sends and bypass Redis dedupe.
 - Template editor actions must validate merged allowed/required variable sets on partial updates and use compare-and-swap guards on status/updatedAt during update/activate/archive, or stale direct calls can persist invalid templates or revive old state.
@@ -460,3 +461,9 @@
 - Attacks tried: 8
 - Bugs found: 2
 - Key finding: one null-poisoned branding field could make the full branding payload fail validation, crashing reads or resetting valid notification branding to defaults, while traversal-style filenames could still generate poisoned storage keys before later cleanup.
+
+## 2026-04-17T20:13:56Z — src/lib/validations/certificate.ts — certificate validation invariant hardening
+- Verdict: hardened
+- Attacks tried: 8
+- Bugs found: 2
+- Key finding: the validator accepted non-manual certificate issuance without any eligibility basis ID, so direct callers could request issuance detached from the registration/attendance/session record the certificate is supposed to prove.

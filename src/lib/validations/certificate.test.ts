@@ -107,6 +107,14 @@ describe('updateCertificateTemplateSchema', () => {
     });
     expect(result.templateJson).toBeDefined();
   });
+
+  it('rejects required variables outside the updated allowed set', () => {
+    expect(() => updateCertificateTemplateSchema.parse({
+      templateId: validUuid,
+      allowedVariablesJson: ['full_name'],
+      requiredVariablesJson: ['event_name'],
+    })).toThrow('required variables must be included in allowed variables');
+  });
 });
 
 describe('activateCertificateTemplateSchema', () => {
@@ -140,12 +148,13 @@ describe('issueCertificateSchema', () => {
       templateId: validUuid,
       certificateType: 'delegate_attendance',
       eligibilityBasisType: 'registration',
+      eligibilityBasisId: validUuid,
       renderedVariablesJson: { full_name: 'John Doe' },
     });
     expect(result.certificateType).toBe('delegate_attendance');
   });
 
-  it('accepts optional eligibilityBasisId', () => {
+  it('accepts missing eligibilityBasisId only for manual basis types', () => {
     const result = issueCertificateSchema.parse({
       personId: validUuid,
       templateId: validUuid,
@@ -154,6 +163,27 @@ describe('issueCertificateSchema', () => {
       renderedVariablesJson: {},
     });
     expect(result.eligibilityBasisId).toBeUndefined();
+  });
+
+  it('rejects missing eligibilityBasisId for non-manual basis types', () => {
+    expect(() => issueCertificateSchema.parse({
+      personId: validUuid,
+      templateId: validUuid,
+      certificateType: 'delegate_attendance',
+      eligibilityBasisType: 'registration',
+      renderedVariablesJson: {},
+    })).toThrow('eligibilityBasisId is required unless eligibilityBasisType is manual');
+  });
+
+  it('rejects eligibilityBasisId when eligibilityBasisType is manual', () => {
+    expect(() => issueCertificateSchema.parse({
+      personId: validUuid,
+      templateId: validUuid,
+      certificateType: 'faculty_participation',
+      eligibilityBasisType: 'manual',
+      eligibilityBasisId: validUuid,
+      renderedVariablesJson: {},
+    })).toThrow('Manual eligibility cannot reference another record');
   });
 });
 

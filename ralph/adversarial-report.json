@@ -3929,5 +3929,72 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/validations/certificate.ts",
+    "module": "src/lib/validations/certificate.ts",
+    "attacked_at": "2026-04-17T20:13:56Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "issueCertificateSchema with eligibilityBasisType='registration' and no eligibilityBasisId",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "issueCertificateSchema with eligibilityBasisType='manual' and a forged eligibilityBasisId",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "updateCertificateTemplateSchema with allowedVariablesJson=['full_name'] and requiredVariablesJson=['event_name']",
+        "result": "succeeded"
+      },
+      {
+        "category": "prototype_pollution",
+        "payload": "__proto__ / inherited properties inside templateJson and renderedVariablesJson",
+        "result": "blocked_by_current_zod_object_record_validation"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized templateName/revokeReason/personIds arrays",
+        "result": "blocked_by_existing_length_and_batch_caps"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not_applicable_module_has_no_event_scope_queries_or_writes",
+        "result": "not_applicable"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "not_applicable_module_has_no_auth_or_role_boundary",
+        "result": "not_applicable"
+      },
+      {
+        "category": "race_condition",
+        "payload": "not_applicable_pure_validation_module_has_no_shared_mutation_path",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "malformed_input",
+        "description": "issueCertificateSchema accepted non-manual certificate issuance payloads with no eligibilityBasisId and also accepted manual issuance with a referenced basis row, so direct callers could bypass the intended certificate-to-registration/attendance/session linkage at the validation boundary.",
+        "fix": "Added a cross-field issueCertificateSchema refinement that requires eligibilityBasisId for non-manual basis types and rejects any basis reference for manual issuance.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/certificate.test.ts > rejects missing eligibilityBasisId for non-manual basis types; src/lib/validations/certificate.test.ts > rejects eligibilityBasisId when eligibilityBasisType is manual"
+      },
+      {
+        "severity": "medium",
+        "category": "stale_state",
+        "description": "updateCertificateTemplateSchema accepted partial updates where requiredVariablesJson was outside the updated allowedVariablesJson set, allowing direct callers to validate impossible template contracts unless every write path reimplemented the merge-time subset check itself.",
+        "fix": "Added an updateCertificateTemplateSchema cross-field refinement that rejects required variables outside the provided allowed-variable set.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/certificate.test.ts > rejects required variables outside the updated allowed set"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
