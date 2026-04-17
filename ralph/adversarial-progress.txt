@@ -82,6 +82,7 @@
 - Shared class-name merge helpers are security boundaries too: only honor own enumerable keys from object inputs and bound array traversal iteratively, or prototype-backed dictionaries can inject inherited classes and cyclic/deep arrays can crash render paths with stack overflows.
 - Validation modules must not trust `new Date(...)` coercion as a parser. JavaScript silently normalizes impossible calendar inputs like `2026-02-30`, and optional update date fields that accept `''` become malformed `Invalid Date` writes unless the schema enforces canonical non-empty ISO date/date-time strings and range checks itself.
 - Event and settings validation boundaries must validate real IANA timezone names too. Hidden form fields or direct JSON callers can otherwise persist poisoned timezone strings that later throw `RangeError` in date-formatting and dashboard reads.
+- Contact-method validators must normalize or validate trimmed phone inputs before using truthy/length checks for "at least one contact" rules. Whitespace-only phone strings otherwise satisfy the refinement, normalize to empty later, and let direct callers persist unreachable person records or clear every usable contact channel.
 
 ## Iteration log
 
@@ -481,3 +482,9 @@
 - Attacks tried: 9
 - Bugs found: 1
 - Key finding: the validator accepted whitespace-poisoned, reserved-segment, and impossible required variable identifiers, so direct callers could persist templates that later fail every render/send despite providing the documented variables.
+
+## 2026-04-17T20:34:38Z — src/lib/validations/person.ts — person contact validation hardening
+- Verdict: hardened
+- Attacks tried: 8
+- Bugs found: 2
+- Key finding: the validator treated whitespace-only phone strings as a usable contact method and let one update payload blank both email and phone, so direct callers could create or mutate people into unreachable records before later phone normalization ran.

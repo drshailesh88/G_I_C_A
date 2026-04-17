@@ -4132,5 +4132,72 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/validations/person.ts",
+    "module": "src/lib/validations/person.ts",
+    "attacked_at": "2026-04-17T20:34:38Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "create payload with phone='   ' and no email",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "create payload with valid email and malformed phone='123'",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "update payload with email='' and phone='   '",
+        "result": "succeeded"
+      },
+      {
+        "category": "unicode",
+        "payload": "whitespace-padded contact fields and trim-sensitive optional strings",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized fullName/email/phone/tags/search payloads",
+        "result": "blocked_by_existing_length_limits"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not_applicable_module_has_no_event_scoped_queries_or_writes",
+        "result": "not_applicable"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "not_applicable_module_has_no_auth_or_role_boundary",
+        "result": "not_applicable"
+      },
+      {
+        "category": "race_condition",
+        "payload": "not_applicable_pure_validation_module_has_no_shared_mutation_path",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "malformed_input",
+        "description": "createPersonSchema/updatePersonSchema only bounded phone length and used raw truthy checks for the contact-method refinement. A direct caller could send phone='   ' to satisfy the create-time contact requirement, then have later normalization collapse it to an empty string and persist a person with no usable email or phone. The same boundary also accepted malformed non-empty phone strings such as '123', deferring failure to later runtime normalization instead of rejecting at parse time.",
+        "fix": "Trimmed optional string fields before validation, added phone-number validation at the schema boundary by reusing normalizePhone(), and changed the create-time contact refinement to require an actually non-empty trimmed email or phone value.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/person.test.ts > rejects whitespace-only phone when no other contact is provided; src/lib/validations/person.test.ts > rejects malformed phone numbers at the validation boundary"
+      },
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "updatePersonSchema accepted one payload that simultaneously set email='' and phone='   ', allowing direct callers to blank both contact methods at once and turn an existing person record into an unreachable contact.",
+        "fix": "Added an update-time cross-field refinement that rejects requests attempting to clear both email and phone in the same payload after trimming.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/person.test.ts > rejects updates that clear both email and phone at once"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

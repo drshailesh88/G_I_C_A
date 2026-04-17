@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js';
+import { parsePhoneNumber } from 'libphonenumber-js';
 
 // ── Phone normalization ────────────────────────────────────────
 export function normalizePhone(raw: string): string {
@@ -14,6 +14,38 @@ export function normalizePhone(raw: string): string {
   return parsed.number; // E.164 format
 }
 
+function trimString(value: unknown): unknown {
+  return typeof value === 'string' ? value.trim() : value;
+}
+
+const optionalEmailSchema = z.preprocess(
+  trimString,
+  z.union([
+    z.literal(''),
+    z.string().email('Invalid email').max(254),
+  ]).optional(),
+);
+
+const optionalPhoneSchema = z.preprocess(
+  trimString,
+  z.union([
+    z.literal(''),
+    z.string().max(20).refine((value) => {
+      try {
+        normalizePhone(value);
+        return true;
+      } catch {
+        return false;
+      }
+    }, 'Invalid phone number'),
+  ]).optional(),
+);
+
+const optionalTrimmedString = (max: number) => z.preprocess(
+  trimString,
+  z.union([z.literal(''), z.string().max(max)]).optional(),
+);
+
 // ── Salutation values ──────────────────────────────────────────
 export const SALUTATIONS = ['Dr', 'Prof', 'Mr', 'Mrs', 'Ms', 'Mx', 'Other'] as const;
 export type Salutation = (typeof SALUTATIONS)[number];
@@ -25,15 +57,15 @@ export const PERSON_CATEGORIES = ['faculty', 'delegate', 'sponsor', 'vip', 'volu
 export const createPersonSchema = z.object({
   salutation: z.enum(SALUTATIONS).optional(),
   fullName: z.string().trim().min(1, 'Full name is required').max(200),
-  email: z.string().email('Invalid email').max(254).optional().or(z.literal('')),
-  phone: z.string().max(20).optional().or(z.literal('')),
-  designation: z.string().max(200).optional().or(z.literal('')),
-  specialty: z.string().max(200).optional().or(z.literal('')),
-  organization: z.string().max(300).optional().or(z.literal('')),
-  city: z.string().max(100).optional().or(z.literal('')),
+  email: optionalEmailSchema,
+  phone: optionalPhoneSchema,
+  designation: optionalTrimmedString(200),
+  specialty: optionalTrimmedString(200),
+  organization: optionalTrimmedString(300),
+  city: optionalTrimmedString(100),
   tags: z.array(z.string().max(50)).max(20).default([]),
 }).refine(
-  (data) => (data.email && data.email.length > 0) || (data.phone && data.phone.length > 0),
+  (data) => Boolean(data.email || data.phone),
   { message: 'At least one of email or mobile is required', path: ['email'] },
 );
 
@@ -41,17 +73,30 @@ export const createPersonSchema = z.object({
 const personFieldsSchema = z.object({
   salutation: z.enum(SALUTATIONS).optional(),
   fullName: z.string().trim().min(1, 'Full name is required').max(200),
-  email: z.string().email('Invalid email').max(254).optional().or(z.literal('')),
-  phone: z.string().max(20).optional().or(z.literal('')),
-  designation: z.string().max(200).optional().or(z.literal('')),
-  specialty: z.string().max(200).optional().or(z.literal('')),
-  organization: z.string().max(300).optional().or(z.literal('')),
-  city: z.string().max(100).optional().or(z.literal('')),
+  email: optionalEmailSchema,
+  phone: optionalPhoneSchema,
+  designation: optionalTrimmedString(200),
+  specialty: optionalTrimmedString(200),
+  organization: optionalTrimmedString(300),
+  city: optionalTrimmedString(100),
   tags: z.array(z.string().max(50)).max(20).default([]),
 });
 
 export const updatePersonSchema = personFieldsSchema.partial().extend({
   personId: z.string().uuid('Invalid person ID'),
+}).superRefine((data, ctx) => {
+  if (
+    data.email !== undefined &&
+    data.phone !== undefined &&
+    !data.email &&
+    !data.phone
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'At least one of email or mobile is required',
+      path: ['email'],
+    });
+  }
 });
 
 export const personIdSchema = z.string().uuid('Invalid person ID');

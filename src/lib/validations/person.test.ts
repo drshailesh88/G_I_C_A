@@ -75,6 +75,29 @@ describe('createPersonSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it('rejects whitespace-only phone when no other contact is provided', () => {
+    const result = createPersonSchema.safeParse({
+      fullName: 'Test Person',
+      phone: '   ',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe('At least one of email or mobile is required');
+    }
+  });
+
+  it('rejects malformed phone numbers at the validation boundary', () => {
+    const result = createPersonSchema.safeParse({
+      fullName: 'Test Person',
+      email: 'test@example.com',
+      phone: '123',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.message === 'Invalid phone number')).toBe(true);
+    }
+  });
 });
 
 describe('updatePersonSchema', () => {
@@ -117,6 +140,18 @@ describe('updatePersonSchema', () => {
       salutation: 'Dr',
     });
     expect(result.success).toBe(true);
+  });
+
+  it('rejects updates that clear both email and phone at once', () => {
+    const result = updatePersonSchema.safeParse({
+      personId: '550e8400-e29b-41d4-a716-446655440000',
+      email: '',
+      phone: '   ',
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.message === 'At least one of email or mobile is required')).toBe(true);
+    }
   });
 });
 
