@@ -85,6 +85,39 @@ describe('buildIdempotencyKey', () => {
     const key2 = buildIdempotencyKey({ ...base, eventId: 'event-B' });
     expect(key1).not.toBe(key2);
   });
+
+  it('encodes unsafe delimiters inside segments instead of emitting raw separators', () => {
+    const key = buildIdempotencyKey({
+      userId: 'u1',
+      eventId: 'event-1',
+      type: 'travel.updated',
+      triggerId: 'trigger:section:a',
+      channel: 'email',
+    });
+
+    expect(key).toBe('notification:u1:event-1:travel.updated:v:trigger%3Asection%3Aa:email');
+    expect(key).not.toContain(':trigger:section:a:');
+  });
+
+  it('does not collide when malformed values try to shift key boundaries', () => {
+    const first = buildIdempotencyKey({
+      userId: 'user:segment',
+      eventId: 'event-1',
+      type: 'travel.saved',
+      triggerId: 'record-1',
+      channel: 'email',
+    });
+
+    const second = buildIdempotencyKey({
+      userId: 'user',
+      eventId: 'segment:event-1',
+      type: 'travel.saved',
+      triggerId: 'record-1',
+      channel: 'email',
+    });
+
+    expect(first).not.toBe(second);
+  });
 });
 
 describe('createIdempotencyService', () => {

@@ -8,6 +8,16 @@
 import { Redis } from '@upstash/redis';
 import type { IdempotencyService, Channel } from './types';
 
+const SAFE_KEY_SEGMENT_PATTERN = /^[A-Za-z0-9._-]+$/;
+
+function encodeKeySegment(value: string): string {
+  if (SAFE_KEY_SEGMENT_PATTERN.test(value)) {
+    return value;
+  }
+
+  return `v:${encodeURIComponent(value)}`;
+}
+
 export function buildIdempotencyKey(params: {
   userId: string;
   eventId: string;
@@ -15,7 +25,14 @@ export function buildIdempotencyKey(params: {
   triggerId: string;
   channel: Channel;
 }): string {
-  return `notification:${params.userId}:${params.eventId}:${params.type}:${params.triggerId}:${params.channel}`;
+  return [
+    'notification',
+    encodeKeySegment(params.userId),
+    encodeKeySegment(params.eventId),
+    encodeKeySegment(params.type),
+    encodeKeySegment(params.triggerId),
+    encodeKeySegment(params.channel),
+  ].join(':');
 }
 
 const SEVEN_DAYS_SECONDS = 7 * 24 * 60 * 60;

@@ -329,3 +329,9 @@
 - Attacks tried: 4
 - Bugs found: 2
 - Key finding: the email adapter trusted raw `fromDisplayName`, arbitrary custom headers, and event-scoped attachment storage keys, so direct callers could inject provider-level headers or attach private files from another event.
+
+## 2026-04-17T17:21:29Z — src/lib/notifications/idempotency.ts — idempotency key collision hardening
+- Verdict: hardened
+- Attacks tried: 4
+- Bugs found: 1
+- Key finding: the idempotency key builder concatenated raw `:`-delimited segments, so malformed present values could inject extra separators, collide with another notification’s Redis key, and suppress a legitimate send as a duplicate.

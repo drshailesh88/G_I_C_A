@@ -2960,5 +2960,44 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "cascade-028",
+    "module": "src/lib/notifications/idempotency.ts",
+    "attacked_at": "2026-04-17T17:21:29Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "triggerId `record:1` with otherwise ordinary notification identifiers",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "delimiter-bearing `eventId` or `userId` segments that shift raw `:` key boundaries and collapse two distinct notifications onto one Redis key",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "concurrent duplicate sends against the same normalized key",
+        "result": "blocked_by_atomic_redis_set_nx"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "repeat checkAndSet calls with ordinary key sizes",
+        "result": "no_exploitable_failure_found_in_this_module"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "idempotency_key_collision",
+        "description": "buildIdempotencyKey concatenated raw segments with `:`. A malformed present value like `user:segment` or `segment:event-1` could inject extra delimiters and make two distinct notification scopes produce the exact same Redis idempotency key, causing the later send to be suppressed as a duplicate.",
+        "fix": "Preserved the legacy raw format for ordinary safe identifiers, but URL-encode unsafe key segments before joining them so delimiter-bearing values cannot shift key boundaries or collide with another notification.",
+        "fix_commit": "FIX_COMMIT_PLACEHOLDER",
+        "regression_test": "src/lib/notifications/idempotency.test.ts > encodes unsafe delimiters inside segments instead of emitting raw separators; src/lib/notifications/idempotency.test.ts > does not collide when malformed values try to shift key boundaries; src/lib/notifications/idempotency.mutation-kill.test.ts > keeps distinct malformed inputs from collapsing to the same Redis key"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

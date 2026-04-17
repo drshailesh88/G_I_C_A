@@ -7,6 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { buildIdempotencyKey } from './idempotency';
 
 describe('redisIdempotencyService', () => {
   beforeEach(() => {
@@ -128,5 +129,51 @@ describe('createIdempotencyService', () => {
 
     const setValue = mockRedis.set.mock.calls[0][1];
     expect(setValue).toBe('1');
+  });
+});
+
+describe('buildIdempotencyKey — delimiter collision hardening', () => {
+  it('preserves the legacy raw format for ordinary safe identifiers', () => {
+    expect(
+      buildIdempotencyKey({
+        userId: 'u1',
+        eventId: 'evt-1',
+        type: 'registration.created',
+        triggerId: 'reg-1',
+        channel: 'email',
+      }),
+    ).toBe('notification:u1:evt-1:registration.created:reg-1:email');
+  });
+
+  it('encodes colon-bearing segments so they cannot inject extra separators', () => {
+    expect(
+      buildIdempotencyKey({
+        userId: 'u1',
+        eventId: 'evt-1',
+        type: 'registration.created',
+        triggerId: 'reg:1',
+        channel: 'email',
+      }),
+    ).toBe('notification:u1:evt-1:registration.created:v:reg%3A1:email');
+  });
+
+  it('keeps distinct malformed inputs from collapsing to the same Redis key', () => {
+    const first = buildIdempotencyKey({
+      userId: 'user:one',
+      eventId: 'event-1',
+      type: 'travel.saved',
+      triggerId: 'record-1',
+      channel: 'email',
+    });
+
+    const second = buildIdempotencyKey({
+      userId: 'user',
+      eventId: 'one:event-1',
+      type: 'travel.saved',
+      triggerId: 'record-1',
+      channel: 'email',
+    });
+
+    expect(first).not.toBe(second);
   });
 });
