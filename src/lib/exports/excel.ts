@@ -27,9 +27,14 @@ import {
 } from '@/lib/db/schema';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { eq, ne } from 'drizzle-orm';
+import { eventIdSchema } from '@/lib/validations/event';
 import { EXPORT_TYPES, type ExportType } from './types';
 
 export { EXPORT_TYPES, type ExportType };
+
+function validateExcelEventId(eventId: string): string {
+  return eventIdSchema.parse(eventId);
+}
 
 // ── Shared Helpers ─────────────────────────────────────────────
 
@@ -386,8 +391,11 @@ async function exportFacultyResponsibilities(eventId: string): Promise<ExcelJS.B
     })
     .from(sessionAssignments)
     .innerJoin(people, eq(sessionAssignments.personId, people.id))
-    .innerJoin(sessions, eq(sessionAssignments.sessionId, sessions.id))
-    .leftJoin(halls, eq(sessions.hallId, halls.id))
+    .innerJoin(
+      sessions,
+      withEventScope(sessions.eventId, eventId, eq(sessionAssignments.sessionId, sessions.id)),
+    )
+    .leftJoin(halls, withEventScope(halls.eventId, eventId, eq(sessions.hallId, halls.id)))
     .where(withEventScope(sessionAssignments.eventId, eventId));
 
   // Sort by person name, then session date
@@ -450,9 +458,16 @@ async function exportAttendanceReport(eventId: string): Promise<ExcelJS.Buffer> 
     .innerJoin(people, eq(attendanceRecords.personId, people.id))
     .leftJoin(
       eventRegistrations,
-      eq(attendanceRecords.registrationId, eventRegistrations.id),
+      withEventScope(
+        eventRegistrations.eventId,
+        eventId,
+        eq(attendanceRecords.registrationId, eventRegistrations.id),
+      ),
     )
-    .leftJoin(sessions, eq(attendanceRecords.sessionId, sessions.id))
+    .leftJoin(
+      sessions,
+      withEventScope(sessions.eventId, eventId, eq(attendanceRecords.sessionId, sessions.id)),
+    )
     .where(withEventScope(attendanceRecords.eventId, eventId));
 
   const wb = new ExcelJS.Workbook();
@@ -489,19 +504,21 @@ export async function generateExport(
   eventId: string,
   type: ExportType,
 ): Promise<ExcelJS.Buffer> {
+  const scopedEventId = validateExcelEventId(eventId);
+
   switch (type) {
     case 'attendee-list':
-      return exportAttendeeList(eventId);
+      return exportAttendeeList(scopedEventId);
     case 'travel-roster':
-      return exportTravelRoster(eventId);
+      return exportTravelRoster(scopedEventId);
     case 'rooming-list':
-      return exportRoomingList(eventId);
+      return exportRoomingList(scopedEventId);
     case 'transport-plan':
-      return exportTransportPlan(eventId);
+      return exportTransportPlan(scopedEventId);
     case 'faculty-responsibilities':
-      return exportFacultyResponsibilities(eventId);
+      return exportFacultyResponsibilities(scopedEventId);
     case 'attendance-report':
-      return exportAttendanceReport(eventId);
+      return exportAttendanceReport(scopedEventId);
     default:
       throw new Error(`Unknown export type: ${type}`);
   }

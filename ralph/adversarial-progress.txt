@@ -6,6 +6,7 @@
 - Storage helpers must validate object-key canonical form and signed-URL TTLs before touching the S3/R2 SDK. Otherwise traversal-style keys or overlong expiries can bypass higher-level event scoping assumptions and turn private files into long-lived download URLs.
 - Shared event-scope SQL helpers must validate canonical UUID event IDs, not just truthiness. Otherwise malformed, whitespace-padded, or oversized tenant IDs reach UUID-backed queries and turn missing caller-side validation into DB-layer failures instead of a fail-closed scope guard.
 - Export helpers are still security boundaries even when API routes validate first. Validate canonical event IDs inside the helper itself before building storage keys or issuing UUID-backed queries, and event-scope every joined event-owned table in export reads to stop legacy foreign keys from leaking cross-event metadata.
+- Excel/XLSX export joins must event-scope every foreign event-owned table, not just the base scoped rows. Bare joins from scoped assignments/attendance into `sessions`, `halls`, or `event_registrations` still leak cross-event metadata when bad legacy foreign keys point outside the active event.
 - Idempotency-key builders must encode and presence-mark each segment. Raw delimiter concatenation and placeholder sentinels let malformed present values collide with missing fields or adjacent segments, suppressing distinct notifications.
 - Logistics server actions cannot rely on UI-only filters. Enforce travel-first and event/person-scoped foreign keys inside the action or direct calls will create cross-tenant/invalid rows.
 - Logistics mutations must emit audit + cascade side effects from the server action itself. If the action only mutates the table, downstream flags/notifications are bypassable.
@@ -273,3 +274,9 @@
 - Attacks tried: 7
 - Bugs found: 3
 - Key finding: the emergency-kit helper trusted raw `eventId` strings and arbitrary override keys, and its program export joined halls by bare UUID, so direct callers could poison ZIP object keys, overwrite another event's emergency-kit path, or leak foreign hall metadata into `program.json`.
+
+## 2026-04-17T16:15:23Z — src/lib/exports/excel.ts — export join scoping hardening
+- Verdict: hardened
+- Attacks tried: 6
+- Bugs found: 3
+- Key finding: the Excel helper only scoped the base export tables, so malformed event IDs reached the db builder before rejection and bad session/attendance foreign keys could leak cross-event session, hall, and registration metadata into exported workbooks.

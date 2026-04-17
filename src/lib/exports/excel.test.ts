@@ -35,7 +35,7 @@ vi.mock('@/lib/db/schema', () => {
     sessions: { id: col('id'), eventId: col('event_id'), title: col('title'), sessionType: col('type'), sessionDate: col('date'), startAtUtc: col('start'), endAtUtc: col('end'), hallId: col('hall_id') },
     sessionAssignments: { eventId: col('event_id'), sessionId: col('session_id'), personId: col('person_id'), role: col('role'), presentationTitle: col('pres_title') },
     attendanceRecords: { eventId: col('event_id'), personId: col('person_id'), registrationId: col('reg_id'), sessionId: col('session_id'), checkInMethod: col('method'), checkInAt: col('check_in_at') },
-    halls: { id: col('id'), name: col('name') },
+    halls: { id: col('id'), eventId: col('hall_event_id'), name: col('name') },
   };
 });
 
@@ -95,8 +95,8 @@ function getHeaders(ws: ExcelJS.Worksheet): string[] {
   return headers;
 }
 
-const EVENT_A = 'event-aaa-aaa';
-const EVENT_B = 'event-bbb-bbb';
+const EVENT_A = '11111111-1111-4111-8111-111111111111';
+const EVENT_B = '22222222-2222-4222-8222-222222222222';
 
 // ── Tests: 3 per export type ───────────────────────────────────
 
@@ -413,6 +413,41 @@ describe('Excel Export Engine', () => {
         EVENT_B,
       );
     });
+
+    it('event-scopes joined session and hall metadata to prevent cross-tenant leakage', async () => {
+      setupDbReturn([
+        {
+          fullName: 'Prof. Bob Jones',
+          email: 'bob@example.com',
+          phone: '+919876543211',
+          designation: 'Professor',
+          sessionTitle: 'Scoped Session',
+          sessionType: 'keynote',
+          sessionDate: new Date('2026-04-10'),
+          startAtUtc: new Date('2026-04-10T09:00:00Z'),
+          endAtUtc: new Date('2026-04-10T10:00:00Z'),
+          role: 'speaker',
+          presentationTitle: 'Heart Repair Techniques',
+          hallName: 'Hall A',
+        },
+      ]);
+
+      await generateExport(EVENT_A, 'faculty-responsibilities');
+
+      const eventScopedCalls = mockWithEventScope.mock.calls.filter(
+        ([column, scopedEventId]) =>
+          (column as { name?: string } | undefined)?.name === 'event_id'
+          && scopedEventId === EVENT_A,
+      );
+      const hallJoinScoped = mockWithEventScope.mock.calls.some(
+        ([column, scopedEventId]) =>
+          (column as { name?: string } | undefined)?.name === 'hall_event_id'
+          && scopedEventId === EVENT_A,
+      );
+
+      expect(eventScopedCalls).toHaveLength(2);
+      expect(hallJoinScoped).toBe(true);
+    });
   });
 
   // ── 6. Attendance Report ─────────────────────────────────────
@@ -470,6 +505,31 @@ describe('Excel Export Engine', () => {
         EVENT_A,
       );
     });
+
+    it('event-scopes joined registration and session metadata to prevent cross-tenant leakage', async () => {
+      setupDbReturn([
+        {
+          fullName: 'Dr. Alice Smith',
+          email: 'alice@example.com',
+          phone: '+919876543210',
+          regNumber: 'GEM-DEL-001',
+          category: 'delegate',
+          checkInMethod: 'qr_scan',
+          checkInAt: new Date('2026-04-10T09:15:00Z'),
+          sessionTitle: 'Scoped Session',
+        },
+      ]);
+
+      await generateExport(EVENT_A, 'attendance-report');
+
+      const eventScopedCalls = mockWithEventScope.mock.calls.filter(
+        ([column, scopedEventId]) =>
+          (column as { name?: string } | undefined)?.name === 'event_id'
+          && scopedEventId === EVENT_A,
+      );
+
+      expect(eventScopedCalls).toHaveLength(3);
+    });
   });
 
   // ── Invalid export type ──────────────────────────────────────
@@ -479,6 +539,13 @@ describe('Excel Export Engine', () => {
       await expect(
         generateExport(EVENT_A, 'invalid-type' as ExportType),
       ).rejects.toThrow('Unknown export type');
+    });
+
+    it('rejects a malformed eventId before database access', async () => {
+      await expect(
+        generateExport('not-a-uuid', 'attendee-list'),
+      ).rejects.toThrow('Invalid event ID');
+      expect(mockDb.select).not.toHaveBeenCalled();
     });
   });
 });

@@ -13,8 +13,10 @@ vi.mock('@/lib/db', () => ({
   }),
 }));
 
+const mockWithEventScope = vi.fn((_col: unknown, _eventId: string, ..._rest: unknown[]) => ({ eventId: _eventId }));
+
 vi.mock('@/lib/db/with-event-scope', () => ({
-  withEventScope: vi.fn((_col: unknown, _eventId: string, ..._rest: unknown[]) => ({ eventId: _eventId })),
+  withEventScope: (...args: unknown[]) => mockWithEventScope(...(args as [unknown, string, ...unknown[]])),
 }));
 
 vi.mock('@/lib/db/schema', () => {
@@ -30,7 +32,7 @@ vi.mock('@/lib/db/schema', () => {
     sessions: { id: col('id'), eventId: col('event_id'), title: col('title'), sessionType: col('type'), sessionDate: col('date'), startAtUtc: col('start'), endAtUtc: col('end'), hallId: col('hall_id') },
     sessionAssignments: { eventId: col('event_id'), sessionId: col('session_id'), personId: col('person_id'), role: col('role'), presentationTitle: col('pres_title') },
     attendanceRecords: { eventId: col('event_id'), personId: col('person_id'), registrationId: col('reg_id'), sessionId: col('session_id'), checkInMethod: col('method'), checkInAt: col('check_in_at') },
-    halls: { id: col('id'), name: col('name') },
+    halls: { id: col('id'), eventId: col('hall_event_id'), name: col('name') },
   };
 });
 
@@ -84,13 +86,18 @@ function getRowValues(ws: ExcelJS.Worksheet, rowNum = 2): (unknown)[] {
   return vals;
 }
 
-const EVENT = 'evt-harden-001';
+const EVENT = '33333333-3333-4333-8333-333333333333';
 
 // ── Tests ──────────────────────────────────────────────────────
 
 describe('Excel mutation-kill suite', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('rejects malformed eventIds before any db builder is created', async () => {
+    await expect(generateExport('not-a-uuid', 'attendee-list')).rejects.toThrow('Invalid event ID');
+    expect(mockDb.select).not.toHaveBeenCalled();
   });
 
   // ── HEADER_FILL / HEADER_FONT / HEADER_ALIGNMENT ────────────
@@ -644,6 +651,38 @@ describe('Excel mutation-kill suite', () => {
     expect(ws.getRow(3).getCell(5).value).toBe('Has Date');
   });
 
+  it('faculty-responsibilities: event-scopes session and hall joins so foreign references cannot leak metadata', async () => {
+    setupDbReturn([{
+      fullName: 'Prof. Bob',
+      email: 'bob@test.com',
+      phone: '+911234567890',
+      designation: 'Professor',
+      sessionTitle: 'Scoped Session',
+      sessionType: 'keynote',
+      sessionDate: new Date('2026-04-10T00:00:00Z'),
+      startAtUtc: new Date('2026-04-10T09:00:00Z'),
+      endAtUtc: new Date('2026-04-10T10:00:00Z'),
+      role: 'speaker',
+      presentationTitle: 'Heart Repair',
+      hallName: 'Hall A',
+    }]);
+
+    await generateExport(EVENT, 'faculty-responsibilities');
+
+    const eventScopedCalls = mockWithEventScope.mock.calls.filter(
+      ([column, scopedEventId]) =>
+        (column as { name?: string } | undefined)?.name === 'event_id' && scopedEventId === EVENT,
+    );
+    const hallJoinScoped = mockWithEventScope.mock.calls.some(
+      ([column, scopedEventId]) =>
+        (column as { name?: string } | undefined)?.name === 'hall_event_id'
+        && scopedEventId === EVENT,
+    );
+
+    expect(eventScopedCalls).toHaveLength(2);
+    expect(hallJoinScoped).toBe(true);
+  });
+
   // ── Attendance Report: exact headers + cell values + ?? fallback ──
 
   it('attendance-report: exact column headers (kills L462-469 header StringLiteral + ObjectLiteral mutants)', async () => {
@@ -708,5 +747,27 @@ describe('Excel mutation-kill suite', () => {
     const ws = wb.getWorksheet('Attendance Report')!;
     // non-null → must NOT become 'Event-level', must be 'Specific Session Name'
     expect(ws.getRow(2).getCell(6).value).toBe('Specific Session Name');
+  });
+
+  it('attendance-report: event-scopes joined registrations and sessions so foreign ids cannot leak metadata', async () => {
+    setupDbReturn([{
+      fullName: 'Charlie Brown',
+      email: 'charlie@test.com',
+      phone: '+913333333333',
+      regNumber: 'GEM-003',
+      category: 'faculty',
+      checkInMethod: 'qr_scan',
+      checkInAt: new Date('2026-04-10T09:30:00Z'),
+      sessionTitle: 'Morning Keynote',
+    }]);
+
+    await generateExport(EVENT, 'attendance-report');
+
+    const eventScopedCalls = mockWithEventScope.mock.calls.filter(
+      ([column, scopedEventId]) =>
+        (column as { name?: string } | undefined)?.name === 'event_id' && scopedEventId === EVENT,
+    );
+
+    expect(eventScopedCalls).toHaveLength(3);
   });
 });

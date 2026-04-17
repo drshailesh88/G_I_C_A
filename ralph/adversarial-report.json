@@ -2506,5 +2506,70 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/exports/excel.ts",
+    "module": "src/lib/exports/excel.ts",
+    "attacked_at": "2026-04-17T16:15:23Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "generateExport('not-a-uuid', 'attendee-list')",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "faculty export with a session_assignment in event A referencing sessionId/hallId from event B",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "attendance export with an attendance row in event A referencing registrationId/sessionId from event B",
+        "result": "succeeded"
+      },
+      {
+        "category": "csv_formula_injection",
+        "payload": "formula-style strings in exported cell values",
+        "result": "no_exploitable_failure_reproduced_in_xlsx_writer"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "large export sets hitting autoWidth and workbook buffering",
+        "result": "no_deterministic_failure_reproduced_in_module_tests"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "invoke export helper directly without Clerk context",
+        "result": "not_applicable_internal_export_helper_has_no_auth_surface"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "generateExport validated event scope only indirectly inside downstream query helpers. A malformed eventId could still reach the db builder before the module failed closed, instead of being rejected immediately at the export boundary.",
+        "fix": "Added canonical event UUID validation at the generateExport boundary and reused the validated eventId for every export branch.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/exports/excel.test.ts > rejects a malformed eventId before database access; src/lib/exports/excel.mutation-kill.test.ts > rejects malformed eventIds before any db builder is created"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "exportFacultyResponsibilities scoped only session_assignments.eventId, then joined sessions and halls by bare IDs. A bad or legacy assignment row in the active event could therefore leak another event's session title/date and hall name into the workbook.",
+        "fix": "Scoped the joined sessions and halls with withEventScope(..., eventId, eq(...)) so foreign session or hall references fail closed outside the active event.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/exports/excel.test.ts > event-scopes joined session and hall metadata to prevent cross-tenant leakage"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "exportAttendanceReport scoped only attendance_records.eventId, then joined event_registrations and sessions by bare IDs. A poisoned attendance row in the active event could leak another event's registration number/category or session title into the workbook.",
+        "fix": "Scoped the joined registration and session lookups with withEventScope(..., eventId, eq(...)) so exported attendance metadata only resolves within the active event.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/exports/excel.test.ts > event-scopes joined registration and session metadata to prevent cross-tenant leakage"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
