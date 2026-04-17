@@ -1,7 +1,16 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { issuedCertificates, certificateTemplates, people, eventRegistrations, events, eventPeople } from '@/lib/db/schema';
+import {
+  issuedCertificates,
+  certificateTemplates,
+  people,
+  eventRegistrations,
+  events,
+  eventPeople,
+  attendanceRecords,
+  sessionAssignments,
+} from '@/lib/db/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
@@ -34,6 +43,12 @@ type PersonVariableSnapshot = {
   city?: string | null;
 };
 
+const eventIdSchema = z.string().uuid('Invalid event ID');
+
+function validateEventId(eventId: string): string {
+  return eventIdSchema.parse(eventId);
+}
+
 function buildRenderedVariablesSnapshot(
   variables: Record<string, unknown>,
   person: PersonVariableSnapshot,
@@ -59,9 +74,105 @@ function buildRenderedVariablesSnapshot(
   return snapshot;
 }
 
+async function assertEligibilityBasisBelongsToEventPerson(
+  eventId: string,
+  personId: string,
+  basisType: string,
+  basisId: string | undefined,
+) {
+  if (!basisId) {
+    return;
+  }
+
+  if (basisType === 'manual') {
+    throw new Error('Manual eligibility cannot reference another record');
+  }
+
+  let rows: { id: string }[];
+
+  switch (basisType) {
+    case 'registration':
+      rows = await db
+        .select({ id: eventRegistrations.id })
+        .from(eventRegistrations)
+        .where(
+          withEventScope(
+            eventRegistrations.eventId,
+            eventId,
+            and(
+              eq(eventRegistrations.id, basisId),
+              eq(eventRegistrations.personId, personId),
+            )!,
+          ),
+        )
+        .limit(1);
+      break;
+
+    case 'attendance':
+      rows = await db
+        .select({ id: attendanceRecords.id })
+        .from(attendanceRecords)
+        .where(
+          withEventScope(
+            attendanceRecords.eventId,
+            eventId,
+            and(
+              eq(attendanceRecords.id, basisId),
+              eq(attendanceRecords.personId, personId),
+            )!,
+          ),
+        )
+        .limit(1);
+      break;
+
+    case 'session_assignment':
+      rows = await db
+        .select({ id: sessionAssignments.id })
+        .from(sessionAssignments)
+        .where(
+          withEventScope(
+            sessionAssignments.eventId,
+            eventId,
+            and(
+              eq(sessionAssignments.id, basisId),
+              eq(sessionAssignments.personId, personId),
+            )!,
+          ),
+        )
+        .limit(1);
+      break;
+
+    case 'event_role':
+      rows = await db
+        .select({ id: eventPeople.id })
+        .from(eventPeople)
+        .where(
+          withEventScope(
+            eventPeople.eventId,
+            eventId,
+            and(
+              eq(eventPeople.id, basisId),
+              eq(eventPeople.personId, personId),
+            )!,
+          ),
+        )
+        .limit(1);
+      break;
+
+    default:
+      rows = [];
+  }
+
+  const [record] = rows;
+  if (!record) {
+    throw new Error('Eligibility basis does not belong to this event/person');
+  }
+}
+
 // ── Issue a single certificate ───────────────────────────────
 export async function issueCertificate(eventId: string, input: unknown) {
-  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  const scopedEventId = validateEventId(eventId);
+  const { userId, role } = await assertEventAccess(scopedEventId, { requireWrite: true });
   assertCertificateWriteRole(role);
   const validated = issueCertificateSchema.parse(input);
 
@@ -69,7 +180,7 @@ export async function issueCertificate(eventId: string, input: unknown) {
   const [event] = await db
     .select({ status: events.status })
     .from(events)
-    .where(eq(events.id, eventId))
+    .where(eq(events.id, scopedEventId))
     .limit(1);
   if (!event || event.status === 'archived') {
     throw new Error('Event is archived — certificate issuance is blocked');
@@ -97,7 +208,7 @@ export async function issueCertificate(eventId: string, input: unknown) {
   const [attachment] = await db
     .select({ id: eventPeople.id })
     .from(eventPeople)
-    .where(and(eq(eventPeople.eventId, eventId), eq(eventPeople.personId, validated.personId)))
+    .where(and(eq(eventPeople.eventId, scopedEventId), eq(eventPeople.personId, validated.personId)))
     .limit(1);
   if (!attachment) throw new Error('person not attached to event');
 
@@ -108,15 +219,25 @@ export async function issueCertificate(eventId: string, input: unknown) {
     .where(
       withEventScope(
         certificateTemplates.eventId,
-        eventId,
+        scopedEventId,
         and(
           eq(certificateTemplates.id, validated.templateId),
+          eq(certificateTemplates.certificateType, validated.certificateType),
           eq(certificateTemplates.status, 'active'),
         )!,
       ),
     )
     .limit(1);
-  if (!template) throw new Error('Active certificate template not found');
+  if (!template || template.certificateType !== validated.certificateType) {
+    throw new Error('Active certificate template not found');
+  }
+
+  await assertEligibilityBasisBelongsToEventPerson(
+    scopedEventId,
+    validated.personId,
+    validated.eligibilityBasisType,
+    validated.eligibilityBasisId,
+  );
 
   // Retry loop for certificate number collisions (concurrent issuance for same event)
   const MAX_CERT_NUMBER_RETRIES = 3;
@@ -131,7 +252,7 @@ export async function issueCertificate(eventId: string, input: unknown) {
           .where(
             withEventScope(
               issuedCertificates.eventId,
-              eventId,
+              scopedEventId,
               and(
                 eq(issuedCertificates.personId, validated.personId),
                 eq(issuedCertificates.certificateType, validated.certificateType),
@@ -142,7 +263,7 @@ export async function issueCertificate(eventId: string, input: unknown) {
         const currentCert = findCurrentCertificate(
           existingCerts as IssuedCertificateRecord[],
           validated.personId,
-          eventId,
+          scopedEventId,
           validated.certificateType,
         );
 
@@ -151,7 +272,7 @@ export async function issueCertificate(eventId: string, input: unknown) {
         const existingNumbers = await tx
           .select({ certificateNumber: issuedCertificates.certificateNumber })
           .from(issuedCertificates)
-          .where(eq(issuedCertificates.eventId, eventId));
+          .where(eq(issuedCertificates.eventId, scopedEventId));
 
         const config = getCertificateTypeConfig(validated.certificateType);
         const numbers = existingNumbers.map(r => r.certificateNumber);
@@ -159,17 +280,42 @@ export async function issueCertificate(eventId: string, input: unknown) {
         const certificateNumber = generateCertificateNumber(validated.certificateType, sequence);
 
         const certId = crypto.randomUUID();
-        const storageKey = buildCertificateStorageKey(eventId, validated.certificateType, certId);
+        const storageKey = buildCertificateStorageKey(scopedEventId, validated.certificateType, certId);
         const renderedVariablesSnapshot = buildRenderedVariablesSnapshot(
           validated.renderedVariablesJson,
           person,
         );
 
+        if (currentCert && chain.oldCertUpdate) {
+          const [superseded] = await tx
+            .update(issuedCertificates)
+            .set({
+              status: 'superseded',
+              supersededById: certId,
+              updatedAt: new Date(),
+            })
+            .where(
+              withEventScope(
+                issuedCertificates.eventId,
+                scopedEventId,
+                and(
+                  eq(issuedCertificates.id, currentCert.id),
+                  eq(issuedCertificates.status, 'issued'),
+                )!,
+              ),
+            )
+            .returning({ id: issuedCertificates.id });
+
+          if (!superseded) {
+            throw new Error('Current certificate changed during issuance; retry regeneration');
+          }
+        }
+
         const [newCert] = await tx
           .insert(issuedCertificates)
           .values({
             id: certId,
-            eventId,
+            eventId: scopedEventId,
             personId: validated.personId,
             templateId: validated.templateId,
             templateVersionNo: template.versionNo,
@@ -187,27 +333,10 @@ export async function issueCertificate(eventId: string, input: unknown) {
           })
           .returning();
 
-        if (currentCert && chain.oldCertUpdate) {
-          await tx
-            .update(issuedCertificates)
-            .set({
-              status: 'superseded',
-              supersededById: newCert.id,
-              updatedAt: new Date(),
-            })
-            .where(
-              withEventScope(
-                issuedCertificates.eventId,
-                eventId,
-                eq(issuedCertificates.id, currentCert.id),
-              ),
-            );
-        }
-
         return newCert;
       });
 
-      revalidatePath(`/events/${eventId}/certificates`);
+      revalidatePath(`/events/${scopedEventId}/certificates`);
       return issued;
     } catch (error) {
       if (originalTransactionFailure) {
@@ -243,7 +372,8 @@ export async function issueCertificate(eventId: string, input: unknown) {
 
 // ── Revoke a certificate ─────────────────────────────────────
 export async function revokeCertificate(eventId: string, input: unknown) {
-  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  const scopedEventId = validateEventId(eventId);
+  const { userId, role } = await assertEventAccess(scopedEventId, { requireWrite: true });
   assertCertificateWriteRole(role);
   const validated = revokeCertificateSchema.parse(input);
 
@@ -253,7 +383,7 @@ export async function revokeCertificate(eventId: string, input: unknown) {
     .where(
       withEventScope(
         issuedCertificates.eventId,
-        eventId,
+        scopedEventId,
         eq(issuedCertificates.id, validated.certificateId),
       ),
     )
@@ -277,19 +407,27 @@ export async function revokeCertificate(eventId: string, input: unknown) {
     .where(
       withEventScope(
         issuedCertificates.eventId,
-        eventId,
-        eq(issuedCertificates.id, validated.certificateId),
+        scopedEventId,
+        and(
+          eq(issuedCertificates.id, validated.certificateId),
+          eq(issuedCertificates.status, 'issued'),
+        )!,
       ),
     )
     .returning();
 
-  revalidatePath(`/events/${eventId}/certificates`);
+  if (!revoked) {
+    throw new Error('Certificate changed during revocation; reload and try again');
+  }
+
+  revalidatePath(`/events/${scopedEventId}/certificates`);
   return revoked;
 }
 
 // ── List issued certificates (with recipient info) ──────────
 export async function listIssuedCertificates(eventId: string) {
-  await assertEventAccess(eventId);
+  const scopedEventId = validateEventId(eventId);
+  await assertEventAccess(scopedEventId);
 
   return db
     .select({
@@ -318,7 +456,7 @@ export async function listIssuedCertificates(eventId: string) {
         eq(eventRegistrations.eventId, issuedCertificates.eventId),
       ),
     )
-    .where(eq(issuedCertificates.eventId, eventId))
+    .where(eq(issuedCertificates.eventId, scopedEventId))
     .orderBy(desc(issuedCertificates.issuedAt));
 }
 
@@ -326,7 +464,8 @@ export async function listIssuedCertificates(eventId: string) {
 const certificateIdSchema = z.string().uuid('Invalid certificate ID');
 
 export async function getIssuedCertificate(eventId: string, certificateId: string) {
-  await assertEventAccess(eventId);
+  const scopedEventId = validateEventId(eventId);
+  await assertEventAccess(scopedEventId);
   const validatedId = certificateIdSchema.parse(certificateId);
 
   const [cert] = await db
@@ -335,7 +474,7 @@ export async function getIssuedCertificate(eventId: string, certificateId: strin
     .where(
       withEventScope(
         issuedCertificates.eventId,
-        eventId,
+        scopedEventId,
         eq(issuedCertificates.id, validatedId),
       ),
     )
@@ -351,7 +490,8 @@ export async function getCertificateDownloadUrl(
   certificateId: string,
   storageProvider?: import('@/lib/certificates/storage').StorageProvider,
 ) {
-  const { role } = await assertEventAccess(eventId);
+  const scopedEventId = validateEventId(eventId);
+  const { role } = await assertEventAccess(scopedEventId);
   assertCertificateWriteRole(role);
   const validatedId = certificateIdSchema.parse(certificateId);
 
@@ -366,7 +506,7 @@ export async function getCertificateDownloadUrl(
     .where(
       withEventScope(
         issuedCertificates.eventId,
-        eventId,
+        scopedEventId,
         eq(issuedCertificates.id, validatedId),
       ),
     )
@@ -377,7 +517,7 @@ export async function getCertificateDownloadUrl(
   // Validate download access — blocks revoked, superseded, and ungenerated certs
   const access = validateDownloadAccess({
     id: cert.id,
-    eventId,
+    eventId: scopedEventId,
     personId: '',
     certificateType: '',
     status: cert.status,
@@ -406,7 +546,7 @@ export async function getCertificateDownloadUrl(
     .where(
       withEventScope(
         issuedCertificates.eventId,
-        eventId,
+        scopedEventId,
         eq(issuedCertificates.id, validatedId),
       ),
     )
@@ -496,7 +636,8 @@ const resendCertSchema = z.object({
 });
 
 export async function resendCertificateNotification(eventId: string, input: unknown) {
-  const { role } = await assertEventAccess(eventId, { requireWrite: true });
+  const scopedEventId = validateEventId(eventId);
+  const { role } = await assertEventAccess(scopedEventId, { requireWrite: true });
   assertCertificateWriteRole(role);
   const validated = resendCertSchema.parse(input);
 
@@ -517,7 +658,7 @@ export async function resendCertificateNotification(eventId: string, input: unkn
     .where(
       withEventScope(
         issuedCertificates.eventId,
-        eventId,
+        scopedEventId,
         eq(issuedCertificates.id, validated.certificateId),
       ),
     )
@@ -535,7 +676,7 @@ export async function resendCertificateNotification(eventId: string, input: unkn
 
   for (const channel of channels) {
     const result = await sendNotification({
-      eventId,
+      eventId: scopedEventId,
       personId: cert.personId,
       channel,
       templateKey: 'certificate_delivery',
@@ -543,7 +684,7 @@ export async function resendCertificateNotification(eventId: string, input: unkn
       triggerEntityType: 'issued_certificate',
       triggerEntityId: cert.id,
       sendMode: 'manual',
-      idempotencyKey: `cert-resend-${cert.id}-${channel}-${Date.now()}`,
+      idempotencyKey: `cert-send-${cert.id}-${channel}`,
       variables: {
         full_name: cert.personFullName,
         certificate_number: cert.certificateNumber,
@@ -565,11 +706,11 @@ export async function resendCertificateNotification(eventId: string, input: unkn
     .where(
       withEventScope(
         issuedCertificates.eventId,
-        eventId,
+        scopedEventId,
         eq(issuedCertificates.id, cert.id),
       ),
     );
 
-  revalidatePath(`/events/${eventId}/certificates`);
+  revalidatePath(`/events/${scopedEventId}/certificates`);
   return { sent: true, channels: channels.length };
 }

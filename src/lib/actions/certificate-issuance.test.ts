@@ -84,10 +84,12 @@ const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 const PERSON_ID = '550e8400-e29b-41d4-a716-446655440001';
 const TEMPLATE_ID = '550e8400-e29b-41d4-a716-446655440002';
 const CERT_ID = '550e8400-e29b-41d4-a716-446655440003';
+const BASIS_ID = '550e8400-e29b-41d4-a716-446655440004';
 
 const mockTemplate = {
   id: TEMPLATE_ID,
   eventId: EVENT_ID,
+  certificateType: 'delegate_attendance',
   status: 'active',
   versionNo: 1,
   brandingSnapshotJson: { logo: 'url' },
@@ -140,6 +142,13 @@ describe('issueCertificate — archived event', () => {
 
 // ── Issue Certificate ────────────────────────────────────────
 describe('issueCertificate', () => {
+  it('rejects a malformed eventId before auth or database access', async () => {
+    await expect(issueCertificate('not-a-uuid', validIssueInput)).rejects.toThrow();
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
   it('issues a new certificate when none exists', async () => {
     chainedSelectSequence([
       [{ status: 'published' }], // event not archived
@@ -203,6 +212,53 @@ describe('issueCertificate', () => {
   it('throws when template not found or not active', async () => {
     chainedSelectSequence([[{ status: 'published' }], [{ id: PERSON_ID }], [{ id: 'ep-1' }], []]);
     await expect(issueCertificate(EVENT_ID, validIssueInput)).rejects.toThrow('Active certificate template not found');
+  });
+
+  it('rejects active templates whose certificate type does not match the requested certificate type', async () => {
+    chainedSelectSequence([
+      [{ status: 'published' }],
+      [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
+      [{ ...mockTemplate, certificateType: 'cme_attendance' }],
+    ]);
+
+    await expect(issueCertificate(EVENT_ID, validIssueInput)).rejects.toThrow('Active certificate template not found');
+    expect(mockDb.transaction).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('rejects eligibility basis records that are not scoped to the event and person', async () => {
+    chainedSelectSequence([
+      [{ status: 'published' }],
+      [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
+      [mockTemplate],
+      [],
+    ]);
+
+    await expect(issueCertificate(EVENT_ID, {
+      ...validIssueInput,
+      eligibilityBasisId: BASIS_ID,
+    })).rejects.toThrow('Eligibility basis does not belong to this event/person');
+    expect(mockDb.transaction).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('rejects manual eligibility with an arbitrary backing record ID', async () => {
+    chainedSelectSequence([
+      [{ status: 'published' }],
+      [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
+      [mockTemplate],
+    ]);
+
+    await expect(issueCertificate(EVENT_ID, {
+      ...validIssueInput,
+      eligibilityBasisType: 'manual',
+      eligibilityBasisId: BASIS_ID,
+    })).rejects.toThrow('Manual eligibility cannot reference another record');
+    expect(mockDb.transaction).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
   });
 
   it('rejects invalid input', async () => {
@@ -425,6 +481,22 @@ describe('issueCertificate', () => {
     const insertCall = insertChain.values.mock.calls[0][0];
     expect(insertCall.renderedVariablesJson).toEqual({ full_name: 'Dr. Priya', designation: 'Professor' });
   });
+
+  it('rejects stale supersession when the current certificate changed before it could be superseded', async () => {
+    const existingCert = { ...mockIssuedCert, id: 'old-cert-id' };
+    chainedSelectSequence([
+      [{ status: 'published' }],
+      [{ id: PERSON_ID }],
+      [{ id: 'ep-1' }],
+      [mockTemplate],
+      [existingCert],
+      [{ certificateNumber: 'GEM2026-ATT-00001' }],
+    ]);
+    chainedUpdate([]);
+
+    await expect(issueCertificate(EVENT_ID, validIssueInput)).rejects.toThrow('changed during issuance');
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
 });
 
 // ── Transaction retry (cert-code-002) ───────────────────────
@@ -510,6 +582,16 @@ describe('issueCertificate — transaction retry', () => {
 
 // ── Revoke Certificate ───────────────────────────────────────
 describe('revokeCertificate', () => {
+  it('rejects a malformed eventId before auth or database access', async () => {
+    await expect(revokeCertificate('not-a-uuid', {
+      certificateId: CERT_ID,
+      revokeReason: 'Issued in error',
+    })).rejects.toThrow();
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
   it('revokes an issued certificate', async () => {
     chainedSelectSequence([[mockIssuedCert]]);
     chainedUpdate([{ ...mockIssuedCert, status: 'revoked', revokeReason: 'Issued in error' }]);
@@ -551,6 +633,16 @@ describe('revokeCertificate', () => {
       revokeReason: '',
     })).rejects.toThrow();
   });
+
+  it('rejects stale revocation when the certificate changed after validation', async () => {
+    chainedSelectSequence([[mockIssuedCert]]);
+    chainedUpdate([]);
+
+    await expect(revokeCertificate(EVENT_ID, {
+      certificateId: CERT_ID,
+      revokeReason: 'Issued in error',
+    })).rejects.toThrow('changed during revocation');
+  });
 });
 
 // ── List Issued Certificates ─────────────────────────────────
@@ -580,6 +672,13 @@ describe('listIssuedCertificates', () => {
     expect(chain.leftJoin).toHaveBeenCalledTimes(1);
   });
 
+  it('rejects a malformed eventId before auth or database access', async () => {
+    await expect(listIssuedCertificates('not-a-uuid')).rejects.toThrow();
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
   it('returns empty array when no certificates', async () => {
     chainedSelectWithJoins([]);
     const result = await listIssuedCertificates(EVENT_ID);
@@ -595,6 +694,13 @@ describe('listIssuedCertificates', () => {
 
 // ── Get Issued Certificate ───────────────────────────────────
 describe('getIssuedCertificate', () => {
+  it('rejects a malformed eventId before auth or database access', async () => {
+    await expect(getIssuedCertificate('not-a-uuid', CERT_ID)).rejects.toThrow();
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
   it('returns certificate by ID', async () => {
     chainedSelectSequence([[mockIssuedCert]]);
     const result = await getIssuedCertificate(EVENT_ID, CERT_ID);
@@ -618,6 +724,14 @@ describe('getCertificateDownloadUrl', () => {
     getSignedUrl: vi.fn().mockResolvedValue('https://r2.example.com/signed?token=abc'),
     delete: vi.fn(),
   };
+
+  it('rejects a malformed eventId before auth or database access', async () => {
+    await expect(getCertificateDownloadUrl('not-a-uuid', CERT_ID, mockStorageProvider)).rejects.toThrow();
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+    expect(mockStorageProvider.getSignedUrl).not.toHaveBeenCalled();
+  });
 
   it('returns download result with correct format (CP-43)', async () => {
     const cert = {
@@ -931,7 +1045,7 @@ describe('resendCertificateNotification', () => {
     })).rejects.toThrow('Forbidden');
   });
 
-  it('uses idempotencyKey with timestamp for uniqueness (CP-124)', async () => {
+  it('uses a stable idempotencyKey so rapid duplicate manual resends collapse', async () => {
     const certWithPerson = {
       id: CERT_ID,
       certificateNumber: 'GEM2026-ATT-00001',
@@ -952,7 +1066,7 @@ describe('resendCertificateNotification', () => {
     });
 
     const call = mockSendNotification.mock.calls[0][0];
-    expect(call.idempotencyKey).toMatch(/^cert-resend-.+-email-\d+$/);
+    expect(call.idempotencyKey).toBe(`cert-send-${CERT_ID}-email`);
   });
 
   it('sends to both channels when channel is both (CP-125)', async () => {
@@ -1052,7 +1166,7 @@ describe('snapshot immutability — no UPDATE of snapshot columns', () => {
 
     for (const filePath of files) {
       const content = fs.readFileSync(filePath, 'utf-8');
-      const setBlocks = content.match(/\.set\(\{[^}]*\}\)/gs) ?? [];
+      const setBlocks = content.match(/\.set\(\{[\s\S]*?\}\)/g) ?? [];
 
       for (const block of setBlocks) {
         expect(block).not.toContain('templateSnapshotJson');

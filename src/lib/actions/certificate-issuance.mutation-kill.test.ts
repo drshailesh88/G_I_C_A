@@ -87,6 +87,7 @@ const CERT_ID = '550e8400-e29b-41d4-a716-446655440003';
 const mockTemplate = {
   id: TEMPLATE_ID,
   eventId: EVENT_ID,
+  certificateType: 'delegate_attendance',
   status: 'active',
   versionNo: 1,
   brandingSnapshotJson: { logo: 'url' },
@@ -175,6 +176,7 @@ describe('issueCertificate — insert shape assertions', () => {
       [{ id: PERSON_ID }],
       [{ id: 'ep-1' }],
       [mockTemplate],
+      [{ id: basisId }],
       [],
       [],
     ]);
@@ -277,7 +279,7 @@ describe('issueCertificate — supersession behavior', () => {
     expect(mockDb.update).toHaveBeenCalled();
     const setCall = updateChain.set.mock.calls[0][0];
     expect(setCall.status).toBe('superseded');
-    expect(setCall.supersededById).toBe('new-cert-id');
+    expect(setCall.supersededById).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
     expect(setCall.updatedAt).toBeInstanceOf(Date);
   });
 

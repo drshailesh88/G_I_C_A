@@ -496,5 +496,114 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/certificate-issuance.ts",
+    "module": "src/lib/actions/certificate-issuance.ts",
+    "attacked_at": "2026-04-17T06:57:01Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "server-action eventId=not-a-uuid across issue/revoke/list/get/download flows",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "issue a delegate certificate while pointing at an active CME template",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "issue a certificate with eligibilityBasisId from another event/person, or manual eligibility with an arbitrary record id",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "regenerate a certificate while the current issued row changes before supersession",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "revoke a certificate after validation while another request supersedes it",
+        "result": "succeeded"
+      },
+      {
+        "category": "notification_idempotency",
+        "payload": "double-click manual resend; idempotencyKey includes Date.now so every click bypasses Redis dedupe",
+        "result": "succeeded"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "call write actions without certificate write role",
+        "result": "blocked"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "SQL metacharacters in eventId, certificateId, templateId, personId, and verification token",
+        "result": "blocked_by_zod_and_parameterized_drizzle_queries"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "<script>alert(1)</script> inside renderedVariablesJson and revokeReason",
+        "result": "no_exploitable_failure_in_action_layer"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized/invalid ID arrays not accepted by this single-certificate action surface; large renderedVariablesJson remains bounded by request/runtime limits, not action-specific recursion",
+        "result": "no_additional_exploitable_failure_in_action_layer"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "Certificate issuance actions called assertEventAccess before validating route/server-action eventId shape, so malformed event scopes reached auth/database-adjacent work instead of failing fast.",
+        "fix": "Added local eventId validation and used the scoped eventId consistently in issue, revoke, list, get, download, and resend paths.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/certificate-issuance.test.ts > rejects a malformed eventId before auth or database access"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "issueCertificate accepted any active template id in the event without binding it to the requested certificateType, allowing direct callers to create certificate rows whose type did not match the immutable template snapshot.",
+        "fix": "Scoped the active template lookup by certificateType and added a runtime certificateType equality guard before issuing.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/certificate-issuance.test.ts > rejects active templates whose certificate type does not match the requested certificate type"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "issueCertificate stored arbitrary eligibilityBasisId values without checking the referenced registration, attendance, assignment, or event role belonged to the active event and recipient person.",
+        "fix": "Added event/person-scoped eligibility-basis validation for registration, attendance, session_assignment, and event_role references; manual eligibility now rejects backing record IDs.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/certificate-issuance.test.ts > rejects eligibility basis records that are not scoped to the event and person; rejects manual eligibility with an arbitrary backing record ID"
+      },
+      {
+        "severity": "high",
+        "category": "race_condition",
+        "description": "Supersession inserted the new issued certificate before marking the old current row as superseded, which conflicts with the partial one-current unique index and allowed stale old-row updates by id only.",
+        "fix": "Generated the new certificate id first, marked the old current row as superseded with eventId + status='issued' compare-and-swap semantics, then inserted the replacement certificate.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/certificate-issuance.test.ts > rejects stale supersession when the current certificate changed before it could be superseded"
+      },
+      {
+        "severity": "medium",
+        "category": "race_condition",
+        "description": "revokeCertificate validated that a row was issued, then updated by event/id only; a concurrent supersession could be overwritten into revoked after the validation read.",
+        "fix": "Added status='issued' to the revoke update predicate and fail loudly when no row is updated.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/certificate-issuance.test.ts > rejects stale revocation when the certificate changed after validation"
+      },
+      {
+        "severity": "high",
+        "category": "notification_idempotency",
+        "description": "resendCertificateNotification used Date.now() in idempotencyKey, so rapid duplicate manual sends for the same certificate/channel were always treated as unique sends and bypassed Redis duplicate suppression.",
+        "fix": "Changed manual certificate resend keys to the stable cert-send-{certificateId}-{channel} shape used by bulk certificate notifications.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/certificate-issuance.test.ts > uses a stable idempotencyKey so rapid duplicate manual resends collapse"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
