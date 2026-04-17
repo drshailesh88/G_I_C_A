@@ -20,7 +20,11 @@ import { findCurrentCertificate, buildSupersessionChain, getNextSequence, type I
 import { generateCertificateNumber, getCertificateTypeConfig } from '@/lib/certificates/certificate-types';
 import { buildCertificateStorageKey, createR2Provider, type StorageUploadResult } from '@/lib/certificates/storage';
 import { createBulkGenerationRedisClient, writeBulkCertificateGenerationSummary } from '@/lib/certificates/bulk-generation-state';
+import { buildLockKey } from '@/lib/certificates/distributed-lock';
+import { CERTIFICATE_TYPES, ELIGIBILITY_BASIS_TYPES } from '@/lib/validations/certificate';
+import { eventIdSchema } from '@/lib/validations/event';
 import type { BulkCertificateGenerateData, BulkCertificateNotifyData, ArchiveGenerateData } from './events';
+import { z } from 'zod';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -95,6 +99,86 @@ type StepRunner = {
 
 type BulkScope = 'all' | { ids: string[] };
 
+const RECIPIENT_TYPES = [
+  'all_delegates',
+  'all_faculty',
+  'all_attendees',
+  'custom',
+] as const;
+const BULK_NOTIFY_CHANNELS = ['email', 'whatsapp', 'both'] as const;
+const MAX_BULK_RECIPIENT_IDS = 500;
+const MAX_BULK_CERTIFICATE_IDS = 500;
+const MAX_BULK_USER_ID_LENGTH = 255;
+const MAX_BULK_BATCH_ID_LENGTH = 255;
+const MAX_BULK_LOCK_KEY_LENGTH = 255;
+
+const trimmedNonEmptyStringSchema = z.string().trim().min(1);
+const boundedIdArraySchema = z.array(trimmedNonEmptyStringSchema).min(1);
+const boundedRecipientIdArraySchema = boundedIdArraySchema.max(MAX_BULK_RECIPIENT_IDS);
+const boundedCertificateIdArraySchema = boundedIdArraySchema.max(MAX_BULK_CERTIFICATE_IDS);
+
+const bulkScopeSchema = z.union([
+  z.literal('all'),
+  z.object({
+    ids: boundedRecipientIdArraySchema,
+  }),
+]);
+
+const bulkGenerateDataSchema = z.object({
+  eventId: eventIdSchema,
+  userId: trimmedNonEmptyStringSchema.max(MAX_BULK_USER_ID_LENGTH),
+  batchId: trimmedNonEmptyStringSchema.max(MAX_BULK_BATCH_ID_LENGTH).optional(),
+  lockKey: trimmedNonEmptyStringSchema.max(MAX_BULK_LOCK_KEY_LENGTH).optional(),
+  certificateType: z.enum(CERTIFICATE_TYPES).optional(),
+  scope: bulkScopeSchema.optional(),
+  templateId: trimmedNonEmptyStringSchema.optional(),
+  recipientType: z.enum(RECIPIENT_TYPES).optional(),
+  personIds: boundedRecipientIdArraySchema.optional(),
+  eligibilityBasisType: z.enum(ELIGIBILITY_BASIS_TYPES).optional(),
+}).superRefine((value, ctx) => {
+  if (!value.templateId && !value.certificateType) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['templateId'],
+      message: 'Certificate template or type is required',
+    });
+  }
+
+  if (!value.scope && !value.recipientType) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['recipientType'],
+      message: 'Recipient scope is required',
+    });
+  }
+
+  if (value.personIds && value.recipientType !== 'custom') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['personIds'],
+      message: 'personIds may only be provided for custom recipient selection',
+    });
+  }
+
+  if (value.lockKey && !value.certificateType) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['certificateType'],
+      message: 'certificateType is required when lockKey is provided',
+    });
+  }
+});
+
+const bulkNotifyDataSchema = z.object({
+  eventId: eventIdSchema,
+  certificateIds: boundedCertificateIdArraySchema,
+  channel: z.enum(BULK_NOTIFY_CHANNELS),
+});
+
+const archiveGenerateDataSchema = z.object({
+  eventId: eventIdSchema,
+});
+
 async function releaseBulkGenerationLock(lockKey: string | undefined): Promise<void> {
   if (!lockKey) return;
 
@@ -109,6 +193,27 @@ async function releaseBulkGenerationLock(lockKey: string | undefined): Promise<v
   } catch (err) {
     console.error(`Failed to release bulk certificate generation lock ${lockKey}:`, err);
   }
+}
+
+function validateBulkGenerationLockKey(
+  lockKey: string | undefined,
+  eventId: string,
+  certificateType: string | undefined,
+): string | undefined {
+  if (!lockKey) {
+    return undefined;
+  }
+
+  if (!certificateType) {
+    throw new Error('certificateType is required when lockKey is provided');
+  }
+
+  const expectedLockKey = buildLockKey(eventId, certificateType);
+  if (lockKey !== expectedLockKey) {
+    throw new Error('Invalid bulk certificate generation lock key');
+  }
+
+  return expectedLockKey;
 }
 
 type BulkGenerationResult = {
@@ -178,9 +283,9 @@ export const bulkCertificateGenerateFn = inngest.createFunction(
     triggers: [{ event: 'bulk/certificates.generate' }],
   },
   async ({ event, step }: { event: { data: BulkCertificateGenerateData }; step: StepRunner }) => {
-    const data = event.data;
+    const data = bulkGenerateDataSchema.parse(event.data);
     const { eventId, userId } = data;
-    const lockKey = typeof data.lockKey === 'string' ? data.lockKey : undefined;
+    const lockKey = validateBulkGenerationLockKey(data.lockKey, eventId, data.certificateType);
     const eligibilityBasisType = data.eligibilityBasisType ?? 'manual';
 
     try {
@@ -536,7 +641,7 @@ export const bulkCertificateNotifyFn = inngest.createFunction(
     triggers: [{ event: 'bulk/certificates.notify' }],
   },
   async ({ event, step }: { event: { data: BulkCertificateNotifyData }; step: StepRunner }) => {
-    const data = event.data;
+    const data = bulkNotifyDataSchema.parse(event.data);
     const { eventId, certificateIds, channel } = data;
 
     // Step 1: Load certificate data
@@ -715,7 +820,7 @@ export const archiveGenerateFn = inngest.createFunction(
     triggers: [{ event: 'bulk/archive.generate' }],
   },
   async ({ event, step }: { event: { data: ArchiveGenerateData }; step: StepRunner }) => {
-    const data = event.data;
+    const data = archiveGenerateDataSchema.parse(event.data);
     const { eventId } = data;
 
     // Step 1: Generate agenda Excel
@@ -797,20 +902,31 @@ export const archiveGenerateFn = inngest.createFunction(
       }
 
       const archiveKey = buildArchiveStorageKey(eventId);
+      let archiveSizeBytes = 0;
+      const countBytes = (chunk: Buffer) => {
+        archiveSizeBytes += chunk.length;
+      };
+      passThrough.on('data', countBytes);
 
-      // Attach listeners BEFORE finalize to avoid race condition
-      const chunks: Buffer[] = [];
-      passThrough.on('data', (chunk: Buffer) => chunks.push(chunk));
-      const endPromise = new Promise<void>((resolve, reject) => {
-        passThrough.on('end', resolve);
-        passThrough.on('error', reject);
-      });
+      if (storageProvider.uploadStream) {
+        const uploadPromise = storageProvider.uploadStream(archiveKey, passThrough, 'application/zip');
+        await archive.finalize();
+        const uploadResult = await uploadPromise;
+        archiveSizeBytes = uploadResult.fileSizeBytes;
+      } else {
+        const chunks: Buffer[] = [];
+        passThrough.on('data', (chunk: Buffer) => chunks.push(chunk));
+        const endPromise = new Promise<void>((resolve, reject) => {
+          passThrough.on('end', resolve);
+          passThrough.on('error', reject);
+        });
 
-      // Now finalize — triggers flush and stream close
-      await archive.finalize();
-      await endPromise;
-      const fullBuffer = Buffer.concat(chunks);
-      await storageProvider.upload(archiveKey, fullBuffer, 'application/zip');
+        await archive.finalize();
+        await endPromise;
+        const fullBuffer = Buffer.concat(chunks);
+        archiveSizeBytes = fullBuffer.length;
+        await storageProvider.upload(archiveKey, fullBuffer, 'application/zip');
+      }
 
       const archiveUrl = await storageProvider.getSignedUrl(archiveKey, 3600);
 
@@ -818,7 +934,7 @@ export const archiveGenerateFn = inngest.createFunction(
         archiveStorageKey: archiveKey,
         archiveUrl,
         fileCount,
-        archiveSizeBytes: fullBuffer.length,
+        archiveSizeBytes,
       };
     });
 

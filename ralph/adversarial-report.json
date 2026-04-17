@@ -2740,5 +2740,75 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/inngest/bulk-functions.ts",
+    "module": "src/lib/inngest/bulk-functions.ts",
+    "attacked_at": "2026-04-17T16:46:05Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "queued bulk generation/archive events with eventId='not-a-uuid' and invalid recipient/channel values",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "bulk notification payload with 501 certificateIds and generation payloads with oversized recipient batches",
+        "result": "succeeded"
+      },
+      {
+        "category": "key_injection",
+        "payload": "forged bulk generation lockKey pointing at a different Redis namespace key than the active event/certificateType",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "attempted foreign certificate/person selection under the active eventId via queued worker payloads",
+        "result": "blocked_by_event_scoped_queries"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "attempted to treat the worker itself as an auth boundary",
+        "result": "not_applicable_background_worker_executes_trusted_enqueued_jobs"
+      },
+      {
+        "category": "race_condition",
+        "payload": "attempted overlapping bulk generation/archive execution for the same event",
+        "result": "blocked_by_inngest_event_concurrency_and_existing_lock_pattern"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "large archive generation forcing the ZIP builder to buffer the full artifact in memory before upload",
+        "result": "succeeded"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "The bulk worker trusted raw Inngest payloads, so malformed event IDs, invalid recipient/channel enums, and oversized ID arrays could reach DB/storage work or build oversized query batches before failing.",
+        "fix": "Added worker-side Zod validation for bulk generation, notification, and archive events, including canonical event IDs, enum checks, and 500-item caps for queued recipient/certificate batches.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/inngest/bulk-functions.test.ts > rejects a malformed eventId before any database work starts; src/lib/inngest/bulk-functions.test.ts > rejects oversized certificate notification batches before querying the database"
+      },
+      {
+        "severity": "high",
+        "category": "key_injection",
+        "description": "bulkCertificateGenerateFn trusted event.data.lockKey and blindly deleted it in finally. A forged Inngest event could redirect cleanup to an unrelated Redis key and tear down another in-flight lock or control key.",
+        "fix": "Validated lockKey against the canonical buildLockKey(eventId, certificateType) before any work and only release matching keys.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/inngest/bulk-functions.test.ts > rejects forged lock keys that do not match the active event and certificate type"
+      },
+      {
+        "severity": "high",
+        "category": "resource_exhaustion",
+        "description": "archiveGenerateFn claimed to stream ZIP creation but buffered the entire archive into memory before upload. Large event archives could exhaust worker memory and fail the job.",
+        "fix": "Switched archive uploads to use storageProvider.uploadStream when available and kept buffered upload only as a fallback path.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/inngest/bulk-functions.test.ts > streams archive uploads when the storage provider supports uploadStream"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

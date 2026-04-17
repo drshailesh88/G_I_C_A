@@ -58,6 +58,7 @@
 - ZIP/file-export filename sanitizers must strip control characters, trim before removing leading dots, collapse `..`, and cap entry-name length. Otherwise whitespace-padded traversal names, null bytes, or oversized filenames survive into archive headers.
 - Shared certificate/template registries must be exported as immutable data. Returning live config objects lets one caller mutate required variables or prefixes and poison later requests handled by the same server process.
 - Fixed-format identifier helpers must validate both namespace membership and numeric bounds. Accepting unknown certificate prefixes or overflowed/fractional sequence numbers creates forged or impossible IDs that downstream code may treat as legitimate.
+- Background workers and queue consumers are security boundaries too. Validate queued payload enums and tenant IDs, cap batch sizes, refuse forged cleanup lock keys, and stream large archive uploads instead of buffering whole artifacts in memory.
 
 ## Iteration log
 
@@ -301,3 +302,9 @@
 - Attacks tried: 6
 - Bugs found: 3
 - Key finding: the import helper trusted prototype-shaped CSV headers, spreadsheet-formula text payloads, and oversized batch previews, so a hostile CSV could crash row parsing, seed export-time formula injection, or bypass the server-side 500-row import limit until late failure.
+
+## 2026-04-17T16:46:05Z — src/lib/inngest/bulk-functions.ts — bulk worker boundary hardening
+- Verdict: hardened
+- Attacks tried: 7
+- Bugs found: 3
+- Key finding: the background worker trusted raw Inngest payloads and cleanup lock keys, and its archive path still buffered whole ZIPs in memory, so forged events could delete unrelated Redis keys or crash large archive jobs with avoidable memory pressure.

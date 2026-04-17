@@ -12,6 +12,7 @@
  * 8. Bulk cert notify: certs without storageKey are filtered out
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { z } from 'zod';
 
 // ── Hoisted mocks ──────────────────────────────────────────
 
@@ -81,6 +82,30 @@ vi.mock('@/lib/certificates/storage', () => ({
   buildCertificateStorageKey: vi.fn((eid: string, ct: string, cid: string) => `certs/${eid}/${ct}/${cid}.pdf`),
   createR2Provider: vi.fn(),
 }));
+vi.mock('@/lib/certificates/distributed-lock', () => ({
+  buildLockKey: vi.fn((eventId: string, certificateType: string) => `lock:${eventId}:${certificateType}`),
+}));
+vi.mock('@/lib/validations/event', () => ({
+  eventIdSchema: z.string().min(1).refine((value) => value !== 'not-a-uuid', 'Invalid event ID'),
+}));
+vi.mock('@/lib/validations/certificate', () => ({
+  CERTIFICATE_TYPES: [
+    'delegate_attendance',
+    'faculty_participation',
+    'speaker_recognition',
+    'chairperson_recognition',
+    'panelist_recognition',
+    'moderator_recognition',
+    'cme_attendance',
+  ],
+  ELIGIBILITY_BASIS_TYPES: [
+    'registration',
+    'attendance',
+    'session_assignment',
+    'event_role',
+    'manual',
+  ],
+}));
 vi.mock('@pdfme/generator', () => ({
   generate: vi.fn().mockResolvedValue(Uint8Array.from([1, 2, 3, 4])),
 }));
@@ -116,10 +141,16 @@ const mockStorageProvider = {
 // Mock archiver for archive test — returns a fake archive object
 vi.mock('archiver', () => ({
   default: vi.fn(() => {
+    let capturedStream: NodeJS.WritableStream | null = null;
     const archive = {
       append: vi.fn(),
-      pipe: vi.fn(),
-      finalize: vi.fn().mockImplementation(() => Promise.resolve()),
+      pipe: vi.fn().mockImplementation((stream: NodeJS.WritableStream) => {
+        capturedStream = stream;
+      }),
+      finalize: vi.fn().mockImplementation(() => {
+        capturedStream?.end();
+        return Promise.resolve();
+      }),
       on: vi.fn(),
     };
     return archive;
@@ -203,6 +234,7 @@ function createMockStep() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockStorageProvider.uploadStream = null;
   vi.mocked(storageModule.createR2Provider).mockReturnValue(mockStorageProvider as never);
 });
 
@@ -560,6 +592,53 @@ describe('bulkCertificateGenerateFn handler', () => {
     expect(res.errors[0]).toContain('insert failed');
     expect(mockStorageProvider.upload).toHaveBeenCalledTimes(1);
   });
+
+  it('rejects a malformed eventId before any database work starts', async () => {
+    const handler = getHandler();
+    const step = createMockStep();
+
+    await expect(
+      handler({
+        event: {
+          data: {
+            eventId: 'not-a-uuid',
+            userId: 'user-1',
+            templateId: 'tpl-1',
+            recipientType: 'all_delegates',
+            eligibilityBasisType: 'registration',
+          },
+        },
+        step,
+      }),
+    ).rejects.toThrow('Invalid event ID');
+
+    expect(mockDb.select).not.toHaveBeenCalled();
+    expect(mockDb.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects forged lock keys that do not match the active event and certificate type', async () => {
+    const handler = getHandler();
+    const step = createMockStep();
+
+    await expect(
+      handler({
+        event: {
+          data: {
+            eventId: 'evt-1',
+            userId: 'user-1',
+            certificateType: 'delegate_attendance',
+            templateId: 'tpl-1',
+            recipientType: 'all_delegates',
+            eligibilityBasisType: 'registration',
+            lockKey: 'lock:other-event:delegate_attendance',
+          },
+        },
+        step,
+      }),
+    ).rejects.toThrow('Invalid bulk certificate generation lock key');
+
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
 });
 
 // ── Test: Per-cert transaction isolation (cert-api-011) ──────
@@ -801,6 +880,23 @@ describe('bulkCertificateNotifyFn handler', () => {
     expect(res.total).toBe(1);
     expect(res.sent).toBe(1);
   });
+
+  it('rejects oversized certificate notification batches before querying the database', async () => {
+    const handler = getHandler();
+    const step = createMockStep();
+    const certificateIds = Array.from({ length: 501 }, (_, i) => `cert-${i + 1}`);
+
+    await expect(
+      handler({
+        event: {
+          data: { eventId: 'evt-1', certificateIds, channel: 'email' },
+        },
+        step,
+      }),
+    ).rejects.toThrow('Array must contain at most 500 element(s)');
+
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
 });
 
 // ── Test 6: Archive generation steps ───────────────────────
@@ -847,5 +943,43 @@ describe('archiveGenerateFn handler', () => {
     const res = result as { archiveStorageKey: string; fileCount: number };
     expect(res.archiveStorageKey).toBe('archives/test.zip');
     expect(res.fileCount).toBe(2);
+  });
+
+  it('streams archive uploads when the storage provider supports uploadStream', async () => {
+    const handler = (bulkInngestFunctions[2] as unknown as { _handler: (args: { event: unknown; step: unknown }) => Promise<unknown> })._handler;
+    const uploadStream = vi.fn(async (_key: string, stream: NodeJS.ReadableStream) => {
+      await new Promise<void>((resolve, reject) => {
+        stream.on('end', resolve);
+        stream.on('error', reject);
+        stream.resume();
+      });
+
+      return {
+        storageKey: 'archives/test.zip',
+        fileSizeBytes: 321,
+        fileChecksumSha256: 'sha256-archive',
+      };
+    });
+
+    mockStorageProvider.uploadStream = uploadStream;
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => Uint8Array.from([1, 2, 3]).buffer,
+    }) as unknown as typeof fetch;
+
+    const { getCertificateStorageKeys } = await import('@/lib/exports/archive');
+    vi.mocked(getCertificateStorageKeys).mockResolvedValueOnce([
+      { storageKey: 'certs/cert-1.pdf', fileName: 'cert-1.pdf' },
+    ]);
+
+    const step = createMockStep();
+    const result = await handler({
+      event: { data: { eventId: 'evt-1' } },
+      step,
+    });
+
+    expect(uploadStream).toHaveBeenCalledWith('archives/test.zip', expect.anything(), 'application/zip');
+    expect(mockStorageProvider.upload).not.toHaveBeenCalled();
+    expect((result as { archiveSizeBytes: number }).archiveSizeBytes).toBe(321);
   });
 });

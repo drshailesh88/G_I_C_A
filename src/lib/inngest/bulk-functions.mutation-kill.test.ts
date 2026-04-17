@@ -3,6 +3,7 @@
  * Target: raise mutation score from 35.97% to ≥75%
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { z } from 'zod';
 
 // ── Hoisted mocks ──────────────────────────────────────────
 const { mockCreateFunction2, mockDb2, mockSendNotification2, mockRedisClient, mockWriteBulkSummary } = vi.hoisted(() => ({
@@ -62,6 +63,30 @@ vi.mock('@/lib/certificates/certificate-types', () => ({
 vi.mock('@/lib/certificates/storage', () => ({
   buildCertificateStorageKey: vi.fn((eid: string, ct: string, cid: string) => `certs/${eid}/${ct}/${cid}.pdf`),
   createR2Provider: vi.fn(),
+}));
+vi.mock('@/lib/certificates/distributed-lock', () => ({
+  buildLockKey: vi.fn((eventId: string, certificateType: string) => `lock:${eventId}:${certificateType}`),
+}));
+vi.mock('@/lib/validations/event', () => ({
+  eventIdSchema: z.string().min(1).refine((value) => value !== 'not-a-uuid', 'Invalid event ID'),
+}));
+vi.mock('@/lib/validations/certificate', () => ({
+  CERTIFICATE_TYPES: [
+    'delegate_attendance',
+    'faculty_participation',
+    'speaker_recognition',
+    'chairperson_recognition',
+    'panelist_recognition',
+    'moderator_recognition',
+    'cme_attendance',
+  ],
+  ELIGIBILITY_BASIS_TYPES: [
+    'registration',
+    'attendance',
+    'session_assignment',
+    'event_role',
+    'manual',
+  ],
 }));
 vi.mock('@pdfme/generator', () => ({
   generate: vi.fn().mockResolvedValue(Uint8Array.from([1, 2, 3, 4])),
@@ -220,6 +245,7 @@ const getNotifyHandler = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockStorageProvider2.uploadStream = null;
   vi.mocked(storageModule.createR2Provider).mockReturnValue(mockStorageProvider2 as never);
 });
 
@@ -270,32 +296,36 @@ describe('releaseBulkGenerationLock via handler finally block', () => {
       event: {
         data: {
           eventId: 'evt-1', userId: 'user-1', templateId: 'tpl-1',
+          certificateType: 'delegate_attendance',
           recipientType: 'all_delegates', eligibilityBasisType: 'registration',
-          lockKey: 'lock:evt-1:bulk-cert-xyz',
+          lockKey: 'lock:evt-1:delegate_attendance',
         },
       },
       step,
     });
 
-    expect(mockRedisClient.del).toHaveBeenCalledWith('lock:evt-1:bulk-cert-xyz');
+    expect(mockRedisClient.del).toHaveBeenCalledWith('lock:evt-1:delegate_attendance');
   });
 
-  it('does NOT call redis.del when lockKey is not a string (number)', async () => {
+  it('rejects non-string lockKey values before any work starts', async () => {
     const handler = getCertHandler();
     const step = createMockStep();
-    makeSelectMockWithInsert(makeRecipients2(1));
 
-    await handler({
-      event: {
-        data: {
-          eventId: 'evt-1', userId: 'user-1', templateId: 'tpl-1',
-          recipientType: 'all_delegates', eligibilityBasisType: 'registration',
-          lockKey: 42,
+    await expect(
+      handler({
+        event: {
+          data: {
+            eventId: 'evt-1', userId: 'user-1', templateId: 'tpl-1',
+            certificateType: 'delegate_attendance',
+            recipientType: 'all_delegates', eligibilityBasisType: 'registration',
+            lockKey: 42,
+          },
         },
-      },
-      step,
-    });
+        step,
+      }),
+    ).rejects.toThrow('Expected string, received number');
 
+    expect(mockDb2.select).not.toHaveBeenCalled();
     expect(mockRedisClient.del).not.toHaveBeenCalled();
   });
 
@@ -334,14 +364,15 @@ describe('releaseBulkGenerationLock via handler finally block', () => {
         event: {
           data: {
             eventId: 'evt-1', userId: 'user-1', templateId: 'tpl-1',
-            recipientType: 'all_delegates', lockKey: 'lock:evt-1:abc',
+            certificateType: 'delegate_attendance',
+            recipientType: 'all_delegates', lockKey: 'lock:evt-1:delegate_attendance',
           },
         },
         step,
       }),
     ).rejects.toThrow();
 
-    expect(mockRedisClient.del).toHaveBeenCalledWith('lock:evt-1:abc');
+    expect(mockRedisClient.del).toHaveBeenCalledWith('lock:evt-1:delegate_attendance');
   });
 
   it('logs error but does not throw when redis is null', async () => {
@@ -358,7 +389,8 @@ describe('releaseBulkGenerationLock via handler finally block', () => {
         event: {
           data: {
             eventId: 'evt-1', userId: 'user-1', templateId: 'tpl-1',
-            recipientType: 'all_delegates', lockKey: 'lock:evt-1:null-redis',
+            certificateType: 'delegate_attendance',
+            recipientType: 'all_delegates', lockKey: 'lock:evt-1:delegate_attendance',
           },
         },
         step,
@@ -495,14 +527,14 @@ describe('eligibilityBasisType', () => {
         data: {
           eventId: 'evt-1', userId: 'user-1', templateId: 'tpl-1',
           recipientType: 'all_delegates',
-          eligibilityBasisType: 'attendance_verified',
+          eligibilityBasisType: 'attendance',
         },
       },
       step,
     });
 
     expect(capturedInsertValues).not.toBeNull();
-    expect(capturedInsertValues.eligibilityBasisType).toBe('attendance_verified');
+    expect(capturedInsertValues.eligibilityBasisType).toBe('attendance');
   });
 
   it('defaults eligibilityBasisType to manual when not provided', async () => {
@@ -593,29 +625,23 @@ describe('bulkCertificateGenerateFn edge cases', () => {
     ).rejects.toThrow('Active certificate template not found');
   });
 
-  it('returns 0 issued immediately when scope.ids is empty array', async () => {
+  it('rejects empty scope.ids arrays before querying recipients', async () => {
     const handler = getCertHandler();
     const step = createMockStep();
-    let n = 0;
-    mockDb2.select.mockImplementation(() => {
-      n++;
-      if (n === 1) return chainedSelect([mockTemplate]);
-      return chainedSelect([]);
-    });
-    mockDb2.update.mockImplementation(() => chainedUpdate());
 
-    const result = await handler({
-      event: {
-        data: {
-          eventId: 'evt-1', userId: 'user-1', templateId: 'tpl-1',
-          scope: { ids: [] },
+    await expect(
+      handler({
+        event: {
+          data: {
+            eventId: 'evt-1', userId: 'user-1', templateId: 'tpl-1',
+            scope: { ids: [] },
+          },
         },
-      },
-      step,
-    });
+        step,
+      }),
+    ).rejects.toThrow('Array must contain at least 1 element(s)');
 
-    expect((result as any).issued).toBe(0);
-    expect((result as any).certificateIds).toHaveLength(0);
+    expect(mockDb2.select).not.toHaveBeenCalled();
   });
 
   it('scope=all queries eventPeople (not eventRegistrations)', async () => {
@@ -841,29 +867,24 @@ describe('recipientType branches', () => {
     expect((result as any).issued).toBe(3);
   });
 
-  it('custom with empty personIds returns 0 issued immediately', async () => {
+  it('rejects empty custom personIds before querying recipients', async () => {
     const handler = getCertHandler();
     const step = createMockStep();
-    let n = 0;
-    mockDb2.select.mockImplementation(() => {
-      n++;
-      if (n === 1) return chainedSelect([mockTemplate]);
-      return chainedSelect([]);
-    });
-    mockDb2.update.mockImplementation(() => chainedUpdate());
 
-    const result = await handler({
-      event: {
-        data: {
-          eventId: 'evt-1', userId: 'user-1', templateId: 'tpl-1',
-          recipientType: 'custom',
-          personIds: [],
+    await expect(
+      handler({
+        event: {
+          data: {
+            eventId: 'evt-1', userId: 'user-1', templateId: 'tpl-1',
+            recipientType: 'custom',
+            personIds: [],
+          },
         },
-      },
-      step,
-    });
+        step,
+      }),
+    ).rejects.toThrow('Array must contain at least 1 element(s)');
 
-    expect((result as any).issued).toBe(0);
+    expect(mockDb2.select).not.toHaveBeenCalled();
   });
 
   it('custom with personIds queries those specific people', async () => {
@@ -901,16 +922,9 @@ describe('recipientType branches', () => {
     expect((result as any).issued).toBe(2);
   });
 
-  it('throws for unknown recipientType', async () => {
+  it('rejects unknown recipientType values at the worker boundary', async () => {
     const handler = getCertHandler();
     const step = createMockStep();
-    let n = 0;
-    mockDb2.select.mockImplementation(() => {
-      n++;
-      if (n === 1) return chainedSelect([mockTemplate]);
-      return chainedSelect([]);
-    });
-    mockDb2.update.mockImplementation(() => chainedUpdate());
 
     await expect(
       handler({
@@ -922,7 +936,9 @@ describe('recipientType branches', () => {
         },
         step,
       }),
-    ).rejects.toThrow('Invalid bulk certificate generation recipient scope');
+    ).rejects.toThrow('Invalid enum value');
+
+    expect(mockDb2.select).not.toHaveBeenCalled();
   });
 });
 
