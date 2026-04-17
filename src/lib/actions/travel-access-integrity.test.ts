@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockDb, mockRevalidatePath, mockAssertEventAccess, mockWithEventScope } = vi.hoisted(() => ({
+const {
+  mockDb,
+  mockRevalidatePath,
+  mockAssertEventAccess,
+  mockWithEventScope,
+  mockWriteAudit,
+  mockEmitCascadeEvent,
+} = vi.hoisted(() => ({
   mockDb: {
     select: vi.fn(),
     insert: vi.fn(),
@@ -9,6 +16,8 @@ const { mockDb, mockRevalidatePath, mockAssertEventAccess, mockWithEventScope } 
   mockRevalidatePath: vi.fn(),
   mockAssertEventAccess: vi.fn(),
   mockWithEventScope: vi.fn((...args: unknown[]) => args[args.length - 1]),
+  mockWriteAudit: vi.fn(),
+  mockEmitCascadeEvent: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -29,6 +38,14 @@ vi.mock('@/lib/db/with-event-scope', () => ({
 
 vi.mock('@/lib/auth/event-access', () => ({
   assertEventAccess: mockAssertEventAccess,
+}));
+
+vi.mock('@/lib/audit/write', () => ({
+  writeAudit: mockWriteAudit,
+}));
+
+vi.mock('@/lib/cascade/emit', () => ({
+  emitCascadeEvent: mockEmitCascadeEvent,
 }));
 
 import {
@@ -102,6 +119,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:ops' });
   mockWithEventScope.mockImplementation((...args: unknown[]) => args[args.length - 1]);
+  mockWriteAudit.mockResolvedValue(undefined);
+  mockEmitCascadeEvent.mockResolvedValue({ handlersRun: 0, errors: [] });
 });
 
 // ══════════════════════════════════════════════════════════════

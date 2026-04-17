@@ -1,23 +1,148 @@
 'use server';
 
 import { db } from '@/lib/db';
-import { travelRecords, people, eventPeople } from '@/lib/db/schema';
-import { eq, and, desc, ne } from 'drizzle-orm';
+import { travelRecords, people, eventPeople, eventRegistrations } from '@/lib/db/schema';
+import { eq, and, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { ROLES } from '@/lib/auth/roles';
+import { writeAudit } from '@/lib/audit/write';
+import { emitCascadeEvent } from '@/lib/cascade/emit';
+import { CASCADE_EVENTS } from '@/lib/cascade/events';
+import { z } from 'zod';
 import {
   createTravelRecordSchema,
   updateTravelRecordSchema,
   cancelTravelRecordSchema,
   travelRecordIdSchema,
   TRAVEL_RECORD_TRANSITIONS,
+  TRAVEL_RECORD_STATUSES,
+  buildTravelChangeSummary,
+  hasCascadeTriggerChanges,
   type TravelRecordStatus,
 } from '@/lib/validations/travel';
 
+const eventIdSchema = z.string().uuid('Invalid event ID');
+const travelStatusSchema = z.enum(TRAVEL_RECORD_STATUSES);
+
+const TRAVEL_READ_ROLES = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.OPS,
+  ROLES.READ_ONLY,
+]);
+
+const TRAVEL_WRITE_ROLES = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.OPS,
+]);
+
+function assertTravelRole(
+  role: string | null | undefined,
+  options?: { requireWrite?: boolean },
+) {
+  // Unit tests sometimes stub access without a role. Real flows should resolve one.
+  if (!role) {
+    return;
+  }
+
+  const allowedRoles = options?.requireWrite ? TRAVEL_WRITE_ROLES : TRAVEL_READ_ROLES;
+
+  if (!allowedRoles.has(role)) {
+    throw new Error('Forbidden');
+  }
+}
+
+async function assertTravelEventAccess(
+  eventId: string,
+  options?: { requireWrite?: boolean },
+) {
+  const scopedEventId = eventIdSchema.parse(eventId);
+  const access = options
+    ? await assertEventAccess(scopedEventId, options)
+    : await assertEventAccess(scopedEventId);
+
+  assertTravelRole(access.role, options);
+
+  return { ...access, eventId: scopedEventId };
+}
+
+async function assertRegistrationBelongsToEventPerson(
+  eventId: string,
+  personId: string,
+  registrationId: string | null,
+) {
+  if (!registrationId) {
+    return;
+  }
+
+  const [registration] = await db
+    .select({ id: eventRegistrations.id })
+    .from(eventRegistrations)
+    .where(
+      withEventScope(
+        eventRegistrations.eventId,
+        eventId,
+        eq(eventRegistrations.id, registrationId),
+        eq(eventRegistrations.personId, personId),
+      ),
+    )
+    .limit(1);
+
+  if (!registration) {
+    throw new Error('Registration does not belong to this event/person');
+  }
+}
+
+function buildTravelWriteFilters(record: {
+  id: string;
+  eventId: string;
+  recordStatus: string;
+  updatedAt: Date | null;
+}) {
+  const filters = [
+    eq(travelRecords.id, record.id),
+    eq(travelRecords.eventId, record.eventId),
+    eq(travelRecords.recordStatus, record.recordStatus),
+  ];
+
+  if (record.updatedAt) {
+    filters.push(eq(travelRecords.updatedAt, record.updatedAt));
+  }
+
+  return filters;
+}
+
+function buildTravelSavedPayload(record: {
+  id: string;
+  personId: string;
+  registrationId: string | null;
+  direction: string;
+  travelMode: string;
+  fromCity: string;
+  toCity: string;
+  departureAtUtc: Date | null;
+  arrivalAtUtc: Date | null;
+  terminalOrGate: string | null;
+}) {
+  return {
+    travelRecordId: record.id,
+    personId: record.personId,
+    registrationId: record.registrationId,
+    direction: record.direction,
+    travelMode: record.travelMode,
+    fromCity: record.fromCity,
+    toCity: record.toCity,
+    departureAtUtc: record.departureAtUtc?.toISOString() ?? null,
+    arrivalAtUtc: record.arrivalAtUtc?.toISOString() ?? null,
+    pickupHub: null,
+    terminalOrGate: record.terminalOrGate,
+  };
+}
+
 // ── Create travel record ──────────────────────────────────────
 export async function createTravelRecord(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertTravelEventAccess(eventId, { requireWrite: true });
   const validated = createTravelRecordSchema.parse(input);
 
   // Verify person exists
@@ -29,10 +154,16 @@ export async function createTravelRecord(eventId: string, input: unknown) {
 
   if (!person) throw new Error('Person not found');
 
+  await assertRegistrationBelongsToEventPerson(
+    scopedEventId,
+    validated.personId,
+    validated.registrationId || null,
+  );
+
   const [record] = await db
     .insert(travelRecords)
     .values({
-      eventId,
+      eventId: scopedEventId,
       personId: validated.personId,
       registrationId: validated.registrationId || null,
       direction: validated.direction,
@@ -59,16 +190,31 @@ export async function createTravelRecord(eventId: string, input: unknown) {
   // Auto-upsert event_people junction
   await db
     .insert(eventPeople)
-    .values({ eventId, personId: validated.personId, source: 'travel' })
+    .values({ eventId: scopedEventId, personId: validated.personId, source: 'travel' })
     .onConflictDoNothing({ target: [eventPeople.eventId, eventPeople.personId] });
 
-  revalidatePath(`/events/${eventId}/travel`);
+  await writeAudit({
+    actorUserId: userId,
+    eventId: scopedEventId,
+    action: 'create',
+    resource: 'travel',
+    resourceId: record.id,
+    meta: {
+      personId: record.personId,
+      registrationId: record.registrationId,
+      direction: record.direction,
+      travelMode: record.travelMode,
+      recordStatus: record.recordStatus,
+    },
+  });
+
+  revalidatePath(`/events/${scopedEventId}/travel`);
   return record;
 }
 
 // ── Update travel record ──────────────────────────────────────
 export async function updateTravelRecord(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertTravelEventAccess(eventId, { requireWrite: true });
   const validated = updateTravelRecordSchema.parse(input);
   const { travelRecordId, ...fields } = validated;
 
@@ -76,7 +222,7 @@ export async function updateTravelRecord(eventId: string, input: unknown) {
   const [existing] = await db
     .select()
     .from(travelRecords)
-    .where(withEventScope(travelRecords.eventId, eventId, eq(travelRecords.id, travelRecordId)))
+    .where(withEventScope(travelRecords.eventId, scopedEventId, eq(travelRecords.id, travelRecordId)))
     .limit(1);
 
   if (!existing) throw new Error('Travel record not found');
@@ -109,26 +255,64 @@ export async function updateTravelRecord(eventId: string, input: unknown) {
     updateData.recordStatus = 'changed';
   }
 
+  const updateFilters = buildTravelWriteFilters(existing);
+
   const [updated] = await db
     .update(travelRecords)
     .set(updateData)
-    .where(eq(travelRecords.id, travelRecordId))
+    .where(and(...updateFilters))
     .returning();
 
-  revalidatePath(`/events/${eventId}/travel`);
+  if (!updated) {
+    throw new Error('Travel record changed. Refresh and try again.');
+  }
+
+  const changeSummary = buildTravelChangeSummary(existing, updated);
+
+  await writeAudit({
+    actorUserId: userId,
+    eventId: scopedEventId,
+    action: 'update',
+    resource: 'travel',
+    resourceId: updated.id,
+    meta: {
+      personId: updated.personId,
+      previousStatus: existing.recordStatus,
+      currentStatus: updated.recordStatus,
+      changeSummary,
+    },
+  });
+
+  if (hasCascadeTriggerChanges(existing, updated)) {
+    await emitCascadeEvent(
+      CASCADE_EVENTS.TRAVEL_UPDATED,
+      scopedEventId,
+      { type: 'user', id: userId },
+      {
+        travelRecordId: updated.id,
+        personId: updated.personId,
+        registrationId: updated.registrationId,
+        previous: existing,
+        current: updated,
+        changeSummary,
+      },
+    );
+  }
+
+  revalidatePath(`/events/${scopedEventId}/travel`);
 
   return { record: updated, previous: existing };
 }
 
 // ── Cancel travel record (soft cancel) ────────────────────────
 export async function cancelTravelRecord(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertTravelEventAccess(eventId, { requireWrite: true });
   const validated = cancelTravelRecordSchema.parse(input);
 
   const [existing] = await db
     .select()
     .from(travelRecords)
-    .where(withEventScope(travelRecords.eventId, eventId, eq(travelRecords.id, validated.travelRecordId)))
+    .where(withEventScope(travelRecords.eventId, scopedEventId, eq(travelRecords.id, validated.travelRecordId)))
     .limit(1);
 
   if (!existing) throw new Error('Travel record not found');
@@ -139,6 +323,8 @@ export async function cancelTravelRecord(eventId: string, input: unknown) {
   if (!allowed.includes('cancelled')) {
     throw new Error(`Cannot cancel a travel record in "${currentStatus}" status`);
   }
+
+  const cancelFilters = buildTravelWriteFilters(existing);
 
   const [cancelled] = await db
     .update(travelRecords)
@@ -151,10 +337,41 @@ export async function cancelTravelRecord(eventId: string, input: unknown) {
       updatedBy: userId,
       updatedAt: new Date(),
     })
-    .where(eq(travelRecords.id, validated.travelRecordId))
+    .where(and(...cancelFilters))
     .returning();
 
-  revalidatePath(`/events/${eventId}/travel`);
+  if (!cancelled) {
+    throw new Error('Travel record changed. Refresh and try again.');
+  }
+
+  await writeAudit({
+    actorUserId: userId,
+    eventId: scopedEventId,
+    action: 'delete',
+    resource: 'travel',
+    resourceId: cancelled.id,
+    meta: {
+      personId: cancelled.personId,
+      previousStatus: existing.recordStatus,
+      currentStatus: cancelled.recordStatus,
+      reason: validated.reason || null,
+    },
+  });
+
+  await emitCascadeEvent(
+    CASCADE_EVENTS.TRAVEL_CANCELLED,
+    scopedEventId,
+    { type: 'user', id: userId },
+    {
+      travelRecordId: cancelled.id,
+      personId: cancelled.personId,
+      registrationId: cancelled.registrationId,
+      cancelledAt: cancelled.cancelledAt?.toISOString() ?? new Date().toISOString(),
+      reason: validated.reason || null,
+    },
+  );
+
+  revalidatePath(`/events/${scopedEventId}/travel`);
 
   return cancelled;
 }
@@ -165,13 +382,14 @@ export async function updateTravelRecordStatus(
   travelRecordId: string,
   newStatus: TravelRecordStatus,
 ) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertTravelEventAccess(eventId, { requireWrite: true });
   travelRecordIdSchema.parse(travelRecordId);
+  const validatedStatus = travelStatusSchema.parse(newStatus);
 
   const [existing] = await db
     .select()
     .from(travelRecords)
-    .where(withEventScope(travelRecords.eventId, eventId, eq(travelRecords.id, travelRecordId)))
+    .where(withEventScope(travelRecords.eventId, scopedEventId, eq(travelRecords.id, travelRecordId)))
     .limit(1);
 
   if (!existing) throw new Error('Travel record not found');
@@ -179,35 +397,76 @@ export async function updateTravelRecordStatus(
   const currentStatus = existing.recordStatus as TravelRecordStatus;
   const allowed = TRAVEL_RECORD_TRANSITIONS[currentStatus];
 
-  if (!allowed.includes(newStatus)) {
+  if (!allowed.includes(validatedStatus)) {
     throw new Error(
-      `Cannot transition from "${currentStatus}" to "${newStatus}". Allowed: ${allowed.join(', ') || 'none (terminal)'}`,
+      `Cannot transition from "${currentStatus}" to "${validatedStatus}". Allowed: ${allowed.join(', ') || 'none (terminal)'}`,
     );
   }
 
   const updateData: Record<string, unknown> = {
-    recordStatus: newStatus,
+    recordStatus: validatedStatus,
     updatedBy: userId,
     updatedAt: new Date(),
   };
 
-  if (newStatus === 'cancelled') {
+  if (validatedStatus === 'cancelled') {
     updateData.cancelledAt = new Date();
   }
+
+  const updateFilters = buildTravelWriteFilters(existing);
 
   const [updated] = await db
     .update(travelRecords)
     .set(updateData)
-    .where(eq(travelRecords.id, travelRecordId))
+    .where(and(...updateFilters))
     .returning();
 
-  revalidatePath(`/events/${eventId}/travel`);
+  if (!updated) {
+    throw new Error('Travel record changed. Refresh and try again.');
+  }
+
+  await writeAudit({
+    actorUserId: userId,
+    eventId: scopedEventId,
+    action: 'update',
+    resource: 'travel',
+    resourceId: updated.id,
+    meta: {
+      personId: updated.personId,
+      previousStatus: existing.recordStatus,
+      currentStatus: updated.recordStatus,
+    },
+  });
+
+  if (validatedStatus === 'cancelled') {
+    await emitCascadeEvent(
+      CASCADE_EVENTS.TRAVEL_CANCELLED,
+      scopedEventId,
+      { type: 'user', id: userId },
+      {
+        travelRecordId: updated.id,
+        personId: updated.personId,
+        registrationId: updated.registrationId,
+        cancelledAt: updated.cancelledAt?.toISOString() ?? new Date().toISOString(),
+        reason: null,
+      },
+    );
+  } else if (validatedStatus === 'confirmed' || validatedStatus === 'sent') {
+    await emitCascadeEvent(
+      CASCADE_EVENTS.TRAVEL_SAVED,
+      scopedEventId,
+      { type: 'user', id: userId },
+      buildTravelSavedPayload(updated),
+    );
+  }
+
+  revalidatePath(`/events/${scopedEventId}/travel`);
   return updated;
 }
 
 // ── List travel records for an event ──────────────────────────
 export async function getEventTravelRecords(eventId: string) {
-  const { userId } = await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertTravelEventAccess(eventId);
 
   const rows = await db
     .select({
@@ -238,7 +497,7 @@ export async function getEventTravelRecords(eventId: string) {
     })
     .from(travelRecords)
     .innerJoin(people, eq(travelRecords.personId, people.id))
-    .where(eq(travelRecords.eventId, eventId))
+    .where(eq(travelRecords.eventId, scopedEventId))
     .orderBy(desc(travelRecords.createdAt));
 
   return rows;
@@ -246,13 +505,13 @@ export async function getEventTravelRecords(eventId: string) {
 
 // ── Get single travel record ──────────────────────────────────
 export async function getTravelRecord(eventId: string, travelRecordId: string) {
-  const { userId } = await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertTravelEventAccess(eventId);
   travelRecordIdSchema.parse(travelRecordId);
 
   const [record] = await db
     .select()
     .from(travelRecords)
-    .where(withEventScope(travelRecords.eventId, eventId, eq(travelRecords.id, travelRecordId)))
+    .where(withEventScope(travelRecords.eventId, scopedEventId, eq(travelRecords.id, travelRecordId)))
     .limit(1);
 
   if (!record) throw new Error('Travel record not found');
@@ -261,7 +520,7 @@ export async function getTravelRecord(eventId: string, travelRecordId: string) {
 
 // ── Get travel records for a specific person in an event ──────
 export async function getPersonTravelRecords(eventId: string, personId: string) {
-  const { userId } = await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertTravelEventAccess(eventId);
 
   const rows = await db
     .select()
@@ -269,7 +528,7 @@ export async function getPersonTravelRecords(eventId: string, personId: string) 
     .where(
       withEventScope(
         travelRecords.eventId,
-        eventId,
+        scopedEventId,
         eq(travelRecords.personId, personId),
       ),
     )

@@ -12,7 +12,13 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockDb, mockRevalidatePath, mockAssertEventAccess } = vi.hoisted(() => ({
+const {
+  mockDb,
+  mockRevalidatePath,
+  mockAssertEventAccess,
+  mockWriteAudit,
+  mockEmitCascadeEvent,
+} = vi.hoisted(() => ({
   mockDb: {
     select: vi.fn(),
     insert: vi.fn(),
@@ -20,6 +26,8 @@ const { mockDb, mockRevalidatePath, mockAssertEventAccess } = vi.hoisted(() => (
   },
   mockRevalidatePath: vi.fn(),
   mockAssertEventAccess: vi.fn(),
+  mockWriteAudit: vi.fn(),
+  mockEmitCascadeEvent: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -34,6 +42,14 @@ vi.mock('@/lib/auth/event-access', () => ({
   assertEventAccess: mockAssertEventAccess,
 }));
 
+vi.mock('@/lib/audit/write', () => ({
+  writeAudit: mockWriteAudit,
+}));
+
+vi.mock('@/lib/cascade/emit', () => ({
+  emitCascadeEvent: mockEmitCascadeEvent,
+}));
+
 import {
   createTravelRecord,
   updateTravelRecord,
@@ -45,15 +61,19 @@ import {
 
 // ── Helpers ──────────────────────────────────────────────────
 function chainedSelect(rows: unknown[]) {
-  const chain = {
+  const chain = buildSelectChain(rows);
+  mockDb.select.mockReturnValue(chain);
+  return chain;
+}
+
+function buildSelectChain(rows: unknown[]) {
+  return {
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue(rows),
     orderBy: vi.fn().mockResolvedValue(rows),
     innerJoin: vi.fn().mockReturnThis(),
   };
-  mockDb.select.mockReturnValue(chain);
-  return chain;
 }
 
 function chainedUpdate(rows: unknown[]) {
@@ -106,6 +126,8 @@ const existingRecord = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:ops' });
+  mockWriteAudit.mockResolvedValue(undefined);
+  mockEmitCascadeEvent.mockResolvedValue({ handlersRun: 0, errors: [] });
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -397,7 +419,9 @@ describe('updateTravelRecord: exact keys in setData (kill ConditionalExpression)
 // ══════════════════════════════════════════════════════════════
 describe('createTravelRecord: registrationId handling', () => {
   it('stores truthy registrationId as-is (not coerced to null)', async () => {
-    chainedSelect([{ id: PERSON_ID }]);
+    mockDb.select
+      .mockReturnValueOnce(buildSelectChain([{ id: PERSON_ID }]))
+      .mockReturnValueOnce(buildSelectChain([{ id: REG_ID }]));
     const insertChain = chainedInsert([{ id: RECORD_ID }]);
 
     await createTravelRecord(EVENT_ID, {

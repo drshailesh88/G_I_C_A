@@ -1423,5 +1423,104 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/travel.ts",
+    "module": "src/lib/actions/travel.ts",
+    "attacked_at": "2026-04-17T11:51:01Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "route eventId=not-a-uuid on read and write travel actions",
+        "result": "succeeded"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "call travel read/write actions as org:event_coordinator via direct server-action invocation",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "create travel in event A with registrationId from another event/person",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "update/cancel/status transition after a concurrent write changed the same travel row",
+        "result": "succeeded"
+      },
+      {
+        "category": "audit_bypass",
+        "payload": "create/update/cancel/status mutations and inspect side effects for audit-log writes",
+        "result": "succeeded"
+      },
+      {
+        "category": "cascade_bypass",
+        "payload": "update/cancel/status travel mutations and inspect side effects for downstream travel cascade events",
+        "result": "succeeded"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "SQL metacharacters in travel fields and IDs",
+        "result": "blocked_by_zod_and_parameterized_queries"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "<script>alert(1)</script> in notes and location fields",
+        "result": "no_exploitable_failure_in_action_layer"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "Travel actions trusted the route eventId until after auth/database work. A malformed route eventId could reach assertEventAccess and read/write queries instead of failing fast at the action boundary.",
+        "fix": "Added a travel-specific event access helper that validates route event IDs with Zod before any auth or database work.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/travel.test.ts > createTravelRecord rejects a malformed route eventId before auth or database access; getEventTravelRecords rejects malformed event IDs before auth or database access"
+      },
+      {
+        "severity": "high",
+        "category": "auth_bypass",
+        "description": "The travel action module relied on generic event access, so org:event_coordinator callers could read and mutate ops-only travel data directly even though travel is a logistics module.",
+        "fix": "Added travel-specific read/write role allowlists that permit only super admin, ops, and read-only reads, and only super admin or ops writes.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/travel.test.ts > rejects event coordinators from writing travel records; rejects event coordinators from reading travel records"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "createTravelRecord accepted arbitrary registrationId values, allowing a travel row in one event to point at a registration from another event or another person.",
+        "fix": "Validated registrationId with eventId + personId scoping before insert.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/travel.test.ts > rejects registration IDs from another event/person"
+      },
+      {
+        "severity": "high",
+        "category": "race_condition",
+        "description": "updateTravelRecord, cancelTravelRecord, and updateTravelRecordStatus fetched the row under event scope and then wrote it back by bare id. A concurrent status or content change could therefore be silently overwritten by a stale editor.",
+        "fix": "Added compare-and-swap update filters on id, eventId, current status, and updatedAt so stale writes now fail loudly.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/travel.test.ts > rejects stale concurrent updates after the scoped read; rejects stale concurrent cancels after the scoped read; rejects stale concurrent status updates after the scoped read"
+      },
+      {
+        "severity": "high",
+        "category": "audit_bypass",
+        "description": "Travel create, update, cancel, and status mutations completed without the mandatory audit-log write, leaving logistics changes outside the compliance trail required by project policy.",
+        "fix": "Wired writeAudit into every travel mutation with resource-specific metadata.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/travel.test.ts > writes an audit log on create; writes an audit log and emits cascade when trigger fields change; writes an audit log and emits cascade on cancel; writes an audit log and emits travel.saved when sending an itinerary"
+      },
+      {
+        "severity": "high",
+        "category": "cascade_bypass",
+        "description": "Travel update, cancel, and lifecycle status mutations did not emit any travel cascade events, so accommodation/transport red-flag recalculation and delegate notifications could be bypassed by direct action calls.",
+        "fix": "Emit conference/travel.updated for trigger-field edits, conference/travel.cancelled for cancellations, and conference/travel.saved for confirmed/sent lifecycle transitions.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/travel.test.ts > writes an audit log and emits cascade when trigger fields change; writes an audit log and emits cascade on cancel; writes an audit log and emits travel.saved when sending an itinerary"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockDb, mockRevalidatePath, mockAssertEventAccess } = vi.hoisted(() => ({
+const {
+  mockDb,
+  mockRevalidatePath,
+  mockAssertEventAccess,
+  mockWriteAudit,
+  mockEmitCascadeEvent,
+} = vi.hoisted(() => ({
   mockDb: {
     select: vi.fn(),
     insert: vi.fn(),
@@ -8,6 +14,8 @@ const { mockDb, mockRevalidatePath, mockAssertEventAccess } = vi.hoisted(() => (
   },
   mockRevalidatePath: vi.fn(),
   mockAssertEventAccess: vi.fn(),
+  mockWriteAudit: vi.fn(),
+  mockEmitCascadeEvent: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({
@@ -30,6 +38,14 @@ vi.mock('@/lib/auth/event-access', () => ({
   assertEventAccess: mockAssertEventAccess,
 }));
 
+vi.mock('@/lib/audit/write', () => ({
+  writeAudit: mockWriteAudit,
+}));
+
+vi.mock('@/lib/cascade/emit', () => ({
+  emitCascadeEvent: mockEmitCascadeEvent,
+}));
+
 import {
   createTravelRecord,
   updateTravelRecord,
@@ -42,15 +58,19 @@ import {
 
 // ── Chain helpers ─────────────────────────────────────────────
 function chainedSelect(rows: unknown[]) {
-  const chain = {
+  const chain = buildSelectChain(rows);
+  mockDb.select.mockReturnValue(chain);
+  return chain;
+}
+
+function buildSelectChain(rows: unknown[]) {
+  return {
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
     limit: vi.fn().mockResolvedValue(rows),
     orderBy: vi.fn().mockResolvedValue(rows),
     innerJoin: vi.fn().mockReturnThis(),
   };
-  mockDb.select.mockReturnValue(chain);
-  return chain;
 }
 
 function chainedInsert(rows: unknown[]) {
@@ -88,6 +108,8 @@ const validCreateInput = {
 beforeEach(() => {
   vi.clearAllMocks();
   mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:ops' });
+  mockWriteAudit.mockResolvedValue(undefined);
+  mockEmitCascadeEvent.mockResolvedValue({ handlersRun: 0, errors: [] });
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -110,6 +132,26 @@ describe('createTravelRecord', () => {
     await expect(createTravelRecord(EVENT_ID, validCreateInput)).rejects.toThrow('Person not found');
   });
 
+  it('rejects a malformed route eventId before auth or database access', async () => {
+    await expect(createTravelRecord('not-a-uuid', validCreateInput)).rejects.toThrow('Invalid event ID');
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
+  it('rejects registration IDs from another event/person', async () => {
+    mockDb.select
+      .mockReturnValueOnce(buildSelectChain([{ id: PERSON_ID }]))
+      .mockReturnValueOnce(buildSelectChain([]));
+
+    await expect(
+      createTravelRecord(EVENT_ID, {
+        ...validCreateInput,
+        registrationId: '550e8400-e29b-41d4-a716-446655440010',
+      }),
+    ).rejects.toThrow('Registration does not belong to this event/person');
+  });
+
   it('rejects invalid input (missing direction)', async () => {
     const { direction, ...bad } = validCreateInput;
     await expect(createTravelRecord(EVENT_ID, bad)).rejects.toThrow();
@@ -120,12 +162,35 @@ describe('createTravelRecord', () => {
     await expect(createTravelRecord(EVENT_ID, validCreateInput)).rejects.toThrow('Forbidden');
   });
 
+  it('rejects event coordinators from writing travel records', async () => {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:event_coordinator' });
+
+    await expect(createTravelRecord(EVENT_ID, validCreateInput)).rejects.toThrow('Forbidden');
+  });
+
   it('revalidates travel path after creation', async () => {
     chainedSelect([{ id: PERSON_ID }]);
     chainedInsert([{ id: RECORD_ID, ...validCreateInput, eventId: EVENT_ID }]);
 
     await createTravelRecord(EVENT_ID, validCreateInput);
     expect(mockRevalidatePath).toHaveBeenCalledWith(`/events/${EVENT_ID}/travel`);
+  });
+
+  it('writes an audit log on create', async () => {
+    chainedSelect([{ id: PERSON_ID }]);
+    chainedInsert([{ id: RECORD_ID, ...validCreateInput, eventId: EVENT_ID, recordStatus: 'draft' }]);
+
+    await createTravelRecord(EVENT_ID, validCreateInput);
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actorUserId: 'user_123',
+        eventId: EVENT_ID,
+        action: 'create',
+        resource: 'travel',
+        resourceId: RECORD_ID,
+      }),
+    );
   });
 });
 
@@ -138,9 +203,12 @@ describe('updateTravelRecord', () => {
     eventId: EVENT_ID,
     personId: PERSON_ID,
     recordStatus: 'confirmed',
+    registrationId: null,
     direction: 'inbound',
     fromCity: 'Mumbai',
     toCity: 'Delhi',
+    terminalOrGate: 'T3',
+    updatedAt: new Date('2026-04-17T00:00:00Z'),
   };
 
   it('updates a travel record', async () => {
@@ -185,6 +253,15 @@ describe('updateTravelRecord', () => {
     ).rejects.toThrow('Cannot update a cancelled travel record');
   });
 
+  it('rejects stale concurrent updates after the scoped read', async () => {
+    chainedSelect([existingRecord]);
+    chainedUpdate([]);
+
+    await expect(
+      updateTravelRecord(EVENT_ID, { travelRecordId: RECORD_ID, fromCity: 'Pune' }),
+    ).rejects.toThrow('Travel record changed. Refresh and try again.');
+  });
+
   it('marks sent record as changed on update', async () => {
     const sentRecord = { ...existingRecord, recordStatus: 'sent' };
     chainedSelect([sentRecord]);
@@ -197,6 +274,36 @@ describe('updateTravelRecord', () => {
 
     const setCall = updateChain.set.mock.calls[0][0];
     expect(setCall.recordStatus).toBe('changed');
+  });
+
+  it('writes an audit log and emits cascade when trigger fields change', async () => {
+    chainedSelect([existingRecord]);
+    chainedUpdate([{ ...existingRecord, fromCity: 'Pune', recordStatus: 'changed' }]);
+
+    await updateTravelRecord(EVENT_ID, {
+      travelRecordId: RECORD_ID,
+      fromCity: 'Pune',
+    });
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'update',
+        resource: 'travel',
+        resourceId: RECORD_ID,
+      }),
+    );
+    expect(mockEmitCascadeEvent).toHaveBeenCalledWith(
+      'conference/travel.updated',
+      EVENT_ID,
+      { type: 'user', id: 'user_123' },
+      expect.objectContaining({
+        travelRecordId: RECORD_ID,
+        personId: PERSON_ID,
+        changeSummary: expect.objectContaining({
+          fromCity: { from: 'Mumbai', to: 'Pune' },
+        }),
+      }),
+    );
   });
 });
 
@@ -233,7 +340,9 @@ describe('cancelTravelRecord', () => {
   });
 
   it('appends cancellation reason to notes', async () => {
-    chainedSelect([{ id: RECORD_ID, recordStatus: 'draft', notes: 'Original note' }]);
+    chainedSelect([
+      { id: RECORD_ID, eventId: EVENT_ID, personId: PERSON_ID, registrationId: null, recordStatus: 'draft', notes: 'Original note', updatedAt: new Date('2026-04-17T00:00:00Z') },
+    ]);
     const updateChain = chainedUpdate([{ id: RECORD_ID, recordStatus: 'cancelled' }]);
 
     await cancelTravelRecord(EVENT_ID, {
@@ -244,6 +353,49 @@ describe('cancelTravelRecord', () => {
     const setCall = updateChain.set.mock.calls[0][0];
     expect(setCall.notes).toContain('Cancellation reason: Changed plans');
     expect(setCall.notes).toContain('Original note');
+  });
+
+  it('rejects stale concurrent cancels after the scoped read', async () => {
+    chainedSelect([
+      { id: RECORD_ID, eventId: EVENT_ID, personId: PERSON_ID, registrationId: null, recordStatus: 'confirmed', notes: null, updatedAt: new Date('2026-04-17T00:00:00Z') },
+    ]);
+    chainedUpdate([]);
+
+    await expect(
+      cancelTravelRecord(EVENT_ID, { travelRecordId: RECORD_ID, reason: 'Flight cancelled' }),
+    ).rejects.toThrow('Travel record changed. Refresh and try again.');
+  });
+
+  it('writes an audit log and emits cascade on cancel', async () => {
+    chainedSelect([
+      { id: RECORD_ID, eventId: EVENT_ID, personId: PERSON_ID, registrationId: null, recordStatus: 'confirmed', notes: null, updatedAt: new Date('2026-04-17T00:00:00Z') },
+    ]);
+    chainedUpdate([
+      { id: RECORD_ID, personId: PERSON_ID, registrationId: null, recordStatus: 'cancelled', cancelledAt: new Date('2026-04-18T00:00:00Z') },
+    ]);
+
+    await cancelTravelRecord(EVENT_ID, {
+      travelRecordId: RECORD_ID,
+      reason: 'Flight cancelled',
+    });
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'delete',
+        resource: 'travel',
+        resourceId: RECORD_ID,
+      }),
+    );
+    expect(mockEmitCascadeEvent).toHaveBeenCalledWith(
+      'conference/travel.cancelled',
+      EVENT_ID,
+      { type: 'user', id: 'user_123' },
+      expect.objectContaining({
+        travelRecordId: RECORD_ID,
+        personId: PERSON_ID,
+        reason: 'Flight cancelled',
+      }),
+    );
   });
 });
 
@@ -348,6 +500,82 @@ describe('updateTravelRecordStatus', () => {
       updateTravelRecordStatus(EVENT_ID, RECORD_ID, 'changed'),
     ).rejects.toThrow('Cannot transition');
   });
+
+  it('rejects stale concurrent status updates after the scoped read', async () => {
+    chainedSelect([
+      {
+        id: RECORD_ID,
+        eventId: EVENT_ID,
+        personId: PERSON_ID,
+        registrationId: null,
+        direction: 'inbound',
+        travelMode: 'flight',
+        fromCity: 'Mumbai',
+        toCity: 'Delhi',
+        terminalOrGate: 'T3',
+        recordStatus: 'confirmed',
+        updatedAt: new Date('2026-04-17T00:00:00Z'),
+      },
+    ]);
+    chainedUpdate([]);
+
+    await expect(
+      updateTravelRecordStatus(EVENT_ID, RECORD_ID, 'sent'),
+    ).rejects.toThrow('Travel record changed. Refresh and try again.');
+  });
+
+  it('writes an audit log and emits travel.saved when sending an itinerary', async () => {
+    chainedSelect([
+      {
+        id: RECORD_ID,
+        eventId: EVENT_ID,
+        personId: PERSON_ID,
+        registrationId: null,
+        direction: 'inbound',
+        travelMode: 'flight',
+        fromCity: 'Mumbai',
+        toCity: 'Delhi',
+        terminalOrGate: 'T3',
+        recordStatus: 'confirmed',
+        updatedAt: new Date('2026-04-17T00:00:00Z'),
+      },
+    ]);
+    chainedUpdate([
+      {
+        id: RECORD_ID,
+        personId: PERSON_ID,
+        registrationId: null,
+        direction: 'inbound',
+        travelMode: 'flight',
+        fromCity: 'Mumbai',
+        toCity: 'Delhi',
+        terminalOrGate: 'T3',
+        departureAtUtc: null,
+        arrivalAtUtc: null,
+        recordStatus: 'sent',
+      },
+    ]);
+
+    await updateTravelRecordStatus(EVENT_ID, RECORD_ID, 'sent');
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'update',
+        resource: 'travel',
+        resourceId: RECORD_ID,
+      }),
+    );
+    expect(mockEmitCascadeEvent).toHaveBeenCalledWith(
+      'conference/travel.saved',
+      EVENT_ID,
+      { type: 'user', id: 'user_123' },
+      expect.objectContaining({
+        travelRecordId: RECORD_ID,
+        personId: PERSON_ID,
+        travelMode: 'flight',
+      }),
+    );
+  });
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -363,6 +591,19 @@ describe('getEventTravelRecords', () => {
     const result = await getEventTravelRecords(EVENT_ID);
     expect(result).toEqual(rows);
     expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_ID);
+  });
+
+  it('rejects malformed event IDs before auth or database access', async () => {
+    await expect(getEventTravelRecords('not-a-uuid')).rejects.toThrow('Invalid event ID');
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
+  it('rejects event coordinators from reading travel records', async () => {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:event_coordinator' });
+
+    await expect(getEventTravelRecords(EVENT_ID)).rejects.toThrow('Forbidden');
   });
 });
 
