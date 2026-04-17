@@ -31,6 +31,7 @@
 - Branding and file-backed settings must event-scope stored object keys before signing URLs; direct server-action JSON updates can otherwise borrow another event's object.
 - Notification template render helpers are security boundaries too: validate canonical event IDs and template keys before any lookup, and only sign canonical `branding/<eventId>/<logo|header>/...` asset keys so forged branding JSON cannot borrow another event's files.
 - Template path resolvers must reject reserved segments like `__proto__`, `constructor`, and `prototype` even when they arrive as own JSON properties. Own-property checks alone still let malformed payloads interpolate or satisfy required-variable checks through prototype-shaped keys.
+- Timeout wrappers must validate finite integer durations before calling `setTimeout`. Negative, zero, `NaN`, `Infinity`, fractional, or overflowed values are coerced by Node timers into near-immediate 1ms aborts and can turn malformed configuration into a provider-wide denial of service.
 - Server actions must validate runtime enum parameters and uploaded file bytes. TypeScript unions and browser-provided MIME strings do not protect direct action callers.
 - JSON blob read-merge-write actions need compare-and-swap guards on `updatedAt`, or concurrent partial updates can silently clobber unrelated fields.
 - Long-running bulk jobs cannot ignore distributed-lock renew failures. If the lock expires or ownership is lost mid-flight, abort instead of continuing duplicate work without exclusivity.
@@ -384,3 +385,9 @@
 - Attacks tried: 5
 - Bugs found: 1
 - Key finding: own JSON properties named `__proto__` and `constructor.prototype` still resolved through template variable paths, so malformed payloads could interpolate reserved keys and satisfy required-variable checks that should fail closed.
+
+## 2026-04-17T18:51:45Z — src/lib/notifications/timeout.ts — timer boundary hardening
+- Verdict: hardened
+- Attacks tried: 4
+- Bugs found: 1
+- Key finding: `withTimeout` trusted malformed timer values, and Node coerced `Infinity`, overflowed integers, `NaN`, zero, negatives, and fractional delays into near-immediate aborts, letting bad caller input force provider timeouts.

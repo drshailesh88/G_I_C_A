@@ -5,6 +5,8 @@
  * Used by email, WhatsApp, and R2 providers.
  */
 
+const MAX_TIMEOUT_MS = 2_147_483_647;
+
 export class ProviderTimeoutError extends Error {
   public readonly timeoutMs: number;
 
@@ -27,6 +29,12 @@ export async function withTimeout<T>(
   timeoutMs: number,
   fn: (signal: AbortSignal) => Promise<T>,
 ): Promise<T> {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > MAX_TIMEOUT_MS) {
+    throw new RangeError(
+      `Invalid timeout for provider "${providerName}": expected an integer between 1 and ${MAX_TIMEOUT_MS}ms`,
+    );
+  }
+
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
 

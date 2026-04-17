@@ -3360,5 +3360,44 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/timeout.ts",
+    "module": "src/lib/notifications/timeout.ts",
+    "attacked_at": "2026-04-17T18:51:45Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "timeoutMs values of 0, -1, NaN, Infinity, and 1.5 passed directly to withTimeout",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "timeoutMs=2147483648 and other values above Node's 32-bit timer limit",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "provider resolves before timeout while timeout cleanup runs",
+        "result": "blocked_by_existing_timer_cleanup"
+      },
+      {
+        "category": "stale_state",
+        "payload": "provider receives AbortSignal and outlives the raced timeout promise",
+        "result": "no_new_exploitable_failure_in_helper_contract"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "withTimeout forwarded unchecked timeoutMs values into Node's timer API. Overflowed, non-finite, fractional, zero, or negative values are coerced to a near-immediate 1ms timer, so malformed caller input could force provider timeouts and emit overflow warnings instead of honoring the configured delay.",
+        "fix": "Validated timeoutMs as a safe integer between 1 and Node's maximum supported 32-bit timer delay before creating the AbortController or scheduling the timeout.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/timeout.adversarial.test.ts > rejects malformed timeout value %s before invoking the provider callback; src/lib/notifications/timeout.adversarial.test.ts > still allows the maximum supported timer value"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
