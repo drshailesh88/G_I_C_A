@@ -2913,5 +2913,52 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/email.ts",
+    "module": "src/lib/notifications/email.ts",
+    "attacked_at": "2026-04-17T17:15:37Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "email attachment storageKey `certificates/550e8400-e29b-41d4-a716-446655440999/...` while sending under event `550e8400-e29b-41d4-a716-446655440000`",
+        "result": "succeeded"
+      },
+      {
+        "category": "header_injection",
+        "payload": "fromDisplayName `GEM India\\r\\nBcc: attacker@example.com`",
+        "result": "succeeded"
+      },
+      {
+        "category": "header_injection",
+        "payload": "custom metadata header `bcc: attacker@example.com`",
+        "result": "succeeded"
+      },
+      {
+        "category": "header_injection",
+        "payload": "custom metadata value `travel-1\\r\\nbcc: attacker@example.com` under `x-trigger-id`",
+        "result": "succeeded"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "The Resend adapter signed any attachment storage key it was handed. A direct caller could send an email for one event while attaching `certificates/{OTHER_EVENT_ID}/...` or other event-scoped objects from another tenant, leaking private files across events.",
+        "fix": "Added event-scope validation for event-prefixed attachment roots before requesting any R2 signed URL.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/email.adversarial.test.ts > rejects attachment storage keys that point at another event"
+      },
+      {
+        "severity": "high",
+        "category": "header_injection",
+        "description": "The adapter interpolated raw `fromDisplayName` into the `From` header and forwarded arbitrary `metadata` as provider headers. Direct callers could inject CRLF-bearing display names or reserved headers like `bcc`, altering outbound provider payloads or forcing provider-level header parse failures.",
+        "fix": "Validated display names against a strict safe-character policy and restricted custom headers to trimmed, control-character-free `x-*` names with bounded values before calling Resend.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/email.adversarial.test.ts > rejects newline injection in fromDisplayName before calling Resend; src/lib/notifications/email.adversarial.test.ts > rejects reserved metadata headers that can override message routing; src/lib/notifications/email.adversarial.test.ts > rejects control characters in custom metadata header values"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

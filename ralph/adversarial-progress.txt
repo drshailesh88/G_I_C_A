@@ -6,6 +6,7 @@
 - Runtime lookup registries used for `key in registry` validation must use null-prototype, immutable objects. Plain object registries inherit `__proto__`, `constructor`, and `toString`, which lets malformed route params pass validation and lets one runtime caller poison metadata for later requests.
 - Redis-backed provider/state helpers must exact-match a small allowlist before building keys. Whitespace-padded, unknown, or oversized provider strings otherwise create parallel key namespaces, bypass open-circuit state, and spray unbounded Redis keys.
 - Webhook correlation lookups must scope provider message IDs by provider, not message ID alone. The schema only guarantees uniqueness for `(provider, providerMessageId)`, so same-channel providers that emit the same upstream ID can otherwise advance the wrong notification log.
+- Notification provider adapters are security boundaries too: validate event-scoped attachment storage keys and restrict outbound display names/custom headers before building provider payloads, or direct callers can sign cross-event private files and inject provider-level email headers.
 - CSV import helpers are security boundaries too: reject dangerous object-prototype header names, fail closed on mapped `__proto__`/`constructor` lookups, and block spreadsheet-formula payloads before imported text can crash previews or become stored export-time formula injection.
 - Redis-backed feature-flag helpers are security boundaries too: validate canonical `eventId` segments and runtime flag keys before building keys, or malformed tenant IDs will miss to default-open flags and prototype-chain/default-registry lookups can return truthy non-booleans.
 - Storage helpers must validate object-key canonical form and signed-URL TTLs before touching the S3/R2 SDK. Otherwise traversal-style keys or overlong expiries can bypass higher-level event scoping assumptions and turn private files into long-lived download URLs.
@@ -322,3 +323,9 @@
 - Attacks tried: 6
 - Bugs found: 1
 - Key finding: delivery-event correlation looked up logs by `providerMessageId` alone even though uniqueness is only `(provider, providerMessageId)`, so two WhatsApp providers sharing the same upstream message ID could cause a webhook to append events to and advance the wrong log.
+
+## 2026-04-17T17:15:37Z — src/lib/notifications/email.ts — email adapter boundary hardening
+- Verdict: hardened
+- Attacks tried: 4
+- Bugs found: 2
+- Key finding: the email adapter trusted raw `fromDisplayName`, arbitrary custom headers, and event-scoped attachment storage keys, so direct callers could inject provider-level headers or attach private files from another event.
