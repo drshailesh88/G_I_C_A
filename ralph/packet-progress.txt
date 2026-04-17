@@ -14,6 +14,20 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-17T23:34:30Z — PKT-A-005 — Registration cancellation cascade creates linked red flags
+
+- Story ID: p3-registration-cancel-cascade
+- Implemented: Added `REGISTRATION_CANCELLED` cascade event (`conference/registration.cancelled`) to `events.ts` and `emit.ts`. Extended `updateRegistrationStatus` in `registration.ts` to emit the event (with `personId` added to the pre-update select) when `newStatus === 'cancelled'`. Added `handleRegistrationCancelled` to `registration-cascade.ts` — queries active accommodation records and transport passenger assignments for the person within event scope, calls `upsertRedFlag` with `registration_cancelled` flag type on each. No downstream records are deleted.
+- Files changed:
+  - src/lib/cascade/events.ts (added RegistrationCancelledPayload type, REGISTRATION_CANCELLED event, CASCADE_DIRECTION entry)
+  - src/lib/cascade/emit.ts (added registrationCancelledPayloadSchema, registered in productionPayloadSchemas, extended eventId cross-check)
+  - src/lib/actions/registration.ts (added personId to select, imported emitCascadeEvent + CASCADE_EVENTS, emit on cancelled transition)
+  - src/lib/cascade/handlers/registration-cascade.ts (added handleRegistrationCancelled, registered handler)
+  - src/lib/cascade/handlers/registration-cancel-cascade.test.ts (new — 7 tests, all pass)
+  - src/lib/actions/registration-cancel-emit.test.ts (new — 3 tests, all pass)
+- Tests run: `npm run test:run` — 10 new tests pass; 3 pre-existing failing test files (archive-bypass, travel-cascade, full-journey), unchanged.
+- Risks/follow-ups: Transport batches (`transport_batch` target type) are not flagged directly — only passenger assignments are flagged. If a batch-level flag is needed, a future packet should extend the handler. Travel records have no `TARGET_ENTITY_TYPE` entry, so they are not directly flagged; ops can infer from the accommodation/transport flags.
+
 ## 2026-04-17T23:30:00Z — PKT-A-004 — Faculty acceptance creates or confirms registration
 
 - Story ID: p2-faculty-accept-creates-registration

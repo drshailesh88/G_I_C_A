@@ -2,7 +2,7 @@
   "version": 1,
   "pipeline": "ralph-packets",
   "updated_at": "2026-04-17T00:00:00Z",
-  "current_packet_id": "PKT-A-004",
+  "current_packet_id": "PKT-A-005",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -86,14 +86,14 @@
       "bucket": "A",
       "module": "registration",
       "priority": 5,
-      "status": "READY",
+      "status": "NEEDS_REVIEW",
       "packet_file": "ralph/packets/PKT-A-005-p3-registration-cancel-cascade.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
-      "build_commit": null,
+      "build_commit": "c475a66e84e1624e62c1629206c8eb52078cfe89",
       "qa_commit": null,
-      "last_status_at": null,
+      "last_status_at": "2026-04-17T23:34:30.000000Z",
       "depends_on": []
     },
     {
