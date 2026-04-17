@@ -1592,5 +1592,62 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/attendance/qr-utils.ts",
+    "module": "src/lib/attendance/qr-utils.ts",
+    "attacked_at": "2026-04-17T12:42:02Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "full QR URLs with duplicate token/event query parameters",
+        "result": "succeeded"
+      },
+      {
+        "category": "path_traversal",
+        "payload": "full QR URLs using foo/../checkin and similar normalized path variants",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "very long baseUrl/payload values that produce QR payloads above the 500-char attendance validation budget",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "payload eventId differs from scoped eventId",
+        "result": "blocked_by_checkin_and_batch_sync_event_scope_checks"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "SQL metacharacters in token/event query values",
+        "result": "blocked_by_strict token and UUID format validation"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "<script>alert(1)</script> and javascript: payload URLs",
+        "result": "blocked_by_protocol/path validation and lack of HTML sinks in the utility"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "parseQrPayload trusted the URL parser's normalized pathname and first query value, so malformed QR URLs like /foo/../checkin or duplicate token/event parameters were accepted as valid scans instead of being rejected.",
+        "fix": "Require canonical /checkin raw paths, reject credentials/fragments, and fail closed when token or event appears more than once.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/attendance/qr-utils.gap.test.ts > rejects duplicate token parameters in URL payloads; rejects traversal-like URL payload paths that normalize to /checkin; rejects URL payloads with fragments"
+      },
+      {
+        "severity": "medium",
+        "category": "resource_exhaustion",
+        "description": "buildQrPayloadUrl could generate full QR URLs longer than the 500-character attendance validation limit, creating server-generated QR payloads that downstream check-in actions would reject and leaving the parser without a local size guard.",
+        "fix": "Aligned qr-utils with the attendance payload budget by rejecting overlong built or parsed payloads before they can propagate.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/attendance/qr-utils.gap.test.ts > rejects payloads longer than the attendance validation limit; rejects building a full QR URL that downstream attendance validation would refuse"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

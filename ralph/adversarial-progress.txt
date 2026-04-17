@@ -37,6 +37,7 @@
 - Registration status transitions must enforce access before the row lookup and update with compare-and-swap filters on `eventId`/`status`/`updatedAt`, or unauthorized callers can probe existence and stale editors can clobber newer state.
 - Clerk organization-membership invariants cannot trust a single 100-row page or a bare read-before-write. Paginate membership queries fully and serialize destructive org membership mutations, or large orgs and concurrent admin changes can strip the last super admin.
 - Transport assignment actions must event-scope both the `travelRecordId`/`personId` pair and the target `vehicleAssignmentId`/`batchId` pair. UUID-shaped foreign keys alone let direct calls graft passengers onto another event’s travel or the wrong batch.
+- QR payload helpers must enforce the same length budget and canonical URL shape as the attendance validators. If they trust URL normalization or unbounded base URLs, malformed `../checkin`/duplicate-param payloads and self-invalidating oversized QR codes slip through.
 
 ## Iteration log
 
@@ -160,3 +161,9 @@
 - Attacks tried: 7
 - Bugs found: 3
 - Key finding: one poisoned offline row could deadlock later batch syncs, and the queue’s IndexedDB sync-state handling could hide pending scans or strand synced rows.
+
+## 2026-04-17T12:42:02Z — src/lib/attendance/qr-utils.ts — QR payload parser and length hardening
+- Verdict: hardened
+- Attacks tried: 6
+- Bugs found: 2
+- Key finding: the utility accepted normalized `../checkin` and duplicate-query QR URLs as valid scans, and it could generate overlong full payloads that the attendance validators would later reject.

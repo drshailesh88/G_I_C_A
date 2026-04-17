@@ -32,6 +32,7 @@ export type CheckInEligibility = {
 const QR_TOKEN_PATTERN = /^[A-Za-z0-9]{32}$/;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const QR_PAYLOAD_MAX_LENGTH = 500;
 
 /** Path prefix for QR check-in URLs */
 export const QR_CHECKIN_PATH = '/checkin';
@@ -42,6 +43,22 @@ function normalizeRequiredString(value: string, fieldName: string): string {
   }
 
   return value.trim();
+}
+
+function assertQrPayloadLength(payload: string, fieldName: string) {
+  if (payload.length > QR_PAYLOAD_MAX_LENGTH) {
+    throw new Error(`${fieldName} exceeds maximum length`);
+  }
+}
+
+function getRawQrUrlPath(payload: string): string | null {
+  const match = payload.match(/^[A-Za-z][A-Za-z0-9+.-]*:\/\/[^/?#]+([^?#]*)/);
+
+  if (!match) {
+    return null;
+  }
+
+  return match[1] || '/';
 }
 
 // ── QR Payload Building ──────────────────────────────────────
@@ -75,7 +92,11 @@ export function buildQrPayloadUrl(
   const url = new URL(QR_CHECKIN_PATH, parsedBaseUrl);
   url.searchParams.set('token', normalizedToken);
   url.searchParams.set('event', normalizedEventId);
-  return url.toString();
+
+  const payload = url.toString();
+  assertQrPayloadLength(payload, 'QR payload');
+
+  return payload;
 }
 
 /**
@@ -110,6 +131,10 @@ export function parseQrPayload(payload: string): QrParseResult {
 
   const trimmed = payload.trim();
 
+  if (trimmed.length > QR_PAYLOAD_MAX_LENGTH) {
+    return { valid: false, error: 'QR payload exceeds maximum length' };
+  }
+
   // Try compact format first: {eventId}:{token}
   const compactMatch = trimmed.match(
     /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}):([A-Za-z0-9]{32})$/i,
@@ -120,18 +145,33 @@ export function parseQrPayload(payload: string): QrParseResult {
 
   // Try full URL format
   try {
+    const rawPath = getRawQrUrlPath(trimmed);
     const url = new URL(trimmed);
 
-    if (!['http:', 'https:'].includes(url.protocol) || url.pathname !== QR_CHECKIN_PATH) {
+    if (
+      !['http:', 'https:'].includes(url.protocol)
+      || rawPath !== QR_CHECKIN_PATH
+      || url.pathname !== QR_CHECKIN_PATH
+      || url.username
+      || url.password
+      || url.hash
+    ) {
       return { valid: false, error: 'Invalid QR payload URL' };
     }
 
-    const token = url.searchParams.get('token');
-    const eventId = url.searchParams.get('event');
+    const tokenParams = url.searchParams.getAll('token');
+    const eventParams = url.searchParams.getAll('event');
 
-    if (!token || !eventId) {
+    if (tokenParams.length === 0 || eventParams.length === 0) {
       return { valid: false, error: 'Missing token or event parameter' };
     }
+
+    if (tokenParams.length > 1 || eventParams.length > 1) {
+      return { valid: false, error: 'Duplicate token or event parameter' };
+    }
+
+    const token = tokenParams[0];
+    const eventId = eventParams[0];
 
     if (!QR_TOKEN_PATTERN.test(token)) {
       return { valid: false, error: 'Invalid token format' };

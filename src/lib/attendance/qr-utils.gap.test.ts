@@ -197,3 +197,56 @@ describe('parseQrPayload protocol edge cases', () => {
     expect(result.valid).toBe(false);
   });
 });
+
+describe('QR payload hardening regressions', () => {
+  it('rejects duplicate token parameters in URL payloads', () => {
+    const result = parseQrPayload(
+      `https://example.com/checkin?token=${TOKEN}&token=12345678901234567890123456789012&event=${EVENT_ID}`,
+    );
+
+    expect(result).toEqual({
+      valid: false,
+      error: 'Duplicate token or event parameter',
+    });
+  });
+
+  it('rejects traversal-like URL payload paths that normalize to /checkin', () => {
+    const result = parseQrPayload(
+      `https://example.com/foo/../checkin?token=${TOKEN}&event=${EVENT_ID}`,
+    );
+
+    expect(result).toEqual({
+      valid: false,
+      error: 'Invalid QR payload URL',
+    });
+  });
+
+  it('rejects URL payloads with fragments', () => {
+    const result = parseQrPayload(
+      `https://example.com/checkin?token=${TOKEN}&event=${EVENT_ID}#scanner-cache`,
+    );
+
+    expect(result).toEqual({
+      valid: false,
+      error: 'Invalid QR payload URL',
+    });
+  });
+
+  it('rejects payloads longer than the attendance validation limit', () => {
+    const longPayload = `https://example.com/checkin?token=${TOKEN}&event=${EVENT_ID}&pad=${'x'.repeat(500)}`;
+    const result = parseQrPayload(longPayload);
+
+    expect(result).toEqual({
+      valid: false,
+      error: 'QR payload exceeds maximum length',
+    });
+  });
+
+  it('rejects building a full QR URL that downstream attendance validation would refuse', () => {
+    const longBaseUrl = `https://${'a'.repeat(430)}.example.com`;
+
+    expect(() => buildQrPayloadUrl(longBaseUrl, TOKEN, EVENT_ID)).toThrow(
+      'QR payload exceeds maximum length',
+    );
+  });
+});
