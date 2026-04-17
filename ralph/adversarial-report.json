@@ -1991,5 +1991,54 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/cascade/red-flags.ts",
+    "module": "src/lib/cascade/red-flags.ts",
+    "attacked_at": "2026-04-17T15:18:47Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "race_condition",
+        "payload": "review or resolve a flag after another request changes its status between the scoped read and the write",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "concurrent upsert/review/resolve changing the same flag after the initial select",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "review or resolve a real flagId through a different eventId scope",
+        "result": "blocked"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "empty eventId passed through the service helpers",
+        "result": "blocked"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "direct invocation without auth context",
+        "result": "not_applicable_internal_service_has_no_auth_surface"
+      },
+      {
+        "category": "injection",
+        "payload": "HTML/SQL metacharacters in flag detail and resolution note fields",
+        "result": "no_exploitable_failure_in_service_layer"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "race_condition",
+        "description": "reviewRedFlag and resolveRedFlag read the flag under event scope but then updated by bare id only. A concurrent transition after the read could still be overwritten, allowing a stale reviewer to downgrade a just-resolved flag back to reviewed or clobber a newer resolution.",
+        "fix": "Added event-scoped compare-and-swap update guards using the current status and updatedAt, and fail closed with a stale-conflict error when the row changed before the write.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/cascade/red-flags.test.ts > rejects stale concurrent review writes after the scoped read; src/lib/cascade/red-flags.test.ts > rejects stale concurrent resolution writes after the scoped read"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

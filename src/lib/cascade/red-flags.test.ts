@@ -11,9 +11,10 @@ const { mockDb } = vi.hoisted(() => ({
 
 vi.mock('@/lib/db', () => ({ db: mockDb }));
 vi.mock('@/lib/db/with-event-scope', () => ({
-  withEventScope: vi.fn(),
+  withEventScope: vi.fn((..._args: unknown[]) => 'event-scope-condition'),
 }));
 
+import { withEventScope } from '@/lib/db/with-event-scope';
 import {
   upsertRedFlag,
   reviewRedFlag,
@@ -168,7 +169,7 @@ describe('upsertRedFlag', () => {
 // ── reviewRedFlag ─────────────────────────────────────────────
 describe('reviewRedFlag', () => {
   it('transitions unreviewed → reviewed', async () => {
-    chainedSelect([{ id: FLAG_ID, flagStatus: 'unreviewed' }]);
+    chainedSelect([{ id: FLAG_ID, flagStatus: 'unreviewed', updatedAt: new Date('2026-04-17T00:00:00Z') }]);
     const updateChain = chainedUpdate([{ id: FLAG_ID, flagStatus: 'reviewed' }]);
 
     const result = await reviewRedFlag(EVENT_ID, FLAG_ID, 'user_123');
@@ -177,6 +178,16 @@ describe('reviewRedFlag', () => {
     const setCall = updateChain.set.mock.calls[0][0];
     expect(setCall.reviewedBy).toBe('user_123');
     expect(setCall.reviewedAt).toBeInstanceOf(Date);
+  });
+
+  it('rejects stale concurrent review writes after the scoped read', async () => {
+    chainedSelect([{ id: FLAG_ID, flagStatus: 'unreviewed', updatedAt: new Date('2026-04-17T00:00:00Z') }]);
+    const updateChain = chainedUpdate([]);
+
+    await expect(reviewRedFlag(EVENT_ID, FLAG_ID, 'user_123')).rejects.toThrow(/stale conflict/i);
+
+    expect(updateChain.where).toHaveBeenCalledWith('event-scope-condition');
+    expect(vi.mocked(withEventScope).mock.calls).toHaveLength(2);
   });
 
   it('throws when flag not found', async () => {
@@ -202,7 +213,7 @@ describe('reviewRedFlag', () => {
 // ── resolveRedFlag ────────────────────────────────────────────
 describe('resolveRedFlag', () => {
   it('transitions reviewed → resolved with note', async () => {
-    chainedSelect([{ id: FLAG_ID, flagStatus: 'reviewed' }]);
+    chainedSelect([{ id: FLAG_ID, flagStatus: 'reviewed', updatedAt: new Date('2026-04-17T00:00:00Z') }]);
     const updateChain = chainedUpdate([{ id: FLAG_ID, flagStatus: 'resolved' }]);
 
     const result = await resolveRedFlag(EVENT_ID, FLAG_ID, 'user_123', 'Manually verified OK');
@@ -215,7 +226,7 @@ describe('resolveRedFlag', () => {
   });
 
   it('allows Super Admin skip: unreviewed → resolved', async () => {
-    chainedSelect([{ id: FLAG_ID, flagStatus: 'unreviewed' }]);
+    chainedSelect([{ id: FLAG_ID, flagStatus: 'unreviewed', updatedAt: new Date('2026-04-17T00:00:00Z') }]);
     chainedUpdate([{ id: FLAG_ID, flagStatus: 'resolved' }]);
 
     const result = await resolveRedFlag(EVENT_ID, FLAG_ID, 'super_admin_123');
@@ -235,13 +246,23 @@ describe('resolveRedFlag', () => {
   });
 
   it('sets null resolution note when not provided', async () => {
-    chainedSelect([{ id: FLAG_ID, flagStatus: 'reviewed' }]);
+    chainedSelect([{ id: FLAG_ID, flagStatus: 'reviewed', updatedAt: new Date('2026-04-17T00:00:00Z') }]);
     const updateChain = chainedUpdate([{ id: FLAG_ID, flagStatus: 'resolved' }]);
 
     await resolveRedFlag(EVENT_ID, FLAG_ID, 'user_123');
 
     const setCall = updateChain.set.mock.calls[0][0];
     expect(setCall.resolutionNote).toBeNull();
+  });
+
+  it('rejects stale concurrent resolution writes after the scoped read', async () => {
+    chainedSelect([{ id: FLAG_ID, flagStatus: 'reviewed', updatedAt: new Date('2026-04-17T00:00:00Z') }]);
+    const updateChain = chainedUpdate([]);
+
+    await expect(resolveRedFlag(EVENT_ID, FLAG_ID, 'user_123')).rejects.toThrow(/stale conflict/i);
+
+    expect(updateChain.where).toHaveBeenCalledWith('event-scope-condition');
+    expect(vi.mocked(withEventScope).mock.calls).toHaveLength(2);
   });
 });
 

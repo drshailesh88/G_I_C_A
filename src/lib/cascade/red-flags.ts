@@ -76,6 +76,21 @@ export const FLAG_TRANSITIONS: Record<FlagStatus, FlagStatus[]> = {
   resolved: [],  // terminal
 };
 
+function buildScopedFlagMutationWhereClause(
+  eventId: string,
+  flagId: string,
+  expectedStatus: FlagStatus,
+  expectedUpdatedAt?: Date | null,
+) {
+  return withEventScope(
+    redFlags.eventId,
+    eventId,
+    eq(redFlags.id, flagId),
+    eq(redFlags.flagStatus, expectedStatus),
+    expectedUpdatedAt ? eq(redFlags.updatedAt, expectedUpdatedAt) : undefined,
+  );
+}
+
 // ── Create or update red flag ─────────────────────────────────
 // Idempotency: one active flag per (event_id, target_type, target_id, flag_type).
 // Uses ON CONFLICT DO UPDATE on partial unique index uq_red_flag_active
@@ -178,8 +193,19 @@ export async function reviewRedFlag(
       reviewedAt: new Date(),
       updatedAt: new Date(),
     })
-    .where(eq(redFlags.id, flagId))
+    .where(
+      buildScopedFlagMutationWhereClause(
+        eventId,
+        flagId,
+        currentStatus,
+        existing.updatedAt,
+      ),
+    )
     .returning();
+
+  if (!updated) {
+    throw new Error('Red flag review failed due to a stale conflict');
+  }
 
   return updated;
 }
@@ -213,8 +239,19 @@ export async function resolveRedFlag(
       resolutionNote: resolutionNote || null,
       updatedAt: new Date(),
     })
-    .where(eq(redFlags.id, flagId))
+    .where(
+      buildScopedFlagMutationWhereClause(
+        eventId,
+        flagId,
+        currentStatus,
+        existing.updatedAt,
+      ),
+    )
     .returning();
+
+  if (!updated) {
+    throw new Error('Red flag resolution failed due to a stale conflict');
+  }
 
   return updated;
 }

@@ -20,6 +20,7 @@ vi.mock('@/lib/db/with-event-scope', () => ({
   withEventScope: vi.fn((..._args: unknown[]) => 'event-scope-condition'),
 }));
 
+import { withEventScope } from '@/lib/db/with-event-scope';
 import {
   upsertRedFlag,
   reviewRedFlag,
@@ -239,7 +240,7 @@ describe('upsertRedFlag status values', () => {
 
 describe('reviewRedFlag status values', () => {
   it('sets flagStatus to exact string "reviewed"', async () => {
-    chainedSelect([{ id: FLAG_ID, flagStatus: 'unreviewed' }]);
+    chainedSelect([{ id: FLAG_ID, flagStatus: 'unreviewed', updatedAt: new Date('2026-04-17T00:00:00Z') }]);
     const updateChain = chainedUpdate([{ id: FLAG_ID, flagStatus: 'reviewed' }]);
 
     await reviewRedFlag(EVENT_ID, FLAG_ID, 'user-abc');
@@ -250,13 +251,23 @@ describe('reviewRedFlag status values', () => {
     expect(setCall.reviewedAt).toBeInstanceOf(Date);
     expect(setCall.updatedAt).toBeInstanceOf(Date);
   });
+
+  it('uses scoped compare-and-swap conditions for the review write', async () => {
+    chainedSelect([{ id: FLAG_ID, flagStatus: 'unreviewed', updatedAt: new Date('2026-04-17T00:00:00Z') }]);
+    const updateChain = chainedUpdate([]);
+
+    await expect(reviewRedFlag(EVENT_ID, FLAG_ID, 'user-abc')).rejects.toThrow(/stale conflict/i);
+
+    expect(updateChain.where).toHaveBeenCalledWith('event-scope-condition');
+    expect(vi.mocked(withEventScope).mock.calls).toHaveLength(2);
+  });
 });
 
 // ── resolveRedFlag: kill StringLiteral on 'resolved' status ──
 
 describe('resolveRedFlag status values', () => {
   it('sets flagStatus to exact string "resolved"', async () => {
-    chainedSelect([{ id: FLAG_ID, flagStatus: 'reviewed' }]);
+    chainedSelect([{ id: FLAG_ID, flagStatus: 'reviewed', updatedAt: new Date('2026-04-17T00:00:00Z') }]);
     const updateChain = chainedUpdate([{ id: FLAG_ID, flagStatus: 'resolved' }]);
 
     await resolveRedFlag(EVENT_ID, FLAG_ID, 'admin-1', 'Checked manually');
@@ -270,13 +281,23 @@ describe('resolveRedFlag status values', () => {
   });
 
   it('sets resolutionNote to null when empty string provided', async () => {
-    chainedSelect([{ id: FLAG_ID, flagStatus: 'unreviewed' }]);
+    chainedSelect([{ id: FLAG_ID, flagStatus: 'unreviewed', updatedAt: new Date('2026-04-17T00:00:00Z') }]);
     const updateChain = chainedUpdate([{ id: FLAG_ID, flagStatus: 'resolved' }]);
 
     await resolveRedFlag(EVENT_ID, FLAG_ID, 'admin-1', '');
 
     const setCall = updateChain.set.mock.calls[0][0];
     expect(setCall.resolutionNote).toBeNull();
+  });
+
+  it('uses scoped compare-and-swap conditions for the resolution write', async () => {
+    chainedSelect([{ id: FLAG_ID, flagStatus: 'reviewed', updatedAt: new Date('2026-04-17T00:00:00Z') }]);
+    const updateChain = chainedUpdate([]);
+
+    await expect(resolveRedFlag(EVENT_ID, FLAG_ID, 'admin-1', 'Checked manually')).rejects.toThrow(/stale conflict/i);
+
+    expect(updateChain.where).toHaveBeenCalledWith('event-scope-condition');
+    expect(vi.mocked(withEventScope).mock.calls).toHaveLength(2);
   });
 });
 

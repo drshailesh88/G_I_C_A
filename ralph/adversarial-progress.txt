@@ -45,6 +45,7 @@
 - Shared event auth helpers must validate UUID event scopes themselves and require a real event row even for super-admin bypasses. Trusting callers or bypassing existence checks lets malformed or phantom event IDs reach downstream auth/DB code.
 - Automation payload sanitizers must recurse through nested objects and arrays. Top-level-only filtering leaks tokens/passwords into template variables and persisted notification logs.
 - Cascade notification handlers cannot trust `payload.variables` for recipient routing or template identity fields. Rebuild recipient/event/fullName vars from scoped DB state before dispatch, or forged snapshots can redirect notifications and normal saved events can arrive without a valid destination/template context.
+- Red-flag lifecycle writes need compare-and-swap guards on `eventId`/`flagStatus`/`updatedAt`. Reading a flag under scope and then updating by bare `id` lets stale reviewers overwrite newer review/resolve transitions.
 
 ## Iteration log
 
@@ -210,3 +211,9 @@
 - Attacks tried: 7
 - Bugs found: 2
 - Key finding: the travel cascade trusted payload `personId` and snapshot recipient/event labels, so a forged envelope could redirect delegate notifications or flag the wrong attendee, and normal sends were missing `fullName`/`eventName` required by active travel templates.
+
+## 2026-04-17T15:18:47Z — src/lib/cascade/red-flags.ts — red-flag stale transition hardening
+- Verdict: hardened
+- Attacks tried: 6
+- Bugs found: 1
+- Key finding: red-flag review/resolve flows read under event scope but wrote back by bare `id`, so a stale operator could overwrite a concurrent transition and downgrade a just-resolved flag back into the active workflow.
