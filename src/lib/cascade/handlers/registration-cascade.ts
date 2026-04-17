@@ -1,6 +1,11 @@
+import { db } from '@/lib/db';
+import { accommodationRecords, transportPassengerAssignments } from '@/lib/db/schema';
+import { eq, ne } from 'drizzle-orm';
+import { withEventScope } from '@/lib/db/with-event-scope';
+import { upsertRedFlag } from '../red-flags';
 import { onCascadeEvent } from '../emit';
 import { CASCADE_EVENTS } from '../events';
-import type { RegistrationCreatedPayload } from '../events';
+import type { RegistrationCreatedPayload, RegistrationCancelledPayload } from '../events';
 import { captureCascadeError } from '@/lib/sentry';
 import { sendNotification } from '@/lib/notifications/send';
 import {
@@ -54,6 +59,66 @@ export async function handleRegistrationCreated(params: {
   }
 }
 
+export async function handleRegistrationCancelled(params: {
+  eventId: string;
+  actor: { type: string; id: string };
+  payload: Record<string, unknown>;
+}) {
+  const { eventId, payload } = params;
+  const data = payload as unknown as RegistrationCancelledPayload;
+
+  // 1. Flag active accommodation records for this person
+  const accomRecords = await db
+    .select({ id: accommodationRecords.id })
+    .from(accommodationRecords)
+    .where(
+      withEventScope(
+        accommodationRecords.eventId,
+        eventId,
+        eq(accommodationRecords.personId, data.personId),
+        ne(accommodationRecords.recordStatus, 'cancelled'),
+      ),
+    );
+
+  for (const accom of accomRecords) {
+    await upsertRedFlag({
+      eventId,
+      flagType: 'registration_cancelled',
+      flagDetail: `Registration ${data.registrationId} cancelled — review accommodation booking`,
+      targetEntityType: 'accommodation_record',
+      targetEntityId: accom.id,
+      sourceEntityType: 'registration',
+      sourceEntityId: data.registrationId,
+    });
+  }
+
+  // 2. Flag active transport passenger assignments for this person
+  const passengerAssignments = await db
+    .select({ id: transportPassengerAssignments.id })
+    .from(transportPassengerAssignments)
+    .where(
+      withEventScope(
+        transportPassengerAssignments.eventId,
+        eventId,
+        eq(transportPassengerAssignments.personId, data.personId),
+        ne(transportPassengerAssignments.assignmentStatus, 'cancelled'),
+      ),
+    );
+
+  for (const pa of passengerAssignments) {
+    await upsertRedFlag({
+      eventId,
+      flagType: 'registration_cancelled',
+      flagDetail: `Registration ${data.registrationId} cancelled — review transport assignment`,
+      targetEntityType: 'transport_passenger_assignment',
+      targetEntityId: pa.id,
+      sourceEntityType: 'registration',
+      sourceEntityId: data.registrationId,
+    });
+  }
+}
+
 export function registerRegistrationCascadeHandlers() {
   onCascadeEvent(CASCADE_EVENTS.REGISTRATION_CREATED, handleRegistrationCreated);
+  onCascadeEvent(CASCADE_EVENTS.REGISTRATION_CANCELLED, handleRegistrationCancelled);
 }

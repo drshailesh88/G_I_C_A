@@ -86,6 +86,13 @@ export type RegistrationCreatedPayload = {
   eventId: string;
 };
 
+export type RegistrationCancelledPayload = {
+  registrationId: string;
+  personId: string;
+  eventId: string;
+  cancelledAt: string;
+};
+
 // ── Session Events ───────────────────────────────────────────
 export type SessionUpdatedPayload = {
   sessionId: string;
@@ -113,6 +120,7 @@ export const CASCADE_EVENTS = {
   ACCOMMODATION_UPDATED: 'conference/accommodation.updated',
   ACCOMMODATION_CANCELLED: 'conference/accommodation.cancelled',
   REGISTRATION_CREATED: 'conference/registration.created',
+  REGISTRATION_CANCELLED: 'conference/registration.cancelled',
   SESSION_UPDATED: 'conference/session.updated',
   CERTIFICATE_GENERATED: 'conference/certificate.generated',
 } as const;
@@ -131,6 +139,7 @@ export const CASCADE_DIRECTION = {
   'conference/accommodation.cancelled': ['transport_flag', 'delegate_notification'],
   'conference/travel.saved': ['notify_delegate_itinerary'],
   'conference/registration.created': ['send_confirmation', 'assign_qr'],
+  'conference/registration.cancelled': ['accommodation_flag', 'transport_flag'],
   'conference/session.updated': ['notify_affected_faculty'],
   'conference/certificate.generated': ['notify_recipient_certificate'],
 } as const;

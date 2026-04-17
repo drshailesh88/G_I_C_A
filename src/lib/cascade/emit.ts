@@ -78,6 +78,12 @@ const registrationCreatedPayloadSchema = payloadBaseSchema.extend({
   personId: nonEmptyStringSchema,
   eventId: nonEmptyStringSchema,
 });
+const registrationCancelledPayloadSchema = payloadBaseSchema.extend({
+  registrationId: nonEmptyStringSchema,
+  personId: nonEmptyStringSchema,
+  eventId: nonEmptyStringSchema,
+  cancelledAt: z.string().optional(),
+});
 const sessionUpdatedPayloadSchema = payloadBaseSchema.extend({
   sessionId: nonEmptyStringSchema,
   changeSummary: changeSummarySchema,
@@ -99,6 +105,7 @@ const productionPayloadSchemas = {
   [CASCADE_EVENTS.ACCOMMODATION_UPDATED]: updatedAccommodationPayloadSchema,
   [CASCADE_EVENTS.ACCOMMODATION_CANCELLED]: cancelledAccommodationPayloadSchema,
   [CASCADE_EVENTS.REGISTRATION_CREATED]: registrationCreatedPayloadSchema,
+  [CASCADE_EVENTS.REGISTRATION_CANCELLED]: registrationCancelledPayloadSchema,
   [CASCADE_EVENTS.SESSION_UPDATED]: sessionUpdatedPayloadSchema,
   [CASCADE_EVENTS.CERTIFICATE_GENERATED]: certificateGeneratedPayloadSchema,
 } satisfies Record<CascadeEventName, z.ZodTypeAny>;
@@ -136,7 +143,8 @@ function validateProductionEmitInput(
   const parsedPayload = payloadResult.data as Record<string, unknown>;
 
   if (
-    eventName === CASCADE_EVENTS.REGISTRATION_CREATED &&
+    (eventName === CASCADE_EVENTS.REGISTRATION_CREATED ||
+      eventName === CASCADE_EVENTS.REGISTRATION_CANCELLED) &&
     typeof parsedPayload.eventId === 'string' &&
     parsedPayload.eventId !== envelope.eventId
   ) {

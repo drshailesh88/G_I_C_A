@@ -20,6 +20,8 @@ import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
 import { ROLES } from '@/lib/auth/roles';
 import { isRegistrationOpen } from '@/lib/flags';
+import { emitCascadeEvent } from '@/lib/cascade/emit';
+import { CASCADE_EVENTS } from '@/lib/cascade/events';
 
 const REGISTRATION_READ_ROLES = new Set([
   ROLES.SUPER_ADMIN,
@@ -252,6 +254,7 @@ export async function updateRegistrationStatus(input: unknown) {
     .select({
       id: eventRegistrations.id,
       eventId: eventRegistrations.eventId,
+      personId: eventRegistrations.personId,
       status: eventRegistrations.status,
       updatedAt: eventRegistrations.updatedAt,
     })
@@ -288,6 +291,20 @@ export async function updateRegistrationStatus(input: unknown) {
 
   if (!updated) {
     throw new Error('Registration was modified by another request. Please refresh and try again.');
+  }
+
+  if (newStatus === 'cancelled') {
+    await emitCascadeEvent(
+      CASCADE_EVENTS.REGISTRATION_CANCELLED,
+      eventId,
+      { type: 'user', id: userId },
+      {
+        registrationId: registration.id,
+        personId: registration.personId,
+        eventId,
+        cancelledAt: new Date().toISOString(),
+      },
+    );
   }
 
   revalidatePath(`/events/${eventId}/registrations`);
