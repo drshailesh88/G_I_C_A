@@ -531,11 +531,14 @@ describe('spec-008: Resend multi-signature support', () => {
   it('accepts when one of multiple v1 signatures is valid', () => {
     const secret = 'whsec_' + Buffer.from('test-secret-32-bytes-long-here!').toString('base64');
     const originalSecret = process.env.RESEND_WEBHOOK_SECRET;
+    const nowSeconds = 1234567890;
     process.env.RESEND_WEBHOOK_SECRET = secret;
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(nowSeconds * 1000));
 
     try {
       const svixId = 'msg_123';
-      const svixTimestamp = '1234567890';
+      const svixTimestamp = String(nowSeconds);
       const payload = '{"test":"data"}';
 
       const secretBytes = Buffer.from(secret.slice(6), 'base64');
@@ -555,6 +558,7 @@ describe('spec-008: Resend multi-signature support', () => {
       });
       expect(result).toBe(true);
     } finally {
+      vi.useRealTimers();
       process.env.RESEND_WEBHOOK_SECRET = originalSecret;
     }
   });

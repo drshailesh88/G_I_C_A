@@ -4,12 +4,16 @@ import { verifyResendSignature, verifyEvolutionSignature } from './webhook-auth'
 
 describe('verifyResendSignature', () => {
   const WEBHOOK_SECRET = 'whsec_dGVzdHNlY3JldA=='; // base64 of "testsecret"
+  const NOW_SECONDS = 1712592000;
 
   beforeEach(() => {
     vi.stubEnv('RESEND_WEBHOOK_SECRET', WEBHOOK_SECRET);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(NOW_SECONDS * 1000));
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
   });
 
@@ -23,7 +27,7 @@ describe('verifyResendSignature', () => {
   it('accepts a valid signature', () => {
     const payload = '{"type":"email.sent","data":{}}';
     const svixId = 'msg_123';
-    const svixTimestamp = '1712592000';
+    const svixTimestamp = String(NOW_SECONDS);
     const svixSignature = signPayload(payload, svixId, svixTimestamp);
 
     expect(verifyResendSignature({ payload, svixId, svixTimestamp, svixSignature })).toBe(true);
@@ -33,7 +37,7 @@ describe('verifyResendSignature', () => {
     expect(verifyResendSignature({
       payload: '{"type":"email.sent"}',
       svixId: 'msg_123',
-      svixTimestamp: '1712592000',
+      svixTimestamp: String(NOW_SECONDS),
       svixSignature: 'v1,invalidsignaturedata',
     })).toBe(false);
   });
@@ -52,7 +56,7 @@ describe('verifyResendSignature', () => {
     expect(verifyResendSignature({
       payload: '{}',
       svixId: 'msg_1',
-      svixTimestamp: '123',
+      svixTimestamp: String(NOW_SECONDS),
       svixSignature: 'v1,abc',
     })).toBe(false);
   });
@@ -60,11 +64,29 @@ describe('verifyResendSignature', () => {
   it('rejects a tampered payload', () => {
     const original = '{"type":"email.sent","data":{}}';
     const svixId = 'msg_123';
-    const svixTimestamp = '1712592000';
+    const svixTimestamp = String(NOW_SECONDS);
     const svixSignature = signPayload(original, svixId, svixTimestamp);
 
     const tampered = '{"type":"email.sent","data":{"hacked":true}}';
     expect(verifyResendSignature({ payload: tampered, svixId, svixTimestamp, svixSignature })).toBe(false);
+  });
+
+  it('rejects a correctly signed stale timestamp to block webhook replay', () => {
+    const payload = '{"type":"email.delivered","data":{}}';
+    const svixId = 'msg_stale';
+    const svixTimestamp = String(NOW_SECONDS - 301);
+    const svixSignature = signPayload(payload, svixId, svixTimestamp);
+
+    expect(verifyResendSignature({ payload, svixId, svixTimestamp, svixSignature })).toBe(false);
+  });
+
+  it('rejects a malformed timestamp even when the signature matches that value', () => {
+    const payload = '{"type":"email.delivered","data":{}}';
+    const svixId = 'msg_bad_ts';
+    const svixTimestamp = '1712592000.5';
+    const svixSignature = signPayload(payload, svixId, svixTimestamp);
+
+    expect(verifyResendSignature({ payload, svixId, svixTimestamp, svixSignature })).toBe(false);
   });
 });
 

@@ -12,6 +12,7 @@ import { verifyResendSignature, verifyEvolutionSignature } from './webhook-auth'
 describe('verifyResendSignature — mutation killing', () => {
   const RAW_SECRET = 'dGVzdHNlY3JldA=='; // base64 of "testsecret"
   const WEBHOOK_SECRET = `whsec_${RAW_SECRET}`;
+  const NOW_SECONDS = 1712600000;
 
   function signPayload(payload: string, svixId: string, svixTimestamp: string): string {
     const secretBytes = Buffer.from(RAW_SECRET, 'base64');
@@ -22,9 +23,12 @@ describe('verifyResendSignature — mutation killing', () => {
 
   beforeEach(() => {
     vi.stubEnv('RESEND_WEBHOOK_SECRET', WEBHOOK_SECRET);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(NOW_SECONDS * 1000));
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
   });
 
@@ -34,7 +38,7 @@ describe('verifyResendSignature — mutation killing', () => {
     const result = verifyResendSignature({
       payload: '{}',
       svixId: 'msg_1',
-      svixTimestamp: '123',
+      svixTimestamp: String(NOW_SECONDS),
       svixSignature: 'v1,abc',
     });
     expect(result).toBe(false);
@@ -64,7 +68,7 @@ describe('verifyResendSignature — mutation killing', () => {
     const result = verifyResendSignature({
       payload: '{}',
       svixId: 'msg_1',
-      svixTimestamp: '123',
+      svixTimestamp: String(NOW_SECONDS),
       svixSignature: null,
     });
     expect(result).toBe(false);
@@ -73,7 +77,7 @@ describe('verifyResendSignature — mutation killing', () => {
   it('strips whsec_ prefix from secret before decoding', () => {
     const payload = '{"event":"email.delivered"}';
     const svixId = 'msg_strip';
-    const svixTimestamp = '1712600000';
+    const svixTimestamp = String(NOW_SECONDS);
     const svixSignature = signPayload(payload, svixId, svixTimestamp);
 
     const result = verifyResendSignature({
@@ -91,7 +95,7 @@ describe('verifyResendSignature — mutation killing', () => {
 
     const payload = '{"event":"email.delivered"}';
     const svixId = 'msg_nopre';
-    const svixTimestamp = '1712600000';
+    const svixTimestamp = String(NOW_SECONDS);
 
     // Sign with raw secret (no prefix stripping needed)
     const secretBytes = Buffer.from(RAW_SECRET, 'base64');
@@ -110,7 +114,7 @@ describe('verifyResendSignature — mutation killing', () => {
   it('strips v1, prefix from signature before comparison', () => {
     const payload = '{"test":true}';
     const svixId = 'msg_v1';
-    const svixTimestamp = '1712600001';
+    const svixTimestamp = String(NOW_SECONDS + 1);
     const svixSignature = signPayload(payload, svixId, svixTimestamp);
 
     // Verify the signature starts with v1,
@@ -126,7 +130,7 @@ describe('verifyResendSignature — mutation killing', () => {
   it('accepts when one of multiple space-separated signatures is valid', () => {
     const payload = '{"multi":true}';
     const svixId = 'msg_multi';
-    const svixTimestamp = '1712600002';
+    const svixTimestamp = String(NOW_SECONDS + 2);
     const validSig = signPayload(payload, svixId, svixTimestamp);
 
     // Multiple signatures separated by spaces
@@ -143,7 +147,7 @@ describe('verifyResendSignature — mutation killing', () => {
     expect(verifyResendSignature({
       payload: '{}',
       svixId: 'msg_bad',
-      svixTimestamp: '123',
+      svixTimestamp: String(NOW_SECONDS),
       svixSignature: 'v1,aW52YWxpZA== v1,YWxzb2JhZA==',
     })).toBe(false);
   });
@@ -151,7 +155,7 @@ describe('verifyResendSignature — mutation killing', () => {
   it('handles signature without v1, prefix gracefully', () => {
     const payload = '{"raw":true}';
     const svixId = 'msg_raw';
-    const svixTimestamp = '1712600003';
+    const svixTimestamp = String(NOW_SECONDS + 3);
 
     // Create valid sig but without v1, prefix
     const secretBytes = Buffer.from(RAW_SECRET, 'base64');
@@ -172,8 +176,36 @@ describe('verifyResendSignature — mutation killing', () => {
     expect(verifyResendSignature({
       payload: '{}',
       svixId: 'msg_catch',
-      svixTimestamp: '123',
+      svixTimestamp: String(NOW_SECONDS),
       svixSignature: 'v1,!!!not-base64!!!',
+    })).toBe(false);
+  });
+
+  it('rejects a stale but otherwise valid signature', () => {
+    const payload = '{"event":"email.delivered"}';
+    const svixId = 'msg_stale';
+    const svixTimestamp = String(NOW_SECONDS - 301);
+    const svixSignature = signPayload(payload, svixId, svixTimestamp);
+
+    expect(verifyResendSignature({
+      payload,
+      svixId,
+      svixTimestamp,
+      svixSignature,
+    })).toBe(false);
+  });
+
+  it('rejects a non-numeric timestamp even when signed', () => {
+    const payload = '{"event":"email.delivered"}';
+    const svixId = 'msg_non_numeric';
+    const svixTimestamp = '1712600000abc';
+    const svixSignature = signPayload(payload, svixId, svixTimestamp);
+
+    expect(verifyResendSignature({
+      payload,
+      svixId,
+      svixTimestamp,
+      svixSignature,
     })).toBe(false);
   });
 });

@@ -7,6 +7,8 @@
 
 import { createHmac, timingSafeEqual } from 'crypto';
 
+const SVIX_TIMESTAMP_TOLERANCE_SECONDS = 5 * 60;
+
 // ── Resend Webhook Verification ──────────────────────────────
 // Resend sends a `svix-signature` header with HMAC-SHA256 signatures.
 // Docs: https://resend.com/docs/dashboard/webhooks/introduction
@@ -29,6 +31,16 @@ export function verifyResendSignature(params: {
 
   const { payload, svixId, svixTimestamp, svixSignature } = params;
   if (!svixId || !svixTimestamp || !svixSignature) return false;
+  if (!/^\d+$/.test(svixTimestamp)) return false;
+
+  const timestampSeconds = Number.parseInt(svixTimestamp, 10);
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (
+    !Number.isSafeInteger(timestampSeconds) ||
+    Math.abs(nowSeconds - timestampSeconds) > SVIX_TIMESTAMP_TOLERANCE_SECONDS
+  ) {
+    return false;
+  }
 
   // Resend/Svix uses base64-encoded secret with "whsec_" prefix
   const secretBytes = Buffer.from(

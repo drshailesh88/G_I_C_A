@@ -3461,5 +3461,49 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/webhook-auth.ts",
+    "module": "src/lib/notifications/webhook-auth.ts",
+    "attacked_at": "2026-04-17T19:20:35Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "auth_bypass",
+        "payload": "forged Resend/Evolution headers without the shared secret or valid HMAC",
+        "result": "blocked"
+      },
+      {
+        "category": "stale_state",
+        "payload": "replay a previously valid Resend payload with its original signed svix-timestamp after the normal delivery window",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "correctly signed Resend payload with non-numeric svix-timestamp values like 1712592000.5 or 1712600000abc",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "multi-signature headers with invalid entries ahead of one valid signature",
+        "result": "blocked_no_new_failure"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not_applicable_module_has_no_event_scope_inputs",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "stale_state",
+        "description": "verifyResendSignature never checked svix-timestamp freshness or numeric shape. A captured legitimate Resend webhook could therefore be replayed indefinitely, and even malformed signed timestamp strings were accepted, allowing old deliveries to be reinserted and status handling to rerun long after the original event.",
+        "fix": "Added fail-closed numeric timestamp validation and a 5-minute freshness window before HMAC comparison so stale or malformed signed Resend requests are rejected at the webhook boundary.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/webhook-auth.test.ts > rejects a correctly signed stale timestamp to block webhook replay; src/lib/notifications/webhook-auth.mutation-kill.test.ts > rejects a stale but otherwise valid signature"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
