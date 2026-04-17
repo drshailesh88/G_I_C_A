@@ -82,6 +82,12 @@ describe('evaluateGuard', () => {
     expect(evaluateGuard(guard, { meta: { type: 'auto' } })).toBe(true);
     expect(evaluateGuard(guard, { meta: { type: 'manual' } })).toBe(false);
   });
+
+  it('fails closed for non-plain payload objects that only look like empty objects', () => {
+    const guard = { meta: {} };
+    expect(evaluateGuard(guard, { meta: new Date('2026-04-17T00:00:00.000Z') })).toBe(false);
+    expect(evaluateGuard(guard, { meta: new Map([['status', 'confirmed']]) })).toBe(false);
+  });
 });
 
 // ── buildIdempotencyKey ──────────────────────────────────────
@@ -99,7 +105,7 @@ describe('buildIdempotencyKey', () => {
       ...base,
       scope: 'per_person_per_trigger_entity_per_channel',
     });
-    expect(key).toBe('notify|registration.created|event-1|person-1|entity-1|email');
+    expect(key).toBe('notify|v:registration.created|v:event-1|v:person-1|v:entity-1|v:email');
   });
 
   it('builds per_person_per_event_per_channel key (no entity)', () => {
@@ -107,7 +113,7 @@ describe('buildIdempotencyKey', () => {
       ...base,
       scope: 'per_person_per_event_per_channel',
     });
-    expect(key).toBe('notify|registration.created|event-1|person-1|email');
+    expect(key).toBe('notify|v:registration.created|v:event-1|v:person-1|v:email');
   });
 
   it('builds per_trigger_entity_per_channel key (no person)', () => {
@@ -115,30 +121,30 @@ describe('buildIdempotencyKey', () => {
       ...base,
       scope: 'per_trigger_entity_per_channel',
     });
-    expect(key).toBe('notify|registration.created|event-1|entity-1|email');
+    expect(key).toBe('notify|v:registration.created|v:event-1|v:entity-1|v:email');
   });
 
-  it('uses "__missing__" when triggerEntityId is undefined', () => {
+  it('marks missing triggerEntityId distinctly when it is undefined', () => {
     const key = buildIdempotencyKey({
       ...base,
       triggerEntityId: undefined,
       scope: 'per_person_per_trigger_entity_per_channel',
     });
-    expect(key).toContain('|__missing__|');
+    expect(key).toContain('|m|');
   });
 
-  it('does not collide "__missing__" with literal string "none"', () => {
+  it('does not collide a missing triggerEntityId with a present value', () => {
     const keyMissing = buildIdempotencyKey({
       ...base,
       triggerEntityId: undefined,
       scope: 'per_person_per_trigger_entity_per_channel',
     });
-    const keyNone = buildIdempotencyKey({
+    const keyValue = buildIdempotencyKey({
       ...base,
-      triggerEntityId: 'none',
+      triggerEntityId: '__missing__',
       scope: 'per_person_per_trigger_entity_per_channel',
     });
-    expect(keyMissing).not.toBe(keyNone);
+    expect(keyMissing).not.toBe(keyValue);
   });
 
   it('uses default scope for unknown scope values', () => {
@@ -146,23 +152,40 @@ describe('buildIdempotencyKey', () => {
       ...base,
       scope: 'unknown_scope',
     });
-    expect(key).toBe('notify|registration.created|event-1|person-1|entity-1|email');
+    expect(key).toBe('notify|v:registration.created|v:event-1|v:person-1|v:entity-1|v:email');
   });
 
-  it('sanitizes colons in field values to prevent injection', () => {
+  it('encodes delimiters in field values to prevent injection collisions', () => {
     const key1 = buildIdempotencyKey({
       ...base,
-      triggerEventType: 'a:b',
+      personId: 'person-1|entity-1',
+      channel: 'email',
       triggerEntityId: 'c',
       scope: 'per_person_per_trigger_entity_per_channel',
     });
     const key2 = buildIdempotencyKey({
       ...base,
-      triggerEventType: 'a',
-      triggerEntityId: 'b|c',
+      personId: 'person-1',
+      channel: 'email|c',
+      triggerEntityId: 'entity-1',
       scope: 'per_person_per_trigger_entity_per_channel',
     });
     expect(key1).not.toBe(key2);
+  });
+
+  it('does not collapse empty-string and missing triggerEntityId', () => {
+    const keyMissing = buildIdempotencyKey({
+      ...base,
+      triggerEntityId: undefined,
+      scope: 'per_person_per_trigger_entity_per_channel',
+    });
+    const keyEmpty = buildIdempotencyKey({
+      ...base,
+      triggerEntityId: '',
+      scope: 'per_person_per_trigger_entity_per_channel',
+    });
+
+    expect(keyMissing).not.toBe(keyEmpty);
   });
 
   it('differentiates channels', () => {

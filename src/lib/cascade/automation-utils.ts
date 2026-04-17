@@ -44,7 +44,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
     if (a.length !== b.length) return false;
     return a.every((val, i) => deepEqual(val, b[i]));
   }
-  if (typeof a === 'object' && typeof b === 'object') {
+  if (isPlainObject(a) && isPlainObject(b)) {
     const aObj = a as Record<string, unknown>;
     const bObj = b as Record<string, unknown>;
     const aKeys = Object.keys(aObj);
@@ -56,11 +56,29 @@ function deepEqual(a: unknown, b: unknown): boolean {
 }
 
 /**
- * Sanitize a field value for use in idempotency keys.
- * Replaces colons to prevent delimiter injection.
+ * Guard comparisons only need to support JSON-like objects.
+ * Any non-plain object should fail closed instead of comparing like "{}".
  */
-function sanitizeKeyField(value: string): string {
-  return value.replace(/:/g, '_');
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+/**
+ * Encode a field value for use in idempotency keys.
+ * Prefixes values so missing and present fields can never collide,
+ * and URL-encodes delimiters to prevent key-shape injection.
+ */
+function encodeKeyField(value: string | undefined): string {
+  if (value === undefined) {
+    return 'm';
+  }
+
+  return `v:${encodeURIComponent(value)}`;
 }
 
 /**
@@ -75,17 +93,21 @@ export function buildIdempotencyKey(params: {
   triggerEventType: string;
 }): string {
   const { scope, eventId, personId, triggerEntityId, channel, triggerEventType } = params;
-  const s = sanitizeKeyField;
-  const entityPart = triggerEntityId ? s(triggerEntityId) : '__missing__';
+  const field = encodeKeyField;
+  const eventPart = field(eventId);
+  const personPart = field(personId);
+  const channelPart = field(channel);
+  const eventTypePart = field(triggerEventType);
+  const entityPart = field(triggerEntityId);
 
   switch (scope) {
     case 'per_person_per_trigger_entity_per_channel':
-      return `notify|${s(triggerEventType)}|${s(eventId)}|${s(personId)}|${entityPart}|${s(channel)}`;
+      return `notify|${eventTypePart}|${eventPart}|${personPart}|${entityPart}|${channelPart}`;
     case 'per_person_per_event_per_channel':
-      return `notify|${s(triggerEventType)}|${s(eventId)}|${s(personId)}|${s(channel)}`;
+      return `notify|${eventTypePart}|${eventPart}|${personPart}|${channelPart}`;
     case 'per_trigger_entity_per_channel':
-      return `notify|${s(triggerEventType)}|${s(eventId)}|${entityPart}|${s(channel)}`;
+      return `notify|${eventTypePart}|${eventPart}|${entityPart}|${channelPart}`;
     default:
-      return `notify|${s(triggerEventType)}|${s(eventId)}|${s(personId)}|${entityPart}|${s(channel)}`;
+      return `notify|${eventTypePart}|${eventPart}|${personPart}|${entityPart}|${channelPart}`;
   }
 }

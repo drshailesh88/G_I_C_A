@@ -1701,5 +1701,57 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/cascade/automation-utils.ts",
+    "module": "src/lib/cascade/automation-utils.ts",
+    "attacked_at": "2026-04-17T13:11:00Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "prototype_pollution",
+        "payload": "guard path __proto__.toString against an empty payload",
+        "result": "blocked_by_own_property_path_resolution"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "guard expects {} while payload provides Date and Map objects with no enumerable JSON keys",
+        "result": "succeeded"
+      },
+      {
+        "category": "delimiter_injection",
+        "payload": "personId/channel/triggerEntityId containing raw | delimiters",
+        "result": "succeeded"
+      },
+      {
+        "category": "sentinel_collision",
+        "payload": "triggerEntityId omitted versus literal __missing__ and empty-string triggerEntityId",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "large nested guard payloads and long strings through the pure utility",
+        "result": "no_exploitable_failure_beyond_existing_collision_vectors"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "evaluateGuard treated any non-array object as JSON-like, so a guard expecting {} would incorrectly match runtime payload values such as Date or Map because both expose zero enumerable keys.",
+        "fix": "Restricted deep object comparisons to plain JSON-like objects only and fail closed for non-plain payload objects.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/cascade/automation.test.ts > fails closed for non-plain payload objects that only look like empty objects"
+      },
+      {
+        "severity": "high",
+        "category": "idempotency_collision",
+        "description": "buildIdempotencyKey concatenated raw | delimited segments and used __missing__ as an unscoped sentinel, so malformed present values could collide with missing triggerEntityIds or adjacent fields and incorrectly suppress distinct automation notifications.",
+        "fix": "Encoded every key segment with a present/missing marker and URL encoding so missing, empty, and delimiter-bearing values remain distinct.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/cascade/automation.test.ts > does not collide a missing triggerEntityId with a present value; encodes delimiters in field values to prevent injection collisions; does not collapse empty-string and missing triggerEntityId"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

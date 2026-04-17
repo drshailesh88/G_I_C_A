@@ -90,12 +90,19 @@ describe('evaluateGuard — object value mismatch with multiple keys', () => {
   });
 });
 
-// ── L63 sanitizeKeyField: ':' → '_' vs ':' → '' ──────────────────────────────
-describe('buildIdempotencyKey — colon sanitization produces underscore', () => {
-  it('replaces colons with underscores (not empty string) in triggerEventType', () => {
-    // Kills L63:30 StringLiteral ('_' → ''):
-    // Original produces 'conference_registration.created'; mutant produces
-    // 'conferenceregistration.created' (colon removed entirely).
+describe('evaluateGuard — non-plain objects fail closed', () => {
+  it('returns false when the guard expects an empty plain object but payload provides a Date', () => {
+    expect(evaluateGuard({ meta: {} }, { meta: new Date('2026-04-17T00:00:00.000Z') })).toBe(false);
+  });
+
+  it('returns false when the guard expects an empty plain object but payload provides a Map', () => {
+    expect(evaluateGuard({ meta: {} }, { meta: new Map([['status', 'confirmed']]) })).toBe(false);
+  });
+});
+
+// ── Idempotency field encoding + collision resistance ────────────────────────
+describe('buildIdempotencyKey — encoded fields avoid delimiter collisions', () => {
+  it('encodes colons instead of emitting raw delimiters in triggerEventType', () => {
     const key = buildIdempotencyKey({
       scope: 'per_person_per_event_per_channel',
       eventId: 'event-1',
@@ -103,11 +110,11 @@ describe('buildIdempotencyKey — colon sanitization produces underscore', () =>
       channel: 'email',
       triggerEventType: 'conference:registration.created',
     });
-    expect(key).toContain('conference_registration.created');
-    expect(key).not.toContain('conference:registration');
+    expect(key).toContain('v:conference%3Aregistration.created');
+    expect(key).not.toContain('|conference:registration');
   });
 
-  it('replaces colons with underscores in eventId', () => {
+  it('encodes colons in eventId', () => {
     const key = buildIdempotencyKey({
       scope: 'per_person_per_event_per_channel',
       eventId: 'ev:001',
@@ -115,11 +122,11 @@ describe('buildIdempotencyKey — colon sanitization produces underscore', () =>
       channel: 'email',
       triggerEventType: 'conference.registration',
     });
-    expect(key).toContain('ev_001');
-    expect(key).not.toContain('ev:001');
+    expect(key).toContain('v:ev%3A001');
+    expect(key).not.toContain('|ev:001|');
   });
 
-  it('replaces colons with underscores in triggerEntityId', () => {
+  it('encodes colons in triggerEntityId', () => {
     const key = buildIdempotencyKey({
       scope: 'per_person_per_trigger_entity_per_channel',
       eventId: 'event-1',
@@ -128,7 +135,48 @@ describe('buildIdempotencyKey — colon sanitization produces underscore', () =>
       triggerEventType: 'conference.update',
       triggerEntityId: 'entity:abc',
     });
-    expect(key).toContain('entity_abc');
-    expect(key).not.toContain('entity:abc');
+    expect(key).toContain('v:entity%3Aabc');
+    expect(key).not.toContain('|entity:abc|');
+  });
+
+  it('does not collide a missing triggerEntityId with a literal "__missing__" value', () => {
+    const missing = buildIdempotencyKey({
+      scope: 'per_person_per_trigger_entity_per_channel',
+      eventId: 'event-1',
+      personId: 'person-1',
+      channel: 'email',
+      triggerEventType: 'conference.update',
+    });
+    const literal = buildIdempotencyKey({
+      scope: 'per_person_per_trigger_entity_per_channel',
+      eventId: 'event-1',
+      personId: 'person-1',
+      channel: 'email',
+      triggerEventType: 'conference.update',
+      triggerEntityId: '__missing__',
+    });
+
+    expect(missing).not.toBe(literal);
+  });
+
+  it('does not collide when pipe characters appear in present values', () => {
+    const first = buildIdempotencyKey({
+      scope: 'per_person_per_trigger_entity_per_channel',
+      eventId: 'event-1',
+      personId: 'person-1|entity-1',
+      channel: 'email',
+      triggerEventType: 'conference.update',
+      triggerEntityId: 'sms',
+    });
+    const second = buildIdempotencyKey({
+      scope: 'per_person_per_trigger_entity_per_channel',
+      eventId: 'event-1',
+      personId: 'person-1',
+      channel: 'email|sms',
+      triggerEventType: 'conference.update',
+      triggerEntityId: 'entity-1',
+    });
+
+    expect(first).not.toBe(second);
   });
 });
