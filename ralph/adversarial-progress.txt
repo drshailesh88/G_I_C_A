@@ -19,6 +19,7 @@
 - Certificate issuance must bind active templates and polymorphic eligibility basis IDs to the requested event/person/type. Admin override does not mean arbitrary cross-event backing records or mismatched template snapshots are safe.
 - Certificate supersession must clear the old current row with a status-scoped compare-and-swap before inserting the replacement, or the partial one-current unique index and concurrent regenerations can break the chain.
 - Notification idempotency keys for certificate sends must be stable per certificate/channel. Timestamped keys convert rapid duplicate clicks into distinct sends and bypass Redis dedupe.
+- Template editor actions must validate merged allowed/required variable sets on partial updates and use compare-and-swap guards on status/updatedAt during update/activate/archive, or stale direct calls can persist invalid templates or revive old state.
 
 ## Iteration log
 
@@ -28,6 +29,12 @@
 - Attacks tried: 10
 - Bugs found: 6
 - Key finding: direct callers could issue mismatched/cross-event certificate records, supersession and revocation had stale-state races, and timestamped resend idempotency keys bypassed duplicate-send suppression.
+
+## 2026-04-17T07:44:15Z — src/lib/actions/certificate.ts — certificate template action hardening
+- Verdict: hardened
+- Attacks tried: 8
+- Bugs found: 3
+- Key finding: malformed route IDs reached auth before validation, partial template updates could persist impossible required-variable sets, and stale concurrent writes could overwrite or revive template state.
 
 ## 2026-04-17T06:38:21Z — src/lib/actions/certificate-generation.ts — certificate generation queue hardening
 - Verdict: hardened

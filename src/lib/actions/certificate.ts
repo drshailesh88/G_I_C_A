@@ -17,25 +17,69 @@ import {
   type TemplateStatus,
 } from '@/lib/validations/certificate';
 
+const eventIdSchema = z.string().uuid('Invalid event ID');
+
 const recipientSearchSchema = z.object({
   query: z.string().trim().min(1, 'Search query is required').max(200),
   limit: z.number().int().min(1).max(20).default(10),
 });
 
+const templateVariablesSchema = z.array(z.string().trim().min(1, 'Variable name cannot be empty'));
+
+function validateEventId(eventId: string): string {
+  return eventIdSchema.parse(eventId);
+}
+
+function assertRequiredVariablesIncluded(
+  allowedVariables: unknown,
+  requiredVariables: unknown,
+) {
+  const allowed = templateVariablesSchema.parse(allowedVariables ?? []);
+  const required = templateVariablesSchema.parse(requiredVariables ?? []);
+  const allowedSet = new Set(allowed);
+
+  if (!required.every((variable) => allowedSet.has(variable))) {
+    throw new Error('All required variables must be included in allowed variables');
+  }
+}
+
+function buildTemplateStateFilters(
+  eventId: string,
+  template: {
+    id: string;
+    status: string;
+    updatedAt: Date | null;
+  },
+) {
+  const filters = [
+    eq(certificateTemplates.id, template.id),
+    eq(certificateTemplates.eventId, eventId),
+    eq(certificateTemplates.status, template.status),
+  ];
+
+  if (template.updatedAt) {
+    filters.push(eq(certificateTemplates.updatedAt, template.updatedAt));
+  }
+
+  return filters;
+}
+
 // ── List certificate templates ───────────────────────────────
 export async function listCertificateTemplates(eventId: string) {
-  await assertEventAccess(eventId);
+  const scopedEventId = validateEventId(eventId);
+  await assertEventAccess(scopedEventId);
 
   return db
     .select()
     .from(certificateTemplates)
-    .where(eq(certificateTemplates.eventId, eventId))
+    .where(eq(certificateTemplates.eventId, scopedEventId))
     .orderBy(desc(certificateTemplates.updatedAt));
 }
 
 // ── Search certificate recipients within one event ─────────────
 export async function searchCertificateRecipients(eventId: string, input: unknown) {
-  await assertEventAccess(eventId);
+  const scopedEventId = validateEventId(eventId);
+  await assertEventAccess(scopedEventId);
   const { query, limit } = recipientSearchSchema.parse(input);
   const escaped = query.replace(/%/g, '\\%').replace(/_/g, '\\_');
 
@@ -50,7 +94,7 @@ export async function searchCertificateRecipients(eventId: string, input: unknow
     .innerJoin(people, eq(eventPeople.personId, people.id))
     .where(
       and(
-        eq(eventPeople.eventId, eventId),
+        eq(eventPeople.eventId, scopedEventId),
         isNull(people.archivedAt),
         isNull(people.anonymizedAt),
         or(
@@ -67,12 +111,13 @@ export async function searchCertificateRecipients(eventId: string, input: unknow
 
 // ── Get single certificate template ──────────────────────────
 export async function getCertificateTemplate(eventId: string, templateId: string) {
-  await assertEventAccess(eventId);
+  const scopedEventId = validateEventId(eventId);
+  await assertEventAccess(scopedEventId);
 
   const [template] = await db
     .select()
     .from(certificateTemplates)
-    .where(withEventScope(certificateTemplates.eventId, eventId, eq(certificateTemplates.id, templateId)))
+    .where(withEventScope(certificateTemplates.eventId, scopedEventId, eq(certificateTemplates.id, templateId)))
     .limit(1);
 
   if (!template) throw new Error('Certificate template not found');
@@ -81,14 +126,15 @@ export async function getCertificateTemplate(eventId: string, templateId: string
 
 // ── Create certificate template ──────────────────────────────
 export async function createCertificateTemplate(eventId: string, input: unknown) {
-  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  const scopedEventId = validateEventId(eventId);
+  const { userId, role } = await assertEventAccess(scopedEventId, { requireWrite: true });
   assertCertificateWriteRole(role);
   const validated = createCertificateTemplateSchema.parse(input);
 
   const [template] = await db
     .insert(certificateTemplates)
     .values({
-      eventId,
+      eventId: scopedEventId,
       templateName: validated.templateName,
       certificateType: validated.certificateType,
       audienceScope: validated.audienceScope,
@@ -110,13 +156,14 @@ export async function createCertificateTemplate(eventId: string, input: unknown)
     })
     .returning();
 
-  revalidatePath(`/events/${eventId}/certificates`);
+  revalidatePath(`/events/${scopedEventId}/certificates`);
   return template;
 }
 
 // ── Update certificate template ──────────────────────────────
 export async function updateCertificateTemplate(eventId: string, input: unknown) {
-  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  const scopedEventId = validateEventId(eventId);
+  const { userId, role } = await assertEventAccess(scopedEventId, { requireWrite: true });
   assertCertificateWriteRole(role);
   const validated = updateCertificateTemplateSchema.parse(input);
   const { templateId, ...fields } = validated;
@@ -125,7 +172,7 @@ export async function updateCertificateTemplate(eventId: string, input: unknown)
   const [existing] = await db
     .select()
     .from(certificateTemplates)
-    .where(withEventScope(certificateTemplates.eventId, eventId, eq(certificateTemplates.id, templateId)))
+    .where(withEventScope(certificateTemplates.eventId, scopedEventId, eq(certificateTemplates.id, templateId)))
     .limit(1);
 
   if (!existing) throw new Error('Certificate template not found');
@@ -134,6 +181,11 @@ export async function updateCertificateTemplate(eventId: string, input: unknown)
   if (existing.status === 'archived') {
     throw new Error('Cannot update an archived template');
   }
+
+  assertRequiredVariablesIncluded(
+    fields.allowedVariablesJson ?? existing.allowedVariablesJson,
+    fields.requiredVariablesJson ?? existing.requiredVariablesJson,
+  );
 
   const updateFields: Record<string, unknown> = { updatedBy: userId, updatedAt: new Date() };
   if (fields.templateName !== undefined) updateFields.templateName = fields.templateName;
@@ -158,24 +210,29 @@ export async function updateCertificateTemplate(eventId: string, input: unknown)
   const [updated] = await db
     .update(certificateTemplates)
     .set(updateFields)
-    .where(withEventScope(certificateTemplates.eventId, eventId, eq(certificateTemplates.id, templateId)))
+    .where(and(...buildTemplateStateFilters(scopedEventId, existing)))
     .returning();
 
-  revalidatePath(`/events/${eventId}/certificates`);
+  if (!updated) {
+    throw new Error('Certificate template changed. Refresh and try again.');
+  }
+
+  revalidatePath(`/events/${scopedEventId}/certificates`);
   return updated;
 }
 
 // ── Activate certificate template ────────────────────────────
 // Activating archives any other active template of the same type for this event.
 export async function activateCertificateTemplate(eventId: string, input: unknown) {
-  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  const scopedEventId = validateEventId(eventId);
+  const { userId, role } = await assertEventAccess(scopedEventId, { requireWrite: true });
   assertCertificateWriteRole(role);
   const { templateId } = activateCertificateTemplateSchema.parse(input);
 
   const [template] = await db
     .select()
     .from(certificateTemplates)
-    .where(withEventScope(certificateTemplates.eventId, eventId, eq(certificateTemplates.id, templateId)))
+    .where(withEventScope(certificateTemplates.eventId, scopedEventId, eq(certificateTemplates.id, templateId)))
     .limit(1);
 
   if (!template) throw new Error('Certificate template not found');
@@ -186,69 +243,56 @@ export async function activateCertificateTemplate(eventId: string, input: unknow
   }
 
   const [activated] = await db.transaction(async (tx) => {
-    let shouldArchiveSibling = true;
-    const siblingSelect = tx.select({ id: certificateTemplates.id });
-
-    if (siblingSelect && typeof siblingSelect.from === 'function') {
-      const [activeSibling] = await siblingSelect
-        .from(certificateTemplates)
-        .where(
-          and(
-            eq(certificateTemplates.eventId, eventId),
-            eq(certificateTemplates.certificateType, template.certificateType),
-            eq(certificateTemplates.status, 'active'),
-            ne(certificateTemplates.id, templateId),
-          ),
-        )
-        .limit(1);
-
-      shouldArchiveSibling = Boolean(activeSibling);
-    }
-
-    if (shouldArchiveSibling) {
-      await tx
-        .update(certificateTemplates)
-        .set({
-          status: 'archived',
-          archivedAt: new Date(),
-          updatedBy: userId,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(certificateTemplates.eventId, eventId),
-            eq(certificateTemplates.certificateType, template.certificateType),
-            eq(certificateTemplates.status, 'active'),
-            ne(certificateTemplates.id, templateId),
-          ),
-        );
-    }
-
-    return tx
+    await tx
       .update(certificateTemplates)
       .set({
-        status: 'active',
+        status: 'archived',
+        archivedAt: new Date(),
         updatedBy: userId,
         updatedAt: new Date(),
       })
-      .where(withEventScope(certificateTemplates.eventId, eventId, eq(certificateTemplates.id, templateId)))
+      .where(
+        and(
+          eq(certificateTemplates.eventId, scopedEventId),
+          eq(certificateTemplates.certificateType, template.certificateType),
+          eq(certificateTemplates.status, 'active'),
+          ne(certificateTemplates.id, templateId),
+        ),
+      );
+
+    const [nextTemplate] = await tx
+      .update(certificateTemplates)
+      .set({
+        status: 'active',
+        archivedAt: null,
+        updatedBy: userId,
+        updatedAt: new Date(),
+      })
+      .where(and(...buildTemplateStateFilters(scopedEventId, template)))
       .returning();
+
+    if (!nextTemplate) {
+      throw new Error('Certificate template changed. Refresh and try again.');
+    }
+
+    return [nextTemplate];
   });
 
-  revalidatePath(`/events/${eventId}/certificates`);
+  revalidatePath(`/events/${scopedEventId}/certificates`);
   return activated;
 }
 
 // ── Archive certificate template ─────────────────────────────
 export async function archiveCertificateTemplate(eventId: string, input: unknown) {
-  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  const scopedEventId = validateEventId(eventId);
+  const { userId, role } = await assertEventAccess(scopedEventId, { requireWrite: true });
   assertCertificateWriteRole(role);
   const { templateId } = archiveCertificateTemplateSchema.parse(input);
 
   const [template] = await db
     .select()
     .from(certificateTemplates)
-    .where(withEventScope(certificateTemplates.eventId, eventId, eq(certificateTemplates.id, templateId)))
+    .where(withEventScope(certificateTemplates.eventId, scopedEventId, eq(certificateTemplates.id, templateId)))
     .limit(1);
 
   if (!template) throw new Error('Certificate template not found');
@@ -266,9 +310,13 @@ export async function archiveCertificateTemplate(eventId: string, input: unknown
       updatedBy: userId,
       updatedAt: new Date(),
     })
-    .where(withEventScope(certificateTemplates.eventId, eventId, eq(certificateTemplates.id, templateId)))
+    .where(and(...buildTemplateStateFilters(scopedEventId, template)))
     .returning();
 
-  revalidatePath(`/events/${eventId}/certificates`);
+  if (!archived) {
+    throw new Error('Certificate template changed. Refresh and try again.');
+  }
+
+  revalidatePath(`/events/${scopedEventId}/certificates`);
   return archived;
 }

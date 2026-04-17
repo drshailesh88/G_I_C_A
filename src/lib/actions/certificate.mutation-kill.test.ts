@@ -90,6 +90,8 @@ const mockTemplate = {
   orientation: 'landscape',
   status: 'draft',
   versionNo: 1,
+  allowedVariablesJson: ['full_name', 'event_name'],
+  requiredVariablesJson: ['full_name'],
   createdBy: 'user_123',
   updatedBy: 'user_123',
 };

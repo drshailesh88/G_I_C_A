@@ -87,6 +87,7 @@ function chainedUpdate(rows: unknown[]) {
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 const TEMPLATE_ID = '550e8400-e29b-41d4-a716-446655440001';
+const INVALID_EVENT_ID = 'not-a-uuid';
 
 const validCreateInput = {
   templateName: 'Delegate Attendance Certificate',
@@ -106,8 +107,11 @@ const mockTemplate = {
   orientation: 'landscape',
   status: 'draft',
   versionNo: 1,
+  allowedVariablesJson: ['full_name', 'event_name'],
+  requiredVariablesJson: ['full_name'],
   createdBy: 'user_123',
   updatedBy: 'user_123',
+  updatedAt: new Date('2026-04-17T07:00:00.000Z'),
 };
 
 beforeEach(() => {
@@ -130,6 +134,12 @@ describe('listCertificateTemplates', () => {
     chainedSelect([]);
     const result = await listCertificateTemplates(EVENT_ID);
     expect(result).toEqual([]);
+  });
+
+  it('rejects a malformed route eventId before auth or database access', async () => {
+    await expect(listCertificateTemplates(INVALID_EVENT_ID)).rejects.toThrow('Invalid event ID');
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
   });
 });
 
@@ -182,6 +192,12 @@ describe('createCertificateTemplate', () => {
 
   it('rejects invalid input', async () => {
     await expect(createCertificateTemplate(EVENT_ID, {})).rejects.toThrow();
+  });
+
+  it('rejects a malformed route eventId before auth or database access', async () => {
+    await expect(createCertificateTemplate(INVALID_EVENT_ID, validCreateInput)).rejects.toThrow('Invalid event ID');
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
   });
 
   it('rejects unauthorized access', async () => {
@@ -244,6 +260,27 @@ describe('updateCertificateTemplate', () => {
     });
     expect(result.versionNo).toBe(3);
   });
+
+  it('rejects required variables that are not included in allowed variables', async () => {
+    chainedSelect([{ ...mockTemplate, allowedVariablesJson: ['full_name'], requiredVariablesJson: [] }]);
+
+    await expect(updateCertificateTemplate(EVENT_ID, {
+      templateId: TEMPLATE_ID,
+      requiredVariablesJson: ['event_name'],
+    })).rejects.toThrow('All required variables must be included in allowed variables');
+
+    expect(mockDb.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects stale concurrent updates', async () => {
+    chainedSelect([mockTemplate]);
+    chainedUpdate([]);
+
+    await expect(updateCertificateTemplate(EVENT_ID, {
+      templateId: TEMPLATE_ID,
+      templateName: 'Updated Name',
+    })).rejects.toThrow('Certificate template changed. Refresh and try again.');
+  });
 });
 
 // ── Activate ─────────────────────────────────────────────────
@@ -268,6 +305,36 @@ describe('activateCertificateTemplate', () => {
     chainedSelect([{ ...mockTemplate, status: 'active' }]);
     await expect(activateCertificateTemplate(EVENT_ID, { templateId: TEMPLATE_ID }))
       .rejects.toThrow('Cannot activate a template with status "active"');
+  });
+
+  it('rejects a malformed route eventId before auth or database access', async () => {
+    await expect(activateCertificateTemplate(INVALID_EVENT_ID, { templateId: TEMPLATE_ID }))
+      .rejects.toThrow('Invalid event ID');
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+    expect(mockDb.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects stale concurrent activations', async () => {
+    chainedSelect([mockTemplate]);
+
+    const archiveSiblingChain = {
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockResolvedValue(undefined),
+    };
+    const activateChain = {
+      set: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      returning: vi.fn().mockResolvedValue([]),
+    };
+
+    mockDb.update
+      .mockReturnValueOnce(archiveSiblingChain)
+      .mockReturnValueOnce(activateChain);
+
+    await expect(activateCertificateTemplate(EVENT_ID, { templateId: TEMPLATE_ID }))
+      .rejects.toThrow('Certificate template changed. Refresh and try again.');
   });
 });
 
@@ -299,5 +366,13 @@ describe('archiveCertificateTemplate', () => {
     chainedSelect([{ ...mockTemplate, status: 'archived' }]);
     await expect(archiveCertificateTemplate(EVENT_ID, { templateId: TEMPLATE_ID }))
       .rejects.toThrow('Cannot archive a template with status "archived"');
+  });
+
+  it('rejects stale concurrent archives', async () => {
+    chainedSelect([mockTemplate]);
+    chainedUpdate([]);
+
+    await expect(archiveCertificateTemplate(EVENT_ID, { templateId: TEMPLATE_ID }))
+      .rejects.toThrow('Certificate template changed. Refresh and try again.');
   });
 });

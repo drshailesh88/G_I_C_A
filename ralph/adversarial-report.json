@@ -605,5 +605,80 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/certificate.ts",
+    "module": "src/lib/actions/certificate.ts",
+    "attacked_at": "2026-04-17T07:44:15Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "route eventId=not-a-uuid on list/create/activate template actions",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "partial update with requiredVariablesJson not included in allowedVariablesJson",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "stale update/activate/archive after another admin changed template status or updatedAt",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "template lookup/update by id from another event",
+        "result": "blocked_by_event_scoped_queries"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "certificate template writes with non-certificate role",
+        "result": "blocked"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "recipient search query containing wildcard and SQL metacharacters",
+        "result": "blocked_by_parameterized_drizzle_queries"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "<script>alert(1)</script> in template metadata fields",
+        "result": "no_exploitable_failure_in_action_layer"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized search query and recipient limit escalation",
+        "result": "blocked_by_zod_limits"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "Certificate template actions called assertEventAccess before validating the route eventId, so malformed route IDs reached auth work before being rejected.",
+        "fix": "Added a shared route eventId validator and used the validated event scope for every certificate template read/write action before auth or database access.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/certificate.test.ts > rejects a malformed route eventId before auth or database access"
+      },
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "updateCertificateTemplate accepted partial updates where requiredVariablesJson was no longer a subset of allowedVariablesJson, allowing direct callers to persist impossible template configurations that createCertificateTemplate rejects.",
+        "fix": "Validated the merged allowed/required variable sets during template updates and fail closed when a partial update would make the template invalid.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/certificate.test.ts > rejects required variables that are not included in allowed variables"
+      },
+      {
+        "severity": "high",
+        "category": "race_condition",
+        "description": "Template update, activate, and archive fetched the current row and then wrote back by id/event only, so stale concurrent requests could overwrite newer changes or revive a template after its status changed.",
+        "fix": "Added compare-and-swap update predicates using eventId, current status, and updatedAt so stale writes and stale status transitions now fail with a refresh-required error.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/certificate.test.ts > rejects stale concurrent updates; rejects stale concurrent activations; rejects stale concurrent archives"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
