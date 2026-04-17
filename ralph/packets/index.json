@@ -71,7 +71,7 @@
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
-      "build_commit": "TBD",
+      "build_commit": "a7be16b",
       "qa_commit": null,
       "last_status_at": "2026-04-17T23:30:00.000000Z",
       "depends_on": [
