@@ -177,6 +177,46 @@ describe('searchRegistrationsForCheckIn', () => {
     ).rejects.toThrow();
   });
 
+  it('rejects a malformed route eventId before auth or database access', async () => {
+    await expect(
+      searchRegistrationsForCheckIn('not-a-uuid', {
+        eventId: EVENT_ID,
+        query: 'Sharma',
+      }),
+    ).rejects.toThrow();
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
+  it('rejects body and route eventId mismatches before auth or database access', async () => {
+    await expect(
+      searchRegistrationsForCheckIn(EVENT_ID, {
+        eventId: '550e8400-e29b-41d4-a716-446655440099',
+        query: 'Sharma',
+      }),
+    ).rejects.toThrow('Event ID mismatch');
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed sessionId before auth or database access', async () => {
+    await expect(
+      searchRegistrationsForCheckIn(
+        EVENT_ID,
+        {
+          eventId: EVENT_ID,
+          query: 'Sharma',
+        },
+        'not-a-uuid',
+      ),
+    ).rejects.toThrow();
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
   it('escapes SQL LIKE wildcards in search query', async () => {
     chainedSelectSequence([[], []]);
 
@@ -321,6 +361,7 @@ describe('searchRegistrationsForCheckIn', () => {
   it('uses eq (not isNull) for session condition when sessionId is provided', async () => {
     const SESSION_ID = '550e8400-e29b-41d4-a716-446655440010';
     chainedSelectSequence([
+      [{ id: SESSION_ID }],
       [
         {
           registrationId: REG_ID,
@@ -346,6 +387,22 @@ describe('searchRegistrationsForCheckIn', () => {
     const eqCalls = mockEq.mock.calls as unknown[][];
     const sessionEq = eqCalls.find((c) => c[1] === SESSION_ID);
     expect(sessionEq).toBeDefined();
+  });
+
+  it('rejects a sessionId that is not scoped to the active event', async () => {
+    const SESSION_ID = '550e8400-e29b-41d4-a716-446655440010';
+    chainedSelectSequence([[]]);
+
+    await expect(
+      searchRegistrationsForCheckIn(
+        EVENT_ID,
+        { eventId: EVENT_ID, query: 'Sharma' },
+        SESSION_ID,
+      ),
+    ).rejects.toThrow('Session not found for this event.');
+
+    expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_ID, { requireWrite: true });
+    expect(mockDb.select).toHaveBeenCalledTimes(1);
   });
 
   it('uses isNull for session condition when sessionId is null', async () => {

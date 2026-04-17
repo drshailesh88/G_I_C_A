@@ -680,5 +680,80 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/checkin-search.ts",
+    "module": "src/lib/actions/checkin-search.ts",
+    "attacked_at": "2026-04-17T07:59:02Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "route eventId=not-a-uuid with otherwise valid search input",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "route eventId for event A with body eventId for event B",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "sessionId=not-a-uuid passed directly to the server action",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "sessionId from another event or a deleted session used to shape alreadyCheckedIn results",
+        "result": "succeeded"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "call searchRegistrationsForCheckIn without write permission",
+        "result": "blocked"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "query with LIKE wildcards, backslashes, and SQL metacharacters",
+        "result": "blocked_by_escape_and_parameterized_queries"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized and empty search queries",
+        "result": "blocked_by_zod_limits"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "<script>alert(1)</script> in returned person fields",
+        "result": "no_exploitable_failure_in_action_layer"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "searchRegistrationsForCheckIn called assertEventAccess before validating the route eventId, so malformed route IDs reached auth work before Zod rejected them.",
+        "fix": "Validate the route eventId up front and reuse the validated event scope for auth and every database query.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/checkin-search.test.ts > rejects a malformed route eventId before auth or database access"
+      },
+      {
+        "severity": "medium",
+        "category": "eventid_cross_tenant",
+        "description": "The action parsed input.eventId but never compared it to the route eventId, allowing stale or cross-event body payloads to be accepted under a different route scope.",
+        "fix": "Reject body/route eventId mismatches before auth or database access.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/checkin-search.test.ts > rejects body and route eventId mismatches before auth or database access"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "The optional sessionId argument was never validated or event-scoped, so direct callers could pass malformed, deleted, or foreign-session IDs to shape alreadyCheckedIn state without proving the session belonged to the active event.",
+        "fix": "Validate sessionId shape before auth and require any non-null sessionId to resolve to a session in the active event before searching or checking attendance.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/checkin-search.test.ts > rejects a malformed sessionId before auth or database access; rejects a sessionId that is not scoped to the active event"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

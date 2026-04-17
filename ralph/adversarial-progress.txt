@@ -10,6 +10,7 @@
 - Event-scoped read joins must scope every joined event table, not just the base table. Joining by globally unique IDs alone can leak cross-event metadata from bad or legacy rows.
 - Multi-query aggregate dashboards need a stable snapshot (`repeatable read` or a single aggregate query). A default Postgres transaction can still produce torn stats under concurrent writes.
 - Attendance/check-in mutations must event-scope optional `sessionId` foreign keys before inserting attendance rows, or offline/manual flows can attach active-event attendance to another event's session.
+- Session-aware check-in reads must validate optional `sessionId` parameters for UUID shape and active-event membership before using them to shape attendance state, or stale/foreign session IDs can bypass validation and mislead operators.
 - Branding and file-backed settings must event-scope stored object keys before signing URLs; direct server-action JSON updates can otherwise borrow another event's object.
 - Server actions must validate runtime enum parameters and uploaded file bytes. TypeScript unions and browser-provided MIME strings do not protect direct action callers.
 - JSON blob read-merge-write actions need compare-and-swap guards on `updatedAt`, or concurrent partial updates can silently clobber unrelated fields.
@@ -71,3 +72,9 @@
 - Attacks tried: 9
 - Bugs found: 4
 - Key finding: direct server-action calls bypassed the travel-first rule, accepted cross-event registrations, skipped audit/cascade side effects, and allowed stale concurrent writes.
+
+## 2026-04-17T07:59:02Z — src/lib/actions/checkin-search.ts — check-in search scoping hardening
+- Verdict: hardened
+- Attacks tried: 8
+- Bugs found: 3
+- Key finding: the search action trusted malformed route IDs, stale body/route event mismatches, and arbitrary session IDs, so direct callers could hit auth/DB work before validation and probe attendance state with foreign session scopes.

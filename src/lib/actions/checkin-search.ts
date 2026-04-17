@@ -4,10 +4,11 @@ import { db } from '@/lib/db';
 import { eventRegistrations } from '@/lib/db/schema/registrations';
 import { people } from '@/lib/db/schema/people';
 import { attendanceRecords } from '@/lib/db/schema/attendance';
+import { sessions } from '@/lib/db/schema/program';
 import { eq, and, or, ilike, isNull } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
-import { checkInSearchSchema } from '@/lib/validations/attendance';
+import { attendanceQuerySchema, checkInSearchSchema } from '@/lib/validations/attendance';
 
 export type CheckInSearchResult = {
   registrationId: string;
@@ -21,13 +22,55 @@ export type CheckInSearchResult = {
   alreadyCheckedIn: boolean;
 };
 
+const eventIdSchema = checkInSearchSchema.shape.eventId;
+const sessionIdSchema = attendanceQuerySchema.shape.sessionId;
+
+function validateCheckInSearchRequest(eventId: string, input: unknown, sessionId?: string | null) {
+  const scopedEventId = eventIdSchema.parse(eventId);
+  const validated = checkInSearchSchema.parse(input);
+  const validatedSessionId = sessionIdSchema.parse(sessionId ?? null) ?? null;
+
+  if (validated.eventId.toLowerCase() !== scopedEventId.toLowerCase()) {
+    throw new Error('Event ID mismatch');
+  }
+
+  return {
+    scopedEventId,
+    validated,
+    validatedSessionId,
+  };
+}
+
 export async function searchRegistrationsForCheckIn(
   eventId: string,
   input: unknown,
   sessionId?: string | null,
 ): Promise<CheckInSearchResult[]> {
-  await assertEventAccess(eventId, { requireWrite: true });
-  const validated = checkInSearchSchema.parse(input);
+  const { scopedEventId, validated, validatedSessionId } = validateCheckInSearchRequest(
+    eventId,
+    input,
+    sessionId,
+  );
+
+  await assertEventAccess(scopedEventId, { requireWrite: true });
+
+  if (validatedSessionId) {
+    const [session] = await db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(
+        withEventScope(
+          sessions.eventId,
+          scopedEventId,
+          eq(sessions.id, validatedSessionId),
+        ),
+      )
+      .limit(1);
+
+    if (!session) {
+      throw new Error('Session not found for this event.');
+    }
+  }
 
   const escaped = validated.query.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 
@@ -47,7 +90,7 @@ export async function searchRegistrationsForCheckIn(
     .where(
       withEventScope(
         eventRegistrations.eventId,
-        eventId,
+        scopedEventId,
         or(
           ilike(people.fullName, `%${escaped}%`),
           ilike(people.email, `%${escaped}%`),
@@ -65,9 +108,8 @@ export async function searchRegistrationsForCheckIn(
 
   if (personIds.length > 0) {
     // Build session-aware attendance condition
-    const resolvedSessionId = sessionId ?? null;
-    const sessionCondition = resolvedSessionId
-      ? eq(attendanceRecords.sessionId, resolvedSessionId)
+    const sessionCondition = validatedSessionId
+      ? eq(attendanceRecords.sessionId, validatedSessionId)
       : isNull(attendanceRecords.sessionId);
 
     const attendanceRows = await db
@@ -76,7 +118,7 @@ export async function searchRegistrationsForCheckIn(
       .where(
         withEventScope(
           attendanceRecords.eventId,
-          eventId,
+          scopedEventId,
           and(
             sessionCondition,
             or(...personIds.map((pid) => eq(attendanceRecords.personId, pid))),
