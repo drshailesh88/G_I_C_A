@@ -4199,5 +4199,72 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/validations/program.ts",
+    "module": "src/lib/validations/program.ts",
+    "attacked_at": "2026-04-17T20:41:56Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "createSessionSchema with sessionDate='2026-02-30'",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "createSessionSchema with startTime='09:00:00' or startTime='09:00Z'",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "updateSessionSchema with sessionDate='2026-05-15', startTime='10:30', endTime='09:00'",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "updateSessionSchema with startTime/endTime but no sessionDate, or sessionDate with only one boundary time",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized title, description, track, notes, and publishReason fields",
+        "result": "blocked_by_existing_length_limits"
+      },
+      {
+        "category": "prototype_pollution",
+        "payload": "__proto__ / constructor keys inside program payload objects",
+        "result": "blocked_by_current_zod_object_validation_and_unknown_key_stripping"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not_applicable_module_has_no_event_scoped_queries_or_writes",
+        "result": "not_applicable"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "not_applicable_module_has_no_auth_or_role_boundary",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "malformed_input",
+        "description": "createSessionSchema accepted impossible calendar dates like `2026-02-30` and non-canonical times like `09:00:00` or `09:00Z` because it only compared `new Date(...)` results. Direct callers could therefore pass validation with schedule fields that later normalize to the wrong day or break when the action appends `:00` while constructing persisted timestamps.",
+        "fix": "Replaced raw date coercion with strict `YYYY-MM-DD` and `HH:MM` validators and performed the end-after-start check only after canonical schedule fields validate.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/program.test.ts > rejects impossible session dates instead of normalizing them; src/lib/validations/program.test.ts > rejects malformed time formats that would break later timestamp construction; src/lib/validations/program.mutation-kill.test.ts > sessionDate impossible calendar value is rejected; src/lib/validations/program.mutation-kill.test.ts > startTime must use canonical HH:MM format"
+      },
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "updateSessionSchema accepted full schedule updates with inverted times and also accepted partial schedule patches that omitted sessionDate, startTime, or endTime. That let direct callers send updates that either persist impossible session windows or succeed while the action silently ignores part of the requested schedule change.",
+        "fix": "Added update-time schedule invariants so sessionDate, startTime, and endTime must be supplied together and must still satisfy the canonical end-after-start check.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/validations/program.test.ts > rejects reversed times in full schedule updates; src/lib/validations/program.test.ts > rejects partial schedule updates that omit the session date; src/lib/validations/program.mutation-kill.test.ts > rejects schedule updates that omit sessionDate; src/lib/validations/program.mutation-kill.test.ts > rejects schedule updates that omit startTime or endTime; src/lib/validations/program.mutation-kill.test.ts > rejects reversed full schedule updates"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

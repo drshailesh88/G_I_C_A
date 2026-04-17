@@ -3,6 +3,7 @@
 ## Attack Patterns
 
 <!-- Recurring attack vectors + their fixes. Agent writes here. -->
+- Schedule validators must canonicalize date-only and time-only strings instead of trusting `new Date(...)` coercion, and update validators must require date/time fields as one atomic group. Otherwise impossible calendar values, timezone-suffixed times, or partial schedule patches can pass validation and only fail later during timestamp construction or silently no-op in the action layer.
 - Request-scoped telemetry helpers must explicitly clear Sentry user context on anonymous/system captures. In a warm Node process, only setting `setUser` on authenticated paths leaks the previous request's user ID onto later errors and poisons incident forensics across tenants or background jobs.
 - Webhook ingest handlers must normalize provider timestamps and only persist delivery/audit rows after a compare-and-set status update succeeds. Writing the forensic row before CAS lets duplicate, regressive, or replayed webhooks grow unbounded event tables, while malformed timestamps can loop valid signed payloads into the DLQ.
 - DLQ and queue-drain helpers must validate queued record shape per item, preserve partial success when later items are corrupt, and cap caller-controlled batch sizes. One poison entry or oversized batch count otherwise turns recovery code into a data-loss and Redis-churn path.
@@ -488,3 +489,9 @@
 - Attacks tried: 8
 - Bugs found: 2
 - Key finding: the validator treated whitespace-only phone strings as a usable contact method and let one update payload blank both email and phone, so direct callers could create or mutate people into unreachable records before later phone normalization ran.
+
+## 2026-04-17T20:41:56Z — src/lib/validations/program.ts — program schedule validation hardening
+- Verdict: hardened
+- Attacks tried: 8
+- Bugs found: 2
+- Key finding: the program validator trusted JavaScript date coercion and non-canonical time strings, and it accepted partial or inverted schedule updates, so direct callers could pass validation with impossible dates/times and malformed session schedule patches that only failed or no-op’d later in the action layer.

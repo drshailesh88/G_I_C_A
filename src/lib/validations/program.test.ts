@@ -106,6 +106,22 @@ describe('createSessionSchema', () => {
     expect(result.success).toBe(false);
   });
 
+  it('rejects impossible session dates instead of normalizing them', () => {
+    const result = createSessionSchema.safeParse({
+      ...validInput,
+      sessionDate: '2026-02-30',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects malformed time formats that would break later timestamp construction', () => {
+    const result = createSessionSchema.safeParse({
+      ...validInput,
+      startTime: '09:00:00',
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('accepts valid parent session ID', () => {
     const result = createSessionSchema.safeParse({
       ...validInput,
@@ -171,6 +187,35 @@ describe('updateSessionSchema', () => {
   it('accepts sessionId only (no fields to update)', () => {
     const result = updateSessionSchema.safeParse({ sessionId: uuid });
     expect(result.success).toBe(true);
+  });
+
+  it('rejects impossible session dates in full schedule updates', () => {
+    const result = updateSessionSchema.safeParse({
+      sessionId: uuid,
+      sessionDate: '2026-02-30',
+      startTime: '09:00',
+      endTime: '10:00',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects reversed times in full schedule updates', () => {
+    const result = updateSessionSchema.safeParse({
+      sessionId: uuid,
+      sessionDate: '2026-05-15',
+      startTime: '10:30',
+      endTime: '09:00',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects partial schedule updates that omit the session date', () => {
+    const result = updateSessionSchema.safeParse({
+      sessionId: uuid,
+      startTime: '09:00',
+      endTime: '10:00',
+    });
+    expect(result.success).toBe(false);
   });
 });
 

@@ -52,37 +52,101 @@ export const updateHallSchema = z.object({
 
 export const hallIdSchema = z.string().uuid('Invalid hall ID');
 
+function isValidDateOnly(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const [year, month, day] = value.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+}
+
+function isValidTimeOnly(value: string): boolean {
+  if (!/^\d{2}:\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const [hours, minutes] = value.split(':').map(Number);
+  return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+}
+
+function getSessionDateTimeMillis(sessionDate: string, time: string): number {
+  const [year, month, day] = sessionDate.split('-').map(Number);
+  const [hours, minutes] = time.split(':').map(Number);
+  return Date.UTC(year, month - 1, day, hours, minutes);
+}
+
+const requiredSessionDateSchema = z
+  .string()
+  .trim()
+  .min(1, 'Session date is required')
+  .refine(isValidDateOnly, 'Session date must be a valid date in YYYY-MM-DD format');
+
+const requiredSessionTimeSchema = (label: string) =>
+  z
+    .string()
+    .trim()
+    .min(1, `${label} is required`)
+    .refine(isValidTimeOnly, `${label} must be in HH:MM 24-hour format`);
+
+const optionalSessionDateSchema = z
+  .string()
+  .trim()
+  .min(1, 'Session date must be a valid date in YYYY-MM-DD format')
+  .refine(isValidDateOnly, 'Session date must be a valid date in YYYY-MM-DD format');
+
+const optionalSessionTimeSchema = (label: string) =>
+  z
+    .string()
+    .trim()
+    .min(1, `${label} must be in HH:MM 24-hour format`)
+    .refine(isValidTimeOnly, `${label} must be in HH:MM 24-hour format`);
+
 // ── Session schemas ───────────────────────────────────────────
 export const createSessionSchema = z.object({
   title: z.string().trim().min(1, 'Session title is required').max(300),
   description: z.string().max(5000).optional().or(z.literal('')),
   parentSessionId: z.string().uuid('Invalid parent session ID').optional().or(z.literal('')),
-  sessionDate: z.string().min(1, 'Session date is required'),
-  startTime: z.string().min(1, 'Start time is required'),
-  endTime: z.string().min(1, 'End time is required'),
+  sessionDate: requiredSessionDateSchema,
+  startTime: requiredSessionTimeSchema('Start time'),
+  endTime: requiredSessionTimeSchema('End time'),
   hallId: z.string().uuid('Invalid hall ID').optional().or(z.literal('')),
   sessionType: z.enum(SESSION_TYPES).default('other'),
   track: z.string().max(100).optional().or(z.literal('')),
   isPublic: z.boolean().default(true),
   cmeCredits: z.coerce.number().int().min(0).max(100).optional(),
   sortOrder: z.coerce.number().int().min(0).default(0),
-}).refine(
-  (data) => {
-    const start = new Date(`${data.sessionDate}T${data.startTime}`);
-    const end = new Date(`${data.sessionDate}T${data.endTime}`);
-    return end > start;
-  },
-  { message: 'End time must be after start time', path: ['endTime'] },
-);
+}).superRefine((data, ctx) => {
+  if (
+    isValidDateOnly(data.sessionDate)
+    && isValidTimeOnly(data.startTime)
+    && isValidTimeOnly(data.endTime)
+    && getSessionDateTimeMillis(data.sessionDate, data.endTime)
+      <= getSessionDateTimeMillis(data.sessionDate, data.startTime)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'End time must be after start time',
+      path: ['endTime'],
+    });
+  }
+});
 
 // Base shape without refinement — for partial updates
 const sessionFieldsSchema = z.object({
   title: z.string().trim().min(1, 'Session title is required').max(300),
   description: z.string().max(5000).optional().or(z.literal('')),
   parentSessionId: z.string().uuid('Invalid parent session ID').optional().or(z.literal('')),
-  sessionDate: z.string().min(1, 'Session date is required'),
-  startTime: z.string().min(1, 'Start time is required'),
-  endTime: z.string().min(1, 'End time is required'),
+  sessionDate: optionalSessionDateSchema,
+  startTime: optionalSessionTimeSchema('Start time'),
+  endTime: optionalSessionTimeSchema('End time'),
   hallId: z.string().uuid('Invalid hall ID').optional().or(z.literal('')),
   sessionType: z.enum(SESSION_TYPES),
   track: z.string().max(100).optional().or(z.literal('')),
@@ -93,6 +157,58 @@ const sessionFieldsSchema = z.object({
 
 export const updateSessionSchema = sessionFieldsSchema.partial().extend({
   sessionId: z.string().uuid('Invalid session ID'),
+}).superRefine((data, ctx) => {
+  const hasSessionDate = data.sessionDate !== undefined;
+  const hasStartTime = data.startTime !== undefined;
+  const hasEndTime = data.endTime !== undefined;
+
+  if (!(hasSessionDate || hasStartTime || hasEndTime)) {
+    return;
+  }
+
+  if (!hasSessionDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Session date is required when updating session time',
+      path: ['sessionDate'],
+    });
+  }
+
+  if (!hasStartTime) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Start time is required when updating session schedule',
+      path: ['startTime'],
+    });
+  }
+
+  if (!hasEndTime) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'End time is required when updating session schedule',
+      path: ['endTime'],
+    });
+  }
+
+  if (
+    hasSessionDate
+    && hasStartTime
+    && hasEndTime
+    && data.sessionDate
+    && data.startTime
+    && data.endTime
+    && isValidDateOnly(data.sessionDate)
+    && isValidTimeOnly(data.startTime)
+    && isValidTimeOnly(data.endTime)
+    && getSessionDateTimeMillis(data.sessionDate, data.endTime)
+      <= getSessionDateTimeMillis(data.sessionDate, data.startTime)
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'End time must be after start time',
+      path: ['endTime'],
+    });
+  }
 });
 
 export const updateSessionStatusSchema = z.object({

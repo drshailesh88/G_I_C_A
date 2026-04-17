@@ -188,12 +188,30 @@ describe('createSessionSchema — exact error messages and boundaries', () => {
     }
   });
 
+  it('sessionDate impossible calendar value is rejected', () => {
+    const r = createSessionSchema.safeParse({ ...base, sessionDate: '2026-02-30' });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const msg = r.error.issues.find(i => i.path.includes('sessionDate'))?.message;
+      expect(msg).toBe('Session date must be a valid date in YYYY-MM-DD format');
+    }
+  });
+
   it('startTime error → "Start time is required"', () => {
     const r = createSessionSchema.safeParse({ ...base, startTime: '' });
     expect(r.success).toBe(false);
     if (!r.success) {
       const msg = r.error.issues.find(i => i.path.includes('startTime'))?.message;
       expect(msg).toBe('Start time is required');
+    }
+  });
+
+  it('startTime must use canonical HH:MM format', () => {
+    const r = createSessionSchema.safeParse({ ...base, startTime: '09:00:00' });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const msg = r.error.issues.find(i => i.path.includes('startTime'))?.message;
+      expect(msg).toBe('Start time must be in HH:MM 24-hour format');
     }
   });
 
@@ -311,6 +329,60 @@ describe('updateSessionSchema — boundaries', () => {
   it('all session fields are optional in update', () => {
     const r = updateSessionSchema.safeParse({ sessionId: UUID });
     expect(r.success).toBe(true);
+  });
+
+  it('sessionDate impossible calendar value is rejected on update', () => {
+    const r = updateSessionSchema.safeParse({
+      sessionId: UUID,
+      sessionDate: '2026-02-30',
+      startTime: '09:00',
+      endTime: '10:00',
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const msg = r.error.issues.find(i => i.path.includes('sessionDate'))?.message;
+      expect(msg).toBe('Session date must be a valid date in YYYY-MM-DD format');
+    }
+  });
+
+  it('rejects schedule updates that omit sessionDate', () => {
+    const r = updateSessionSchema.safeParse({
+      sessionId: UUID,
+      startTime: '09:00',
+      endTime: '10:00',
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const msg = r.error.issues.find(i => i.path.includes('sessionDate'))?.message;
+      expect(msg).toBe('Session date is required when updating session time');
+    }
+  });
+
+  it('rejects schedule updates that omit startTime or endTime', () => {
+    const r = updateSessionSchema.safeParse({
+      sessionId: UUID,
+      sessionDate: '2026-05-15',
+      startTime: '09:00',
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const msg = r.error.issues.find(i => i.path.includes('endTime'))?.message;
+      expect(msg).toBe('End time is required when updating session schedule');
+    }
+  });
+
+  it('rejects reversed full schedule updates', () => {
+    const r = updateSessionSchema.safeParse({
+      sessionId: UUID,
+      sessionDate: '2026-05-15',
+      startTime: '10:00',
+      endTime: '09:00',
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const msg = r.error.issues.find(i => i.path.includes('endTime'))?.message;
+      expect(msg).toBe('End time must be after start time');
+    }
   });
 });
 
