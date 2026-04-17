@@ -2040,5 +2040,62 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/certificates/bulk-zip.ts",
+    "module": "src/lib/certificates/bulk-zip.ts",
+    "attacked_at": "2026-04-17T15:23:15Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "path_traversal",
+        "payload": "fileName=' ../../../etc/passwd' and '..\\\\..\\\\windows\\\\system32' through sanitizeFileName/createZipArchive",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "fileName containing null bytes and control characters such as 'cert\\u0000\\tname\\n.pdf'",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "fileName with 260+ characters to force oversized ZIP entry names",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "eventId/certificateType scoping in this internal ZIP utility",
+        "result": "not_applicable_scoped_by_action_layer_and_no_db_access"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "direct invocation without auth context",
+        "result": "not_applicable_internal_utility_has_no_auth_surface"
+      },
+      {
+        "category": "race_condition",
+        "payload": "concurrent createZipArchive/createZipStream calls against the same inputs",
+        "result": "no_new_failure_beyond_action_layer_locking"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "path_traversal",
+        "description": "sanitizeFileName trimmed after stripping leading dots and did not remove control characters. A whitespace-padded traversal name like ' ../../../etc/passwd' or a null-byte filename could survive into ZIP entry headers as hidden or ambiguous filenames.",
+        "fix": "Strip control characters first, trim before removing leading dots, and collapse any remaining '..' segments before archiving.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/certificates/bulk-zip.test.ts > strips whitespace-padded traversal segments before removing leading dots; src/lib/certificates/bulk-zip.test.ts > strips control characters and null bytes from file names"
+      },
+      {
+        "severity": "medium",
+        "category": "resource_exhaustion",
+        "description": "sanitizeFileName accepted arbitrarily long filenames, allowing direct callers to generate ZIP entries with oversized names that waste memory and can fail or hang during extraction.",
+        "fix": "Cap sanitized ZIP entry names at 200 characters while preserving the file extension.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/certificates/bulk-zip.test.ts > truncates overlong file names while preserving the extension"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

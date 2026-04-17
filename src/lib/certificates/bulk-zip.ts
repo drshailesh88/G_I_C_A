@@ -16,6 +16,7 @@ import type { StorageProvider } from './storage';
 
 /** Maximum aggregate PDF size before ZIP creation (200MB) */
 export const MAX_AGGREGATE_SIZE_BYTES = 200 * 1024 * 1024;
+const MAX_ZIP_ENTRY_NAME_LENGTH = 200;
 
 export type BulkZipInput = {
   eventId: string;
@@ -47,10 +48,21 @@ export function buildBulkZipStorageKey(eventId: string, certificateType: string)
  * Strips path separators and dangerous characters.
  */
 export function sanitizeFileName(name: string): string {
-  return name
+  let sanitized = name
+    .replace(/[\x00-\x1f\x7f]/g, '')
     .replace(/[/\\:*?"<>|]/g, '_')
+    .trim()
     .replace(/^\.+/, '')
-    .trim() || 'certificate.pdf';
+    .replace(/\.\./g, '_')
+    .trim();
+
+  if (sanitized.length > MAX_ZIP_ENTRY_NAME_LENGTH) {
+    const dotIdx = sanitized.lastIndexOf('.');
+    const ext = dotIdx > 0 ? sanitized.slice(dotIdx) : '';
+    sanitized = sanitized.slice(0, MAX_ZIP_ENTRY_NAME_LENGTH - ext.length) + ext;
+  }
+
+  return sanitized || 'certificate.pdf';
 }
 
 /**

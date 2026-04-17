@@ -46,6 +46,7 @@
 - Automation payload sanitizers must recurse through nested objects and arrays. Top-level-only filtering leaks tokens/passwords into template variables and persisted notification logs.
 - Cascade notification handlers cannot trust `payload.variables` for recipient routing or template identity fields. Rebuild recipient/event/fullName vars from scoped DB state before dispatch, or forged snapshots can redirect notifications and normal saved events can arrive without a valid destination/template context.
 - Red-flag lifecycle writes need compare-and-swap guards on `eventId`/`flagStatus`/`updatedAt`. Reading a flag under scope and then updating by bare `id` lets stale reviewers overwrite newer review/resolve transitions.
+- ZIP/file-export filename sanitizers must strip control characters, trim before removing leading dots, collapse `..`, and cap entry-name length. Otherwise whitespace-padded traversal names, null bytes, or oversized filenames survive into archive headers.
 
 ## Iteration log
 
@@ -217,3 +218,9 @@
 - Attacks tried: 6
 - Bugs found: 1
 - Key finding: red-flag review/resolve flows read under event scope but wrote back by bare `id`, so a stale operator could overwrite a concurrent transition and downgrade a just-resolved flag back into the active workflow.
+
+## 2026-04-17T15:23:15Z — src/lib/certificates/bulk-zip.ts — ZIP filename sanitizer hardening
+- Verdict: hardened
+- Attacks tried: 6
+- Bugs found: 2
+- Key finding: the bulk ZIP utility let whitespace-padded traversal names, control characters, and arbitrarily long filenames survive into archive entry headers, creating ambiguous extraction paths and avoidable archive-size abuse.

@@ -111,13 +111,21 @@ describe('sanitizeFileName', () => {
     const result = sanitizeFileName('../../etc/passwd');
     expect(result).not.toContain('/');
     expect(result).not.toContain('\\');
-    expect(result).toBe('_.._etc_passwd');
+    expect(result).not.toContain('..');
+    expect(result).toBe('___etc_passwd');
+  });
+
+  it('strips whitespace-padded traversal segments before removing leading dots', () => {
+    const result = sanitizeFileName(' ../../../etc/passwd');
+    expect(result).not.toContain('..');
+    expect(result).toBe('_____etc_passwd');
   });
 
   it('strips backslashes', () => {
     const result = sanitizeFileName('..\\..\\windows\\system32');
     expect(result).not.toContain('\\');
-    expect(result).toBe('_.._windows_system32');
+    expect(result).not.toContain('..');
+    expect(result).toBe('___windows_system32');
   });
 
   it('strips dangerous characters', () => {
@@ -134,6 +142,16 @@ describe('sanitizeFileName', () => {
 
   it('returns fallback for all-dots name', () => {
     expect(sanitizeFileName('...')).toBe('certificate.pdf');
+  });
+
+  it('strips control characters and null bytes from file names', () => {
+    expect(sanitizeFileName('cert\x00\tname\n.pdf')).toBe('certname.pdf');
+  });
+
+  it('truncates overlong file names while preserving the extension', () => {
+    const result = sanitizeFileName(`${'a'.repeat(260)}.pdf`);
+    expect(result.length).toBe(200);
+    expect(result.endsWith('.pdf')).toBe(true);
   });
 });
 
@@ -186,7 +204,7 @@ describe('deduplicateFileNames', () => {
 
   it('sanitizes path traversal in file names', () => {
     const result = deduplicateFileNames(['../../evil.pdf', 'good.pdf']);
-    expect(result.get(0)).toBe('_.._evil.pdf');
+    expect(result.get(0)).toBe('___evil.pdf');
     expect(result.get(1)).toBe('good.pdf');
   });
 });
