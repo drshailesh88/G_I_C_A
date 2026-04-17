@@ -5,6 +5,7 @@
  * service (not the stub) with correct parameters, dual-channel (email + WhatsApp).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { eq } from 'drizzle-orm';
 
 // Mock Inngest client (not used in test mode, but imported transitively)
 vi.mock('@/lib/inngest/client', () => ({
@@ -14,6 +15,10 @@ vi.mock('@/lib/inngest/client', () => ({
 // Mock dependencies
 vi.mock('@/lib/db', () => ({ db: { select: vi.fn() } }));
 vi.mock('@/lib/db/schema', () => ({
+  events: {
+    id: 'events.id',
+    name: 'events.name',
+  },
   accommodationRecords: {
     id: 'accom.id',
     eventId: 'accom.event_id',
@@ -32,6 +37,11 @@ vi.mock('@/lib/db/schema', () => ({
     email: 'people.email',
     phoneE164: 'people.phone_e164',
     fullName: 'people.full_name',
+  },
+  travelRecords: {
+    id: 'travel.id',
+    eventId: 'travel.event_id',
+    personId: 'travel.person_id',
   },
 }));
 vi.mock('drizzle-orm', () => ({
@@ -77,12 +87,13 @@ import { registerTravelCascadeHandlers } from './travel-cascade';
 // Use in-memory mode for these unit tests
 enableTestMode();
 
-const mockDb = vi.mocked(db as { select: ReturnType<typeof vi.fn> });
+const mockDb = vi.mocked(db as unknown as { select: ReturnType<typeof vi.fn> });
 
 const personWithBoth = [{ email: 'dr@example.com', phoneE164: '+919876543210', fullName: 'Dr. Test' }];
 const personEmailOnly = [{ email: 'delegate@test.com', phoneE164: null, fullName: 'Jane Doe' }];
 const personPhoneOnly = [{ email: null, phoneE164: '+919999999999', fullName: 'Phone Only' }];
-const personNotFound = [{ email: null, phoneE164: null, fullName: null }];
+const personNotFound: Record<string, unknown>[] = [];
+const defaultEvent = [{ name: 'GEM India 2026' }];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -90,13 +101,45 @@ beforeEach(() => {
   registerTravelCascadeHandlers();
 });
 
-// Helper: mock selects for a handler call (2 red-flag queries + 2 person lookups)
-function mockSelectsForHandler(person: Record<string, unknown>[]) {
+function mockSavedSelects(params: {
+  person: Record<string, unknown>[];
+  trustedPersonId?: string;
+  event?: Record<string, unknown>[];
+}) {
+  const {
+    person,
+    trustedPersonId = 'person-200',
+    event = defaultEvent,
+  } = params;
+
   mockDb.select
-    .mockReturnValueOnce(createChainableSelect([])) // accom records
-    .mockReturnValueOnce(createChainableSelect([])) // transport assignments
-    .mockReturnValueOnce(createChainableSelect(person)) // person lookup (email path)
-    .mockReturnValueOnce(createChainableSelect(person)); // person lookup (whatsapp path)
+    .mockReturnValueOnce(createChainableSelect([{ personId: trustedPersonId }]))
+    .mockReturnValueOnce(createChainableSelect(person))
+    .mockReturnValueOnce(createChainableSelect(event));
+}
+
+// Helper: mock selects for update/cancel handlers
+function mockScopedSelectsForHandler(params: {
+  person: Record<string, unknown>[];
+  accom?: Record<string, unknown>[];
+  transport?: Record<string, unknown>[];
+  trustedPersonId?: string;
+  event?: Record<string, unknown>[];
+}) {
+  const {
+    person,
+    accom = [],
+    transport = [],
+    trustedPersonId = 'person-200',
+    event = defaultEvent,
+  } = params;
+
+  mockDb.select
+    .mockReturnValueOnce(createChainableSelect([{ personId: trustedPersonId }])) // scoped travel record
+    .mockReturnValueOnce(createChainableSelect(person)) // person lookup
+    .mockReturnValueOnce(createChainableSelect(event)) // event lookup
+    .mockReturnValueOnce(createChainableSelect(accom)) // accom records
+    .mockReturnValueOnce(createChainableSelect(transport)); // transport assignments
 }
 
 describe('Travel cascade → real notification', () => {
@@ -106,7 +149,7 @@ describe('Travel cascade → real notification', () => {
   const actor = { type: 'user' as const, id: 'user_1' };
 
   it('sends email + WhatsApp on travel update when person has both', async () => {
-    mockSelectsForHandler(personWithBoth);
+    mockScopedSelectsForHandler({ person: personWithBoth });
 
     await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
       travelRecordId, personId, registrationId: null,
@@ -123,6 +166,8 @@ describe('Travel cascade → real notification', () => {
     expect(emailCall.sendMode).toBe('automatic');
     expect(emailCall.variables.recipientEmail).toBe('dr@example.com');
     expect(emailCall.variables.recipientName).toBe('Dr. Test');
+    expect(emailCall.variables.fullName).toBe('Dr. Test');
+    expect(emailCall.variables.eventName).toBe('GEM India 2026');
 
     const waCall = mockSendNotification.mock.calls[1][0];
     expect(waCall.channel).toBe('whatsapp');
@@ -130,7 +175,7 @@ describe('Travel cascade → real notification', () => {
   });
 
   it('sends only email on travel cancellation when person has no phone', async () => {
-    mockSelectsForHandler(personEmailOnly);
+    mockScopedSelectsForHandler({ person: personEmailOnly });
 
     await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_CANCELLED, eventId, actor, {
       travelRecordId, personId, registrationId: null,
@@ -147,7 +192,7 @@ describe('Travel cascade → real notification', () => {
 
   it('cascade continues when notification send throws', async () => {
     mockSendNotification.mockRejectedValueOnce(new Error('Provider down'));
-    mockSelectsForHandler(personEmailOnly);
+    mockScopedSelectsForHandler({ person: personEmailOnly });
 
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -163,7 +208,7 @@ describe('Travel cascade → real notification', () => {
   });
 
   it('sends only WhatsApp when person has no email (Codex fix)', async () => {
-    mockSelectsForHandler(personPhoneOnly);
+    mockScopedSelectsForHandler({ person: personPhoneOnly });
 
     await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
       travelRecordId, personId, registrationId: null,
@@ -176,7 +221,7 @@ describe('Travel cascade → real notification', () => {
   });
 
   it('skips ALL notifications when person not found (Codex fix)', async () => {
-    mockSelectsForHandler(personNotFound);
+    mockScopedSelectsForHandler({ person: personNotFound });
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_CANCELLED, eventId, actor, {
@@ -190,7 +235,7 @@ describe('Travel cascade → real notification', () => {
   });
 
   it('generates unique idempotency keys for successive updates (Codex fix)', async () => {
-    mockSelectsForHandler(personEmailOnly);
+    mockScopedSelectsForHandler({ person: personEmailOnly });
     await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
       travelRecordId, personId, registrationId: null,
       previous: {}, current: {},
@@ -200,7 +245,7 @@ describe('Travel cascade → real notification', () => {
 
     await new Promise(r => setTimeout(r, 2));
 
-    mockSelectsForHandler(personEmailOnly);
+    mockScopedSelectsForHandler({ person: personEmailOnly });
     await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
       travelRecordId, personId, registrationId: null,
       previous: {}, current: {},
@@ -209,6 +254,66 @@ describe('Travel cascade → real notification', () => {
     const key2 = mockSendNotification.mock.calls[1][0].idempotencyKey;
 
     expect(key1).not.toBe(key2);
+  });
+
+  it('ignores forged payload personId and snapshot recipients on travel update', async () => {
+    mockScopedSelectsForHandler({
+      person: [{ email: 'real@delegate.com', phoneE164: '+919000000099', fullName: 'Real Delegate' }],
+      trustedPersonId: 'real-person-1',
+      event: [{ name: 'Scoped Event' }],
+    });
+
+    await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
+      travelRecordId,
+      personId: 'forged-person',
+      registrationId: null,
+      previous: {},
+      current: {},
+      changeSummary: { toCity: { from: 'Mumbai', to: 'Delhi' } },
+      variables: {
+        recipientEmail: 'attacker@example.com',
+        recipientPhoneE164: '+15550000000',
+        recipientName: 'Attacker',
+        fullName: 'Attacker',
+        eventName: 'Wrong Event',
+      },
+    });
+
+    expect(mockSendNotification).toHaveBeenCalledTimes(2);
+    for (const [callArg] of mockSendNotification.mock.calls) {
+      expect(callArg.personId).toBe('real-person-1');
+      expect(callArg.variables).toEqual(expect.objectContaining({
+        recipientEmail: 'real@delegate.com',
+        recipientPhoneE164: '+919000000099',
+        recipientName: 'Real Delegate',
+        fullName: 'Real Delegate',
+        eventName: 'Scoped Event',
+      }));
+    }
+  });
+
+  it('skips the saved cascade when the travel record is outside the active event scope', async () => {
+    mockDb.select.mockReturnValueOnce(createChainableSelect([]));
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_SAVED, eventId, actor, {
+      travelRecordId,
+      personId,
+      registrationId: null,
+      direction: 'inbound',
+      travelMode: 'flight',
+      fromCity: 'Delhi',
+      toCity: 'Mumbai',
+      departureAtUtc: '2026-04-20T10:00:00Z',
+      arrivalAtUtc: '2026-04-20T12:00:00Z',
+    });
+
+    expect(mockSendNotification).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[cascade:travel] skipping saved cascade — travel record not found in event scope',
+      expect.objectContaining({ eventId, travelRecordId }),
+    );
+    warnSpy.mockRestore();
   });
 });
 
@@ -221,11 +326,10 @@ describe('Travel cascade → red flag creation', () => {
   const mockedUpsertRedFlag = vi.mocked(upsertRedFlag);
 
   it('creates red flags on accommodation records when travel is updated', async () => {
-    mockDb.select
-      .mockReturnValueOnce(createChainableSelect([{ id: 'accom-1' }, { id: 'accom-2' }])) // accommodation
-      .mockReturnValueOnce(createChainableSelect([])) // transport
-      .mockReturnValueOnce(createChainableSelect(personWithBoth)) // person (email)
-      .mockReturnValueOnce(createChainableSelect(personWithBoth)); // person (whatsapp)
+    mockScopedSelectsForHandler({
+      person: personWithBoth,
+      accom: [{ id: 'accom-1' }, { id: 'accom-2' }],
+    });
 
     await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
       travelRecordId, personId, registrationId: null,
@@ -258,11 +362,10 @@ describe('Travel cascade → red flag creation', () => {
   });
 
   it('creates red flags on transport assignments when travel is updated', async () => {
-    mockDb.select
-      .mockReturnValueOnce(createChainableSelect([])) // accommodation (empty)
-      .mockReturnValueOnce(createChainableSelect([{ id: 'tpa-1' }])) // transport
-      .mockReturnValueOnce(createChainableSelect(personWithBoth)) // person (email)
-      .mockReturnValueOnce(createChainableSelect(personWithBoth)); // person (whatsapp)
+    mockScopedSelectsForHandler({
+      person: personWithBoth,
+      transport: [{ id: 'tpa-1' }],
+    });
 
     await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
       travelRecordId, personId, registrationId: null,
@@ -283,11 +386,10 @@ describe('Travel cascade → red flag creation', () => {
   });
 
   it('creates red flags on accommodation records when travel is cancelled', async () => {
-    mockDb.select
-      .mockReturnValueOnce(createChainableSelect([{ id: 'accom-10' }])) // accommodation
-      .mockReturnValueOnce(createChainableSelect([])) // transport (empty)
-      .mockReturnValueOnce(createChainableSelect(personWithBoth)) // person (email)
-      .mockReturnValueOnce(createChainableSelect(personWithBoth)); // person (whatsapp)
+    mockScopedSelectsForHandler({
+      person: personWithBoth,
+      accom: [{ id: 'accom-10' }],
+    });
 
     await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_CANCELLED, eventId, actor, {
       travelRecordId, personId, registrationId: null,
@@ -308,11 +410,10 @@ describe('Travel cascade → red flag creation', () => {
   });
 
   it('creates red flags on transport assignments when travel is cancelled', async () => {
-    mockDb.select
-      .mockReturnValueOnce(createChainableSelect([])) // accommodation (empty)
-      .mockReturnValueOnce(createChainableSelect([{ id: 'tpa-20' }])) // transport
-      .mockReturnValueOnce(createChainableSelect(personWithBoth)) // person (email)
-      .mockReturnValueOnce(createChainableSelect(personWithBoth)); // person (whatsapp)
+    mockScopedSelectsForHandler({
+      person: personWithBoth,
+      transport: [{ id: 'tpa-20' }],
+    });
 
     await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_CANCELLED, eventId, actor, {
       travelRecordId, personId, registrationId: null,
@@ -336,11 +437,9 @@ describe('Travel cascade → red flag creation', () => {
   it('does not flag cancelled transport passenger assignments', async () => {
     // The query uses ne(assignmentStatus, 'cancelled') to filter.
     // When no non-cancelled transport assignments match, no transport flags are created.
-    mockDb.select
-      .mockReturnValueOnce(createChainableSelect([])) // accommodation (empty)
-      .mockReturnValueOnce(createChainableSelect([])) // transport — returns empty because cancelled ones are filtered out by ne()
-      .mockReturnValueOnce(createChainableSelect(personWithBoth)) // person (email)
-      .mockReturnValueOnce(createChainableSelect(personWithBoth)); // person (whatsapp)
+    mockScopedSelectsForHandler({
+      person: personWithBoth,
+    });
 
     await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
       travelRecordId, personId, registrationId: null,
@@ -353,11 +452,10 @@ describe('Travel cascade → red flag creation', () => {
   });
 
   it('includes cancellation reason in flag detail when reason is provided', async () => {
-    mockDb.select
-      .mockReturnValueOnce(createChainableSelect([{ id: 'accom-30' }])) // accommodation
-      .mockReturnValueOnce(createChainableSelect([])) // transport (empty)
-      .mockReturnValueOnce(createChainableSelect(personWithBoth)) // person (email)
-      .mockReturnValueOnce(createChainableSelect(personWithBoth)); // person (whatsapp)
+    mockScopedSelectsForHandler({
+      person: personWithBoth,
+      accom: [{ id: 'accom-30' }],
+    });
 
     await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_CANCELLED, eventId, actor, {
       travelRecordId, personId, registrationId: null,
@@ -368,5 +466,28 @@ describe('Travel cascade → red flag creation', () => {
     expect(mockedUpsertRedFlag).toHaveBeenCalledTimes(1);
     expect(mockedUpsertRedFlag.mock.calls[0][0].flagDetail).toContain('Flight changed');
     expect(mockedUpsertRedFlag.mock.calls[0][0].flagDetail).toContain('review accommodation');
+  });
+
+  it('uses the trusted scoped travel person for accommodation flags when payload personId is forged', async () => {
+    const eqMock = vi.mocked(eq);
+    mockScopedSelectsForHandler({
+      person: personWithBoth,
+      trustedPersonId: 'real-person-1',
+      accom: [{ id: 'accom-real' }],
+    });
+
+    await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
+      travelRecordId,
+      personId: 'forged-person',
+      registrationId: null,
+      previous: {},
+      current: {},
+      changeSummary: { toCity: { from: 'A', to: 'B' } },
+    });
+
+    expect(eqMock).toHaveBeenCalledWith('accom.person_id', 'real-person-1');
+    expect(mockedUpsertRedFlag).toHaveBeenCalledWith(expect.objectContaining({
+      targetEntityId: 'accom-real',
+    }));
   });
 });

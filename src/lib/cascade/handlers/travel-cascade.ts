@@ -10,7 +10,13 @@
  */
 
 import { db } from '@/lib/db';
-import { accommodationRecords, transportPassengerAssignments, people } from '@/lib/db/schema';
+import {
+  accommodationRecords,
+  events,
+  people,
+  transportPassengerAssignments,
+  travelRecords,
+} from '@/lib/db/schema';
 import { eq, ne } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { upsertRedFlag } from '../red-flags';
@@ -25,18 +31,116 @@ import {
   handleCascadeNotificationResult,
 } from '../dead-letter';
 
+type TravelCascadeContext = {
+  personId: string;
+  eventName: string | null;
+  contact: {
+    email: string | null;
+    phoneE164: string | null;
+    fullName: string | null;
+  } | null;
+};
+
 /** Resolve person email and phone for notification variables */
-async function resolvePersonContact(personId: string): Promise<{
-  email: string | null;
-  phoneE164: string | null;
-  fullName: string | null;
-}> {
+async function resolvePersonContact(personId: string): Promise<TravelCascadeContext['contact']> {
   const [person] = await db
     .select({ email: people.email, phoneE164: people.phoneE164, fullName: people.fullName })
     .from(people)
     .where(eq(people.id, personId))
     .limit(1);
-  return person ?? { email: null, phoneE164: null, fullName: null };
+
+  return person ?? null;
+}
+
+async function resolveEventName(eventId: string): Promise<string | null> {
+  const [event] = await db
+    .select({ name: events.name })
+    .from(events)
+    .where(eq(events.id, eventId))
+    .limit(1);
+
+  return event?.name ?? null;
+}
+
+async function resolveTravelCascadeContext(
+  eventId: string,
+  travelRecordId: string,
+): Promise<TravelCascadeContext | null> {
+  const [travelRecord] = await db
+    .select({ personId: travelRecords.personId })
+    .from(travelRecords)
+    .where(
+      withEventScope(
+        travelRecords.eventId,
+        eventId,
+        eq(travelRecords.id, travelRecordId),
+      ),
+    )
+    .limit(1);
+
+  if (!travelRecord) {
+    return null;
+  }
+
+  const [contact, eventName] = await Promise.all([
+    resolvePersonContact(travelRecord.personId),
+    resolveEventName(eventId),
+  ]);
+
+  return {
+    personId: travelRecord.personId,
+    eventName,
+    contact,
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return value as Record<string, unknown>;
+}
+
+function getOptionalString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+async function buildTravelNotificationVariables(params: {
+  eventId: string;
+  travelRecordId: string;
+  snapshotVars?: unknown;
+  domainVars: Record<string, unknown>;
+}): Promise<(TravelCascadeContext & { variables: Record<string, unknown> }) | null> {
+  const trustedContext = await resolveTravelCascadeContext(params.eventId, params.travelRecordId);
+
+  if (!trustedContext) {
+    return null;
+  }
+
+  const snapshotVars = asRecord(params.snapshotVars);
+  const trustedFullName =
+    trustedContext.contact?.fullName ??
+    getOptionalString(snapshotVars.fullName) ??
+    getOptionalString(snapshotVars.recipientName);
+
+  return {
+    ...trustedContext,
+    variables: {
+      ...snapshotVars,
+      ...params.domainVars,
+      recipientEmail: trustedContext.contact?.email ?? null,
+      recipientPhoneE164: trustedContext.contact?.phoneE164 ?? null,
+      recipientName: trustedFullName,
+      fullName: trustedFullName,
+      eventName: trustedContext.eventName,
+    },
+  };
 }
 
 /** Send notification from cascade handler — never throws (cascade must not fail on notification) */
@@ -49,50 +153,19 @@ async function sendCascadeNotification(params: {
   triggerEntityType: string;
   triggerEntityId: string;
   variables: Record<string, unknown>;
-  snapshotVars: Record<string, unknown> | undefined;
   idempotencyKey: string;
   cascadeEvent: string;
   payload: Record<string, unknown>;
 }): Promise<void> {
   try {
-    let vars: Record<string, unknown>;
-
-    if (params.snapshotVars) {
-      vars = params.snapshotVars;
-    } else {
-      const contact = await resolvePersonContact(params.personId);
-
-      if (params.channel === 'email' && !contact.email) {
-        console.warn('[cascade:travel] skipping email notification — person has no email', {
-          personId: params.personId,
-          eventId: params.eventId,
-        });
-        return;
-      }
-      if (params.channel === 'whatsapp' && !contact.phoneE164) {
-        console.warn('[cascade:travel] skipping WhatsApp notification — person has no phone', {
-          personId: params.personId,
-          eventId: params.eventId,
-        });
-        return;
-      }
-
-      vars = {
-        ...params.variables,
-        recipientEmail: contact.email,
-        recipientPhoneE164: contact.phoneE164,
-        recipientName: contact.fullName,
-      };
-    }
-
-    if (params.channel === 'email' && !vars.recipientEmail) {
+    if (params.channel === 'email' && !params.variables.recipientEmail) {
       console.warn('[cascade:travel] skipping email notification — person has no email', {
         personId: params.personId,
         eventId: params.eventId,
       });
       return;
     }
-    if (params.channel === 'whatsapp' && !vars.recipientPhoneE164) {
+    if (params.channel === 'whatsapp' && !params.variables.recipientPhoneE164) {
       console.warn('[cascade:travel] skipping WhatsApp notification — person has no phone', {
         personId: params.personId,
         eventId: params.eventId,
@@ -110,7 +183,7 @@ async function sendCascadeNotification(params: {
       triggerEntityId: params.triggerEntityId,
       sendMode: 'automatic',
       idempotencyKey: params.idempotencyKey,
-      variables: vars,
+      variables: params.variables,
     });
     await handleCascadeNotificationResult({
       eventId: params.eventId,
@@ -144,51 +217,45 @@ export async function handleTravelSaved(params: {
 }) {
   const { eventId, payload } = params;
   const data = payload as unknown as TravelSavedPayload;
-  const snapshotVars = payload.variables as Record<string, unknown> | undefined;
+  const notificationContext = await buildTravelNotificationVariables({
+    eventId,
+    travelRecordId: data.travelRecordId,
+    snapshotVars: payload.variables,
+    domainVars: {
+      direction: data.direction,
+      travelMode: data.travelMode,
+      fromCity: data.fromCity,
+      toCity: data.toCity,
+      departureAtUtc: data.departureAtUtc,
+      arrivalAtUtc: data.arrivalAtUtc,
+    },
+  });
+
+  if (!notificationContext) {
+    console.warn('[cascade:travel] skipping saved cascade — travel record not found in event scope', {
+      eventId,
+      travelRecordId: data.travelRecordId,
+    });
+    return;
+  }
+
   const ts = Date.now();
 
-  await sendCascadeNotification({
-    eventId,
-    personId: data.personId,
-    channel: 'email',
-    templateKey: 'travel_itinerary',
-    triggerType: 'travel.saved',
-    triggerEntityType: 'travel_record',
-    triggerEntityId: data.travelRecordId,
-    variables: {
-      direction: data.direction,
-      travelMode: data.travelMode,
-      fromCity: data.fromCity,
-      toCity: data.toCity,
-      departureAtUtc: data.departureAtUtc,
-      arrivalAtUtc: data.arrivalAtUtc,
-    },
-    snapshotVars,
-    idempotencyKey: `notify:travel-itinerary:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:email`,
-    cascadeEvent: 'conference/travel.saved',
-    payload,
-  });
-  await sendCascadeNotification({
-    eventId,
-    personId: data.personId,
-    channel: 'whatsapp',
-    templateKey: 'travel_itinerary',
-    triggerType: 'travel.saved',
-    triggerEntityType: 'travel_record',
-    triggerEntityId: data.travelRecordId,
-    variables: {
-      direction: data.direction,
-      travelMode: data.travelMode,
-      fromCity: data.fromCity,
-      toCity: data.toCity,
-      departureAtUtc: data.departureAtUtc,
-      arrivalAtUtc: data.arrivalAtUtc,
-    },
-    snapshotVars,
-    idempotencyKey: `notify:travel-itinerary:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:whatsapp`,
-    cascadeEvent: 'conference/travel.saved',
-    payload,
-  });
+  for (const channel of ['email', 'whatsapp'] as const) {
+    await sendCascadeNotification({
+      eventId,
+      personId: notificationContext.personId,
+      channel,
+      templateKey: 'travel_itinerary',
+      triggerType: 'travel.saved',
+      triggerEntityType: 'travel_record',
+      triggerEntityId: data.travelRecordId,
+      variables: notificationContext.variables,
+      idempotencyKey: `notify:travel-itinerary:${eventId}:${notificationContext.personId}:${data.travelRecordId}:${ts}:${channel}`,
+      cascadeEvent: 'conference/travel.saved',
+      payload,
+    });
+  }
 }
 
 // ── Travel Updated Handler ────────────────────────────────────
@@ -197,8 +264,24 @@ export async function handleTravelUpdated(params: {
   actor: { type: string; id: string };
   payload: Record<string, unknown>;
 }) {
-  const { eventId, actor, payload } = params;
+  const { eventId, payload } = params;
   const data = payload as unknown as TravelUpdatedPayload;
+  const notificationContext = await buildTravelNotificationVariables({
+    eventId,
+    travelRecordId: data.travelRecordId,
+    snapshotVars: payload.variables,
+    domainVars: {
+      changeSummary: data.changeSummary,
+    },
+  });
+
+  if (!notificationContext) {
+    console.warn('[cascade:travel] skipping update cascade — travel record not found in event scope', {
+      eventId,
+      travelRecordId: data.travelRecordId,
+    });
+    return;
+  }
 
   // 1. Flag accommodation records for this person
   const accomRecords = await db
@@ -208,7 +291,7 @@ export async function handleTravelUpdated(params: {
       withEventScope(
         accommodationRecords.eventId,
         eventId,
-        eq(accommodationRecords.personId, data.personId),
+        eq(accommodationRecords.personId, notificationContext.personId),
         ne(accommodationRecords.recordStatus, 'cancelled'),
       ),
     );
@@ -255,36 +338,22 @@ export async function handleTravelUpdated(params: {
   }
 
   // 3. Notify delegate of travel update (email + WhatsApp)
-  const snapshotVars = payload.variables as Record<string, unknown> | undefined;
   const ts = Date.now();
-  await sendCascadeNotification({
-    eventId,
-    personId: data.personId,
-    channel: 'email',
-    templateKey: 'travel_update',
-    triggerType: 'travel.updated',
-    triggerEntityType: 'travel_record',
-    triggerEntityId: data.travelRecordId,
-    variables: { changeSummary: data.changeSummary },
-    snapshotVars,
-    idempotencyKey: `notify:travel-updated:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:email`,
-    cascadeEvent: 'conference/travel.updated',
-    payload,
-  });
-  await sendCascadeNotification({
-    eventId,
-    personId: data.personId,
-    channel: 'whatsapp',
-    templateKey: 'travel_update',
-    triggerType: 'travel.updated',
-    triggerEntityType: 'travel_record',
-    triggerEntityId: data.travelRecordId,
-    variables: { changeSummary: data.changeSummary },
-    snapshotVars,
-    idempotencyKey: `notify:travel-updated:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:whatsapp`,
-    cascadeEvent: 'conference/travel.updated',
-    payload,
-  });
+  for (const channel of ['email', 'whatsapp'] as const) {
+    await sendCascadeNotification({
+      eventId,
+      personId: notificationContext.personId,
+      channel,
+      templateKey: 'travel_update',
+      triggerType: 'travel.updated',
+      triggerEntityType: 'travel_record',
+      triggerEntityId: data.travelRecordId,
+      variables: notificationContext.variables,
+      idempotencyKey: `notify:travel-updated:${eventId}:${notificationContext.personId}:${data.travelRecordId}:${ts}:${channel}`,
+      cascadeEvent: 'conference/travel.updated',
+      payload,
+    });
+  }
 }
 
 // ── Travel Cancelled Handler ──────────────────────────────────
@@ -293,8 +362,25 @@ export async function handleTravelCancelled(params: {
   actor: { type: string; id: string };
   payload: Record<string, unknown>;
 }) {
-  const { eventId, actor, payload } = params;
+  const { eventId, payload } = params;
   const data = payload as unknown as TravelCancelledPayload;
+  const notificationContext = await buildTravelNotificationVariables({
+    eventId,
+    travelRecordId: data.travelRecordId,
+    snapshotVars: payload.variables,
+    domainVars: {
+      cancelledAt: data.cancelledAt,
+      reason: data.reason,
+    },
+  });
+
+  if (!notificationContext) {
+    console.warn('[cascade:travel] skipping cancelled cascade — travel record not found in event scope', {
+      eventId,
+      travelRecordId: data.travelRecordId,
+    });
+    return;
+  }
 
   // 1. High-severity flag on accommodation records
   const accomRecords = await db
@@ -304,7 +390,7 @@ export async function handleTravelCancelled(params: {
       withEventScope(
         accommodationRecords.eventId,
         eventId,
-        eq(accommodationRecords.personId, data.personId),
+        eq(accommodationRecords.personId, notificationContext.personId),
         ne(accommodationRecords.recordStatus, 'cancelled'),
       ),
     );
@@ -347,36 +433,22 @@ export async function handleTravelCancelled(params: {
   }
 
   // 3. Notify delegate of travel cancellation (email + WhatsApp)
-  const snapshotVars = payload.variables as Record<string, unknown> | undefined;
   const ts = Date.now();
-  await sendCascadeNotification({
-    eventId,
-    personId: data.personId,
-    channel: 'email',
-    templateKey: 'travel_cancelled',
-    triggerType: 'travel.cancelled',
-    triggerEntityType: 'travel_record',
-    triggerEntityId: data.travelRecordId,
-    variables: { cancelledAt: data.cancelledAt, reason: data.reason },
-    snapshotVars,
-    idempotencyKey: `notify:travel-cancelled:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:email`,
-    cascadeEvent: 'conference/travel.cancelled',
-    payload,
-  });
-  await sendCascadeNotification({
-    eventId,
-    personId: data.personId,
-    channel: 'whatsapp',
-    templateKey: 'travel_cancelled',
-    triggerType: 'travel.cancelled',
-    triggerEntityType: 'travel_record',
-    triggerEntityId: data.travelRecordId,
-    variables: { cancelledAt: data.cancelledAt, reason: data.reason },
-    snapshotVars,
-    idempotencyKey: `notify:travel-cancelled:${eventId}:${data.personId}:${data.travelRecordId}:${ts}:whatsapp`,
-    cascadeEvent: 'conference/travel.cancelled',
-    payload,
-  });
+  for (const channel of ['email', 'whatsapp'] as const) {
+    await sendCascadeNotification({
+      eventId,
+      personId: notificationContext.personId,
+      channel,
+      templateKey: 'travel_cancelled',
+      triggerType: 'travel.cancelled',
+      triggerEntityType: 'travel_record',
+      triggerEntityId: data.travelRecordId,
+      variables: notificationContext.variables,
+      idempotencyKey: `notify:travel-cancelled:${eventId}:${notificationContext.personId}:${data.travelRecordId}:${ts}:${channel}`,
+      cascadeEvent: 'conference/travel.cancelled',
+      payload,
+    });
+  }
 }
 
 // ── Register handlers ─────────────────────────────────────────

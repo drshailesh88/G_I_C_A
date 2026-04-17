@@ -20,6 +20,10 @@ vi.mock('@/lib/inngest/client', () => ({
 
 vi.mock('@/lib/db', () => ({ db: { select: vi.fn() } }));
 vi.mock('@/lib/db/schema', () => ({
+  events: {
+    id: 'events.id',
+    name: 'events.name',
+  },
   accommodationRecords: {
     id: 'accom.id',
     eventId: 'accom.event_id',
@@ -38,6 +42,11 @@ vi.mock('@/lib/db/schema', () => ({
     email: 'people.email',
     phoneE164: 'people.phone_e164',
     fullName: 'people.full_name',
+  },
+  travelRecords: {
+    id: 'travel.id',
+    eventId: 'travel.event_id',
+    personId: 'travel.person_id',
   },
 }));
 vi.mock('drizzle-orm', () => ({
@@ -89,17 +98,17 @@ import { registerTravelCascadeHandlers } from './travel-cascade';
 
 enableTestMode();
 
-const mockDb = vi.mocked(db as { select: ReturnType<typeof vi.fn> });
+const mockDb = vi.mocked(db as unknown as { select: ReturnType<typeof vi.fn> });
 
 const personBoth = [{ email: 'a@b.com', phoneE164: '+911234567890', fullName: 'Alice' }];
 const personEmailOnly = [{ email: 'a@b.com', phoneE164: null, fullName: 'Bob' }];
 const personPhoneOnly = [{ email: null, phoneE164: '+911234567890', fullName: 'Charlie' }];
-const personNone = [{ email: null, phoneE164: null, fullName: null }];
+const personNone: Record<string, unknown>[] = [];
 
 const eventId = 'evt-1';
 const personId = 'person-1';
 const travelRecordId = 'tr-1';
-const actor = { type: 'user', id: 'u1' };
+const actor = { type: 'user', id: 'u1' } as const;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -113,10 +122,11 @@ function mockSelects(
   person: Record<string, unknown>[],
 ) {
   mockDb.select
-    .mockReturnValueOnce(createChainableSelect(accom))
-    .mockReturnValueOnce(createChainableSelect(transport))
+    .mockReturnValueOnce(createChainableSelect([{ personId }]))
     .mockReturnValueOnce(createChainableSelect(person))
-    .mockReturnValueOnce(createChainableSelect(person));
+    .mockReturnValueOnce(createChainableSelect([{ name: 'Scoped Event' }]))
+    .mockReturnValueOnce(createChainableSelect(accom))
+    .mockReturnValueOnce(createChainableSelect(transport));
 }
 
 // ── StringLiteral mutations: exact red flag strings ──────────────
@@ -501,6 +511,8 @@ describe('Mutation kill: exact notification variable shapes', () => {
       recipientEmail: 'a@b.com',
       recipientPhoneE164: '+911234567890',
       recipientName: 'Alice',
+      fullName: 'Alice',
+      eventName: 'Scoped Event',
     });
   });
 
@@ -517,6 +529,8 @@ describe('Mutation kill: exact notification variable shapes', () => {
       recipientEmail: 'a@b.com',
       recipientPhoneE164: '+911234567890',
       recipientName: 'Alice',
+      fullName: 'Alice',
+      eventName: 'Scoped Event',
     });
   });
 
@@ -649,12 +663,13 @@ describe('Mutation kill: error handling strings and objects', () => {
 describe('Mutation kill: resolvePersonContact null fallback shape', () => {
   it('when person not found, notification is skipped and contact defaults to { email: null, phoneE164: null, fullName: null }', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    // Return empty array for person lookup so ?? fallback triggers
+    // Return empty array for person lookup so the handler fails closed on missing contact state
     mockDb.select
+      .mockReturnValueOnce(createChainableSelect([{ personId }])) // scoped travel record
+      .mockReturnValueOnce(createChainableSelect([])) // person NOT FOUND
+      .mockReturnValueOnce(createChainableSelect([{ name: 'Scoped Event' }])) // event lookup
       .mockReturnValueOnce(createChainableSelect([])) // accom
-      .mockReturnValueOnce(createChainableSelect([])) // transport
-      .mockReturnValueOnce(createChainableSelect([])) // person NOT FOUND (email path)
-      .mockReturnValueOnce(createChainableSelect([])); // person NOT FOUND (whatsapp path)
+      .mockReturnValueOnce(createChainableSelect([])); // transport
 
     await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
       travelRecordId, personId, registrationId: null,
@@ -698,6 +713,8 @@ describe('Mutation kill: sendNotification receives exact full object shape', () 
     expect(call.variables).toHaveProperty('recipientEmail');
     expect(call.variables).toHaveProperty('recipientPhoneE164');
     expect(call.variables).toHaveProperty('recipientName');
+    expect(call.variables).toHaveProperty('fullName', 'Alice');
+    expect(call.variables).toHaveProperty('eventName', 'Scoped Event');
   });
 
   it('travel cancelled whatsapp: sendNotification called with complete object', async () => {
@@ -723,6 +740,8 @@ describe('Mutation kill: sendNotification receives exact full object shape', () 
       recipientEmail: 'a@b.com',
       recipientPhoneE164: '+911234567890',
       recipientName: 'Alice',
+      fullName: 'Alice',
+      eventName: 'Scoped Event',
     });
   });
 });

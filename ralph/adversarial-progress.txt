@@ -29,6 +29,7 @@
 - Module-specific communications actions cannot rely on generic `assertEventAccess(..., { requireWrite: true })`. `org:ops` inherits broad event write access there, so communications reads/writes need their own role allowlists to block PII leakage and resend control bypasses.
 - People-directory actions need their own module RBAC even when they are not event-scoped. Bare `auth().userId` checks let `org:ops` mutate the master people table, and event-roster helpers still need UUID validation plus event access before reading or forging `event_people` links.
 - Program actions cannot rely on generic event write access. Halls, sessions, assignments, invites, versioning, and schedule reads need program-specific role allowlists or `org:ops` can bypass the UI and operate on scientific-program data directly.
+- Cascade handlers must resolve authoritative event-scoped resource, person, and event context before trusting payload `personId` or snapshot `variables`. Forged envelopes can otherwise redirect notifications, mis-target downstream flags, and omit required template vars like `fullName` and `eventName`.
 - Client-side offline queues must validate and normalize rows before persistence and while reading back legacy data. One malformed local record can poison a whole server-validated sync batch and deadlock offline recovery until storage is cleared.
 - IndexedDB queue state should use an explicit numeric/string sync key and cursor-based reads for cleanup/counting. Mixed boolean/numeric lookups and `getAll` on unbounded queues can hide pending rows or turn badge polling into a local memory sink.
 - Session and invite lifecycle writes need optimistic-lock filters on `updatedAt` plus current status. Fetch-then-update by bare id lets stale editors or racing responders overwrite newer program state.
@@ -203,3 +204,9 @@
 - Attacks tried: 7
 - Bugs found: 2
 - Key finding: the accommodation cascade trusted snapshot-supplied recipient/event vars and the saved path dropped destination/template context entirely, so direct forged events could redirect notifications and normal confirmation sends could arrive without a valid recipient.
+
+## 2026-04-17T13:51:45Z — src/lib/cascade/handlers/travel-cascade.ts — travel context and template hardening
+- Verdict: hardened
+- Attacks tried: 7
+- Bugs found: 2
+- Key finding: the travel cascade trusted payload `personId` and snapshot recipient/event labels, so a forged envelope could redirect delegate notifications or flag the wrong attendee, and normal sends were missing `fullName`/`eventName` required by active travel templates.

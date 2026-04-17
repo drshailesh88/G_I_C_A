@@ -1929,5 +1929,67 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/cascade/handlers/travel-cascade.ts",
+    "module": "src/lib/cascade/handlers/travel-cascade.ts",
+    "attacked_at": "2026-04-17T13:51:45Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "forge a cascade envelope with eventId for the active event, a real travelRecordId, and a different payload personId",
+        "result": "succeeded"
+      },
+      {
+        "category": "info_leakage",
+        "payload": "inject recipientEmail/recipientPhoneE164/recipientName/fullName/eventName through payload.variables",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "emit saved/updated/cancelled with a travelRecordId that no longer exists in the active event",
+        "result": "succeeded"
+      },
+      {
+        "category": "availability",
+        "payload": "exercise the handler against the seeded travel_update/travel_cancelled templates that require fullName and eventName",
+        "result": "succeeded"
+      },
+      {
+        "category": "injection",
+        "payload": "HTML/SQL metacharacters inside reason, changeSummary, and snapshot variables",
+        "result": "no_exploitable_failure_in_handler_layer"
+      },
+      {
+        "category": "race_condition",
+        "payload": "concurrent retries of the same travel cascade envelope",
+        "result": "no_new_handler_local_race_beyond_notification_idempotency"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "direct invocation without auth context",
+        "result": "not_applicable_internal_handler_has_no_auth_surface"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "The travel cascade trusted payload.personId and payload.variables wholesale. A forged cascade envelope could reuse a scoped travelRecordId but swap in another attendee's personId and recipient/event labels, redirecting notifications and creating accommodation flags for the wrong attendee.",
+        "fix": "Resolve the authoritative travel record, person contact, and event name from event-scoped database state before creating flags or notifications, and override recipient/fullName/eventName fields with trusted values.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/cascade/handlers/travel-cascade.test.ts > ignores forged payload personId and snapshot recipients on travel update"
+      },
+      {
+        "severity": "high",
+        "category": "availability",
+        "description": "Normal travel save/update/cancel handlers only forwarded domain fields plus recipientName, so active travel templates were missing required fullName/eventName variables and could fail at render time, silently dropping delegate notifications.",
+        "fix": "Build a complete notification context from scoped travel/person/event state, include fullName and eventName in every send, and skip the cascade entirely when the travel record is no longer present in the active event.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/cascade/handlers/travel-cascade.test.ts > sends email + WhatsApp on travel update when person has both; src/lib/cascade/handlers/travel-cascade.test.ts > skips the saved cascade when the travel record is outside the active event scope"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

@@ -24,6 +24,10 @@ const { mockDbSelect, mockNe, mockUpsertRedFlag, mockSendNotification, mockCaptu
   }),
   mockCaptureCascadeError: vi.fn(),
   SCHEMA: {
+    events: {
+      id: 'events.id',
+      name: 'events.name',
+    },
     accommodationRecords: {
       id: 'accom.id',
       eventId: 'accom.event_id',
@@ -42,6 +46,11 @@ const { mockDbSelect, mockNe, mockUpsertRedFlag, mockSendNotification, mockCaptu
       email: 'people.email',
       phoneE164: 'people.phone_e164',
       fullName: 'people.full_name',
+    },
+    travelRecords: {
+      id: 'travel.id',
+      eventId: 'travel.event_id',
+      personId: 'travel.person_id',
     },
   },
 }));
@@ -99,7 +108,7 @@ const personBoth = [{ email: 'a@b.com', phoneE164: '+911234567890', fullName: 'A
 const eventId = 'evt-1';
 const personId = 'person-1';
 const travelRecordId = 'tr-1';
-const actor = { type: 'user', id: 'u1' };
+const actor = { type: 'user', id: 'u1' } as const;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -113,10 +122,11 @@ function mockSelects(
   person: Record<string, unknown>[],
 ) {
   mockDbSelect
-    .mockReturnValueOnce(createChainableSelect(accom))
-    .mockReturnValueOnce(createChainableSelect(transport))
+    .mockReturnValueOnce(createChainableSelect([{ personId }]))
     .mockReturnValueOnce(createChainableSelect(person))
-    .mockReturnValueOnce(createChainableSelect(person));
+    .mockReturnValueOnce(createChainableSelect([{ name: 'Scoped Event' }]))
+    .mockReturnValueOnce(createChainableSelect(accom))
+    .mockReturnValueOnce(createChainableSelect(transport));
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -133,9 +143,8 @@ describe('resolvePersonContact: select shape (lines 32, 36)', () => {
       changeSummary: { arrivalAtUtc: { from: 'x', to: 'y' } },
     });
 
-    // The 3rd db.select call is for person lookup (email notification)
-    // select is called: accom, transport, person (email path), person (whatsapp path)
-    const personSelectArg = mockDbSelect.mock.calls[2][0];
+    // select is called: scoped travel record, person, event, accom, transport
+    const personSelectArg = mockDbSelect.mock.calls[1][0];
     expect(personSelectArg).toEqual({
       email: SCHEMA.people.email,
       phoneE164: SCHEMA.people.phoneE164,
@@ -146,10 +155,11 @@ describe('resolvePersonContact: select shape (lines 32, 36)', () => {
   it('when person not found, fallback returns all nulls and notifications are skipped', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     mockDbSelect
-      .mockReturnValueOnce(createChainableSelect([])) // accom
-      .mockReturnValueOnce(createChainableSelect([])) // transport
+      .mockReturnValueOnce(createChainableSelect([{ personId }])) // scoped travel record
       .mockReturnValueOnce(createChainableSelect([])) // person NOT FOUND
-      .mockReturnValueOnce(createChainableSelect([])); // person NOT FOUND
+      .mockReturnValueOnce(createChainableSelect([{ name: 'Scoped Event' }])) // event lookup
+      .mockReturnValueOnce(createChainableSelect([])) // accom
+      .mockReturnValueOnce(createChainableSelect([])); // transport
 
     await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_UPDATED, eventId, actor, {
       travelRecordId, personId, registrationId: null,
@@ -167,10 +177,11 @@ describe('resolvePersonContact: select shape (lines 32, 36)', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     // Only one person lookup needed — for email channel. It will skip, then whatsapp also skips.
     mockDbSelect
+      .mockReturnValueOnce(createChainableSelect([{ personId }])) // scoped travel record
+      .mockReturnValueOnce(createChainableSelect([])) // person NOT FOUND
+      .mockReturnValueOnce(createChainableSelect([{ name: 'Scoped Event' }])) // event lookup
       .mockReturnValueOnce(createChainableSelect([])) // accom
-      .mockReturnValueOnce(createChainableSelect([])) // transport
-      .mockReturnValueOnce(createChainableSelect([])) // person (email)
-      .mockReturnValueOnce(createChainableSelect([])); // person (whatsapp)
+      .mockReturnValueOnce(createChainableSelect([])); // transport
 
     await emitCascadeEvent(CASCADE_EVENTS.TRAVEL_CANCELLED, eventId, actor, {
       travelRecordId, personId, registrationId: null,
@@ -199,8 +210,7 @@ describe('handleTravelUpdated: select shapes for accom and transport (lines 109,
       changeSummary: { toCity: { from: 'A', to: 'B' } },
     });
 
-    // First db.select call is for accommodation records
-    const accomSelectArg = mockDbSelect.mock.calls[0][0];
+    const accomSelectArg = mockDbSelect.mock.calls[3][0];
     expect(accomSelectArg).toEqual({ id: SCHEMA.accommodationRecords.id });
   });
 
@@ -212,8 +222,7 @@ describe('handleTravelUpdated: select shapes for accom and transport (lines 109,
       changeSummary: { toCity: { from: 'A', to: 'B' } },
     });
 
-    // Second db.select call is for transport passenger assignments
-    const transportSelectArg = mockDbSelect.mock.calls[1][0];
+    const transportSelectArg = mockDbSelect.mock.calls[4][0];
     expect(transportSelectArg).toEqual({ id: SCHEMA.transportPassengerAssignments.id });
   });
 });
@@ -230,7 +239,7 @@ describe('handleTravelCancelled: select shapes for accom and transport (lines 19
       cancelledAt: '2026-01-01T00:00:00Z', reason: null,
     });
 
-    const accomSelectArg = mockDbSelect.mock.calls[0][0];
+    const accomSelectArg = mockDbSelect.mock.calls[3][0];
     expect(accomSelectArg).toEqual({ id: SCHEMA.accommodationRecords.id });
   });
 
@@ -241,7 +250,7 @@ describe('handleTravelCancelled: select shapes for accom and transport (lines 19
       cancelledAt: '2026-01-01T00:00:00Z', reason: null,
     });
 
-    const transportSelectArg = mockDbSelect.mock.calls[1][0];
+    const transportSelectArg = mockDbSelect.mock.calls[4][0];
     expect(transportSelectArg).toEqual({ id: SCHEMA.transportPassengerAssignments.id });
   });
 });
