@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockDb, mockRevalidatePath, mockAssertEventAccess } = vi.hoisted(() => ({
+const { mockDb, mockRevalidatePath, mockAssertEventAccess, mockWriteAudit } = vi.hoisted(() => ({
   mockDb: {
     select: vi.fn(),
     insert: vi.fn(),
@@ -8,6 +8,7 @@ const { mockDb, mockRevalidatePath, mockAssertEventAccess } = vi.hoisted(() => (
   },
   mockRevalidatePath: vi.fn(),
   mockAssertEventAccess: vi.fn(),
+  mockWriteAudit: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: vi.fn().mockResolvedValue({ userId: 'user_123' }) }));
@@ -15,6 +16,7 @@ vi.mock('@/lib/db', () => ({ db: mockDb }));
 vi.mock('next/cache', () => ({ revalidatePath: mockRevalidatePath }));
 vi.mock('@/lib/db/with-event-scope', () => ({ withEventScope: vi.fn() }));
 vi.mock('@/lib/auth/event-access', () => ({ assertEventAccess: mockAssertEventAccess }));
+vi.mock('@/lib/audit/write', () => ({ writeAudit: mockWriteAudit }));
 
 import {
   createTransportBatch,
@@ -27,6 +29,12 @@ import {
 } from './transport';
 
 function chainedSelect(rows: unknown[]) {
+  const chain = selectChain(rows);
+  mockDb.select.mockReturnValue(chain);
+  return chain;
+}
+
+function selectChain(rows: unknown[]) {
   const chain = {
     from: vi.fn().mockReturnThis(),
     where: vi.fn().mockReturnThis(),
@@ -34,7 +42,6 @@ function chainedSelect(rows: unknown[]) {
     orderBy: vi.fn().mockResolvedValue(rows),
     innerJoin: vi.fn().mockReturnThis(),
   };
-  mockDb.select.mockReturnValue(chain);
   return chain;
 }
 
@@ -63,6 +70,8 @@ const VEHICLE_ID = '550e8400-e29b-41d4-a716-446655440002';
 const PASSENGER_ID = '550e8400-e29b-41d4-a716-446655440003';
 const PERSON_ID = '550e8400-e29b-41d4-a716-446655440004';
 const TRAVEL_ID = '550e8400-e29b-41d4-a716-446655440005';
+const OTHER_BATCH_ID = '550e8400-e29b-41d4-a716-446655440006';
+const INVALID_EVENT_ID = 'not-a-uuid';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -90,6 +99,42 @@ describe('createTransportBatch', () => {
 
   it('rejects invalid input', async () => {
     await expect(createTransportBatch(EVENT_ID, { movementType: 'invalid' })).rejects.toThrow();
+  });
+
+  it('rejects a malformed route eventId before auth or database access', async () => {
+    await expect(createTransportBatch(INVALID_EVENT_ID, {
+      movementType: 'arrival',
+      serviceDate: '2026-05-01T00:00:00Z',
+      timeWindowStart: '2026-05-01T08:00:00Z',
+      timeWindowEnd: '2026-05-01T10:00:00Z',
+      sourceCity: 'Mumbai',
+      pickupHub: 'BOM T2',
+      dropHub: 'Hotel Leela',
+    })).rejects.toThrow('Invalid event ID');
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('writes an audit log on create', async () => {
+    chainedInsert([{ id: BATCH_ID, batchStatus: 'planned', movementType: 'arrival', batchSource: 'manual' }]);
+
+    await createTransportBatch(EVENT_ID, {
+      movementType: 'arrival',
+      serviceDate: '2026-05-01T00:00:00Z',
+      timeWindowStart: '2026-05-01T08:00:00Z',
+      timeWindowEnd: '2026-05-01T10:00:00Z',
+      sourceCity: 'Mumbai',
+      pickupHub: 'BOM T2',
+      dropHub: 'Hotel Leela',
+    });
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({
+      eventId: EVENT_ID,
+      action: 'create',
+      resource: 'transport_batch',
+      resourceId: BATCH_ID,
+    }));
   });
 });
 
@@ -124,6 +169,43 @@ describe('updateBatchStatus', () => {
     chainedSelect([]);
     await expect(updateBatchStatus(EVENT_ID, BATCH_ID, 'ready')).rejects.toThrow('Transport batch not found');
   });
+
+  it('rejects stale status writes after a concurrent change', async () => {
+    mockDb.select.mockReturnValueOnce(selectChain([{
+      id: BATCH_ID,
+      eventId: EVENT_ID,
+      batchStatus: 'planned',
+      updatedAt: new Date('2026-04-17T00:00:00Z'),
+    }]));
+    chainedUpdate([]);
+
+    await expect(updateBatchStatus(EVENT_ID, BATCH_ID, 'ready')).rejects.toThrow(
+      'Transport batch changed. Refresh and try again.',
+    );
+  });
+
+  it('writes an audit log on status update', async () => {
+    mockDb.select.mockReturnValueOnce(selectChain([{
+      id: BATCH_ID,
+      eventId: EVENT_ID,
+      batchStatus: 'planned',
+      updatedAt: new Date('2026-04-17T00:00:00Z'),
+    }]));
+    chainedUpdate([{ id: BATCH_ID, batchStatus: 'ready' }]);
+
+    await updateBatchStatus(EVENT_ID, BATCH_ID, 'ready');
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({
+      eventId: EVENT_ID,
+      action: 'update',
+      resource: 'transport_batch',
+      resourceId: BATCH_ID,
+      meta: expect.objectContaining({
+        previousStatus: 'planned',
+        currentStatus: 'ready',
+      }),
+    }));
+  });
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -152,6 +234,25 @@ describe('createVehicleAssignment', () => {
       capacity: 12,
     })).rejects.toThrow('Transport batch not found');
   });
+
+  it('writes an audit log on create', async () => {
+    mockDb.select.mockReturnValueOnce(selectChain([{ id: BATCH_ID, batchStatus: 'planned' }]));
+    chainedInsert([{ id: VEHICLE_ID, assignmentStatus: 'assigned', vehicleType: 'van', capacity: 12 }]);
+
+    await createVehicleAssignment(EVENT_ID, {
+      batchId: BATCH_ID,
+      vehicleLabel: 'Van-1',
+      vehicleType: 'van',
+      capacity: 12,
+    });
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({
+      eventId: EVENT_ID,
+      action: 'create',
+      resource: 'vehicle_assignment',
+      resourceId: VEHICLE_ID,
+    }));
+  });
 });
 
 describe('updateVehicleStatus', () => {
@@ -165,6 +266,45 @@ describe('updateVehicleStatus', () => {
   it('rejects completed → assigned (terminal)', async () => {
     chainedSelect([{ id: VEHICLE_ID, assignmentStatus: 'completed' }]);
     await expect(updateVehicleStatus(EVENT_ID, VEHICLE_ID, 'assigned')).rejects.toThrow('Cannot transition');
+  });
+
+  it('rejects stale vehicle status writes after a concurrent change', async () => {
+    mockDb.select.mockReturnValueOnce(selectChain([{
+      id: VEHICLE_ID,
+      eventId: EVENT_ID,
+      batchId: BATCH_ID,
+      assignmentStatus: 'assigned',
+      updatedAt: new Date('2026-04-17T00:00:00Z'),
+    }]));
+    chainedUpdate([]);
+
+    await expect(updateVehicleStatus(EVENT_ID, VEHICLE_ID, 'dispatched')).rejects.toThrow(
+      'Vehicle assignment changed. Refresh and try again.',
+    );
+  });
+
+  it('writes an audit log on status update', async () => {
+    mockDb.select.mockReturnValueOnce(selectChain([{
+      id: VEHICLE_ID,
+      eventId: EVENT_ID,
+      batchId: BATCH_ID,
+      assignmentStatus: 'assigned',
+      updatedAt: new Date('2026-04-17T00:00:00Z'),
+    }]));
+    chainedUpdate([{ id: VEHICLE_ID, assignmentStatus: 'dispatched' }]);
+
+    await updateVehicleStatus(EVENT_ID, VEHICLE_ID, 'dispatched');
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({
+      eventId: EVENT_ID,
+      action: 'update',
+      resource: 'vehicle_assignment',
+      resourceId: VEHICLE_ID,
+      meta: expect.objectContaining({
+        previousStatus: 'assigned',
+        currentStatus: 'dispatched',
+      }),
+    }));
   });
 });
 
@@ -185,7 +325,10 @@ describe('assignPassenger', () => {
   });
 
   it('assigns as assigned when vehicle is specified', async () => {
-    chainedSelect([{ id: BATCH_ID }]);
+    mockDb.select
+      .mockReturnValueOnce(selectChain([{ id: BATCH_ID, batchStatus: 'planned' }]))
+      .mockReturnValueOnce(selectChain([{ id: TRAVEL_ID }]))
+      .mockReturnValueOnce(selectChain([{ id: VEHICLE_ID, batchId: BATCH_ID, assignmentStatus: 'assigned' }]));
     chainedInsert([{ id: PASSENGER_ID, assignmentStatus: 'assigned' }]);
 
     const result = await assignPassenger(EVENT_ID, {
@@ -204,6 +347,52 @@ describe('assignPassenger', () => {
       personId: PERSON_ID,
       travelRecordId: TRAVEL_ID,
     })).rejects.toThrow('Transport batch not found');
+  });
+
+  it('rejects travel records from another event or person', async () => {
+    mockDb.select
+      .mockReturnValueOnce(selectChain([{ id: BATCH_ID, batchStatus: 'planned' }]))
+      .mockReturnValueOnce(selectChain([]));
+
+    await expect(assignPassenger(EVENT_ID, {
+      batchId: BATCH_ID,
+      personId: PERSON_ID,
+      travelRecordId: TRAVEL_ID,
+    })).rejects.toThrow('Travel record does not belong to this event/person');
+  });
+
+  it('rejects vehicle assignments from another batch', async () => {
+    mockDb.select
+      .mockReturnValueOnce(selectChain([{ id: BATCH_ID, batchStatus: 'planned' }]))
+      .mockReturnValueOnce(selectChain([{ id: TRAVEL_ID }]))
+      .mockReturnValueOnce(selectChain([{ id: VEHICLE_ID, batchId: OTHER_BATCH_ID, assignmentStatus: 'assigned' }]));
+
+    await expect(assignPassenger(EVENT_ID, {
+      batchId: BATCH_ID,
+      vehicleAssignmentId: VEHICLE_ID,
+      personId: PERSON_ID,
+      travelRecordId: TRAVEL_ID,
+    })).rejects.toThrow('Vehicle assignment does not belong to this batch');
+  });
+
+  it('writes an audit log on create', async () => {
+    mockDb.select
+      .mockReturnValueOnce(selectChain([{ id: BATCH_ID, batchStatus: 'planned' }]))
+      .mockReturnValueOnce(selectChain([{ id: TRAVEL_ID }]));
+    chainedInsert([{ id: PASSENGER_ID, assignmentStatus: 'pending', personId: PERSON_ID, travelRecordId: TRAVEL_ID, vehicleAssignmentId: null }]);
+
+    await assignPassenger(EVENT_ID, {
+      batchId: BATCH_ID,
+      personId: PERSON_ID,
+      travelRecordId: TRAVEL_ID,
+    });
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({
+      eventId: EVENT_ID,
+      action: 'create',
+      resource: 'transport_passenger_assignment',
+      resourceId: PASSENGER_ID,
+    }));
   });
 });
 
@@ -248,6 +437,70 @@ describe('movePassenger', () => {
       targetVehicleAssignmentId: VEHICLE_ID,
     })).rejects.toThrow('Cannot move a passenger in "no_show" status');
   });
+
+  it('rejects moving a passenger onto a vehicle from another batch', async () => {
+    mockDb.select
+      .mockReturnValueOnce(selectChain([{
+        id: PASSENGER_ID,
+        eventId: EVENT_ID,
+        batchId: BATCH_ID,
+        assignmentStatus: 'assigned',
+        updatedAt: new Date('2026-04-17T00:00:00Z'),
+      }]))
+      .mockReturnValueOnce(selectChain([{ id: VEHICLE_ID, batchId: OTHER_BATCH_ID, assignmentStatus: 'assigned' }]));
+
+    await expect(movePassenger(EVENT_ID, {
+      passengerAssignmentId: PASSENGER_ID,
+      targetVehicleAssignmentId: VEHICLE_ID,
+    })).rejects.toThrow('Vehicle assignment does not belong to this batch');
+  });
+
+  it('rejects stale passenger moves after a concurrent change', async () => {
+    mockDb.select.mockReturnValueOnce(selectChain([{
+      id: PASSENGER_ID,
+      eventId: EVENT_ID,
+      batchId: BATCH_ID,
+      vehicleAssignmentId: null,
+      assignmentStatus: 'pending',
+      updatedAt: new Date('2026-04-17T00:00:00Z'),
+    }]));
+    chainedUpdate([]);
+
+    await expect(movePassenger(EVENT_ID, {
+      passengerAssignmentId: PASSENGER_ID,
+      targetVehicleAssignmentId: '',
+    })).rejects.toThrow('Passenger assignment changed. Refresh and try again.');
+  });
+
+  it('writes an audit log on move', async () => {
+    mockDb.select
+      .mockReturnValueOnce(selectChain([{
+        id: PASSENGER_ID,
+        eventId: EVENT_ID,
+        batchId: BATCH_ID,
+        vehicleAssignmentId: null,
+        assignmentStatus: 'pending',
+        updatedAt: new Date('2026-04-17T00:00:00Z'),
+      }]))
+      .mockReturnValueOnce(selectChain([{ id: VEHICLE_ID, batchId: BATCH_ID, assignmentStatus: 'assigned' }]));
+    chainedUpdate([{ id: PASSENGER_ID, vehicleAssignmentId: VEHICLE_ID, assignmentStatus: 'assigned' }]);
+
+    await movePassenger(EVENT_ID, {
+      passengerAssignmentId: PASSENGER_ID,
+      targetVehicleAssignmentId: VEHICLE_ID,
+    });
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({
+      eventId: EVENT_ID,
+      action: 'update',
+      resource: 'transport_passenger_assignment',
+      resourceId: PASSENGER_ID,
+      meta: expect.objectContaining({
+        previousStatus: 'pending',
+        currentStatus: 'assigned',
+      }),
+    }));
+  });
 });
 
 describe('updatePassengerStatus', () => {
@@ -280,6 +533,47 @@ describe('updatePassengerStatus', () => {
   it('throws when not found', async () => {
     chainedSelect([]);
     await expect(updatePassengerStatus(EVENT_ID, PASSENGER_ID, 'assigned')).rejects.toThrow('Passenger assignment not found');
+  });
+
+  it('rejects stale passenger status writes after a concurrent change', async () => {
+    mockDb.select.mockReturnValueOnce(selectChain([{
+      id: PASSENGER_ID,
+      eventId: EVENT_ID,
+      batchId: BATCH_ID,
+      personId: PERSON_ID,
+      assignmentStatus: 'pending',
+      updatedAt: new Date('2026-04-17T00:00:00Z'),
+    }]));
+    chainedUpdate([]);
+
+    await expect(updatePassengerStatus(EVENT_ID, PASSENGER_ID, 'assigned')).rejects.toThrow(
+      'Passenger assignment changed. Refresh and try again.',
+    );
+  });
+
+  it('writes an audit log on status update', async () => {
+    mockDb.select.mockReturnValueOnce(selectChain([{
+      id: PASSENGER_ID,
+      eventId: EVENT_ID,
+      batchId: BATCH_ID,
+      personId: PERSON_ID,
+      assignmentStatus: 'pending',
+      updatedAt: new Date('2026-04-17T00:00:00Z'),
+    }]));
+    chainedUpdate([{ id: PASSENGER_ID, assignmentStatus: 'assigned' }]);
+
+    await updatePassengerStatus(EVENT_ID, PASSENGER_ID, 'assigned');
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({
+      eventId: EVENT_ID,
+      action: 'update',
+      resource: 'transport_passenger_assignment',
+      resourceId: PASSENGER_ID,
+      meta: expect.objectContaining({
+        previousStatus: 'pending',
+        currentStatus: 'assigned',
+      }),
+    }));
   });
 });
 
@@ -319,6 +613,42 @@ describe('updateTransportBatch', () => {
     await expect(
       updateTransportBatch(EVENT_ID, { batchId: BATCH_ID, sourceCity: 'Delhi' }),
     ).rejects.toThrow('Transport batch not found');
+  });
+
+  it('rejects stale batch updates after a concurrent change', async () => {
+    mockDb.select.mockReturnValueOnce(selectChain([{
+      id: BATCH_ID,
+      eventId: EVENT_ID,
+      batchStatus: 'planned',
+      updatedAt: new Date('2026-04-17T00:00:00Z'),
+    }]));
+    chainedUpdate([]);
+
+    await expect(
+      updateTransportBatch(EVENT_ID, { batchId: BATCH_ID, sourceCity: 'Delhi' }),
+    ).rejects.toThrow('Transport batch changed. Refresh and try again.');
+  });
+
+  it('writes an audit log on update', async () => {
+    mockDb.select.mockReturnValueOnce(selectChain([{
+      id: BATCH_ID,
+      eventId: EVENT_ID,
+      batchStatus: 'planned',
+      updatedAt: new Date('2026-04-17T00:00:00Z'),
+    }]));
+    chainedUpdate([{ id: BATCH_ID, batchStatus: 'planned' }]);
+
+    await updateTransportBatch(EVENT_ID, {
+      batchId: BATCH_ID,
+      sourceCity: 'Delhi',
+    });
+
+    expect(mockWriteAudit).toHaveBeenCalledWith(expect.objectContaining({
+      eventId: EVENT_ID,
+      action: 'update',
+      resource: 'transport_batch',
+      resourceId: BATCH_ID,
+    }));
   });
 });
 
@@ -374,6 +704,12 @@ describe('updateVehicleStatus — not found', () => {
 // HARDENING: Read actions call assertEventAccess
 // ══════════════════════════════════════════════════════════════
 describe('Read actions — auth', () => {
+  it('getEventTransportBatches rejects a malformed route eventId before auth or database access', async () => {
+    await expect(getEventTransportBatches(INVALID_EVENT_ID)).rejects.toThrow('Invalid event ID');
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
   it('getEventTransportBatches calls assertEventAccess without requireWrite', async () => {
     chainedSelect([]);
     await getEventTransportBatches(EVENT_ID);

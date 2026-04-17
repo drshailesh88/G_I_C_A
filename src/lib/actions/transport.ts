@@ -12,7 +12,8 @@ import { eq, and, desc, ne } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
-import { ZodError, type ZodType } from 'zod';
+import { writeAudit } from '@/lib/audit/write';
+import { ZodError, type ZodType, z } from 'zod';
 import {
   createBatchSchema,
   updateBatchSchema,
@@ -31,6 +32,8 @@ import {
   type PassengerStatus,
 } from '@/lib/validations/transport';
 
+const eventIdSchema = z.string().uuid('Invalid event ID');
+
 function parseTransportInput<T>(schema: ZodType<T>, input: unknown): T {
   try {
     return schema.parse(input);
@@ -42,18 +45,186 @@ function parseTransportInput<T>(schema: ZodType<T>, input: unknown): T {
   }
 }
 
+async function assertTransportEventAccess(
+  eventId: string,
+  options?: { requireWrite?: boolean },
+) {
+  const scopedEventId = eventIdSchema.parse(eventId);
+  const access = options
+    ? await assertEventAccess(scopedEventId, options)
+    : await assertEventAccess(scopedEventId);
+
+  return { ...access, eventId: scopedEventId };
+}
+
+async function getScopedBatch(
+  eventId: string,
+  batchId: string,
+) {
+  const [batch] = await db
+    .select({
+      id: transportBatches.id,
+      eventId: transportBatches.eventId,
+      batchStatus: transportBatches.batchStatus,
+      updatedAt: transportBatches.updatedAt,
+    })
+    .from(transportBatches)
+    .where(withEventScope(transportBatches.eventId, eventId, eq(transportBatches.id, batchId)))
+    .limit(1);
+
+  return batch;
+}
+
+async function assertBatchExistsForAssignment(
+  eventId: string,
+  batchId: string,
+) {
+  const batch = await getScopedBatch(eventId, batchId);
+
+  if (!batch) {
+    throw new Error('Transport batch not found');
+  }
+
+  if (batch.batchStatus === 'completed' || batch.batchStatus === 'cancelled') {
+    throw new Error(`Cannot modify a batch in "${batch.batchStatus}" status`);
+  }
+
+  return batch;
+}
+
+async function assertTravelRecordBelongsToEventPerson(
+  eventId: string,
+  personId: string,
+  travelRecordId: string,
+) {
+  const [travelRecord] = await db
+    .select({ id: travelRecords.id })
+    .from(travelRecords)
+    .where(
+      withEventScope(
+        travelRecords.eventId,
+        eventId,
+        eq(travelRecords.id, travelRecordId),
+        eq(travelRecords.personId, personId),
+        ne(travelRecords.recordStatus, 'cancelled'),
+      ),
+    )
+    .limit(1);
+
+  if (!travelRecord) {
+    throw new Error('Travel record does not belong to this event/person');
+  }
+}
+
+async function assertVehicleBelongsToBatch(
+  eventId: string,
+  batchId: string,
+  vehicleAssignmentId: string | null,
+) {
+  if (!vehicleAssignmentId) {
+    return null;
+  }
+
+  const [vehicle] = await db
+    .select({
+      id: vehicleAssignments.id,
+      batchId: vehicleAssignments.batchId,
+      assignmentStatus: vehicleAssignments.assignmentStatus,
+    })
+    .from(vehicleAssignments)
+    .where(
+      withEventScope(
+        vehicleAssignments.eventId,
+        eventId,
+        eq(vehicleAssignments.id, vehicleAssignmentId),
+      ),
+    )
+    .limit(1);
+
+  if (!vehicle) {
+    throw new Error('Vehicle assignment not found');
+  }
+
+  if (vehicle.batchId !== batchId) {
+    throw new Error('Vehicle assignment does not belong to this batch');
+  }
+
+  if (vehicle.assignmentStatus === 'completed' || vehicle.assignmentStatus === 'cancelled') {
+    throw new Error(`Cannot assign passengers to a vehicle in "${vehicle.assignmentStatus}" status`);
+  }
+
+  return vehicle;
+}
+
+function buildBatchWriteFilters(batch: {
+  id: string;
+  eventId: string;
+  batchStatus: string;
+  updatedAt: Date | null;
+}) {
+  const filters = [
+    eq(transportBatches.id, batch.id),
+    eq(transportBatches.eventId, batch.eventId),
+    eq(transportBatches.batchStatus, batch.batchStatus),
+  ];
+
+  if (batch.updatedAt) {
+    filters.push(eq(transportBatches.updatedAt, batch.updatedAt));
+  }
+
+  return filters;
+}
+
+function buildVehicleWriteFilters(vehicle: {
+  id: string;
+  eventId: string;
+  assignmentStatus: string;
+  updatedAt: Date | null;
+}) {
+  const filters = [
+    eq(vehicleAssignments.id, vehicle.id),
+    eq(vehicleAssignments.eventId, vehicle.eventId),
+    eq(vehicleAssignments.assignmentStatus, vehicle.assignmentStatus),
+  ];
+
+  if (vehicle.updatedAt) {
+    filters.push(eq(vehicleAssignments.updatedAt, vehicle.updatedAt));
+  }
+
+  return filters;
+}
+
+function buildPassengerWriteFilters(passenger: {
+  id: string;
+  eventId: string;
+  assignmentStatus: string;
+  updatedAt: Date | null;
+}) {
+  const filters = [
+    eq(transportPassengerAssignments.id, passenger.id),
+    eq(transportPassengerAssignments.eventId, passenger.eventId),
+    eq(transportPassengerAssignments.assignmentStatus, passenger.assignmentStatus),
+  ];
+
+  if (passenger.updatedAt) {
+    filters.push(eq(transportPassengerAssignments.updatedAt, passenger.updatedAt));
+  }
+
+  return filters;
+}
+
 // ══════════════════════════════════════════════════════════════
 // BATCHES
 // ══════════════════════════════════════════════════════════════
 
 export async function createTransportBatch(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
   const validated = parseTransportInput(createBatchSchema, input);
 
   const [batch] = await db
     .insert(transportBatches)
     .values({
-      eventId,
+      eventId: scopedEventId,
       movementType: validated.movementType,
       batchSource: validated.batchSource,
       serviceDate: new Date(validated.serviceDate),
@@ -71,20 +242,29 @@ export async function createTransportBatch(eventId: string, input: unknown) {
     })
     .returning();
 
-  revalidatePath(`/events/${eventId}/transport`);
+  await writeAudit({
+    actorUserId: userId,
+    eventId: scopedEventId,
+    action: 'create',
+    resource: 'transport_batch',
+    resourceId: batch.id,
+    meta: {
+      movementType: batch.movementType,
+      batchSource: batch.batchSource,
+      batchStatus: batch.batchStatus,
+    },
+  });
+
+  revalidatePath(`/events/${scopedEventId}/transport`);
   return batch;
 }
 
 export async function updateTransportBatch(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
   const validated = parseTransportInput(updateBatchSchema, input);
   const { batchId, ...fields } = validated;
 
-  const [existing] = await db
-    .select()
-    .from(transportBatches)
-    .where(withEventScope(transportBatches.eventId, eventId, eq(transportBatches.id, batchId)))
-    .limit(1);
+  const existing = await getScopedBatch(scopedEventId, batchId);
 
   if (!existing) throw new Error('Transport batch not found');
   if (existing.batchStatus === 'completed' || existing.batchStatus === 'cancelled') {
@@ -109,22 +289,35 @@ export async function updateTransportBatch(eventId: string, input: unknown) {
   const [updated] = await db
     .update(transportBatches)
     .set(updateData)
-    .where(eq(transportBatches.id, batchId))
+    .where(and(...buildBatchWriteFilters(existing)))
     .returning();
 
-  revalidatePath(`/events/${eventId}/transport`);
+  if (!updated) {
+    throw new Error('Transport batch changed. Refresh and try again.');
+  }
+
+  await writeAudit({
+    actorUserId: userId,
+    eventId: scopedEventId,
+    action: 'update',
+    resource: 'transport_batch',
+    resourceId: updated.id,
+    meta: {
+      previousStatus: existing.batchStatus,
+      currentStatus: updated.batchStatus,
+      updatedFields: Object.keys(fields),
+    },
+  });
+
+  revalidatePath(`/events/${scopedEventId}/transport`);
   return updated;
 }
 
 export async function updateBatchStatus(eventId: string, batchId: string, newStatus: BatchStatus) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
   parseTransportInput(batchIdSchema, batchId);
 
-  const [existing] = await db
-    .select()
-    .from(transportBatches)
-    .where(withEventScope(transportBatches.eventId, eventId, eq(transportBatches.id, batchId)))
-    .limit(1);
+  const existing = await getScopedBatch(scopedEventId, batchId);
 
   if (!existing) throw new Error('Transport batch not found');
 
@@ -138,31 +331,47 @@ export async function updateBatchStatus(eventId: string, batchId: string, newSta
   const [updated] = await db
     .update(transportBatches)
     .set({ batchStatus: newStatus, updatedBy: userId, updatedAt: new Date() })
-    .where(eq(transportBatches.id, batchId))
+    .where(and(...buildBatchWriteFilters(existing)))
     .returning();
 
-  revalidatePath(`/events/${eventId}/transport`);
+  if (!updated) {
+    throw new Error('Transport batch changed. Refresh and try again.');
+  }
+
+  await writeAudit({
+    actorUserId: userId,
+    eventId: scopedEventId,
+    action: 'update',
+    resource: 'transport_batch',
+    resourceId: updated.id,
+    meta: {
+      previousStatus: currentStatus,
+      currentStatus: updated.batchStatus,
+    },
+  });
+
+  revalidatePath(`/events/${scopedEventId}/transport`);
   return updated;
 }
 
 export async function getEventTransportBatches(eventId: string) {
-  await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertTransportEventAccess(eventId);
 
   return db
     .select()
     .from(transportBatches)
-    .where(eq(transportBatches.eventId, eventId))
+    .where(eq(transportBatches.eventId, scopedEventId))
     .orderBy(desc(transportBatches.serviceDate));
 }
 
 export async function getTransportBatch(eventId: string, batchId: string) {
-  await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertTransportEventAccess(eventId);
   parseTransportInput(batchIdSchema, batchId);
 
   const [batch] = await db
     .select()
     .from(transportBatches)
-    .where(withEventScope(transportBatches.eventId, eventId, eq(transportBatches.id, batchId)))
+    .where(withEventScope(transportBatches.eventId, scopedEventId, eq(transportBatches.id, batchId)))
     .limit(1);
 
   if (!batch) throw new Error('Transport batch not found');
@@ -174,22 +383,15 @@ export async function getTransportBatch(eventId: string, batchId: string) {
 // ══════════════════════════════════════════════════════════════
 
 export async function createVehicleAssignment(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
   const validated = parseTransportInput(createVehicleSchema, input);
 
-  // Verify batch exists and belongs to this event
-  const [batch] = await db
-    .select({ id: transportBatches.id })
-    .from(transportBatches)
-    .where(withEventScope(transportBatches.eventId, eventId, eq(transportBatches.id, validated.batchId)))
-    .limit(1);
-
-  if (!batch) throw new Error('Transport batch not found');
+  const batch = await assertBatchExistsForAssignment(scopedEventId, validated.batchId);
 
   const [vehicle] = await db
     .insert(vehicleAssignments)
     .values({
-      eventId,
+      eventId: scopedEventId,
       batchId: validated.batchId,
       vehicleLabel: validated.vehicleLabel,
       vehicleType: validated.vehicleType,
@@ -208,18 +410,38 @@ export async function createVehicleAssignment(eventId: string, input: unknown) {
     })
     .returning();
 
-  revalidatePath(`/events/${eventId}/transport`);
+  await writeAudit({
+    actorUserId: userId,
+    eventId: scopedEventId,
+    action: 'create',
+    resource: 'vehicle_assignment',
+    resourceId: vehicle.id,
+    meta: {
+      batchId: batch.id,
+      vehicleType: vehicle.vehicleType,
+      assignmentStatus: vehicle.assignmentStatus,
+      capacity: vehicle.capacity,
+    },
+  });
+
+  revalidatePath(`/events/${scopedEventId}/transport`);
   return vehicle;
 }
 
 export async function updateVehicleStatus(eventId: string, vehicleAssignmentId: string, newStatus: VehicleStatus) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
   parseTransportInput(vehicleIdSchema, vehicleAssignmentId);
 
   const [existing] = await db
-    .select()
+    .select({
+      id: vehicleAssignments.id,
+      eventId: vehicleAssignments.eventId,
+      batchId: vehicleAssignments.batchId,
+      assignmentStatus: vehicleAssignments.assignmentStatus,
+      updatedAt: vehicleAssignments.updatedAt,
+    })
     .from(vehicleAssignments)
-    .where(withEventScope(vehicleAssignments.eventId, eventId, eq(vehicleAssignments.id, vehicleAssignmentId)))
+    .where(withEventScope(vehicleAssignments.eventId, scopedEventId, eq(vehicleAssignments.id, vehicleAssignmentId)))
     .limit(1);
 
   if (!existing) throw new Error('Vehicle assignment not found');
@@ -234,21 +456,39 @@ export async function updateVehicleStatus(eventId: string, vehicleAssignmentId: 
   const [updated] = await db
     .update(vehicleAssignments)
     .set({ assignmentStatus: newStatus, updatedBy: userId, updatedAt: new Date() })
-    .where(eq(vehicleAssignments.id, vehicleAssignmentId))
+    .where(and(...buildVehicleWriteFilters(existing)))
     .returning();
 
-  revalidatePath(`/events/${eventId}/transport`);
+  if (!updated) {
+    throw new Error('Vehicle assignment changed. Refresh and try again.');
+  }
+
+  await writeAudit({
+    actorUserId: userId,
+    eventId: scopedEventId,
+    action: 'update',
+    resource: 'vehicle_assignment',
+    resourceId: updated.id,
+    meta: {
+      batchId: existing.batchId,
+      previousStatus: currentStatus,
+      currentStatus: updated.assignmentStatus,
+    },
+  });
+
+  revalidatePath(`/events/${scopedEventId}/transport`);
   return updated;
 }
 
 export async function getBatchVehicles(eventId: string, batchId: string) {
-  await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertTransportEventAccess(eventId);
+  parseTransportInput(batchIdSchema, batchId);
 
   return db
     .select()
     .from(vehicleAssignments)
     .where(
-      withEventScope(vehicleAssignments.eventId, eventId, eq(vehicleAssignments.batchId, batchId)),
+      withEventScope(vehicleAssignments.eventId, scopedEventId, eq(vehicleAssignments.batchId, batchId)),
     );
 }
 
@@ -257,22 +497,21 @@ export async function getBatchVehicles(eventId: string, batchId: string) {
 // ══════════════════════════════════════════════════════════════
 
 export async function assignPassenger(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
   const validated = parseTransportInput(assignPassengerSchema, input);
 
-  // Verify batch exists
-  const [batch] = await db
-    .select({ id: transportBatches.id })
-    .from(transportBatches)
-    .where(withEventScope(transportBatches.eventId, eventId, eq(transportBatches.id, validated.batchId)))
-    .limit(1);
-
-  if (!batch) throw new Error('Transport batch not found');
+  const batch = await assertBatchExistsForAssignment(scopedEventId, validated.batchId);
+  await assertTravelRecordBelongsToEventPerson(scopedEventId, validated.personId, validated.travelRecordId);
+  await assertVehicleBelongsToBatch(
+    scopedEventId,
+    validated.batchId,
+    validated.vehicleAssignmentId || null,
+  );
 
   const [assignment] = await db
     .insert(transportPassengerAssignments)
     .values({
-      eventId,
+      eventId: scopedEventId,
       batchId: validated.batchId,
       vehicleAssignmentId: validated.vehicleAssignmentId || null,
       personId: validated.personId,
@@ -283,21 +522,43 @@ export async function assignPassenger(eventId: string, input: unknown) {
     })
     .returning();
 
-  revalidatePath(`/events/${eventId}/transport`);
+  await writeAudit({
+    actorUserId: userId,
+    eventId: scopedEventId,
+    action: 'create',
+    resource: 'transport_passenger_assignment',
+    resourceId: assignment.id,
+    meta: {
+      batchId: batch.id,
+      vehicleAssignmentId: assignment.vehicleAssignmentId,
+      personId: assignment.personId,
+      travelRecordId: assignment.travelRecordId,
+      assignmentStatus: assignment.assignmentStatus,
+    },
+  });
+
+  revalidatePath(`/events/${scopedEventId}/transport`);
   return assignment;
 }
 
 export async function movePassenger(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
   const validated = parseTransportInput(movePassengerSchema, input);
 
   const [existing] = await db
-    .select()
+    .select({
+      id: transportPassengerAssignments.id,
+      eventId: transportPassengerAssignments.eventId,
+      batchId: transportPassengerAssignments.batchId,
+      vehicleAssignmentId: transportPassengerAssignments.vehicleAssignmentId,
+      assignmentStatus: transportPassengerAssignments.assignmentStatus,
+      updatedAt: transportPassengerAssignments.updatedAt,
+    })
     .from(transportPassengerAssignments)
     .where(
       withEventScope(
         transportPassengerAssignments.eventId,
-        eventId,
+        scopedEventId,
         eq(transportPassengerAssignments.id, validated.passengerAssignmentId),
       ),
     )
@@ -310,6 +571,7 @@ export async function movePassenger(eventId: string, input: unknown) {
 
   const newVehicleId = validated.targetVehicleAssignmentId || null;
   const newStatus: PassengerStatus = newVehicleId ? 'assigned' : 'pending';
+  await assertVehicleBelongsToBatch(scopedEventId, existing.batchId, newVehicleId);
 
   const [updated] = await db
     .update(transportPassengerAssignments)
@@ -318,24 +580,50 @@ export async function movePassenger(eventId: string, input: unknown) {
       assignmentStatus: newStatus,
       updatedAt: new Date(),
     })
-    .where(eq(transportPassengerAssignments.id, validated.passengerAssignmentId))
+    .where(and(...buildPassengerWriteFilters(existing)))
     .returning();
 
-  revalidatePath(`/events/${eventId}/transport`);
+  if (!updated) {
+    throw new Error('Passenger assignment changed. Refresh and try again.');
+  }
+
+  await writeAudit({
+    actorUserId: userId,
+    eventId: scopedEventId,
+    action: 'update',
+    resource: 'transport_passenger_assignment',
+    resourceId: updated.id,
+    meta: {
+      batchId: existing.batchId,
+      previousVehicleAssignmentId: existing.vehicleAssignmentId,
+      currentVehicleAssignmentId: updated.vehicleAssignmentId,
+      previousStatus: existing.assignmentStatus,
+      currentStatus: updated.assignmentStatus,
+    },
+  });
+
+  revalidatePath(`/events/${scopedEventId}/transport`);
   return updated;
 }
 
 export async function updatePassengerStatus(eventId: string, passengerAssignmentId: string, newStatus: PassengerStatus) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
   parseTransportInput(passengerIdSchema, passengerAssignmentId);
 
   const [existing] = await db
-    .select()
+    .select({
+      id: transportPassengerAssignments.id,
+      eventId: transportPassengerAssignments.eventId,
+      batchId: transportPassengerAssignments.batchId,
+      personId: transportPassengerAssignments.personId,
+      assignmentStatus: transportPassengerAssignments.assignmentStatus,
+      updatedAt: transportPassengerAssignments.updatedAt,
+    })
     .from(transportPassengerAssignments)
     .where(
       withEventScope(
         transportPassengerAssignments.eventId,
-        eventId,
+        scopedEventId,
         eq(transportPassengerAssignments.id, passengerAssignmentId),
       ),
     )
@@ -353,15 +641,34 @@ export async function updatePassengerStatus(eventId: string, passengerAssignment
   const [updated] = await db
     .update(transportPassengerAssignments)
     .set({ assignmentStatus: newStatus, updatedAt: new Date() })
-    .where(eq(transportPassengerAssignments.id, passengerAssignmentId))
+    .where(and(...buildPassengerWriteFilters(existing)))
     .returning();
 
-  revalidatePath(`/events/${eventId}/transport`);
+  if (!updated) {
+    throw new Error('Passenger assignment changed. Refresh and try again.');
+  }
+
+  await writeAudit({
+    actorUserId: userId,
+    eventId: scopedEventId,
+    action: 'update',
+    resource: 'transport_passenger_assignment',
+    resourceId: updated.id,
+    meta: {
+      batchId: existing.batchId,
+      personId: existing.personId,
+      previousStatus: currentStatus,
+      currentStatus: updated.assignmentStatus,
+    },
+  });
+
+  revalidatePath(`/events/${scopedEventId}/transport`);
   return updated;
 }
 
 export async function getBatchPassengers(eventId: string, batchId: string) {
-  await assertEventAccess(eventId);
+  const { eventId: scopedEventId } = await assertTransportEventAccess(eventId);
+  parseTransportInput(batchIdSchema, batchId);
 
   return db
     .select({
@@ -381,7 +688,7 @@ export async function getBatchPassengers(eventId: string, batchId: string) {
     .where(
       withEventScope(
         transportPassengerAssignments.eventId,
-        eventId,
+        scopedEventId,
         eq(transportPassengerAssignments.batchId, batchId),
       ),
     );

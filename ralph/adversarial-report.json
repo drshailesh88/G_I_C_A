@@ -1345,5 +1345,83 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/transport.ts",
+    "module": "src/lib/actions/transport.ts",
+    "attacked_at": "2026-04-17T10:54:38Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "route eventId=not-a-uuid on transport read/write actions",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "assignPassenger with event A batch and travelRecordId/vehicleAssignmentId from another event or a different batch",
+        "result": "succeeded"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "call transport mutations without write access",
+        "result": "blocked"
+      },
+      {
+        "category": "race_condition",
+        "payload": "stale updateTransportBatch/updateBatchStatus/updateVehicleStatus/movePassenger/updatePassengerStatus after a concurrent state change",
+        "result": "succeeded"
+      },
+      {
+        "category": "audit_bypass",
+        "payload": "create/update/status/move transport mutations and inspect side effects for audit log writes",
+        "result": "succeeded"
+      },
+      {
+        "category": "injection",
+        "payload": "HTML/SQL metacharacters in hubs, notes, vehicle labels, and pickup/drop notes",
+        "result": "blocked_by_zod_and_parameterized_queries"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized strings and malformed UUID foreign keys across batch/vehicle/passenger inputs",
+        "result": "blocked_by_zod_limits"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "Transport actions trusted the route eventId until after auth/database work. A malformed route eventId could reach assertEventAccess and read queries instead of failing fast at the action boundary.",
+        "fix": "Validated route event IDs with Zod before any auth or database access in transport read and write actions.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/transport.test.ts > createTransportBatch rejects a malformed route eventId before auth or database access; Read actions — auth > getEventTransportBatches rejects a malformed route eventId before auth or database access"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "assignPassenger only verified the batch ID, so direct callers could attach an active-event transport assignment to a travel record from another event/person or move it onto a vehicle from another event/batch.",
+        "fix": "Event-scoped the travelRecordId/personId pair and vehicleAssignmentId/batchId pair before insert or move, and rejected terminal target vehicles.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/transport.test.ts > assignPassenger rejects travel records from another event or person; assignPassenger rejects vehicle assignments from another batch; movePassenger rejects moving a passenger onto a vehicle from another batch"
+      },
+      {
+        "severity": "high",
+        "category": "race_condition",
+        "description": "Transport batch, vehicle, and passenger mutations fetched rows under event scope and then updated them by bare id. Concurrent state changes could therefore be silently overwritten by stale editors.",
+        "fix": "Added compare-and-swap update filters on eventId, current status, and updatedAt for batch, vehicle, and passenger writes; stale mutations now fail loudly.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/transport.test.ts > updateTransportBatch rejects stale batch updates after a concurrent change; updateBatchStatus rejects stale status writes after a concurrent change; updateVehicleStatus rejects stale vehicle status writes after a concurrent change; movePassenger rejects stale passenger moves after a concurrent change; updatePassengerStatus rejects stale passenger status writes after a concurrent change"
+      },
+      {
+        "severity": "high",
+        "category": "audit_bypass",
+        "description": "Every transport mutation completed without the mandatory audit-log write, leaving batch/vehicle/passenger changes invisible to the compliance trail required by project policy.",
+        "fix": "Wired writeAudit into every transport create/update/status/move mutation with resource-specific metadata.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/transport.test.ts > createTransportBatch writes an audit log on create; updateTransportBatch writes an audit log on update; updateBatchStatus writes an audit log on status update; createVehicleAssignment writes an audit log on create; updateVehicleStatus writes an audit log on status update; assignPassenger writes an audit log on create; movePassenger writes an audit log on move; updatePassengerStatus writes an audit log on status update"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

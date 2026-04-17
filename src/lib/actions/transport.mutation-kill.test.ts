@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockDb, mockRevalidatePath, mockAssertEventAccess } = vi.hoisted(() => ({
+const { mockDb, mockRevalidatePath, mockAssertEventAccess, mockWriteAudit } = vi.hoisted(() => ({
   mockDb: {
     select: vi.fn(),
     insert: vi.fn(),
@@ -8,6 +8,7 @@ const { mockDb, mockRevalidatePath, mockAssertEventAccess } = vi.hoisted(() => (
   },
   mockRevalidatePath: vi.fn(),
   mockAssertEventAccess: vi.fn(),
+  mockWriteAudit: vi.fn(),
 }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: vi.fn().mockResolvedValue({ userId: 'user_123' }) }));
@@ -15,6 +16,7 @@ vi.mock('@/lib/db', () => ({ db: mockDb }));
 vi.mock('next/cache', () => ({ revalidatePath: mockRevalidatePath }));
 vi.mock('@/lib/db/with-event-scope', () => ({ withEventScope: vi.fn() }));
 vi.mock('@/lib/auth/event-access', () => ({ assertEventAccess: mockAssertEventAccess }));
+vi.mock('@/lib/audit/write', () => ({ writeAudit: mockWriteAudit }));
 
 import {
   createTransportBatch,
@@ -578,7 +580,25 @@ describe('updateVehicleStatus — exact error messages and values', () => {
 // ══════════════════════════════════════════════════════════════
 describe('assignPassenger — exact insert values', () => {
   it('sets assignmentStatus to "assigned" when vehicleAssignmentId is provided', async () => {
-    chainedSelect([{ id: BATCH_ID }]);
+    const batchChain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([{ id: BATCH_ID, batchStatus: 'planned' }]),
+    };
+    const travelChain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([{ id: TRAVEL_ID }]),
+    };
+    const vehicleChain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([{ id: VEHICLE_ID, batchId: BATCH_ID, assignmentStatus: 'assigned' }]),
+    };
+    mockDb.select
+      .mockReturnValueOnce(batchChain)
+      .mockReturnValueOnce(travelChain)
+      .mockReturnValueOnce(vehicleChain);
     const insertChain = chainedInsert([{ id: PASSENGER_ID, assignmentStatus: 'assigned' }]);
 
     await assignPassenger(EVENT_ID, {
@@ -868,11 +888,11 @@ describe('Write actions pass requireWrite: true', () => {
 });
 
 // ══════════════════════════════════════════════════════════════
-// KILL ObjectLiteral on select({ id: ... }) in batch existence checks
-// Lines 170, 253: select projection must include id field
+// KILL ObjectLiteral on transport batch projection in existence checks
+// createVehicleAssignment / assignPassenger now need batch status for terminal-state blocking
 // ══════════════════════════════════════════════════════════════
 describe('Batch existence checks use select with id projection', () => {
-  it('createVehicleAssignment selects only id from transportBatches', async () => {
+  it('createVehicleAssignment selects the scoped batch fields it needs', async () => {
     const chain = {
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
@@ -891,16 +911,23 @@ describe('Batch existence checks use select with id projection', () => {
     const selectArg = mockDb.select.mock.calls[0][0];
     expect(selectArg).toBeDefined();
     expect(selectArg).toHaveProperty('id');
-    expect(Object.keys(selectArg)).toHaveLength(1);
+    expect(selectArg).toHaveProperty('eventId');
+    expect(selectArg).toHaveProperty('batchStatus');
+    expect(selectArg).toHaveProperty('updatedAt');
   });
 
-  it('assignPassenger selects only id from transportBatches', async () => {
-    const chain = {
+  it('assignPassenger selects the scoped batch fields it needs before validating travel linkage', async () => {
+    const batchChain = {
       from: vi.fn().mockReturnThis(),
       where: vi.fn().mockReturnThis(),
       limit: vi.fn().mockResolvedValue([{ id: BATCH_ID }]),
     };
-    mockDb.select.mockReturnValueOnce(chain);
+    const travelChain = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockReturnThis(),
+      limit: vi.fn().mockResolvedValue([{ id: TRAVEL_ID }]),
+    };
+    mockDb.select.mockReturnValueOnce(batchChain).mockReturnValueOnce(travelChain);
     chainedInsert([{ id: PASSENGER_ID, assignmentStatus: 'pending' }]);
 
     await assignPassenger(EVENT_ID, {
@@ -912,7 +939,9 @@ describe('Batch existence checks use select with id projection', () => {
     const selectArg = mockDb.select.mock.calls[0][0];
     expect(selectArg).toBeDefined();
     expect(selectArg).toHaveProperty('id');
-    expect(Object.keys(selectArg)).toHaveLength(1);
+    expect(selectArg).toHaveProperty('eventId');
+    expect(selectArg).toHaveProperty('batchStatus');
+    expect(selectArg).toHaveProperty('updatedAt');
   });
 });
 
