@@ -2571,5 +2571,57 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/exports/types.ts",
+    "module": "src/lib/exports/types.ts",
+    "attacked_at": "2026-04-17T16:23:37Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "type='__proto__' and type='constructor' checked via `type in EXPORT_TYPES`",
+        "result": "succeeded"
+      },
+      {
+        "category": "shared_state_mutation",
+        "payload": "EXPORT_TYPES['attendee-list'].label = 'Pwned'",
+        "result": "succeeded"
+      },
+      {
+        "category": "prototype_pollution",
+        "payload": "prototype-chain property lookup through a plain object export registry",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized type strings against the static metadata registry",
+        "result": "no_exploitable_failure_reproduced_in_static_lookup_module"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "invoke registry directly without Clerk context",
+        "result": "not_applicable_static_type_registry_has_no_auth_surface"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "EXPORT_TYPES was a normal object, so consumers validating with `type in EXPORT_TYPES` accepted prototype-chain keys like `__proto__`, `constructor`, and `toString` as if they were real export types. Malformed route params could therefore bypass the intended export-type allowlist and fail later instead of being rejected at the boundary.",
+        "fix": "Rebuilt the registry on a null-prototype object so inherited keys are never treated as valid export types.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/exports/types.test.ts > rejects prototype-chain keys as valid export types"
+      },
+      {
+        "severity": "medium",
+        "category": "shared_state_mutation",
+        "description": "The exported registry and its nested metadata objects were mutable process-wide. Any importer could rewrite labels or descriptions and poison later filenames, UI copy, or validation behavior for subsequent requests.",
+        "fix": "Deep-froze the export registry and every metadata entry so shared runtime state cannot be tampered with after module load.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/exports/types.test.ts > does not allow shared runtime mutation of export metadata"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

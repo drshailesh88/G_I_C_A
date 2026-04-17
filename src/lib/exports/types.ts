@@ -11,29 +11,33 @@ export type ExportType =
   | 'faculty-responsibilities'
   | 'attendance-report';
 
-export const EXPORT_TYPES: Record<ExportType, { label: string; description: string }> = {
-  'attendee-list': {
-    label: 'Attendee List',
-    description: 'All registrations with person details and status',
-  },
-  'travel-roster': {
-    label: 'Travel Roster',
-    description: 'All travel records with journey details',
-  },
-  'rooming-list': {
-    label: 'Rooming List',
-    description: 'Accommodation records grouped by hotel',
-  },
-  'transport-plan': {
-    label: 'Transport Plan',
-    description: 'Transport batches with vehicles and passenger assignments',
-  },
-  'faculty-responsibilities': {
-    label: 'Faculty Responsibilities',
-    description: 'Session assignments per faculty member',
-  },
-  'attendance-report': {
-    label: 'Attendance Report',
-    description: 'Check-in records with method and timestamp',
-  },
-};
+type ExportMeta = Readonly<{ label: string; description: string }>;
+
+export const EXPORT_TYPES: Readonly<Record<ExportType, ExportMeta>> = Object.freeze(
+  Object.assign(Object.create(null) as Record<ExportType, ExportMeta>, {
+    'attendee-list': Object.freeze({
+      label: 'Attendee List',
+      description: 'All registrations with person details and status',
+    }),
+    'travel-roster': Object.freeze({
+      label: 'Travel Roster',
+      description: 'All travel records with journey details',
+    }),
+    'rooming-list': Object.freeze({
+      label: 'Rooming List',
+      description: 'Accommodation records grouped by hotel',
+    }),
+    'transport-plan': Object.freeze({
+      label: 'Transport Plan',
+      description: 'Transport batches with vehicles and passenger assignments',
+    }),
+    'faculty-responsibilities': Object.freeze({
+      label: 'Faculty Responsibilities',
+      description: 'Session assignments per faculty member',
+    }),
+    'attendance-report': Object.freeze({
+      label: 'Attendance Report',
+      description: 'Check-in records with method and timestamp',
+    }),
+  }),
+);

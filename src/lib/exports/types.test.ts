@@ -2,6 +2,21 @@ import { describe, it, expect } from 'vitest';
 import { EXPORT_TYPES } from './types';
 
 describe('EXPORT_TYPES', () => {
+  it('rejects prototype-chain keys as valid export types', () => {
+    expect('__proto__' in EXPORT_TYPES).toBe(false);
+    expect('constructor' in EXPORT_TYPES).toBe(false);
+    expect('toString' in EXPORT_TYPES).toBe(false);
+  });
+
+  it('does not allow shared runtime mutation of export metadata', () => {
+    const attendeeMeta = EXPORT_TYPES['attendee-list'] as { label: string; description: string };
+
+    expect(Reflect.set(attendeeMeta, 'label', 'Pwned')).toBe(false);
+    expect(attendeeMeta.label).toBe('Attendee List');
+    expect(Object.isFrozen(attendeeMeta)).toBe(true);
+    expect(Object.isFrozen(EXPORT_TYPES)).toBe(true);
+  });
+
   it('attendee-list has correct label and description', () => {
     expect(EXPORT_TYPES['attendee-list'].label).toBe('Attendee List');
     expect(EXPORT_TYPES['attendee-list'].description).toBe(
