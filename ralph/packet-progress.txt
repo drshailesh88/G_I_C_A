@@ -1,0 +1,29 @@
+# Ralph Packet Progress
+
+## Packet Patterns
+
+<!-- Reusable patterns discovered during packet builds. -->
+
+## Patterns
+
+- DB mock for queries ending in `.where()` (no `.limit()`): add `.then()` and `.catch()` to the chain object so it is thenable. Registration tests use `mockReturnThis()` but that only works when the query ends in `.limit()` or `.orderBy()`.
+- `withEventScope` should be mocked in unit tests (`vi.mock('@/lib/db/with-event-scope', ...)`) so Drizzle column references are not needed in tests.
+- Upsert pattern: select existing → if found update, else insert. Test the two branches separately with `chainedSelect([])` (no record) vs `chainedSelect([{id:'...'}])`.
+
+## Iteration log
+
+<!-- Dated entries per completed packet build. -->
+
+## 2026-04-17T23:10:50Z — PKT-A-001 — Per-event user assignment UI and actions
+
+- Story ID: p2-per-event-user-assignment
+- Implemented: `getEventAssignments`, `createEventAssignment` (upsert), `deactivateEventAssignment` server actions; validation schema; `/events/[eventId]/team` page + client; "Team" tile in event workspace ADMIN section.
+- Files changed:
+  - src/lib/validations/event-assignments.ts (new)
+  - src/lib/actions/event-assignments.ts (new)
+  - src/lib/actions/event-assignments.test.ts (new — 18 tests, all pass)
+  - src/app/(app)/events/[eventId]/team/page.tsx (new)
+  - src/app/(app)/events/[eventId]/team/event-team-client.tsx (new)
+  - src/app/(app)/events/[eventId]/event-workspace-client.tsx (modified — Team tile)
+- Tests run: `npm run test:run` — 18 new tests pass, pre-existing failures unchanged (2 files / 8 tests in travel-cascade, unrelated).
+- Risks/follow-ups: UI shows "Team" tile to all roles but page redirects non-super-admins; role-based tile hiding deferred to a future packet.

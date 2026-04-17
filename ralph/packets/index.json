@@ -1,0 +1,575 @@
+{
+  "version": 1,
+  "pipeline": "ralph-packets",
+  "updated_at": "2026-04-17T00:00:00Z",
+  "current_packet_id": "PKT-A-001",
+  "packets": [
+    {
+      "packet_id": "PKT-A-001",
+      "story_id": "p2-per-event-user-assignment",
+      "title": "Per-event user assignment UI and actions",
+      "bucket": "A",
+      "module": "events",
+      "priority": 1,
+      "status": "NEEDS_REVIEW",
+      "packet_file": "ralph/packets/PKT-A-001-p2-per-event-user-assignment.md",
+      "spec_status": "frozen",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": "4a63d37bde196cca4f64c4a26525d951d2dc5b06",
+      "qa_commit": null,
+      "last_status_at": "2026-04-17T23:10:50.000000Z",
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-A-002",
+      "story_id": "p1-event-edit-settings",
+      "title": "Event settings page and updateEvent action",
+      "bucket": "A",
+      "module": "events",
+      "priority": 2,
+      "status": "READY",
+      "packet_file": "ralph/packets/PKT-A-002-p1-event-edit-settings.md",
+      "spec_status": "frozen",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": [
+        "PKT-A-001"
+      ]
+    },
+    {
+      "packet_id": "PKT-A-003",
+      "story_id": "p2-registration-settings-ui",
+      "title": "Per-event registration settings UI",
+      "bucket": "A",
+      "module": "registration",
+      "priority": 3,
+      "status": "READY",
+      "packet_file": "ralph/packets/PKT-A-003-p2-registration-settings-ui.md",
+      "spec_status": "frozen",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": [
+        "PKT-A-002"
+      ]
+    },
+    {
+      "packet_id": "PKT-A-004",
+      "story_id": "p2-faculty-accept-creates-registration",
+      "title": "Faculty acceptance creates or confirms registration",
+      "bucket": "A",
+      "module": "program",
+      "priority": 4,
+      "status": "READY",
+      "packet_file": "ralph/packets/PKT-A-004-p2-faculty-accept-creates-registration.md",
+      "spec_status": "frozen",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": [
+        "PKT-A-001",
+        "PKT-A-003"
+      ]
+    },
+    {
+      "packet_id": "PKT-A-005",
+      "story_id": "p3-registration-cancel-cascade",
+      "title": "Registration cancellation cascade creates linked red flags",
+      "bucket": "A",
+      "module": "registration",
+      "priority": 5,
+      "status": "READY",
+      "packet_file": "ralph/packets/PKT-A-005-p3-registration-cancel-cascade.md",
+      "spec_status": "frozen",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-A-006",
+      "story_id": "p2-m04-public-attendee-program",
+      "title": "Public attendee-facing scientific program route",
+      "bucket": "A",
+      "module": "program",
+      "priority": 20,
+      "status": "BACKLOG",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-A-007",
+      "story_id": "p4-m13-template-list-hub",
+      "title": "Communications hub page",
+      "bucket": "A",
+      "module": "communications",
+      "priority": 21,
+      "status": "BACKLOG",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-A-008",
+      "story_id": "p4-m39-template-editor",
+      "title": "Communications template editor",
+      "bucket": "A",
+      "module": "communications",
+      "priority": 22,
+      "status": "BACKLOG",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": [
+        "PKT-A-007"
+      ]
+    },
+    {
+      "packet_id": "PKT-A-009",
+      "story_id": "p4-m53-automation-triggers",
+      "title": "Automation triggers management page",
+      "bucket": "A",
+      "module": "communications",
+      "priority": 23,
+      "status": "BACKLOG",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": [
+        "PKT-A-007"
+      ]
+    },
+    {
+      "packet_id": "PKT-A-010",
+      "story_id": "p2-m52-version-history",
+      "title": "Program version history page",
+      "bucket": "A",
+      "module": "program",
+      "priority": 24,
+      "status": "BACKLOG",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-A-011",
+      "story_id": "p2-program-revised-responsibility-notifications",
+      "title": "Revised responsibility notifications on publish",
+      "bucket": "A",
+      "module": "program",
+      "priority": 25,
+      "status": "BACKLOG",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": [
+        "PKT-A-010"
+      ]
+    },
+    {
+      "packet_id": "PKT-A-012",
+      "story_id": "p2-program-aggregated-faculty-email",
+      "title": "Aggregated faculty email and WhatsApp bundle",
+      "bucket": "A",
+      "module": "program",
+      "priority": 26,
+      "status": "BACKLOG",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": [
+        "PKT-A-011"
+      ]
+    },
+    {
+      "packet_id": "PKT-A-013",
+      "story_id": "p1-transfer-event-ownership",
+      "title": "Transfer event ownership workflow",
+      "bucket": "A",
+      "module": "events",
+      "priority": 27,
+      "status": "BACKLOG",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": [
+        "PKT-A-001"
+      ]
+    },
+    {
+      "packet_id": "PKT-A-014",
+      "story_id": "p2-people-merge-duplicates-ui",
+      "title": "Merge duplicate people UI",
+      "bucket": "A",
+      "module": "people",
+      "priority": 28,
+      "status": "BACKLOG",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-A-015",
+      "story_id": "p2-people-change-history",
+      "title": "People change history backed by audit log",
+      "bucket": "A",
+      "module": "people",
+      "priority": 29,
+      "status": "BACKLOG",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-B-001",
+      "story_id": "p3-transport-suggest-batches",
+      "title": "Suggested transport batches",
+      "bucket": "B",
+      "module": "transport",
+      "priority": 101,
+      "status": "DEFERRED",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-B-002",
+      "story_id": "p5-m58-attendance-report-page",
+      "title": "Attendance report drill-down page",
+      "bucket": "B",
+      "module": "qr",
+      "priority": 102,
+      "status": "DEFERRED",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-B-003",
+      "story_id": "p6-event-duplicate",
+      "title": "Duplicate event structure",
+      "bucket": "B",
+      "module": "events",
+      "priority": 103,
+      "status": "DEFERRED",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-B-004",
+      "story_id": "p6-m51-event-field-builder",
+      "title": "Event field builder",
+      "bucket": "B",
+      "module": "events",
+      "priority": 104,
+      "status": "DEFERRED",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-B-005",
+      "story_id": "p6-m47-global-reports",
+      "title": "Global cross-event reports",
+      "bucket": "B",
+      "module": "reports",
+      "priority": 105,
+      "status": "DEFERRED",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-B-006",
+      "story_id": "p3-travel-csv-import",
+      "title": "Travel CSV import",
+      "bucket": "B",
+      "module": "travel",
+      "priority": 106,
+      "status": "DEFERRED",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-B-007",
+      "story_id": "p3-accommodation-csv-import",
+      "title": "Accommodation CSV import",
+      "bucket": "B",
+      "module": "accommodation",
+      "priority": 107,
+      "status": "DEFERRED",
+      "packet_file": null,
+      "spec_status": "audit-only",
+      "wireframe_status": "not_required",
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-C-001",
+      "story_id": "p2-d7-terms-privacy-page",
+      "title": "Terms and privacy pages",
+      "bucket": "C",
+      "module": "public",
+      "priority": 6,
+      "status": "READY",
+      "packet_file": "ralph/packets/PKT-C-001-p2-d7-terms-privacy-page.md",
+      "spec_status": "frozen",
+      "wireframe_status": "frozen",
+      "wireframe_refs": {
+        "design_decisions": ".planning/wireframes/bucket-c-design-decisions.md#1-p2-d7-terms-privacy-page-d7",
+        "pencil_file": "pencil-welcome-desktop.pen",
+        "pencil_node_ids": {
+          "mobile": "3uxaf",
+          "desktop": "DLN2Z"
+        },
+        "exports": [
+          ".planning/wireframes/exports/PKT-C-001-terms-privacy-mobile.png",
+          ".planning/wireframes/exports/PKT-C-001-terms-privacy-desktop.png"
+        ]
+      },
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-C-002",
+      "story_id": "p2-d5-speaker-profile",
+      "title": "Speaker profile public view",
+      "bucket": "C",
+      "module": "public",
+      "priority": 30,
+      "status": "READY",
+      "packet_file": "ralph/packets/PKT-C-002-p2-d5-speaker-profile.md",
+      "spec_status": "frozen",
+      "wireframe_status": "frozen",
+      "wireframe_refs": {
+        "design_decisions": ".planning/wireframes/bucket-c-design-decisions.md#2-p2-d5-speaker-profile-d5",
+        "pencil_file": "pencil-welcome-desktop.pen",
+        "pencil_node_ids": {
+          "mobile": "x6bY7",
+          "desktop": "qzAXE"
+        },
+        "exports": [
+          ".planning/wireframes/exports/PKT-C-002-speaker-profile-mobile.png",
+          ".planning/wireframes/exports/PKT-C-002-speaker-profile-desktop.png"
+        ]
+      },
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-C-003",
+      "story_id": "p2-d1-preview-revised-emails",
+      "title": "Preview revised emails modal",
+      "bucket": "C",
+      "module": "program",
+      "priority": 31,
+      "status": "BACKLOG",
+      "packet_file": "ralph/packets/PKT-C-003-p2-d1-preview-revised-emails.md",
+      "spec_status": "frozen-blocked-on-dependency",
+      "wireframe_status": "frozen",
+      "wireframe_refs": {
+        "design_decisions": ".planning/wireframes/bucket-c-design-decisions.md#6-p2-d1-preview-revised-emails-d1",
+        "pencil_file": "pencil-welcome-desktop.pen",
+        "pencil_node_ids": {
+          "mobile": "dR9PB",
+          "desktop": "SIxo3"
+        },
+        "exports": [
+          ".planning/wireframes/exports/PKT-C-003-preview-emails-mobile.png",
+          ".planning/wireframes/exports/PKT-C-003-preview-emails-desktop.png"
+        ]
+      },
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": [
+        "PKT-A-010"
+      ]
+    },
+    {
+      "packet_id": "PKT-C-004",
+      "story_id": "p2-m30-conflict-fix-action",
+      "title": "Conflict fix CTA destination state",
+      "bucket": "C",
+      "module": "program",
+      "priority": 7,
+      "status": "READY",
+      "packet_file": "ralph/packets/PKT-C-004-p2-m30-conflict-fix-action.md",
+      "spec_status": "frozen",
+      "wireframe_status": "frozen",
+      "wireframe_refs": {
+        "design_decisions": ".planning/wireframes/bucket-c-design-decisions.md#4-p2-m30-conflict-fix-action-d2",
+        "pencil_file": "pencil-welcome-desktop.pen",
+        "pencil_node_ids": {
+          "mobile": "260IB",
+          "desktop": "0ubnB"
+        },
+        "exports": [
+          ".planning/wireframes/exports/PKT-C-004-conflict-fix-mobile.png",
+          ".planning/wireframes/exports/PKT-C-004-conflict-fix-desktop.png"
+        ]
+      },
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-C-005",
+      "story_id": "p6-d8-notification-drawer",
+      "title": "Notification drawer",
+      "bucket": "C",
+      "module": "dashboard",
+      "priority": 8,
+      "status": "READY",
+      "packet_file": "ralph/packets/PKT-C-005-p6-d8-notification-drawer.md",
+      "spec_status": "frozen",
+      "wireframe_status": "frozen",
+      "wireframe_refs": {
+        "design_decisions": ".planning/wireframes/bucket-c-design-decisions.md#5-p6-d8-notification-drawer-d8",
+        "pencil_file": "pencil-welcome-desktop.pen",
+        "pencil_node_ids": {
+          "mobile": "LRyQn",
+          "desktop": "cbjTH"
+        },
+        "exports": [
+          ".planning/wireframes/exports/PKT-C-005-notification-drawer-mobile.png",
+          ".planning/wireframes/exports/PKT-C-005-notification-drawer-desktop.png"
+        ]
+      },
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    },
+    {
+      "packet_id": "PKT-C-006",
+      "story_id": "p3-ops-resend-logistics-notification",
+      "title": "Ops resend logistics notification actions",
+      "bucket": "C",
+      "module": "logistics",
+      "priority": 9,
+      "status": "READY",
+      "packet_file": "ralph/packets/PKT-C-006-p3-ops-resend-logistics-notification.md",
+      "spec_status": "frozen",
+      "wireframe_status": "frozen",
+      "wireframe_refs": {
+        "design_decisions": ".planning/wireframes/bucket-c-design-decisions.md#3-p3-ops-resend-logistics-notification",
+        "pencil_file": "pencil-welcome-desktop.pen",
+        "pencil_node_ids": {
+          "mobile": "X0gnj",
+          "desktop": "C7Lmp"
+        },
+        "exports": [
+          ".planning/wireframes/exports/PKT-C-006-resend-notification-mobile.png",
+          ".planning/wireframes/exports/PKT-C-006-resend-notification-desktop.png"
+        ]
+      },
+      "linear_issue_id": null,
+      "build_commit": null,
+      "qa_commit": null,
+      "last_status_at": null,
+      "depends_on": []
+    }
+  ]
+}
