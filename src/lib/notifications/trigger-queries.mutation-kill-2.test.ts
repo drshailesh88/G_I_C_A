@@ -7,6 +7,10 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const VALID_EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
+const VALID_TRIGGER_ID = '660e8400-e29b-41d4-a716-446655440000';
+const VALID_TEMPLATE_ID = '770e8400-e29b-41d4-a716-446655440000';
+
 const { mockReturning, mockLimit, mockOrderBy, mockWhere, mockSet, mockValues, mockFrom, mockInnerJoin, dbChain } = vi.hoisted(() => {
   const mockReturning = vi.fn();
   const mockLimit = vi.fn();
@@ -25,8 +29,11 @@ const { mockReturning, mockLimit, mockOrderBy, mockWhere, mockSet, mockValues, m
   chain.values = mockValues.mockReturnValue(chain);
   chain.set = mockSet.mockReturnValue(chain);
   chain.where = mockWhere.mockReturnValue(chain);
-  chain.returning = mockReturning.mockResolvedValue([{ id: 'trigger-1' }]);
-  chain.limit = mockLimit.mockResolvedValue([{ id: 'trigger-1' }]);
+  chain.returning = mockReturning.mockResolvedValue([{ id: '660e8400-e29b-41d4-a716-446655440000' }]);
+  chain.limit = mockLimit.mockResolvedValue([{
+    id: '770e8400-e29b-41d4-a716-446655440000',
+    eventId: '550e8400-e29b-41d4-a716-446655440000',
+  }]);
   chain.orderBy = mockOrderBy.mockReturnValue(chain);
   chain.innerJoin = mockInnerJoin.mockReturnValue(chain);
   return { mockReturning, mockLimit, mockOrderBy, mockWhere, mockSet, mockValues, mockFrom, mockInnerJoin, dbChain: chain };
@@ -41,7 +48,8 @@ import { updateTrigger, listTriggersForEvent } from './trigger-queries';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockReturning.mockResolvedValue([{ id: 'trigger-1' }]);
+  mockReturning.mockResolvedValue([{ id: VALID_TRIGGER_ID }]);
+  mockLimit.mockResolvedValue([{ id: VALID_TEMPLATE_ID, eventId: VALID_EVENT_ID }]);
   mockWhere.mockReturnValue(dbChain);
   mockOrderBy.mockReturnValue(dbChain);
   mockFrom.mockReturnValue(dbChain);
@@ -49,61 +57,61 @@ beforeEach(() => {
 
 describe('updateTrigger — negative assertions', () => {
   it('does not set guardConditionJson when not provided', async () => {
-    await updateTrigger('t-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTrigger(VALID_TRIGGER_ID, { eventId: VALID_EVENT_ID, updatedBy: 'u' });
     const s = mockSet.mock.calls[0][0];
     expect(s).not.toHaveProperty('guardConditionJson');
   });
 
   it('does not set templateId when not provided', async () => {
-    await updateTrigger('t-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTrigger(VALID_TRIGGER_ID, { eventId: VALID_EVENT_ID, updatedBy: 'u' });
     expect(mockSet.mock.calls[0][0]).not.toHaveProperty('templateId');
   });
 
   it('does not set recipientResolution when not provided', async () => {
-    await updateTrigger('t-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTrigger(VALID_TRIGGER_ID, { eventId: VALID_EVENT_ID, updatedBy: 'u' });
     expect(mockSet.mock.calls[0][0]).not.toHaveProperty('recipientResolution');
   });
 
   it('does not set delaySeconds when not provided', async () => {
-    await updateTrigger('t-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTrigger(VALID_TRIGGER_ID, { eventId: VALID_EVENT_ID, updatedBy: 'u' });
     expect(mockSet.mock.calls[0][0]).not.toHaveProperty('delaySeconds');
   });
 
   it('does not set idempotencyScope when not provided', async () => {
-    await updateTrigger('t-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTrigger(VALID_TRIGGER_ID, { eventId: VALID_EVENT_ID, updatedBy: 'u' });
     expect(mockSet.mock.calls[0][0]).not.toHaveProperty('idempotencyScope');
   });
 
   it('does not set isEnabled when not provided', async () => {
-    await updateTrigger('t-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTrigger(VALID_TRIGGER_ID, { eventId: VALID_EVENT_ID, updatedBy: 'u' });
     expect(mockSet.mock.calls[0][0]).not.toHaveProperty('isEnabled');
   });
 
   it('does not set priority when not provided', async () => {
-    await updateTrigger('t-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTrigger(VALID_TRIGGER_ID, { eventId: VALID_EVENT_ID, updatedBy: 'u' });
     expect(mockSet.mock.calls[0][0]).not.toHaveProperty('priority');
   });
 
   it('does not set notes when not provided', async () => {
-    await updateTrigger('t-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTrigger(VALID_TRIGGER_ID, { eventId: VALID_EVENT_ID, updatedBy: 'u' });
     expect(mockSet.mock.calls[0][0]).not.toHaveProperty('notes');
   });
 });
 
 describe('listTriggersForEvent — no filters path', () => {
   it('returns results with no filters', async () => {
-    mockOrderBy.mockReturnValue(Promise.resolve([{ id: 't1' }]));
+    mockOrderBy.mockReturnValue(Promise.resolve([{ id: VALID_TRIGGER_ID }]));
 
-    const result = await listTriggersForEvent('evt-1');
+    const result = await listTriggersForEvent(VALID_EVENT_ID);
 
-    expect(result).toEqual([{ id: 't1' }]);
+    expect(result).toEqual([{ id: VALID_TRIGGER_ID }]);
   });
 
   it('uses all three filters together', async () => {
     const { eq } = await import('drizzle-orm');
     mockOrderBy.mockReturnValue(Promise.resolve([]));
 
-    await listTriggersForEvent('evt-1', {
+    await listTriggersForEvent(VALID_EVENT_ID, {
       triggerEventType: 'registration.created',
       channel: 'email',
       isEnabled: true,

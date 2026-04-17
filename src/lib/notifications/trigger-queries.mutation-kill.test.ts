@@ -6,6 +6,13 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const VALID_EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
+const OTHER_EVENT_ID = '550e8400-e29b-41d4-a716-446655440001';
+const VALID_TRIGGER_ID = '660e8400-e29b-41d4-a716-446655440000';
+const MISSING_TRIGGER_ID = '660e8400-e29b-41d4-a716-446655440001';
+const VALID_TEMPLATE_ID = '770e8400-e29b-41d4-a716-446655440000';
+const OTHER_TEMPLATE_ID = '770e8400-e29b-41d4-a716-446655440001';
+
 const { mockReturning, mockLimit, mockOrderBy, mockWhere, mockSet, mockValues, mockFrom, mockInnerJoin, dbChain } = vi.hoisted(() => {
   const mockReturning = vi.fn();
   const mockLimit = vi.fn();
@@ -25,8 +32,11 @@ const { mockReturning, mockLimit, mockOrderBy, mockWhere, mockSet, mockValues, m
   chain.values = mockValues.mockReturnValue(chain);
   chain.set = mockSet.mockReturnValue(chain);
   chain.where = mockWhere.mockReturnValue(chain);
-  chain.returning = mockReturning.mockResolvedValue([{ id: 'trigger-1' }]);
-  chain.limit = mockLimit.mockResolvedValue([{ id: 'trigger-1' }]);
+  chain.returning = mockReturning.mockResolvedValue([{ id: '660e8400-e29b-41d4-a716-446655440000' }]);
+  chain.limit = mockLimit.mockResolvedValue([{
+    id: '770e8400-e29b-41d4-a716-446655440000',
+    eventId: '550e8400-e29b-41d4-a716-446655440000',
+  }]);
   chain.orderBy = mockOrderBy.mockReturnValue(chain);
   chain.innerJoin = mockInnerJoin.mockReturnValue(chain);
 
@@ -80,8 +90,8 @@ import {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockReturning.mockResolvedValue([{ id: 'trigger-1' }]);
-  mockLimit.mockResolvedValue([{ id: 'trigger-1' }]);
+  mockReturning.mockResolvedValue([{ id: VALID_TRIGGER_ID }]);
+  mockLimit.mockResolvedValue([{ id: VALID_TEMPLATE_ID, eventId: VALID_EVENT_ID }]);
   mockWhere.mockReturnValue(dbChain);
   mockOrderBy.mockReturnValue(dbChain);
   mockFrom.mockReturnValue(dbChain);
@@ -91,11 +101,11 @@ beforeEach(() => {
 describe('createTrigger', () => {
   it('maps all input fields with correct defaults', async () => {
     await createTrigger({
-      eventId: 'evt-1',
+      eventId: VALID_EVENT_ID,
       triggerEventType: 'registration.created',
       guardConditionJson: { minAge: 18 },
       channel: 'email',
-      templateId: 'tpl-1',
+      templateId: VALID_TEMPLATE_ID,
       recipientResolution: 'person.email',
       delaySeconds: 60,
       idempotencyScope: 'custom_scope',
@@ -107,11 +117,11 @@ describe('createTrigger', () => {
 
     expect(mockValues).toHaveBeenCalledWith(
       expect.objectContaining({
-        eventId: 'evt-1',
+        eventId: VALID_EVENT_ID,
         triggerEventType: 'registration.created',
         guardConditionJson: { minAge: 18 },
         channel: 'email',
-        templateId: 'tpl-1',
+        templateId: VALID_TEMPLATE_ID,
         recipientResolution: 'person.email',
         delaySeconds: 60,
         idempotencyScope: 'custom_scope',
@@ -126,10 +136,10 @@ describe('createTrigger', () => {
 
   it('applies ?? defaults for optional fields', async () => {
     await createTrigger({
-      eventId: 'evt-1',
+      eventId: VALID_EVENT_ID,
       triggerEventType: 'test',
       channel: 'email',
-      templateId: 'tpl-1',
+      templateId: VALID_TEMPLATE_ID,
       recipientResolution: 'person.email',
       createdBy: 'user-1',
     });
@@ -146,8 +156,8 @@ describe('createTrigger', () => {
 
 describe('updateTrigger', () => {
   it('always sets updatedBy and updatedAt', async () => {
-    await updateTrigger('trigger-1', {
-      eventId: 'evt-1',
+    await updateTrigger(VALID_TRIGGER_ID, {
+      eventId: VALID_EVENT_ID,
       updatedBy: 'user-2',
     });
 
@@ -157,10 +167,10 @@ describe('updateTrigger', () => {
   });
 
   it('conditionally sets each field when provided', async () => {
-    await updateTrigger('trigger-1', {
-      eventId: 'evt-1',
+    await updateTrigger(VALID_TRIGGER_ID, {
+      eventId: VALID_EVENT_ID,
       guardConditionJson: { x: 1 },
-      templateId: 'tpl-2',
+      templateId: OTHER_TEMPLATE_ID,
       recipientResolution: 'person.phone',
       delaySeconds: 120,
       idempotencyScope: 'new_scope',
@@ -172,7 +182,7 @@ describe('updateTrigger', () => {
 
     const setArg = mockSet.mock.calls[0][0];
     expect(setArg.guardConditionJson).toEqual({ x: 1 });
-    expect(setArg.templateId).toBe('tpl-2');
+    expect(setArg.templateId).toBe(OTHER_TEMPLATE_ID);
     expect(setArg.recipientResolution).toBe('person.phone');
     expect(setArg.delaySeconds).toBe(120);
     expect(setArg.idempotencyScope).toBe('new_scope');
@@ -184,8 +194,8 @@ describe('updateTrigger', () => {
   it('returns null when no row matches', async () => {
     mockReturning.mockResolvedValueOnce([]);
 
-    const result = await updateTrigger('nonexistent', {
-      eventId: 'evt-1',
+    const result = await updateTrigger(MISSING_TRIGGER_ID, {
+      eventId: VALID_EVENT_ID,
       updatedBy: 'user-2',
     });
 
@@ -195,8 +205,8 @@ describe('updateTrigger', () => {
   it('uses withEventScope for event isolation', async () => {
     const { withEventScope } = await import('@/lib/db/with-event-scope');
 
-    await updateTrigger('trigger-1', {
-      eventId: 'evt-1',
+    await updateTrigger(VALID_TRIGGER_ID, {
+      eventId: VALID_EVENT_ID,
       updatedBy: 'user-2',
     });
 
@@ -206,19 +216,19 @@ describe('updateTrigger', () => {
 
 describe('listTriggersForEvent', () => {
   it('returns triggers for an event', async () => {
-    mockOrderBy.mockReturnValue(Promise.resolve([{ id: 'trigger-1' }]));
+    mockOrderBy.mockReturnValue(Promise.resolve([{ id: VALID_TRIGGER_ID }]));
 
-    const result = await listTriggersForEvent('evt-1');
+    const result = await listTriggersForEvent(VALID_EVENT_ID);
 
     expect(dbChain.select).toHaveBeenCalled();
-    expect(result).toEqual([{ id: 'trigger-1' }]);
+    expect(result).toEqual([{ id: VALID_TRIGGER_ID }]);
   });
 
   it('applies triggerEventType filter', async () => {
     const { eq } = await import('drizzle-orm');
     mockOrderBy.mockReturnValue(Promise.resolve([]));
 
-    await listTriggersForEvent('evt-1', { triggerEventType: 'registration.created' });
+    await listTriggersForEvent(VALID_EVENT_ID, { triggerEventType: 'registration.created' });
 
     expect(eq).toHaveBeenCalled();
   });
@@ -226,7 +236,7 @@ describe('listTriggersForEvent', () => {
   it('applies channel filter', async () => {
     mockOrderBy.mockReturnValue(Promise.resolve([]));
 
-    await listTriggersForEvent('evt-1', { channel: 'email' });
+    await listTriggersForEvent(VALID_EVENT_ID, { channel: 'email' });
 
     expect(mockWhere).toHaveBeenCalled();
   });
@@ -235,7 +245,7 @@ describe('listTriggersForEvent', () => {
     const { eq } = await import('drizzle-orm');
     mockOrderBy.mockReturnValue(Promise.resolve([]));
 
-    await listTriggersForEvent('evt-1', { isEnabled: true });
+    await listTriggersForEvent(VALID_EVENT_ID, { isEnabled: true });
 
     expect(eq).toHaveBeenCalled();
   });
@@ -243,7 +253,7 @@ describe('listTriggersForEvent', () => {
   it('applies isEnabled=false filter', async () => {
     mockOrderBy.mockReturnValue(Promise.resolve([]));
 
-    await listTriggersForEvent('evt-1', { isEnabled: false });
+    await listTriggersForEvent(VALID_EVENT_ID, { isEnabled: false });
 
     expect(mockWhere).toHaveBeenCalled();
   });
@@ -255,13 +265,13 @@ describe('getActiveTriggersForEventType', () => {
     // Return rows that pass the post-filter
     mockOrderBy.mockReturnValue(
       Promise.resolve([
-        { trigger: { id: 't1' }, template: { eventId: 'evt-1' } },
+        { trigger: { id: 't1' }, template: { eventId: VALID_EVENT_ID } },
         { trigger: { id: 't2' }, template: { eventId: null } }, // global
-        { trigger: { id: 't3' }, template: { eventId: 'evt-other' } }, // cross-event
+        { trigger: { id: 't3' }, template: { eventId: OTHER_EVENT_ID } }, // cross-event
       ]),
     );
 
-    const result = await getActiveTriggersForEventType('evt-1', 'registration.created');
+    const result = await getActiveTriggersForEventType(VALID_EVENT_ID, 'registration.created');
 
     expect(withEventScope).toHaveBeenCalled();
     expect(mockInnerJoin).toHaveBeenCalled();
@@ -274,15 +284,17 @@ describe('getActiveTriggersForEventType', () => {
 
 describe('getTriggerById', () => {
   it('returns trigger scoped by eventId', async () => {
-    const result = await getTriggerById('trigger-1', 'evt-1');
+    mockLimit.mockResolvedValueOnce([{ id: VALID_TRIGGER_ID }]);
 
-    expect(result).toEqual({ id: 'trigger-1' });
+    const result = await getTriggerById(VALID_TRIGGER_ID, VALID_EVENT_ID);
+
+    expect(result).toEqual({ id: VALID_TRIGGER_ID });
   });
 
   it('returns null when not found', async () => {
     mockLimit.mockResolvedValueOnce([]);
 
-    const result = await getTriggerById('nonexistent', 'evt-1');
+    const result = await getTriggerById(VALID_TRIGGER_ID, VALID_EVENT_ID);
 
     expect(result).toBeNull();
   });
@@ -290,17 +302,17 @@ describe('getTriggerById', () => {
 
 describe('deleteTrigger', () => {
   it('deletes and returns the trigger', async () => {
-    const result = await deleteTrigger('trigger-1', 'evt-1');
+    const result = await deleteTrigger(VALID_TRIGGER_ID, VALID_EVENT_ID);
 
     expect(dbChain.delete).toHaveBeenCalled();
     expect(mockReturning).toHaveBeenCalled();
-    expect(result).toEqual({ id: 'trigger-1' });
+    expect(result).toEqual({ id: VALID_TRIGGER_ID });
   });
 
   it('returns null when trigger not found', async () => {
     mockReturning.mockResolvedValueOnce([]);
 
-    const result = await deleteTrigger('nonexistent', 'evt-1');
+    const result = await deleteTrigger(VALID_TRIGGER_ID, VALID_EVENT_ID);
 
     expect(result).toBeNull();
   });

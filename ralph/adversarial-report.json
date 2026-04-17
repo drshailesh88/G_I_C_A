@@ -3399,5 +3399,67 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/trigger-queries.ts",
+    "module": "src/lib/notifications/trigger-queries.ts",
+    "attacked_at": "2026-04-17T19:00:07Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "eventId=not-a-uuid passed to listTriggersForEvent",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "triggerId=not-a-uuid passed to getTriggerById/deleteTrigger/updateTrigger",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "createTrigger for event A with templateId owned by event B",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "updateTrigger in event A to templateId owned by event B",
+        "result": "succeeded"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "SQL metacharacters in triggerEventType and notes",
+        "result": "blocked_by_parameterized_drizzle_queries"
+      },
+      {
+        "category": "race_condition",
+        "payload": "concurrent update/delete against the same trigger row",
+        "result": "no_new_exploitable_failure_in_single_statement_helpers"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "direct helper invocation without higher-layer auth",
+        "result": "not_applicable_query_helper_has_no_auth_context"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "createTrigger and updateTrigger trusted any UUID-shaped templateId and never verified template ownership. A direct caller could persist an automation trigger in one event that referenced another event's notification template, leaving a poisoned cross-tenant link in production state.",
+        "fix": "Validated templateId shape and required the referenced template to belong to the active event or be a global default before insert/update.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/trigger-queries.adversarial.test.ts > rejects template IDs from another event during trigger creation; src/lib/notifications/trigger-queries.adversarial.test.ts > rejects template IDs from another event during trigger updates"
+      },
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "The helper only validated eventId on some read/write paths and never validated trigger IDs, so malformed IDs could reach UUID-backed queries or inserts before the module failed closed.",
+        "fix": "Added explicit eventId, triggerId, and templateId UUID validation inside the query helper and reused event-scoped conditions for list/read/delete paths.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/trigger-queries.adversarial.test.ts > rejects malformed event IDs before listing trigger rows; src/lib/notifications/trigger-queries.adversarial.test.ts > rejects malformed trigger IDs before reading a trigger"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

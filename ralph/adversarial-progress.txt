@@ -70,6 +70,7 @@
 - Background workers and queue consumers are security boundaries too. Validate queued payload enums and tenant IDs, cap batch sizes, refuse forged cleanup lock keys, and stream large archive uploads instead of buffering whole artifacts in memory.
 - Global seeders that create `eventId = null` defaults cannot rely on a partial `(event_id, channel, key)` unique index plus read-then-insert loops. Postgres permits multiple `NULL` keys there, so concurrent seed runs need transaction-scoped locking and atomic rollback or they will duplicate global rows and leave half-seeded state on failure.
 - Notification-template query helpers must require an explicit `eventId | null` scope on every exported read and validate both event/template UUIDs before building Drizzle conditions. Optional unscoped lookup paths become cross-tenant read gadgets, and read-then-write version bumps collapse under concurrent content edits.
+- Automation-trigger query helpers must validate runtime UUIDs and event-scope referenced template IDs themselves. Otherwise direct callers can persist triggers that point at another event's template or push malformed IDs into UUID-backed queries before action-layer Zod runs.
 
 ## Iteration log
 
@@ -391,3 +392,9 @@
 - Attacks tried: 4
 - Bugs found: 1
 - Key finding: `withTimeout` trusted malformed timer values, and Node coerced `Infinity`, overflowed integers, `NaN`, zero, negatives, and fractional delays into near-immediate aborts, letting bad caller input force provider timeouts.
+
+## 2026-04-17T19:00:07Z — src/lib/notifications/trigger-queries.ts — trigger ID and template scope hardening
+- Verdict: hardened
+- Attacks tried: 7
+- Bugs found: 2
+- Key finding: the trigger query helpers accepted malformed runtime UUIDs and let event A triggers reference event B templates, so direct callers could store cross-tenant trigger/template links or hit UUID-backed queries before the module failed closed.

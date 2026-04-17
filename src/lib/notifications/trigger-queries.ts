@@ -7,9 +7,49 @@
 
 import { db } from '@/lib/db';
 import { automationTriggers, notificationTemplates } from '@/lib/db/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
+import { eventIdSchema } from '@/lib/validations/event';
 import type { Channel } from './types';
+import { z } from 'zod';
+
+const automationTriggerIdSchema = z.string().uuid('Invalid automation trigger ID');
+const notificationTemplateIdSchema = z.string().uuid('Invalid notification template ID');
+
+function parseEventId(eventId: string) {
+  return eventIdSchema.parse(eventId);
+}
+
+function parseTriggerId(triggerId: string) {
+  return automationTriggerIdSchema.parse(triggerId);
+}
+
+function parseTemplateId(templateId: string) {
+  return notificationTemplateIdSchema.parse(templateId);
+}
+
+async function assertTemplateInScope(templateId: string, eventId: string) {
+  const scopedTemplateId = parseTemplateId(templateId);
+
+  const [template] = await db
+    .select({
+      id: notificationTemplates.id,
+      eventId: notificationTemplates.eventId,
+    })
+    .from(notificationTemplates)
+    .where(eq(notificationTemplates.id, scopedTemplateId))
+    .limit(1);
+
+  if (!template) {
+    throw new Error('Notification template not found');
+  }
+
+  if (template.eventId !== eventId && template.eventId !== null) {
+    throw new Error('Notification template is outside the active event scope');
+  }
+
+  return scopedTemplateId;
+}
 
 export type CreateTriggerInput = {
   eventId: string;
@@ -41,14 +81,17 @@ export type UpdateTriggerInput = {
 
 /** Create a new automation trigger */
 export async function createTrigger(input: CreateTriggerInput) {
+  const scopedEventId = parseEventId(input.eventId);
+  const scopedTemplateId = await assertTemplateInScope(input.templateId, scopedEventId);
+
   const [trigger] = await db
     .insert(automationTriggers)
     .values({
-      eventId: input.eventId,
+      eventId: scopedEventId,
       triggerEventType: input.triggerEventType,
       guardConditionJson: input.guardConditionJson ?? null,
       channel: input.channel,
-      templateId: input.templateId,
+      templateId: scopedTemplateId,
       recipientResolution: input.recipientResolution,
       delaySeconds: input.delaySeconds ?? 0,
       idempotencyScope: input.idempotencyScope ?? 'per_person_per_trigger_entity_per_channel',
@@ -65,13 +108,17 @@ export async function createTrigger(input: CreateTriggerInput) {
 
 /** Update a trigger by ID */
 export async function updateTrigger(triggerId: string, input: UpdateTriggerInput) {
+  const scopedEventId = parseEventId(input.eventId);
+  const scopedTriggerId = parseTriggerId(triggerId);
   const updateData: Record<string, unknown> = {
     updatedBy: input.updatedBy,
     updatedAt: new Date(),
   };
 
   if (input.guardConditionJson !== undefined) updateData.guardConditionJson = input.guardConditionJson;
-  if (input.templateId !== undefined) updateData.templateId = input.templateId;
+  if (input.templateId !== undefined) {
+    updateData.templateId = await assertTemplateInScope(input.templateId, scopedEventId);
+  }
   if (input.recipientResolution !== undefined) updateData.recipientResolution = input.recipientResolution;
   if (input.delaySeconds !== undefined) updateData.delaySeconds = input.delaySeconds;
   if (input.idempotencyScope !== undefined) updateData.idempotencyScope = input.idempotencyScope;
@@ -85,8 +132,8 @@ export async function updateTrigger(triggerId: string, input: UpdateTriggerInput
     .where(
       withEventScope(
         automationTriggers.eventId,
-        input.eventId,
-        eq(automationTriggers.id, triggerId),
+        scopedEventId,
+        eq(automationTriggers.id, scopedTriggerId),
       ),
     )
     .returning();
@@ -103,21 +150,24 @@ export async function listTriggersForEvent(
     isEnabled?: boolean;
   },
 ) {
-  const conditions = [eq(automationTriggers.eventId, eventId)];
-  if (filters?.triggerEventType) {
-    conditions.push(eq(automationTriggers.triggerEventType, filters.triggerEventType));
-  }
-  if (filters?.channel) {
-    conditions.push(eq(automationTriggers.channel, filters.channel));
-  }
-  if (filters?.isEnabled !== undefined) {
-    conditions.push(eq(automationTriggers.isEnabled, filters.isEnabled));
-  }
+  const scopedEventId = parseEventId(eventId);
 
   return db
     .select()
     .from(automationTriggers)
-    .where(and(...conditions))
+    .where(
+      withEventScope(
+        automationTriggers.eventId,
+        scopedEventId,
+        filters?.triggerEventType
+          ? eq(automationTriggers.triggerEventType, filters.triggerEventType)
+          : undefined,
+        filters?.channel ? eq(automationTriggers.channel, filters.channel) : undefined,
+        filters?.isEnabled !== undefined
+          ? eq(automationTriggers.isEnabled, filters.isEnabled)
+          : undefined,
+      ),
+    )
     .orderBy(desc(automationTriggers.createdAt));
 }
 
@@ -126,6 +176,7 @@ export async function getActiveTriggersForEventType(
   eventId: string,
   triggerEventType: string,
 ) {
+  const scopedEventId = parseEventId(eventId);
   // FIX #3: Also scope the joined template to the same event (or global defaults)
   // Prevents cross-event template leakage via malicious trigger rows
   const rows = await db
@@ -141,7 +192,7 @@ export async function getActiveTriggersForEventType(
     .where(
       withEventScope(
         automationTriggers.eventId,
-        eventId,
+        scopedEventId,
         eq(automationTriggers.triggerEventType, triggerEventType),
         eq(automationTriggers.isEnabled, true),
       ),
@@ -150,20 +201,23 @@ export async function getActiveTriggersForEventType(
 
   // Post-filter: only allow templates that belong to this event or are global defaults
   return rows.filter(({ template }) =>
-    template.eventId === eventId || template.eventId === null
+    template.eventId === scopedEventId || template.eventId === null
   );
 }
 
 /** Get a single trigger by ID (event-scoped) */
 export async function getTriggerById(triggerId: string, eventId: string) {
+  const scopedEventId = parseEventId(eventId);
+  const scopedTriggerId = parseTriggerId(triggerId);
+
   const [trigger] = await db
     .select()
     .from(automationTriggers)
     .where(
       withEventScope(
         automationTriggers.eventId,
-        eventId,
-        eq(automationTriggers.id, triggerId),
+        scopedEventId,
+        eq(automationTriggers.id, scopedTriggerId),
       ),
     )
     .limit(1);
@@ -173,13 +227,16 @@ export async function getTriggerById(triggerId: string, eventId: string) {
 
 /** Delete a trigger (event-scoped) */
 export async function deleteTrigger(triggerId: string, eventId: string) {
+  const scopedEventId = parseEventId(eventId);
+  const scopedTriggerId = parseTriggerId(triggerId);
+
   const [deleted] = await db
     .delete(automationTriggers)
     .where(
       withEventScope(
         automationTriggers.eventId,
-        eventId,
-        eq(automationTriggers.id, triggerId),
+        scopedEventId,
+        eq(automationTriggers.id, scopedTriggerId),
       ),
     )
     .returning();
