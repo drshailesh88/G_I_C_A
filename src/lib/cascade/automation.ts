@@ -161,18 +161,56 @@ function resolveRecipientPersonId(
 
 /** Strip sensitive fields from payload before passing as template variables */
 const SENSITIVE_KEYS = new Set([
-  'accessToken', 'refreshToken', 'passwordResetToken', 'apiKey',
-  'secret', 'password', 'token', 'sessionToken', 'confirmationToken',
+  'accesstoken', 'refreshtoken', 'passwordresettoken', 'apikey',
+  'secret', 'password', 'token', 'sessiontoken', 'confirmationtoken',
 ]);
 
 function sanitizePayloadForVariables(
   payload: Record<string, unknown>,
 ): Record<string, unknown> {
-  const sanitized: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(payload)) {
-    if (!SENSITIVE_KEYS.has(key)) {
-      sanitized[key] = value;
+  return sanitizeValue(payload, new WeakMap<object, unknown>()) as Record<string, unknown>;
+}
+
+function sanitizeValue(
+  value: unknown,
+  seen: WeakMap<object, unknown>,
+): unknown {
+  if (Array.isArray(value)) {
+    if (seen.has(value)) {
+      return seen.get(value);
     }
+
+    const sanitized: unknown[] = [];
+    seen.set(value, sanitized);
+    for (const item of value) {
+      sanitized.push(sanitizeValue(item, seen));
+    }
+    return sanitized;
   }
-  return sanitized;
+
+  if (isPlainObject(value)) {
+    if (seen.has(value)) {
+      return seen.get(value);
+    }
+
+    const sanitized: Record<string, unknown> = {};
+    seen.set(value, sanitized);
+    for (const [key, child] of Object.entries(value)) {
+      if (!SENSITIVE_KEYS.has(key.toLowerCase())) {
+        sanitized[key] = sanitizeValue(child, seen);
+      }
+    }
+    return sanitized;
+  }
+
+  return value;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }

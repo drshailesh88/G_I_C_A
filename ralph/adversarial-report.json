@@ -1753,5 +1753,54 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/cascade/automation.ts",
+    "module": "src/lib/cascade/automation.ts",
+    "attacked_at": "2026-04-17T13:17:32Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "info_leakage",
+        "payload": "nested accessToken/apiKey/token/password values inside objects and arrays in the automation payload",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "payload without personId for trigger_person recipient resolution",
+        "result": "blocked"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "unsupported recipientResolution such as ops_team",
+        "result": "blocked"
+      },
+      {
+        "category": "idempotency_collision",
+        "payload": "multiple matching triggers for the same event/entity/channel",
+        "result": "blocked_by_trigger_specific_idempotency_key_suffix"
+      },
+      {
+        "category": "infinite_loop",
+        "payload": "source=automation on a domain event that otherwise matches an active trigger",
+        "result": "blocked"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "event-scoped trigger lookup with payload fields from another tenant/person",
+        "result": "no_exploitable_failure_in_automation_layer"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "info_leakage",
+        "description": "sanitizePayloadForVariables only removed exact top-level sensitive keys. Nested accessToken/apiKey/token/password values inside cascade payload objects and arrays were forwarded into notification variables, which the notification service renders and persists to renderedVariablesJson in the audit log.",
+        "fix": "Replaced the shallow filter with a recursive, cycle-safe sanitizer that strips sensitive keys case-insensitively at any nesting depth before dispatch.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/cascade/automation-dispatch.test.ts > strips nested sensitive fields before forwarding automation variables"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

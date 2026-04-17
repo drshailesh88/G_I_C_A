@@ -252,6 +252,44 @@ describe('handleDomainEvent → real notification', () => {
     expect(vars).not.toHaveProperty('passwordResetToken');
   });
 
+  it('strips nested sensitive fields before forwarding automation variables', async () => {
+    mockGetActiveTriggersForEventType.mockResolvedValue([activeTrigger]);
+
+    await handleDomainEvent({
+      eventId,
+      triggerEventType: 'conference/travel.saved',
+      actor,
+      payload: {
+        personId: 'person-1',
+        recipientEmail: 'test@test.com',
+        session: {
+          user: 'alice',
+          accessToken: 'nested-secret',
+          profile: {
+            apiKey: 'profile-secret',
+            city: 'Mumbai',
+          },
+        },
+        attendees: [
+          { personId: 'person-2', token: 'row-secret' },
+          { nested: { safe: 'ok', password: 'hidden' } },
+        ],
+      },
+    });
+
+    const vars = mockSendNotification.mock.calls[0][0].variables;
+    expect(vars.session).toStrictEqual({
+      user: 'alice',
+      profile: {
+        city: 'Mumbai',
+      },
+    });
+    expect(vars.attendees).toStrictEqual([
+      { personId: 'person-2' },
+      { nested: { safe: 'ok' } },
+    ]);
+  });
+
   it('includes trigger ID in idempotency key to prevent collisions (Codex fix)', async () => {
     const trigger2 = {
       ...activeTrigger,

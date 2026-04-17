@@ -40,10 +40,17 @@
 - Transport assignment actions must event-scope both the `travelRecordId`/`personId` pair and the target `vehicleAssignmentId`/`batchId` pair. UUID-shaped foreign keys alone let direct calls graft passengers onto another event’s travel or the wrong batch.
 - QR payload helpers must enforce the same length budget and canonical URL shape as the attendance validators. If they trust URL normalization or unbounded base URLs, malformed `../checkin`/duplicate-param payloads and self-invalidating oversized QR codes slip through.
 - Shared event auth helpers must validate UUID event scopes themselves and require a real event row even for super-admin bypasses. Trusting callers or bypassing existence checks lets malformed or phantom event IDs reach downstream auth/DB code.
+- Automation payload sanitizers must recurse through nested objects and arrays. Top-level-only filtering leaks tokens/passwords into template variables and persisted notification logs.
 
 ## Iteration log
 
 <!-- Dated entries per feature attacked. -->
+## 2026-04-17T13:17:32Z — src/lib/cascade/automation.ts — automation payload secret scrubbing hardening
+- Verdict: hardened
+- Attacks tried: 6
+- Bugs found: 1
+- Key finding: automation dispatch only scrubbed top-level secrets, so nested tokens/passwords in cascade payloads flowed into rendered notification variables and the persisted notification audit log.
+
 ## 2026-04-17T08:32:38Z — src/lib/actions/notifications.ts — notifications action RBAC hardening
 - Verdict: hardened
 - Attacks tried: 6
