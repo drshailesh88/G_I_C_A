@@ -7,6 +7,7 @@
 - DLQ and queue-drain helpers must validate queued record shape per item, preserve partial success when later items are corrupt, and cap caller-controlled batch sizes. One poison entry or oversized batch count otherwise turns recovery code into a data-loss and Redis-churn path.
 - Code-seeded registries must be deeply frozen before export. Mutable module-level arrays and nested lists let one runtime caller poison later seed/render behavior for the whole process and can even grow the shared registry with forged entries.
 - Runtime lookup registries used for `key in registry` validation must use null-prototype, immutable objects. Plain object registries inherit `__proto__`, `constructor`, and `toString`, which lets malformed route params pass validation and lets one runtime caller poison metadata for later requests.
+- Webhook/object parser boundaries must only read own properties from plain or null-prototype objects. Prototype-backed payload fields and plain-object registries can otherwise parse forged events, including `__proto__` keys resolving to `Object.prototype` as fake status metadata.
 - Redis-backed provider/state helpers must exact-match a small allowlist before building keys. Whitespace-padded, unknown, or oversized provider strings otherwise create parallel key namespaces, bypass open-circuit state, and spray unbounded Redis keys.
 - Webhook correlation lookups must scope provider message IDs by provider, not message ID alone. The schema only guarantees uniqueness for `(provider, providerMessageId)`, so same-channel providers that emit the same upstream ID can otherwise advance the wrong notification log.
 - Notification provider adapters are security boundaries too: validate event-scoped attachment storage keys and restrict outbound display names/custom headers before building provider payloads, or direct callers can sign cross-event private files and inject provider-level email headers.
@@ -419,3 +420,9 @@
 - Attacks tried: 6
 - Bugs found: 1
 - Key finding: webhook ingest wrote the forensic delivery row before the status CAS, so duplicate or regressive replays still grew `notification_delivery_events`, and malformed provider timestamps could keep otherwise valid signed payloads bouncing through error handling.
+
+## 2026-04-17T19:38:31Z — src/lib/notifications/webhook-parsers.ts — prototype-chain parser hardening
+- Verdict: hardened
+- Attacks tried: 6
+- Bugs found: 1
+- Key finding: the webhook parsers trusted inherited payload fields and a plain-object Resend event registry, so malformed payloads like `type="__proto__"` or prototype-backed objects parsed as legitimate webhook status updates.

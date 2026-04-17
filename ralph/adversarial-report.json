@@ -3606,5 +3606,54 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/webhook-parsers.ts",
+    "module": "src/lib/notifications/webhook-parsers.ts",
+    "attacked_at": "2026-04-17T19:38:31Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "Resend payload with type='__proto__' and otherwise valid data.email_id",
+        "result": "succeeded"
+      },
+      {
+        "category": "prototype_pollution",
+        "payload": "Resend payload whose type/data/email_id only exist on the prototype chain",
+        "result": "succeeded"
+      },
+      {
+        "category": "prototype_pollution",
+        "payload": "Evolution payload whose event/data/key.id/update.status only exist on the prototype chain",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized unrelated payload branches around the shallow fields parsed by this module",
+        "result": "blocked_by_constant_depth_field_access_no_exploitable_failure"
+      },
+      {
+        "category": "auth_bypass",
+        "payload": "not_applicable_module_has_no_auth_or_role_boundary",
+        "result": "not_applicable"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "not_applicable_module_has_no_event_scope_inputs",
+        "result": "not_applicable"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "prototype_pollution",
+        "description": "The webhook parsers trusted inherited properties on payload objects and used a plain-object Resend event registry. A malformed payload with `type: \"__proto__\"` parsed with `eventType = Object.prototype`, and prototype-backed payload objects parsed as legitimate webhook updates even though the provider data was not actually present as own fields.",
+        "fix": "Restricted parser inputs to plain/null-prototype records, read only own properties for every nested field, and moved status/event registries to immutable null-prototype maps so prototype-chain keys cannot resolve as valid webhook metadata.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/webhook-parsers.adversarial.test.ts > rejects Resend event types that only resolve through the registry prototype chain; src/lib/notifications/webhook-parsers.adversarial.test.ts > rejects Resend payload fields supplied only through the payload prototype chain; src/lib/notifications/webhook-parsers.adversarial.test.ts > rejects Evolution payload fields supplied only through the payload prototype chain"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
