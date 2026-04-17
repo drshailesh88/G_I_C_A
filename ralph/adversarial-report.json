@@ -246,5 +246,108 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/branding.ts",
+    "module": "src/lib/actions/branding.ts",
+    "attacked_at": "2026-04-17T05:49:35Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "call updateEventBranding with logoStorageKey/headerImageStorageKey pointing at branding/{OTHER_EVENT_ID}/... then call getBrandingImageUrls",
+        "result": "succeeded"
+      },
+      {
+        "category": "path_traversal",
+        "payload": "call uploadBrandingImage with runtime imageType '../../header'",
+        "result": "succeeded"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "upload image/svg+xml containing <script> and onload",
+        "result": "succeeded"
+      },
+      {
+        "category": "file_upload_spoofing",
+        "payload": "upload file declared image/png whose bytes are plain text",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "read event.branding, concurrently update the same event, then save stale merged JSON",
+        "result": "succeeded"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "call update/upload/delete branding with read-only access",
+        "result": "blocked"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "upload files over 5MB and submit max-length branding text fields",
+        "result": "blocked"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "SQL metacharacters in branding text fields and storage key strings",
+        "result": "blocked_by_zod_and_parameterized_drizzle_queries"
+      },
+      {
+        "category": "prototype_pollution",
+        "payload": "__proto__ and constructor.prototype fields in updateEventBranding input",
+        "result": "blocked_by_update_schema_stripping_unknown_fields"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "invalid eventId, invalid colors, wrong MIME type, empty file, malformed storage keys",
+        "result": "blocked"
+      },
+      {
+        "category": "unicode_and_max_length",
+        "payload": "oversized sender/footer/prefix strings and control/unicode payloads",
+        "result": "blocked_by_zod_length_limits_or_stored_as_text"
+      },
+      {
+        "category": "info_leakage",
+        "payload": "missing event, invalid MIME, stale update, and missing file error paths",
+        "result": "blocked_by_non_sensitive_error_messages"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "updateEventBranding accepted arbitrary logo/header storage keys, and getBrandingImageUrls signed whatever was stored. A write-capable user could point one event at another event's R2 branding object and receive a signed URL for it.",
+        "fix": "Validate direct storage-key updates against branding/{eventId}/{logo|header}/, sanitize legacy stored branding before returning it, and refuse to sign out-of-scope keys.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/branding.test.ts > rejects direct cross-event logo storage keys before updating; does not sign stored image keys outside the active event scope"
+      },
+      {
+        "severity": "medium",
+        "category": "path_traversal",
+        "description": "uploadBrandingImage trusted the TypeScript-only imageType union at runtime. A direct caller could pass '../../header', producing a logical storage key outside the intended logo/header prefix.",
+        "fix": "Validate imageType at runtime before auth, storage, or database work.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/branding.test.ts > rejects runtime-invalid image types before auth or storage work"
+      },
+      {
+        "severity": "high",
+        "category": "xss_file_upload",
+        "description": "Branding upload trusted file.type and allowed active SVG or spoofed image content to be stored and later rendered/signed as event branding.",
+        "fix": "Validate PNG/JPEG/WebP magic bytes and reject active SVG constructs including script tags, event-handler attributes, javascript: URLs, foreignObject, iframe, object, and embed.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/branding.test.ts > rejects spoofed PNG uploads whose bytes are not PNG data; rejects active SVG payloads before upload"
+      },
+      {
+        "severity": "medium",
+        "category": "race_condition",
+        "description": "updateEventBranding read the current branding JSON, merged a partial update, then wrote the full JSON object by event id only. Concurrent updates could silently clobber each other.",
+        "fix": "Select events.updatedAt and use a compare-and-swap update filter with returning(); stale writes now fail before cache revalidation.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/branding.test.ts > blocks stale branding saves that race with another update"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

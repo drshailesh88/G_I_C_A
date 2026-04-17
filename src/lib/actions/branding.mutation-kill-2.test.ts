@@ -40,6 +40,7 @@ vi.mock('drizzle-orm', async () => {
   const actual = await vi.importActual<typeof import('drizzle-orm')>('drizzle-orm');
   return {
     ...actual,
+    and: vi.fn((...args: unknown[]) => ({ type: 'and', args })),
     eq: vi.fn((...args: unknown[]) => ({ type: 'eq', args })),
   };
 });
@@ -60,6 +61,18 @@ import {
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 
+function validPngBytes(size = 16) {
+  const bytes = new Uint8Array(Math.max(size, 8));
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  return bytes;
+}
+
+function validJpegBytes(size = 16) {
+  const bytes = new Uint8Array(Math.max(size, 4));
+  bytes.set([0xff, 0xd8, 0xff, 0xdb]);
+  return bytes;
+}
+
 function mockDbSelectChain(result: unknown) {
   const chain = {
     from: vi.fn().mockReturnThis(),
@@ -73,7 +86,8 @@ function mockDbSelectChain(result: unknown) {
 function mockDbUpdateChain() {
   const chain = {
     set: vi.fn().mockReturnThis(),
-    where: vi.fn().mockResolvedValue(undefined),
+    where: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue([{ id: EVENT_ID }]),
   };
   mockDb.update.mockReturnValue(chain);
   return chain;
@@ -134,7 +148,7 @@ describe('uploadBrandingImage: requireWrite enforcement', () => {
 
   it('first assertEventAccess call passes requireWrite: true (not false, not empty)', async () => {
     setupUploadMocks();
-    const file = new File(['data'], 'logo.png', { type: 'image/png' });
+    const file = new File([validPngBytes()], 'logo.png', { type: 'image/png' });
     const formData = new FormData();
     formData.append('file', file);
 
@@ -187,7 +201,7 @@ describe('uploadBrandingImage: requireWrite enforcement', () => {
 
   it('logo imageType sets logoStorageKey not headerImageStorageKey (L121)', async () => {
     setupUploadMocks();
-    const file = new File(['data'], 'logo.png', { type: 'image/png' });
+    const file = new File([validPngBytes()], 'logo.png', { type: 'image/png' });
     const formData = new FormData();
     formData.append('file', file);
 
@@ -204,7 +218,7 @@ describe('uploadBrandingImage: requireWrite enforcement', () => {
 
   it('header imageType sets headerImageStorageKey not logoStorageKey (L121)', async () => {
     setupUploadMocks();
-    const file = new File(['data'], 'banner.jpg', { type: 'image/jpeg' });
+    const file = new File([validJpegBytes()], 'banner.jpg', { type: 'image/jpeg' });
     const formData = new FormData();
     formData.append('file', file);
 

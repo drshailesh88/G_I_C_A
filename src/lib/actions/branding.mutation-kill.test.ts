@@ -40,6 +40,7 @@ vi.mock('drizzle-orm', async () => {
   const actual = await vi.importActual<typeof import('drizzle-orm')>('drizzle-orm');
   return {
     ...actual,
+    and: vi.fn((...args: unknown[]) => ({ type: 'and', args })),
     eq: vi.fn((...args: unknown[]) => ({ type: 'eq', args })),
   };
 });
@@ -62,6 +63,12 @@ import {
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 
+function validPngBytes(size = 16) {
+  const bytes = new Uint8Array(Math.max(size, 8));
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  return bytes;
+}
+
 function mockDbSelectChain(result: unknown) {
   const chain = {
     from: vi.fn().mockReturnThis(),
@@ -75,7 +82,8 @@ function mockDbSelectChain(result: unknown) {
 function mockDbUpdateChain() {
   const chain = {
     set: vi.fn().mockReturnThis(),
-    where: vi.fn().mockResolvedValue(undefined),
+    where: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue([{ id: EVENT_ID }]),
   };
   mockDb.update.mockReturnValue(chain);
   return chain;
@@ -224,7 +232,7 @@ describe('uploadBrandingImage mutation kills', () => {
 
   it('requires requireWrite access (L97 BooleanLiteral)', async () => {
     setupUploadMocks();
-    const file = new File(['data'], 'logo.png', { type: 'image/png' });
+    const file = new File([validPngBytes()], 'logo.png', { type: 'image/png' });
     const formData = new FormData();
     formData.append('file', file);
 
@@ -245,7 +253,7 @@ describe('uploadBrandingImage mutation kills', () => {
 
   it('rejects file at exactly 5MB boundary (L108 EqualityOperator > vs >=)', async () => {
     // Exactly 5MB should NOT throw (boundary: > not >=)
-    const exactFile = new File([new Uint8Array(5 * 1024 * 1024)], 'exact.png', { type: 'image/png' });
+    const exactFile = new File([validPngBytes(5 * 1024 * 1024)], 'exact.png', { type: 'image/png' });
     const exactFormData = new FormData();
     exactFormData.append('file', exactFile);
     setupUploadMocks();
@@ -267,7 +275,7 @@ describe('uploadBrandingImage mutation kills', () => {
 
   it('maps imageType "logo" to logoStorageKey field (L121 EqualityOperator)', async () => {
     setupUploadMocks();
-    const file = new File(['data'], 'logo.png', { type: 'image/png' });
+    const file = new File([validPngBytes()], 'logo.png', { type: 'image/png' });
     const formData = new FormData();
     formData.append('file', file);
 
@@ -282,7 +290,7 @@ describe('uploadBrandingImage mutation kills', () => {
 
   it('maps imageType "header" to headerImageStorageKey field (L121 EqualityOperator)', async () => {
     setupUploadMocks();
-    const file = new File(['data'], 'header.png', { type: 'image/png' });
+    const file = new File([validPngBytes()], 'header.png', { type: 'image/png' });
     const formData = new FormData();
     formData.append('file', file);
 
@@ -294,12 +302,12 @@ describe('uploadBrandingImage mutation kills', () => {
     const updateChainCalls = mockDb.update.mock.results[0].value;
     const setArg = updateChainCalls.set.mock.calls[0][0];
     expect(setArg.branding).toHaveProperty('headerImageStorageKey');
-    expect(setArg.branding).not.toHaveProperty('logoStorageKey');
+    expect(setArg.branding.logoStorageKey).toBe('');
   });
 
   it('returns storageKey and signedUrl (L122 ObjectLiteral)', async () => {
     setupUploadMocks();
-    const file = new File(['data'], 'logo.png', { type: 'image/png' });
+    const file = new File([validPngBytes()], 'logo.png', { type: 'image/png' });
     const formData = new FormData();
     formData.append('file', file);
 
@@ -314,7 +322,7 @@ describe('uploadBrandingImage mutation kills', () => {
 
   it('calls storage.getSignedUrl with 3600 seconds TTL', async () => {
     setupUploadMocks();
-    const file = new File(['data'], 'logo.png', { type: 'image/png' });
+    const file = new File([validPngBytes()], 'logo.png', { type: 'image/png' });
     const formData = new FormData();
     formData.append('file', file);
 
@@ -351,23 +359,23 @@ describe('deleteBrandingImage mutation kills', () => {
   });
 
   it('calls storage.delete when storageKey exists (L143 ConditionalExpression)', async () => {
-    mockDbSelectChain({ branding: { logoStorageKey: 'branding/evt/logo/old.png' } });
+    mockDbSelectChain({ branding: { logoStorageKey: `branding/${EVENT_ID}/logo/old.png` } });
     mockDbUpdateChain();
     mockStorageDelete.mockResolvedValue(undefined);
 
     await deleteBrandingImage(EVENT_ID, 'logo');
 
-    expect(mockStorageDelete).toHaveBeenCalledWith('branding/evt/logo/old.png');
+    expect(mockStorageDelete).toHaveBeenCalledWith(`branding/${EVENT_ID}/logo/old.png`);
   });
 
   it('deletes header image using headerImageStorageKey field (L140)', async () => {
-    mockDbSelectChain({ branding: { headerImageStorageKey: 'branding/evt/header/bg.png' } });
+    mockDbSelectChain({ branding: { headerImageStorageKey: `branding/${EVENT_ID}/header/bg.png` } });
     mockDbUpdateChain();
     mockStorageDelete.mockResolvedValue(undefined);
 
     await deleteBrandingImage(EVENT_ID, 'header');
 
-    expect(mockStorageDelete).toHaveBeenCalledWith('branding/evt/header/bg.png');
+    expect(mockStorageDelete).toHaveBeenCalledWith(`branding/${EVENT_ID}/header/bg.png`);
   });
 
   it('returns { success: true } (L137 ObjectLiteral, L149)', async () => {
@@ -381,7 +389,7 @@ describe('deleteBrandingImage mutation kills', () => {
   });
 
   it('clears the storage key by setting it to empty string (L149 StringLiteral)', async () => {
-    mockDbSelectChain({ branding: { logoStorageKey: 'branding/evt/logo/old.png' } });
+    mockDbSelectChain({ branding: { logoStorageKey: `branding/${EVENT_ID}/logo/old.png` } });
     const updateChain = mockDbUpdateChain();
     mockStorageDelete.mockResolvedValue(undefined);
 
@@ -398,7 +406,7 @@ describe('deleteBrandingImage mutation kills', () => {
 
 describe('getBrandingImageUrls mutation kills', () => {
   it('returns null logoUrl when logoStorageKey is empty (L165 ConditionalExpression)', async () => {
-    mockDbSelectChain({ branding: { logoStorageKey: '', headerImageStorageKey: 'some/key' } });
+    mockDbSelectChain({ branding: { logoStorageKey: '', headerImageStorageKey: `branding/${EVENT_ID}/header/some-key.png` } });
     mockStorageGetSignedUrl.mockResolvedValue('https://r2.example.com/header-url');
 
     const result = await getBrandingImageUrls(EVENT_ID);
@@ -408,7 +416,7 @@ describe('getBrandingImageUrls mutation kills', () => {
   });
 
   it('returns null headerImageUrl when headerImageStorageKey is empty', async () => {
-    mockDbSelectChain({ branding: { logoStorageKey: 'some/key', headerImageStorageKey: '' } });
+    mockDbSelectChain({ branding: { logoStorageKey: `branding/${EVENT_ID}/logo/some-key.png`, headerImageStorageKey: '' } });
     mockStorageGetSignedUrl.mockResolvedValue('https://r2.example.com/logo-url');
 
     const result = await getBrandingImageUrls(EVENT_ID);
@@ -420,8 +428,8 @@ describe('getBrandingImageUrls mutation kills', () => {
   it('returns both URLs when both storage keys exist', async () => {
     mockDbSelectChain({
       branding: {
-        logoStorageKey: 'branding/evt/logo/a.png',
-        headerImageStorageKey: 'branding/evt/header/b.png',
+        logoStorageKey: `branding/${EVENT_ID}/logo/a.png`,
+        headerImageStorageKey: `branding/${EVENT_ID}/header/b.png`,
       },
     });
     mockStorageGetSignedUrl
@@ -445,15 +453,15 @@ describe('getBrandingImageUrls mutation kills', () => {
   it('calls getSignedUrl with 3600 TTL for each image', async () => {
     mockDbSelectChain({
       branding: {
-        logoStorageKey: 'k1',
-        headerImageStorageKey: 'k2',
+        logoStorageKey: `branding/${EVENT_ID}/logo/k1.png`,
+        headerImageStorageKey: `branding/${EVENT_ID}/header/k2.png`,
       },
     });
     mockStorageGetSignedUrl.mockResolvedValue('https://signed');
 
     await getBrandingImageUrls(EVENT_ID);
 
-    expect(mockStorageGetSignedUrl).toHaveBeenCalledWith('k1', 3600);
-    expect(mockStorageGetSignedUrl).toHaveBeenCalledWith('k2', 3600);
+    expect(mockStorageGetSignedUrl).toHaveBeenCalledWith(`branding/${EVENT_ID}/logo/k1.png`, 3600);
+    expect(mockStorageGetSignedUrl).toHaveBeenCalledWith(`branding/${EVENT_ID}/header/k2.png`, 3600);
   });
 });

@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/db';
 import { events } from '@/lib/db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { assertEventAccess } from '@/lib/auth/event-access';
 import { eventIdSchema } from '@/lib/validations/event';
@@ -16,7 +16,10 @@ import {
   type EventBranding,
 } from '@/lib/validations/branding';
 
+type BrandingImageType = 'logo' | 'header';
+
 const e2eBrandingImages = new Map<string, { data: Buffer; contentType: string }>();
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 function useE2EBrandingStorage() {
   return process.env.E2E_USE_STUB_STORAGE === '1';
@@ -24,6 +27,113 @@ function useE2EBrandingStorage() {
 
 function toDataUrl(file: { data: Buffer; contentType: string }) {
   return `data:${file.contentType};base64,${file.data.toString('base64')}`;
+}
+
+function parseBrandingImageType(imageType: unknown): BrandingImageType {
+  if (imageType === 'logo' || imageType === 'header') return imageType;
+  throw new Error('Invalid branding image type');
+}
+
+function storageFieldForImageType(imageType: BrandingImageType) {
+  return imageType === 'logo' ? 'logoStorageKey' : 'headerImageStorageKey';
+}
+
+function hasBytes(buffer: Buffer, bytes: number[], offset = 0) {
+  if (buffer.length < offset + bytes.length) return false;
+  return bytes.every((byte, index) => buffer[offset + index] === byte);
+}
+
+function hasScopedBrandingStorageKey(
+  eventId: string,
+  imageType: BrandingImageType,
+  storageKey: string,
+) {
+  if (storageKey === '') return true;
+
+  const prefix = `branding/${eventId}/${imageType}/`;
+  if (!storageKey.startsWith(prefix)) return false;
+
+  const filename = storageKey.slice(prefix.length);
+  return (
+    filename.length > 0 &&
+    filename.length <= 140 &&
+    !filename.includes('/') &&
+    !filename.includes('\\') &&
+    !filename.includes('..') &&
+    /^[a-zA-Z0-9._-]+$/.test(filename)
+  );
+}
+
+function assertScopedBrandingStorageKey(
+  eventId: string,
+  imageType: BrandingImageType,
+  storageKey: string | undefined,
+) {
+  if (storageKey === undefined) return;
+  if (!hasScopedBrandingStorageKey(eventId, imageType, storageKey)) {
+    throw new Error(`Invalid ${imageType} storage key for event`);
+  }
+}
+
+function sanitizeStoredBrandingForEvent(
+  eventId: string,
+  branding: Record<string, unknown>,
+) {
+  const sanitized = { ...branding };
+
+  if (
+    typeof sanitized.logoStorageKey !== 'string' ||
+    !hasScopedBrandingStorageKey(eventId, 'logo', sanitized.logoStorageKey)
+  ) {
+    sanitized.logoStorageKey = '';
+  }
+
+  if (
+    typeof sanitized.headerImageStorageKey !== 'string' ||
+    !hasScopedBrandingStorageKey(eventId, 'header', sanitized.headerImageStorageKey)
+  ) {
+    sanitized.headerImageStorageKey = '';
+  }
+
+  return sanitized;
+}
+
+function assertSafeSvg(buffer: Buffer) {
+  const text = buffer.toString('utf8').trim();
+  if (!/(?:<\?xml[\s\S]*?)?<svg[\s>]/i.test(text)) {
+    throw new Error('Invalid SVG image content');
+  }
+
+  if (
+    /<script\b/i.test(text) ||
+    /\son[a-z]+\s*=/i.test(text) ||
+    /javascript\s*:/i.test(text) ||
+    /<foreignObject\b/i.test(text) ||
+    /<(?:iframe|object|embed)\b/i.test(text)
+  ) {
+    throw new Error('Invalid active SVG content');
+  }
+}
+
+function assertImageContentMatchesMime(contentType: string, buffer: Buffer) {
+  if (contentType === 'image/png' && !hasBytes(buffer, PNG_SIGNATURE)) {
+    throw new Error('Invalid PNG image content');
+  }
+
+  if (contentType === 'image/jpeg' && !hasBytes(buffer, [0xff, 0xd8, 0xff])) {
+    throw new Error('Invalid JPEG image content');
+  }
+
+  if (
+    contentType === 'image/webp' &&
+    !(hasBytes(buffer, [0x52, 0x49, 0x46, 0x46]) && hasBytes(buffer, [0x57, 0x45, 0x42, 0x50], 8))
+  ) {
+    throw new Error('Invalid WebP image content');
+  }
+
+  if (contentType === 'image/svg+xml') {
+    assertSafeSvg(buffer);
+  }
 }
 
 /**
@@ -44,7 +154,10 @@ export async function getEventBranding(eventId: string): Promise<EventBranding> 
 
   // Merge stored JSONB with defaults (stored values win)
   const stored = (event.branding ?? {}) as Record<string, unknown>;
-  return eventBrandingSchema.parse({ ...DEFAULT_BRANDING, ...stored });
+  return eventBrandingSchema.parse({
+    ...DEFAULT_BRANDING,
+    ...sanitizeStoredBrandingForEvent(eventId, stored),
+  });
 }
 
 /**
@@ -58,17 +171,22 @@ export async function updateEventBranding(
   eventIdSchema.parse(eventId);
   const { userId } = await assertEventAccess(eventId, { requireWrite: true });
   const validated = updateBrandingSchema.parse(input);
+  assertScopedBrandingStorageKey(eventId, 'logo', validated.logoStorageKey);
+  assertScopedBrandingStorageKey(eventId, 'header', validated.headerImageStorageKey);
 
   // Read current branding
   const [event] = await db
-    .select({ branding: events.branding })
+    .select({ branding: events.branding, updatedAt: events.updatedAt })
     .from(events)
     .where(eq(events.id, eventId))
     .limit(1);
 
   if (!event) throw new Error('Event not found');
 
-  const current = (event.branding ?? {}) as Record<string, unknown>;
+  const current = sanitizeStoredBrandingForEvent(
+    eventId,
+    (event.branding ?? {}) as Record<string, unknown>,
+  );
 
   // Merge: only update fields that were actually provided
   const merged = { ...current };
@@ -78,14 +196,24 @@ export async function updateEventBranding(
     }
   }
 
-  await db
+  const updateFilters = [eq(events.id, eventId)];
+  if (event.updatedAt) {
+    updateFilters.push(eq(events.updatedAt, event.updatedAt));
+  }
+
+  const [updated] = await db
     .update(events)
     .set({
       branding: merged,
       updatedBy: userId,
       updatedAt: new Date(),
     })
-    .where(eq(events.id, eventId));
+    .where(and(...updateFilters))
+    .returning({ id: events.id });
+
+  if (!updated) {
+    throw new Error('Stale branding update conflict: event was concurrently modified');
+  }
 
   revalidatePath(`/events/${eventId}`);
   revalidatePath('/branding');
@@ -104,6 +232,7 @@ export async function uploadBrandingImage(
   formData: FormData,
 ): Promise<{ storageKey: string; signedUrl: string }> {
   eventIdSchema.parse(eventId);
+  const parsedImageType = parseBrandingImageType(imageType);
   await assertEventAccess(eventId, { requireWrite: true });
 
   const file = formData.get('file') as File | null;
@@ -120,12 +249,18 @@ export async function uploadBrandingImage(
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const storageKey = buildBrandingStorageKey(eventId, imageType, file.name);
+  assertImageContentMatchesMime(file.type, buffer);
+  const storageKey = buildBrandingStorageKey(eventId, parsedImageType, file.name);
+  const fieldKey = storageFieldForImageType(parsedImageType);
 
   if (useE2EBrandingStorage()) {
     e2eBrandingImages.set(storageKey, { data: buffer, contentType: file.type });
-    const fieldKey = imageType === 'logo' ? 'logoStorageKey' : 'headerImageStorageKey';
-    await updateEventBranding(eventId, { [fieldKey]: storageKey });
+    try {
+      await updateEventBranding(eventId, { [fieldKey]: storageKey });
+    } catch (error) {
+      e2eBrandingImages.delete(storageKey);
+      throw error;
+    }
     return { storageKey, signedUrl: toDataUrl({ data: buffer, contentType: file.type }) };
   }
 
@@ -135,8 +270,12 @@ export async function uploadBrandingImage(
   await storage.upload(storageKey, buffer, file.type);
 
   // Update branding with the new storage key
-  const fieldKey = imageType === 'logo' ? 'logoStorageKey' : 'headerImageStorageKey';
-  await updateEventBranding(eventId, { [fieldKey]: storageKey });
+  try {
+    await updateEventBranding(eventId, { [fieldKey]: storageKey });
+  } catch (error) {
+    await storage.delete(storageKey).catch(() => undefined);
+    throw error;
+  }
 
   // Return signed URL for immediate display
   const signedUrl = await storage.getSignedUrl(storageKey, 3600);
@@ -151,10 +290,11 @@ export async function deleteBrandingImage(
   imageType: 'logo' | 'header',
 ): Promise<{ success: true }> {
   eventIdSchema.parse(eventId);
+  const parsedImageType = parseBrandingImageType(imageType);
   await assertEventAccess(eventId, { requireWrite: true });
 
   const branding = await getEventBranding(eventId);
-  const fieldKey = imageType === 'logo' ? 'logoStorageKey' : 'headerImageStorageKey';
+  const fieldKey = storageFieldForImageType(parsedImageType);
   const storageKey = branding[fieldKey];
 
   if (storageKey) {
@@ -184,7 +324,9 @@ export async function getBrandingImageUrls(eventId: string): Promise<{
   let headerImageUrl: string | null = null;
 
   if (branding.logoStorageKey) {
-    if (useE2EBrandingStorage()) {
+    if (!hasScopedBrandingStorageKey(eventId, 'logo', branding.logoStorageKey)) {
+      logoUrl = null;
+    } else if (useE2EBrandingStorage()) {
       const file = e2eBrandingImages.get(branding.logoStorageKey);
       logoUrl = file ? toDataUrl(file) : null;
     } else {
@@ -195,7 +337,9 @@ export async function getBrandingImageUrls(eventId: string): Promise<{
   }
 
   if (branding.headerImageStorageKey) {
-    if (useE2EBrandingStorage()) {
+    if (!hasScopedBrandingStorageKey(eventId, 'header', branding.headerImageStorageKey)) {
+      headerImageUrl = null;
+    } else if (useE2EBrandingStorage()) {
       const file = e2eBrandingImages.get(branding.headerImageStorageKey);
       headerImageUrl = file ? toDataUrl(file) : null;
     } else {

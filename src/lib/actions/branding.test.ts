@@ -40,6 +40,7 @@ vi.mock('drizzle-orm', async () => {
   const actual = await vi.importActual<typeof import('drizzle-orm')>('drizzle-orm');
   return {
     ...actual,
+    and: vi.fn((...args: unknown[]) => ({ type: 'and', args })),
     eq: vi.fn((...args: unknown[]) => ({ type: 'eq', args })),
   };
 });
@@ -63,6 +64,12 @@ import { DEFAULT_BRANDING } from '@/lib/validations/branding';
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 
+function validPngBytes(size = 16) {
+  const bytes = new Uint8Array(Math.max(size, 8));
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  return bytes;
+}
+
 function mockDbSelectChain(result: unknown) {
   const chain = {
     from: vi.fn().mockReturnThis(),
@@ -76,7 +83,8 @@ function mockDbSelectChain(result: unknown) {
 function mockDbUpdateChain() {
   const chain = {
     set: vi.fn().mockReturnThis(),
-    where: vi.fn().mockResolvedValue(undefined),
+    where: vi.fn().mockReturnThis(),
+    returning: vi.fn().mockResolvedValue([{ id: EVENT_ID }]),
   };
   mockDb.update.mockReturnValue(chain);
   return chain;
@@ -198,6 +206,32 @@ describe('6B-1: Branding Configuration CRUD', () => {
         updateEventBranding(EVENT_ID, { primaryColor: '#FF0000' }),
       ).rejects.toThrow('forbidden');
     });
+
+    it('rejects direct cross-event logo storage keys before updating', async () => {
+      await expect(
+        updateEventBranding(EVENT_ID, {
+          logoStorageKey: 'branding/550e8400-e29b-41d4-a716-446655440999/logo/stolen.png',
+        }),
+      ).rejects.toThrow(/invalid logo storage key/i);
+
+      expect(mockDb.select).not.toHaveBeenCalled();
+      expect(mockDb.update).not.toHaveBeenCalled();
+    });
+
+    it('blocks stale branding saves that race with another update', async () => {
+      mockDbSelectChain({
+        branding: { primaryColor: '#112233' },
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      });
+      const updateChain = mockDbUpdateChain();
+      updateChain.returning.mockResolvedValueOnce([]);
+
+      await expect(
+        updateEventBranding(EVENT_ID, { secondaryColor: '#445566' }),
+      ).rejects.toThrow(/stale|concurrent|conflict/i);
+
+      expect(mockRevalidatePath).not.toHaveBeenCalled();
+    });
   });
 
   describe('uploadBrandingImage', () => {
@@ -224,7 +258,7 @@ describe('6B-1: Branding Configuration CRUD', () => {
       });
       mockStorageGetSignedUrl.mockResolvedValue('https://r2.example.com/signed-logo-url');
 
-      const file = new File(['fake-image-data'], 'logo.png', { type: 'image/png' });
+      const file = new File([validPngBytes()], 'logo.png', { type: 'image/png' });
       const formData = new FormData();
       formData.append('file', file);
 
@@ -260,6 +294,46 @@ describe('6B-1: Branding Configuration CRUD', () => {
         uploadBrandingImage(EVENT_ID, 'logo', formData),
       ).rejects.toThrow('Invalid file type');
     });
+
+    it('rejects runtime-invalid image types before auth or storage work', async () => {
+      const file = new File(['data'], 'logo.png', { type: 'image/png' });
+      const formData = new FormData();
+      formData.append('file', file);
+
+      await expect(
+        uploadBrandingImage(EVENT_ID, '../../header' as never, formData),
+      ).rejects.toThrow(/invalid branding image type/i);
+
+      expect(mockAssertEventAccess).not.toHaveBeenCalled();
+      expect(mockStorageUpload).not.toHaveBeenCalled();
+    });
+
+    it('rejects spoofed PNG uploads whose bytes are not PNG data', async () => {
+      const file = new File(['not actually a png'], 'logo.png', { type: 'image/png' });
+      const formData = new FormData();
+      formData.append('file', file);
+
+      await expect(
+        uploadBrandingImage(EVENT_ID, 'logo', formData),
+      ).rejects.toThrow(/invalid PNG image content/i);
+
+      expect(mockStorageUpload).not.toHaveBeenCalled();
+      expect(mockDb.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects active SVG payloads before upload', async () => {
+      const svg = '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(1)</script></svg>';
+      const file = new File([svg], 'logo.svg', { type: 'image/svg+xml' });
+      const formData = new FormData();
+      formData.append('file', file);
+
+      await expect(
+        uploadBrandingImage(EVENT_ID, 'logo', formData),
+      ).rejects.toThrow(/active SVG content/i);
+
+      expect(mockStorageUpload).not.toHaveBeenCalled();
+      expect(mockDb.update).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleteBrandingImage', () => {
@@ -269,7 +343,7 @@ describe('6B-1: Branding Configuration CRUD', () => {
         from: vi.fn().mockReturnThis(),
         where: vi.fn().mockReturnThis(),
         limit: vi.fn().mockResolvedValue([{
-          branding: { logoStorageKey: 'branding/test/logo/old.png' },
+          branding: { logoStorageKey: `branding/${EVENT_ID}/logo/old.png` },
         }]),
       };
       mockDb.select.mockReturnValue(selectChain);
@@ -279,7 +353,7 @@ describe('6B-1: Branding Configuration CRUD', () => {
       const result = await deleteBrandingImage(EVENT_ID, 'logo');
 
       expect(result.success).toBe(true);
-      expect(mockStorageDelete).toHaveBeenCalledWith('branding/test/logo/old.png');
+      expect(mockStorageDelete).toHaveBeenCalledWith(`branding/${EVENT_ID}/logo/old.png`);
     });
   });
 
@@ -287,8 +361,8 @@ describe('6B-1: Branding Configuration CRUD', () => {
     it('returns signed URLs for stored images', async () => {
       mockDbSelectChain({
         branding: {
-          logoStorageKey: 'branding/test/logo/logo.png',
-          headerImageStorageKey: 'branding/test/header/header.png',
+          logoStorageKey: `branding/${EVENT_ID}/logo/logo.png`,
+          headerImageStorageKey: `branding/${EVENT_ID}/header/header.png`,
         },
       });
       mockStorageGetSignedUrl
@@ -303,6 +377,21 @@ describe('6B-1: Branding Configuration CRUD', () => {
 
     it('returns null URLs when no images are stored', async () => {
       mockDbSelectChain({ branding: {} });
+
+      const result = await getBrandingImageUrls(EVENT_ID);
+
+      expect(result.logoUrl).toBeNull();
+      expect(result.headerImageUrl).toBeNull();
+      expect(mockStorageGetSignedUrl).not.toHaveBeenCalled();
+    });
+
+    it('does not sign stored image keys outside the active event scope', async () => {
+      mockDbSelectChain({
+        branding: {
+          logoStorageKey: 'branding/550e8400-e29b-41d4-a716-446655440999/logo/stolen.png',
+          headerImageStorageKey: 'branding/550e8400-e29b-41d4-a716-446655440999/header/stolen.png',
+        },
+      });
 
       const result = await getBrandingImageUrls(EVENT_ID);
 

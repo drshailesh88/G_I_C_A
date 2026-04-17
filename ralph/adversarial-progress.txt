@@ -10,10 +10,19 @@
 - Event-scoped read joins must scope every joined event table, not just the base table. Joining by globally unique IDs alone can leak cross-event metadata from bad or legacy rows.
 - Multi-query aggregate dashboards need a stable snapshot (`repeatable read` or a single aggregate query). A default Postgres transaction can still produce torn stats under concurrent writes.
 - Attendance/check-in mutations must event-scope optional `sessionId` foreign keys before inserting attendance rows, or offline/manual flows can attach active-event attendance to another event's session.
+- Branding and file-backed settings must event-scope stored object keys before signing URLs; direct server-action JSON updates can otherwise borrow another event's object.
+- Server actions must validate runtime enum parameters and uploaded file bytes. TypeScript unions and browser-provided MIME strings do not protect direct action callers.
+- JSON blob read-merge-write actions need compare-and-swap guards on `updatedAt`, or concurrent partial updates can silently clobber unrelated fields.
 
 ## Iteration log
 
 <!-- Dated entries per feature attacked. -->
+## 2026-04-17T05:49:35Z — src/lib/actions/branding.ts — branding action hardening
+- Verdict: hardened
+- Attacks tried: 12
+- Bugs found: 4
+- Key finding: direct callers could sign cross-event branding objects, write traversal-like image types, upload active/spoofed image payloads, and clobber concurrent branding updates.
+
 ## 2026-04-17T05:30:18Z — src/lib/actions/batch-sync.ts — offline batch sync hardening
 - Verdict: hardened
 - Attacks tried: 10
