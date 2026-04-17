@@ -7,9 +7,29 @@
 
 import { db } from '@/lib/db';
 import { notificationTemplates } from '@/lib/db/schema';
-import { eq, and, isNull, desc, type SQL } from 'drizzle-orm';
+import { eq, and, isNull, desc, sql, type SQL } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
+import { eventIdSchema } from '@/lib/validations/event';
 import type { Channel } from './types';
+import { z } from 'zod';
+
+const notificationTemplateIdSchema = z.string().uuid('Invalid notification template ID');
+
+function parseTemplateId(templateId: string) {
+  return notificationTemplateIdSchema.parse(templateId);
+}
+
+function parseScopedEventId(eventId: string | null) {
+  return eventId === null ? null : eventIdSchema.parse(eventId);
+}
+
+function buildTemplateScopeCondition(templateId: string, eventId: string | null): SQL {
+  const scopedTemplateId = parseTemplateId(templateId);
+
+  return eventId === null
+    ? and(eq(notificationTemplates.id, scopedTemplateId), isNull(notificationTemplates.eventId))!
+    : withEventScope(notificationTemplates.eventId, eventId, eq(notificationTemplates.id, scopedTemplateId));
+}
 
 export type CreateTemplateInput = {
   eventId: string | null;
@@ -51,10 +71,12 @@ export type UpdateTemplateInput = {
 
 /** Create a new notification template */
 export async function createTemplate(input: CreateTemplateInput) {
+  const scopedEventId = parseScopedEventId(input.eventId);
+
   const [template] = await db
     .insert(notificationTemplates)
     .values({
-      eventId: input.eventId,
+      eventId: scopedEventId,
       templateKey: input.templateKey,
       channel: input.channel,
       templateName: input.templateName,
@@ -83,6 +105,7 @@ export async function createTemplate(input: CreateTemplateInput) {
 
 /** Update an existing template by ID */
 export async function updateTemplate(templateId: string, input: UpdateTemplateInput) {
+  const scopedEventId = parseScopedEventId(input.eventId);
   const updateData: Record<string, unknown> = {
     updatedBy: input.updatedBy,
     updatedAt: new Date(),
@@ -108,33 +131,13 @@ export async function updateTemplate(templateId: string, input: UpdateTemplateIn
 
   // Increment version on content changes
   if (input.bodyContent !== undefined || input.subjectLine !== undefined) {
-    // We use raw SQL increment since drizzle doesn't have increment helper
-    // For now, we read-then-write; acceptable for admin-only operations
-    // Scope version read by eventId
-    const versionCondition = input.eventId
-      ? and(eq(notificationTemplates.id, templateId), eq(notificationTemplates.eventId, input.eventId))
-      : and(eq(notificationTemplates.id, templateId), isNull(notificationTemplates.eventId));
-
-    const existing = await db
-      .select({ versionNo: notificationTemplates.versionNo })
-      .from(notificationTemplates)
-      .where(versionCondition!)
-      .limit(1);
-
-    if (existing.length > 0) {
-      updateData.versionNo = existing[0].versionNo + 1;
-    }
+    updateData.versionNo = sql`${notificationTemplates.versionNo} + 1`;
   }
-
-  // FIX #2: Scope update by eventId for event isolation
-  const whereCondition = input.eventId
-    ? and(eq(notificationTemplates.id, templateId), eq(notificationTemplates.eventId, input.eventId))
-    : and(eq(notificationTemplates.id, templateId), isNull(notificationTemplates.eventId));
 
   const [updated] = await db
     .update(notificationTemplates)
     .set(updateData)
-    .where(whereCondition!)
+    .where(buildTemplateScopeCondition(templateId, scopedEventId))
     .returning();
 
   return updated ?? null;
@@ -149,16 +152,18 @@ export async function listTemplatesForEvent(
     metaCategory?: string;
   },
 ) {
-  // Get event-specific templates
-  const conditions: SQL[] = [eq(notificationTemplates.eventId, eventId)];
-  if (filters?.channel) conditions.push(eq(notificationTemplates.channel, filters.channel));
-  if (filters?.status) conditions.push(eq(notificationTemplates.status, filters.status));
-  if (filters?.metaCategory) conditions.push(eq(notificationTemplates.metaCategory, filters.metaCategory));
+  const scopedEventId = eventIdSchema.parse(eventId);
 
   const eventTemplates = await db
     .select()
     .from(notificationTemplates)
-    .where(and(...conditions))
+    .where(withEventScope(
+      notificationTemplates.eventId,
+      scopedEventId,
+      filters?.channel ? eq(notificationTemplates.channel, filters.channel) : undefined,
+      filters?.status ? eq(notificationTemplates.status, filters.status) : undefined,
+      filters?.metaCategory ? eq(notificationTemplates.metaCategory, filters.metaCategory) : undefined,
+    ))
     .orderBy(desc(notificationTemplates.updatedAt));
 
   // Get global defaults (eventId is null) — used to show which system templates
@@ -178,18 +183,11 @@ export async function listTemplatesForEvent(
 }
 
 /** Get a single template by ID (event-scoped) */
-export async function getTemplateById(templateId: string, eventId?: string | null) {
-  // FIX #2: Scope by eventId for event isolation
-  const whereCondition = eventId
-    ? and(eq(notificationTemplates.id, templateId), eq(notificationTemplates.eventId, eventId))
-    : eventId === null
-      ? and(eq(notificationTemplates.id, templateId), isNull(notificationTemplates.eventId))
-      : eq(notificationTemplates.id, templateId); // undefined = no scoping (internal use only)
-
+export async function getTemplateById(templateId: string, eventId: string | null) {
   const [template] = await db
     .select()
     .from(notificationTemplates)
-    .where(whereCondition)
+    .where(buildTemplateScopeCondition(templateId, parseScopedEventId(eventId)))
     .limit(1);
 
   return template ?? null;
@@ -210,15 +208,13 @@ export async function createEventOverride(
   eventId: string,
   createdBy: string,
 ) {
-  if (!eventId || !eventId.trim()) {
-    throw new Error('createEventOverride: eventId is required');
-  }
-  const global = await getTemplateById(globalTemplateId);
+  const scopedEventId = eventIdSchema.parse(eventId);
+  const global = await getTemplateById(globalTemplateId, null);
   if (!global) throw new Error(`Global template ${globalTemplateId} not found`);
   if (global.eventId !== null) throw new Error('Source template is not a global template');
 
   return createTemplate({
-    eventId,
+    eventId: scopedEventId,
     templateKey: global.templateKey,
     channel: global.channel as Channel,
     templateName: `${global.templateName} (Event Override)`,

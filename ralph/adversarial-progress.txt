@@ -66,6 +66,7 @@
 - Fixed-format identifier helpers must validate both namespace membership and numeric bounds. Accepting unknown certificate prefixes or overflowed/fractional sequence numbers creates forged or impossible IDs that downstream code may treat as legitimate.
 - Background workers and queue consumers are security boundaries too. Validate queued payload enums and tenant IDs, cap batch sizes, refuse forged cleanup lock keys, and stream large archive uploads instead of buffering whole artifacts in memory.
 - Global seeders that create `eventId = null` defaults cannot rely on a partial `(event_id, channel, key)` unique index plus read-then-insert loops. Postgres permits multiple `NULL` keys there, so concurrent seed runs need transaction-scoped locking and atomic rollback or they will duplicate global rows and leave half-seeded state on failure.
+- Notification-template query helpers must require an explicit `eventId | null` scope on every exported read and validate both event/template UUIDs before building Drizzle conditions. Optional unscoped lookup paths become cross-tenant read gadgets, and read-then-write version bumps collapse under concurrent content edits.
 
 ## Iteration log
 
@@ -363,3 +364,9 @@
 - Attacks tried: 6
 - Bugs found: 1
 - Key finding: the exported system-template seed registry was mutable process-wide, so any runtime caller could rewrite shared body/variable definitions or append forged seeds that poisoned later notification seeding and rendering.
+
+## 2026-04-17T18:15:06Z — src/lib/notifications/template-queries.ts — scope and version race hardening
+- Verdict: hardened
+- Attacks tried: 4
+- Bugs found: 2
+- Key finding: the helper exported an unscoped `getTemplateById` path and accepted malformed event/template IDs into query construction, while content edits used a read-then-write version bump that let concurrent updates collapse onto the same version number.

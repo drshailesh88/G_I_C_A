@@ -3217,5 +3217,52 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/notifications/template-queries.ts",
+    "module": "src/lib/notifications/template-queries.ts",
+    "attacked_at": "2026-04-17T18:15:06Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "call getTemplateById(validTemplateId, undefined) to disable tenant scoping and fetch by raw template ID alone",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "call listTemplatesForEvent('not-a-uuid') and createEventOverride(validGlobalTemplateId, 'not-a-uuid', userId)",
+        "result": "succeeded"
+      },
+      {
+        "category": "race_condition",
+        "payload": "issue concurrent bodyContent/subjectLine edits so both updates read the same current version and write back the same next version",
+        "result": "succeeded"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "templateId/eventId payloads containing SQL metacharacters and broken UUIDs",
+        "result": "blocked_by_uuid_validation_and_parameterized_queries"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "getTemplateById exposed an optional unscoped lookup path. Any direct caller that knew or guessed a template UUID could omit eventId and read another event's template by primary key, bypassing the module's tenant-isolation contract. The same helper family also accepted malformed event IDs into UUID-backed queries instead of failing closed first.",
+        "fix": "Required an explicit event scope (`eventId` or `null` for globals), validated template/event UUIDs up front, and routed event-scoped reads through `withEventScope` so malformed tenant IDs never reach Drizzle query execution.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/template-queries.adversarial.test.ts > rejects unscoped template reads before hitting the database; src/lib/notifications/template-queries.adversarial.test.ts > rejects malformed event scopes before listing templates; src/lib/notifications/template-queries.adversarial.test.ts > rejects malformed event IDs before creating an event override"
+      },
+      {
+        "severity": "medium",
+        "category": "race_condition",
+        "description": "updateTemplate incremented `versionNo` with a read-then-write sequence. Two concurrent content edits could both read version N and both persist version N+1, collapsing distinct revisions onto the same version number.",
+        "fix": "Replaced the read-then-write increment with an atomic SQL `version_no = version_no + 1` update so concurrent edits cannot race through the same next version.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/notifications/template-queries.adversarial.test.ts > increments template versions atomically on content updates"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

@@ -8,8 +8,11 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const VALID_TEMPLATE_ID = '660e8400-e29b-41d4-a716-446655440000';
+const OTHER_TEMPLATE_ID = '770e8400-e29b-41d4-a716-446655440000';
+
 // vi.hoisted ensures these are available inside vi.mock factories
-const { mockReturning, mockLimit, mockOrderBy, mockWhere, mockSet, mockValues, mockFrom, mockInnerJoin, dbChain } = vi.hoisted(() => {
+const { mockReturning, mockLimit, mockOrderBy, mockWhere, mockSet, mockValues, mockFrom, mockInnerJoin, mockWithEventScope, mockEventIdParse, mockSql, dbChain } = vi.hoisted(() => {
   const mockReturning = vi.fn();
   const mockLimit = vi.fn();
   const mockOrderBy = vi.fn();
@@ -18,6 +21,16 @@ const { mockReturning, mockLimit, mockOrderBy, mockWhere, mockSet, mockValues, m
   const mockValues = vi.fn();
   const mockFrom = vi.fn();
   const mockInnerJoin = vi.fn();
+  const mockWithEventScope = vi.fn((...args: unknown[]) => ({ _type: 'withEventScope', args }));
+  const mockEventIdParse = vi.fn((value: unknown) => value);
+  const mockSql = Object.assign(
+    (strings: TemplateStringsArray, ...values: unknown[]) => ({
+      _type: 'sql',
+      strings: [...strings],
+      values,
+    }),
+    { __esModule: true },
+  );
 
   const chain: Record<string, any> = {};
   chain.insert = vi.fn().mockReturnValue(chain);
@@ -33,7 +46,20 @@ const { mockReturning, mockLimit, mockOrderBy, mockWhere, mockSet, mockValues, m
   chain.orderBy = mockOrderBy.mockReturnValue(chain);
   chain.innerJoin = mockInnerJoin.mockReturnValue(chain);
 
-  return { mockReturning, mockLimit, mockOrderBy, mockWhere, mockSet, mockValues, mockFrom, mockInnerJoin, dbChain: chain };
+  return {
+    mockReturning,
+    mockLimit,
+    mockOrderBy,
+    mockWhere,
+    mockSet,
+    mockValues,
+    mockFrom,
+    mockInnerJoin,
+    mockWithEventScope,
+    mockEventIdParse,
+    mockSql,
+    dbChain: chain,
+  };
 });
 
 vi.mock('@/lib/db', () => ({
@@ -57,10 +83,17 @@ vi.mock('drizzle-orm', () => ({
   and: vi.fn((...args: unknown[]) => ({ _type: 'and', args })),
   isNull: vi.fn((col: unknown) => ({ _type: 'isNull', col })),
   desc: vi.fn((col: unknown) => ({ _type: 'desc', col })),
+  sql: mockSql,
 }));
 
 vi.mock('@/lib/db/with-event-scope', () => ({
-  withEventScope: vi.fn((...args: unknown[]) => ({ _type: 'withEventScope', args })),
+  withEventScope: mockWithEventScope,
+}));
+
+vi.mock('@/lib/validations/event', () => ({
+  eventIdSchema: {
+    parse: mockEventIdParse,
+  },
 }));
 
 import {
@@ -79,6 +112,7 @@ beforeEach(() => {
   mockWhere.mockReturnValue(dbChain);
   mockOrderBy.mockReturnValue(dbChain);
   mockFrom.mockReturnValue(dbChain);
+  mockEventIdParse.mockImplementation((value: unknown) => value);
 });
 
 describe('createTemplate', () => {
@@ -142,14 +176,14 @@ describe('createTemplate', () => {
 
 describe('updateTemplate', () => {
   it('always sets updatedBy and updatedAt', async () => {
-    await updateTemplate('tpl-1', { eventId: 'evt-1', updatedBy: 'user-2' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', updatedBy: 'user-2' });
     const s = mockSet.mock.calls[0][0];
     expect(s.updatedBy).toBe('user-2');
     expect(s.updatedAt).toBeInstanceOf(Date);
   });
 
   it('conditionally adds fields only when provided', async () => {
-    await updateTemplate('tpl-1', {
+    await updateTemplate(VALID_TEMPLATE_ID, {
       eventId: 'evt-1', templateName: 'New Name', subjectLine: 'New Subject',
       bodyContent: 'New Body', previewText: 'New Preview',
       allowedVariablesJson: ['a'], requiredVariablesJson: ['b'],
@@ -168,7 +202,7 @@ describe('updateTemplate', () => {
   });
 
   it('sets lastActivatedAt when status changes to active', async () => {
-    await updateTemplate('tpl-1', { eventId: 'evt-1', status: 'active', updatedBy: 'user-2' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', status: 'active', updatedBy: 'user-2' });
     const s = mockSet.mock.calls[0][0];
     expect(s.status).toBe('active');
     expect(s.lastActivatedAt).toBeInstanceOf(Date);
@@ -176,58 +210,56 @@ describe('updateTemplate', () => {
   });
 
   it('sets archivedAt when status changes to archived', async () => {
-    await updateTemplate('tpl-1', { eventId: 'evt-1', status: 'archived', updatedBy: 'user-2' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', status: 'archived', updatedBy: 'user-2' });
     const s = mockSet.mock.calls[0][0];
     expect(s.archivedAt).toBeInstanceOf(Date);
   });
 
   it('increments versionNo when bodyContent changes', async () => {
-    mockLimit.mockResolvedValueOnce([{ versionNo: 3 }]);
-    await updateTemplate('tpl-1', { eventId: 'evt-1', bodyContent: 'Updated body', updatedBy: 'user-2' });
-    expect(mockSet.mock.calls[0][0].versionNo).toBe(4);
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', bodyContent: 'Updated body', updatedBy: 'user-2' });
+    expect(mockSet.mock.calls[0][0].versionNo).toMatchObject({ _type: 'sql' });
   });
 
   it('increments versionNo when subjectLine changes', async () => {
-    mockLimit.mockResolvedValueOnce([{ versionNo: 5 }]);
-    await updateTemplate('tpl-1', { eventId: 'evt-1', subjectLine: 'New subject', updatedBy: 'user-2' });
-    expect(mockSet.mock.calls[0][0].versionNo).toBe(6);
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', subjectLine: 'New subject', updatedBy: 'user-2' });
+    expect(mockSet.mock.calls[0][0].versionNo).toMatchObject({ _type: 'sql' });
   });
 
   it('uses isNull for global templates (eventId = null)', async () => {
     const { isNull } = await import('drizzle-orm');
-    await updateTemplate('tpl-1', { eventId: null, templateName: 'X', updatedBy: 'user-2' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: null, templateName: 'X', updatedBy: 'user-2' });
     expect(isNull).toHaveBeenCalled();
   });
 
   it('returns null when no row matches', async () => {
     mockReturning.mockResolvedValueOnce([]);
-    const result = await updateTemplate('tpl-nonexistent', { eventId: 'evt-1', updatedBy: 'user-2' });
+    const result = await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', updatedBy: 'user-2' });
     expect(result).toBeNull();
   });
 });
 
 describe('getTemplateById', () => {
   it('scopes by eventId when provided', async () => {
-    await getTemplateById('tpl-1', 'evt-1');
-    expect(mockWhere).toHaveBeenCalled();
+    await getTemplateById(VALID_TEMPLATE_ID, 'evt-1');
+    expect(mockWithEventScope).toHaveBeenCalled();
   });
 
   it('uses isNull for global templates (eventId === null)', async () => {
     const { isNull } = await import('drizzle-orm');
-    await getTemplateById('tpl-1', null);
+    await getTemplateById(VALID_TEMPLATE_ID, null);
     expect(isNull).toHaveBeenCalled();
   });
 
   it('returns null when template not found', async () => {
     mockLimit.mockResolvedValueOnce([]);
-    const result = await getTemplateById('nonexistent');
+    const result = await getTemplateById('00000000-0000-0000-0000-000000000000', null);
     expect(result).toBeNull();
   });
 });
 
 describe('archiveTemplate', () => {
   it('delegates to updateTemplate with archived status', async () => {
-    await archiveTemplate('tpl-1', 'evt-1', 'user-3');
+    await archiveTemplate(VALID_TEMPLATE_ID, 'evt-1', 'user-3');
     expect(mockSet.mock.calls[0][0].status).toBe('archived');
     expect(mockSet.mock.calls[0][0].updatedBy).toBe('user-3');
   });
@@ -256,33 +288,39 @@ describe('listTemplatesForEvent', () => {
 
 describe('createEventOverride', () => {
   it('throws when eventId is empty', async () => {
-    await expect(createEventOverride('tpl-1', '', 'user-1')).rejects.toThrow('eventId is required');
+    mockEventIdParse.mockImplementation(() => {
+      throw new Error('Invalid event ID');
+    });
+    await expect(createEventOverride(VALID_TEMPLATE_ID, '', 'user-1')).rejects.toThrow('Invalid event ID');
   });
 
   it('throws when eventId is whitespace', async () => {
-    await expect(createEventOverride('tpl-1', '   ', 'user-1')).rejects.toThrow('eventId is required');
+    mockEventIdParse.mockImplementation(() => {
+      throw new Error('Invalid event ID');
+    });
+    await expect(createEventOverride(VALID_TEMPLATE_ID, '   ', 'user-1')).rejects.toThrow('Invalid event ID');
   });
 
   it('throws when source template not found', async () => {
     mockLimit.mockResolvedValueOnce([]);
-    await expect(createEventOverride('tpl-x', 'evt-1', 'user-1')).rejects.toThrow('not found');
+    await expect(createEventOverride(OTHER_TEMPLATE_ID, 'evt-1', 'user-1')).rejects.toThrow('not found');
   });
 
   it('throws when source template is not global', async () => {
-    mockLimit.mockResolvedValueOnce([{ id: 'tpl-1', eventId: 'evt-other', templateName: 'Test' }]);
-    await expect(createEventOverride('tpl-1', 'evt-1', 'user-1')).rejects.toThrow('not a global template');
+    mockLimit.mockResolvedValueOnce([{ id: VALID_TEMPLATE_ID, eventId: 'evt-other', templateName: 'Test' }]);
+    await expect(createEventOverride(VALID_TEMPLATE_ID, 'evt-1', 'user-1')).rejects.toThrow('not a global template');
   });
 
   it('creates event override from global template with correct fields', async () => {
     mockLimit.mockResolvedValueOnce([{
-      id: 'global-tpl-1', eventId: null, templateKey: 'registration_confirmation', channel: 'email',
+      id: VALID_TEMPLATE_ID, eventId: null, templateKey: 'registration_confirmation', channel: 'email',
       templateName: 'Registration Confirmation', metaCategory: 'registration', triggerType: 'registration.created',
       sendMode: 'automatic', subjectLine: 'Welcome', bodyContent: '<p>Hello</p>', previewText: 'Preview',
       allowedVariablesJson: ['name'], requiredVariablesJson: ['name'], brandingMode: 'event_branding',
       customBrandingJson: null, whatsappTemplateName: null, whatsappLanguageCode: null,
     }]);
 
-    await createEventOverride('global-tpl-1', 'evt-1', 'user-1');
+    await createEventOverride(VALID_TEMPLATE_ID, 'evt-1', 'user-1');
 
     const v = mockValues.mock.calls[0][0];
     expect(v.eventId).toBe('evt-1');

@@ -8,7 +8,9 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { mockReturning, mockLimit, mockOrderBy, mockWhere, mockSet, mockValues, mockFrom, dbChain } = vi.hoisted(() => {
+const VALID_TEMPLATE_ID = '660e8400-e29b-41d4-a716-446655440000';
+
+const { mockReturning, mockLimit, mockOrderBy, mockWhere, mockSet, mockValues, mockFrom, mockWithEventScope, mockEventIdParse, mockSql, dbChain } = vi.hoisted(() => {
   const mockReturning = vi.fn();
   const mockLimit = vi.fn();
   const mockOrderBy = vi.fn();
@@ -16,6 +18,16 @@ const { mockReturning, mockLimit, mockOrderBy, mockWhere, mockSet, mockValues, m
   const mockSet = vi.fn();
   const mockValues = vi.fn();
   const mockFrom = vi.fn();
+  const mockWithEventScope = vi.fn((...args: unknown[]) => ({ _type: 'withEventScope', args }));
+  const mockEventIdParse = vi.fn((value: unknown) => value);
+  const mockSql = Object.assign(
+    (strings: TemplateStringsArray, ...values: unknown[]) => ({
+      _type: 'sql',
+      strings: [...strings],
+      values,
+    }),
+    { __esModule: true },
+  );
 
   const chain: Record<string, any> = {};
   chain.insert = vi.fn().mockReturnValue(chain);
@@ -30,13 +42,26 @@ const { mockReturning, mockLimit, mockOrderBy, mockWhere, mockSet, mockValues, m
   chain.limit = mockLimit.mockResolvedValue([{ id: 'tpl-1', versionNo: 1 }]);
   chain.orderBy = mockOrderBy.mockReturnValue(chain);
 
-  return { mockReturning, mockLimit, mockOrderBy, mockWhere, mockSet, mockValues, mockFrom, dbChain: chain };
+  return {
+    mockReturning,
+    mockLimit,
+    mockOrderBy,
+    mockWhere,
+    mockSet,
+    mockValues,
+    mockFrom,
+    mockWithEventScope,
+    mockEventIdParse,
+    mockSql,
+    dbChain: chain,
+  };
 });
 
 vi.mock('@/lib/db', () => ({ db: { insert: dbChain.insert, update: dbChain.update, delete: dbChain.delete, select: dbChain.select } }));
 vi.mock('@/lib/db/schema', () => ({ notificationTemplates: { id: 'id', eventId: 'eventId', channel: 'channel', templateKey: 'templateKey', status: 'status', metaCategory: 'metaCategory', versionNo: 'versionNo', updatedAt: 'updatedAt' } }));
-vi.mock('drizzle-orm', () => ({ eq: vi.fn((...a: unknown[]) => ({ _type: 'eq', a })), and: vi.fn((...a: unknown[]) => ({ _type: 'and', a })), isNull: vi.fn((c: unknown) => ({ _type: 'isNull', c })), desc: vi.fn((c: unknown) => ({ _type: 'desc', c })) }));
-vi.mock('@/lib/db/with-event-scope', () => ({ withEventScope: vi.fn((...a: unknown[]) => ({ _type: 'withEventScope', a })) }));
+vi.mock('drizzle-orm', () => ({ eq: vi.fn((...a: unknown[]) => ({ _type: 'eq', a })), and: vi.fn((...a: unknown[]) => ({ _type: 'and', a })), isNull: vi.fn((c: unknown) => ({ _type: 'isNull', c })), desc: vi.fn((c: unknown) => ({ _type: 'desc', c })), sql: mockSql }));
+vi.mock('@/lib/db/with-event-scope', () => ({ withEventScope: mockWithEventScope }));
+vi.mock('@/lib/validations/event', () => ({ eventIdSchema: { parse: mockEventIdParse } }));
 
 import { updateTemplate, listTemplatesForEvent, getTemplateById } from './template-queries';
 
@@ -47,17 +72,18 @@ beforeEach(() => {
   mockWhere.mockReturnValue(dbChain);
   mockOrderBy.mockReturnValue(dbChain);
   mockFrom.mockReturnValue(dbChain);
+  mockEventIdParse.mockImplementation((value: unknown) => value);
 });
 
 describe('updateTemplate — negative assertions (fields NOT set when omitted)', () => {
   it('does not set templateName when not provided', async () => {
-    await updateTemplate('tpl-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', updatedBy: 'u' });
     const s = mockSet.mock.calls[0][0];
     expect(s).not.toHaveProperty('templateName');
   });
 
   it('does not set status when not provided', async () => {
-    await updateTemplate('tpl-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', updatedBy: 'u' });
     const s = mockSet.mock.calls[0][0];
     expect(s).not.toHaveProperty('status');
     expect(s).not.toHaveProperty('lastActivatedAt');
@@ -65,61 +91,61 @@ describe('updateTemplate — negative assertions (fields NOT set when omitted)',
   });
 
   it('does not set subjectLine when not provided', async () => {
-    await updateTemplate('tpl-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', updatedBy: 'u' });
     const s = mockSet.mock.calls[0][0];
     expect(s).not.toHaveProperty('subjectLine');
   });
 
   it('does not set bodyContent when not provided', async () => {
-    await updateTemplate('tpl-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', updatedBy: 'u' });
     const s = mockSet.mock.calls[0][0];
     expect(s).not.toHaveProperty('bodyContent');
   });
 
   it('does not set previewText when not provided', async () => {
-    await updateTemplate('tpl-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', updatedBy: 'u' });
     const s = mockSet.mock.calls[0][0];
     expect(s).not.toHaveProperty('previewText');
   });
 
   it('does not set allowedVariablesJson when not provided', async () => {
-    await updateTemplate('tpl-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', updatedBy: 'u' });
     const s = mockSet.mock.calls[0][0];
     expect(s).not.toHaveProperty('allowedVariablesJson');
   });
 
   it('does not set requiredVariablesJson when not provided', async () => {
-    await updateTemplate('tpl-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', updatedBy: 'u' });
     const s = mockSet.mock.calls[0][0];
     expect(s).not.toHaveProperty('requiredVariablesJson');
   });
 
   it('does not set brandingMode when not provided', async () => {
-    await updateTemplate('tpl-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', updatedBy: 'u' });
     const s = mockSet.mock.calls[0][0];
     expect(s).not.toHaveProperty('brandingMode');
   });
 
   it('does not set customBrandingJson when not provided', async () => {
-    await updateTemplate('tpl-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', updatedBy: 'u' });
     const s = mockSet.mock.calls[0][0];
     expect(s).not.toHaveProperty('customBrandingJson');
   });
 
   it('does not set notes when not provided', async () => {
-    await updateTemplate('tpl-1', { eventId: 'evt-1', updatedBy: 'u' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', updatedBy: 'u' });
     const s = mockSet.mock.calls[0][0];
     expect(s).not.toHaveProperty('notes');
   });
 
   it('does not increment versionNo when neither bodyContent nor subjectLine changes', async () => {
-    await updateTemplate('tpl-1', { eventId: 'evt-1', templateName: 'New', updatedBy: 'u' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', templateName: 'New', updatedBy: 'u' });
     const s = mockSet.mock.calls[0][0];
     expect(s).not.toHaveProperty('versionNo');
   });
 
   it('does not set archivedAt or lastActivatedAt when status is draft', async () => {
-    await updateTemplate('tpl-1', { eventId: 'evt-1', status: 'draft', updatedBy: 'u' });
+    await updateTemplate(VALID_TEMPLATE_ID, { eventId: 'evt-1', status: 'draft', updatedBy: 'u' });
     const s = mockSet.mock.calls[0][0];
     expect(s.status).toBe('draft');
     expect(s).not.toHaveProperty('lastActivatedAt');
@@ -128,13 +154,13 @@ describe('updateTemplate — negative assertions (fields NOT set when omitted)',
 });
 
 describe('getTemplateById — undefined eventId path', () => {
-  it('does not scope by eventId when eventId is undefined', async () => {
-    const { eq } = await import('drizzle-orm');
+  it('rejects unscoped reads when eventId is undefined', async () => {
+    mockEventIdParse.mockImplementation(() => {
+      throw new Error('Invalid event ID');
+    });
 
-    await getTemplateById('tpl-1', undefined);
-
-    // Should only use eq for templateId, not eventId
-    expect(eq).toHaveBeenCalled();
+    await expect(getTemplateById(VALID_TEMPLATE_ID, undefined as never)).rejects.toThrow('Invalid event ID');
+    expect(mockWhere).not.toHaveBeenCalled();
   });
 });
 
