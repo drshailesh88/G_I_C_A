@@ -316,19 +316,21 @@ describe('updateEventStatus — gap tests (transitions)', () => {
   function setupTransitionTest(currentStatus: string, newStatus: string, verifyResult = true) {
     const eventId = '77777777-7777-7777-7777-777777777777';
 
-    // Two selects: initial read + post-update verification
-    const selectResults = [
-      [{ id: eventId, status: currentStatus, createdBy: 'user-1' }],
-      [{ id: eventId, status: newStatus }],
-    ];
-    let selectCallCount = 0;
-    const limit = vi.fn().mockImplementation(() => selectResults[selectCallCount++]);
+    const limit = vi.fn().mockResolvedValue([
+      {
+        id: eventId,
+        status: currentStatus,
+        createdBy: 'user-1',
+        updatedAt: new Date('2026-04-17T08:15:00.000Z'),
+      },
+    ]);
     const where = vi.fn(() => ({ limit }));
     const from = vi.fn(() => ({ where, limit }));
     mockDb.select.mockReturnValue({ from });
 
     let capturedUpdateData: Record<string, unknown> | undefined;
-    const updateWhere = vi.fn().mockResolvedValue([]);
+    const updateReturning = vi.fn().mockResolvedValue(verifyResult ? [{ id: eventId, status: newStatus }] : []);
+    const updateWhere = vi.fn(() => ({ returning: updateReturning }));
     const set = vi.fn((data: Record<string, unknown>) => {
       capturedUpdateData = data;
       return { where: updateWhere };

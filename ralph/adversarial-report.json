@@ -907,5 +907,67 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/event.ts",
+    "module": "src/lib/actions/event.ts",
+    "attacked_at": "2026-04-17T08:22:16Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "role_escalation",
+        "payload": "call createEvent as org:ops or org:read_only via direct server-action invocation",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "two tabs read draft event, one cancels while the other publishes using the stale copy",
+        "result": "succeeded"
+      },
+      {
+        "category": "malformed_input",
+        "payload": "invalid moduleToggles JSON, invalid event UUIDs, empty/oversized slugs",
+        "result": "blocked"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "read/update another event by guessed UUID through getEvent and updateEventStatus",
+        "result": "blocked_by_existing_event_access_checks"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized event name/slug/module toggle payloads within and above schema limits",
+        "result": "blocked_by_existing_zod_limits"
+      },
+      {
+        "category": "injection",
+        "payload": "SQL metacharacters in slug/name/module toggle fields",
+        "result": "blocked_by_parameterized_queries_and_validation"
+      },
+      {
+        "category": "public_status_exposure",
+        "payload": "load draft event via getEventBySlug",
+        "result": "blocked"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "role_escalation",
+        "description": "createEvent only checked for an authenticated user, so org:ops and org:read_only users could bypass the UI and create new events directly.",
+        "fix": "Enforced server-side create RBAC so only super admins and event coordinators can create events when Clerk role data is present.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/event.test.ts > createEvent should reject ops users that bypass the UI and call the action directly"
+      },
+      {
+        "severity": "high",
+        "category": "stale_state",
+        "description": "updateEventStatus performed a fetch-then-update by bare event id. A stale tab could overwrite a concurrent cancellation/archive and the post-write reread would still report success because it observed its own write.",
+        "fix": "Replaced the blind update with a compare-and-swap update keyed by id, current status, and updatedAt so stale lifecycle transitions fail instead of clobbering newer state.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/event.test.ts > updateEventStatus should fail when the event status changed after it was read"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

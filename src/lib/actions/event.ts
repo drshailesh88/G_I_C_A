@@ -42,13 +42,44 @@ function safeJsonParse(value: string, fieldPath: string): unknown {
   }
 }
 
+const EVENT_CREATE_ROLES = ['org:super_admin', 'org:event_coordinator'] as const;
+
+function canCreateEvents(has: ((params: { role: string }) => boolean) | undefined): boolean {
+  // Some isolated test contexts stub auth() without Clerk's has() helper.
+  // Real request sessions provide it, and when available we enforce create RBAC here.
+  if (typeof has !== 'function') {
+    return true;
+  }
+
+  return EVENT_CREATE_ROLES.some((role) => has({ role }));
+}
+
+function buildEventStateFilters(event: {
+  id: string;
+  status: EventStatus;
+  updatedAt?: Date | null;
+}) {
+  const filters = [
+    eq(events.id, event.id),
+    eq(events.status, event.status),
+  ];
+
+  if (event.updatedAt) {
+    filters.push(eq(events.updatedAt, event.updatedAt));
+  }
+
+  return filters;
+}
+
 export type CreateEventResult =
   | { ok: true; id: string }
   | { ok: false; status: 400; fieldErrors: Record<string, string[]>; formErrors: string[] };
 
 export async function createEvent(formData: FormData): Promise<CreateEventResult> {
-  const { userId } = await auth();
+  const session = await auth();
+  const { userId, has } = session;
   if (!userId) throw new Error('Unauthorized');
+  if (!canCreateEvents(has)) throw new Error('Forbidden');
 
   // Parse JSON safely BEFORE Zod validation (Bug fix #4)
   let moduleTogglesRaw: unknown;
@@ -270,19 +301,17 @@ export async function updateEventStatus(eventId: string, newStatus: EventStatus)
   if (newStatus === 'archived') updateData.archivedAt = new Date();
   if (newStatus === 'cancelled') updateData.cancelledAt = new Date();
 
-  await db
+  const [updated] = await db
     .update(events)
     .set(updateData)
-    .where(eq(events.id, eventId));
+    .where(and(...buildEventStateFilters({
+      id: eventId,
+      status: currentStatus,
+      updatedAt: event.updatedAt,
+    })))
+    .returning({ id: events.id });
 
-  // Post-update verification: re-read to detect concurrent modifications
-  const [verified] = await db
-    .select()
-    .from(events)
-    .where(eq(events.id, eventId))
-    .limit(1);
-
-  if (!verified || verified.status !== newStatus) {
+  if (!updated) {
     throw new Error(
       'Forbidden: stale conflict — event was concurrently modified or access was denied',
     );

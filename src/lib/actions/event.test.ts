@@ -89,6 +89,16 @@ describe('event actions — existing adversarial tests', () => {
     }
   });
 
+  it('createEvent should reject ops users that bypass the UI and call the action directly', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'ops-1',
+      has: ({ role }: { role: string }) => role === 'org:ops',
+    });
+
+    await expect(createEvent(buildFormData())).rejects.toThrow(/forbidden/i);
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
   it('getEvent should reject invalid event ids with Zod before querying', async () => {
     mockSelectById([]);
 
@@ -130,17 +140,19 @@ describe('event actions — existing adversarial tests', () => {
       status: 'draft',
       createdBy: 'owner-3',
       updatedBy: 'owner-3',
+      updatedAt: new Date('2026-04-17T08:00:00.000Z'),
     };
 
     mockAssertEventAccess.mockResolvedValue({ userId: 'owner-3', role: 'org:super_admin' });
     mockSelectById([{ ...persistedEvent }]);
 
     let updatePayload: Record<string, unknown> | undefined;
-    const where = vi.fn().mockImplementation(async () => {
+    const returning = vi.fn().mockImplementation(async () => {
       persistedEvent.status = 'cancelled';
       Object.assign(persistedEvent, updatePayload);
-      return [persistedEvent];
+      return [];
     });
+    const where = vi.fn(() => ({ returning }));
     const set = vi.fn((payload: Record<string, unknown>) => {
       updatePayload = payload;
       return { where };
@@ -246,18 +258,15 @@ describe('event actions — REQ 9/10/11 access control tests', () => {
     const eventId = '55555555-5555-5555-5555-555555555555';
     mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:super_admin' });
 
-    // Mock select for reading event + verification read
-    const selectResults = [
-      [{ id: eventId, status: 'draft', createdBy: 'user-1' }],
-      [{ id: eventId, status: 'published' }],
-    ];
-    let selectCallCount = 0;
-    const limit = vi.fn().mockImplementation(() => selectResults[selectCallCount++]);
+    const limit = vi.fn().mockResolvedValue([
+      { id: eventId, status: 'draft', createdBy: 'user-1', updatedAt: new Date('2026-04-17T08:05:00.000Z') },
+    ]);
     const where = vi.fn(() => ({ limit }));
     const from = vi.fn(() => ({ where, limit }));
     mockDb.select.mockReturnValue({ from });
 
-    const updateWhere = vi.fn().mockResolvedValue([]);
+    const updateReturning = vi.fn().mockResolvedValue([{ id: eventId }]);
+    const updateWhere = vi.fn(() => ({ returning: updateReturning }));
     const set = vi.fn(() => ({ where: updateWhere }));
     mockDb.update.mockReturnValue({ set });
 
@@ -320,26 +329,19 @@ describe('event actions — hardening tests', () => {
   function mockUpdateEventStatusPath(
     eventId: string,
     currentStatus: string,
-    targetStatus: string,
     captureUpdateSet?: (v: Record<string, unknown>) => void,
   ) {
     mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:super_admin' });
 
-    // First select: read event by id
-    const limit1 = vi.fn().mockResolvedValue([{ id: eventId, status: currentStatus }]);
-    const where1 = vi.fn(() => ({ limit: limit1 }));
-    const from1 = vi.fn(() => ({ where: where1, limit: limit1 }));
+    const limit = vi.fn().mockResolvedValue([
+      { id: eventId, status: currentStatus, updatedAt: new Date('2026-04-17T08:10:00.000Z') },
+    ]);
+    const where = vi.fn(() => ({ limit }));
+    const from = vi.fn(() => ({ where, limit }));
+    mockDb.select.mockReturnValue({ from });
 
-    // Second select: verification after update
-    const limit2 = vi.fn().mockResolvedValue([{ id: eventId, status: targetStatus }]);
-    const where2 = vi.fn(() => ({ limit: limit2 }));
-    const from2 = vi.fn(() => ({ where: where2, limit: limit2 }));
-
-    mockDb.select
-      .mockReturnValueOnce({ from: from1 })
-      .mockReturnValueOnce({ from: from2 });
-
-    const updateWhere = vi.fn().mockResolvedValue([]);
+    const updateReturning = vi.fn().mockResolvedValue([{ id: eventId }]);
+    const updateWhere = vi.fn(() => ({ returning: updateReturning }));
     const set = vi.fn((v: Record<string, unknown>) => {
       if (captureUpdateSet) captureUpdateSet(v);
       return { where: updateWhere };
@@ -579,7 +581,7 @@ describe('event actions — hardening tests', () => {
   it('updateEventStatus sets archivedAt when transitioning to archived', async () => {
     const eventId = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
     let updateSetPayload: Record<string, unknown> = {};
-    mockUpdateEventStatusPath('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'completed', 'archived', (v) => { updateSetPayload = v; });
+    mockUpdateEventStatusPath('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'completed', (v) => { updateSetPayload = v; });
 
     await updateEventStatus(eventId, 'archived');
     expect(updateSetPayload.archivedAt).toBeInstanceOf(Date);
@@ -589,7 +591,7 @@ describe('event actions — hardening tests', () => {
   it('updateEventStatus does NOT set archivedAt when transitioning to published', async () => {
     const eventId = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
     let updateSetPayload: Record<string, unknown> = {};
-    mockUpdateEventStatusPath('cccccccc-cccc-cccc-cccc-cccccccccccc', 'draft', 'published', (v) => { updateSetPayload = v; });
+    mockUpdateEventStatusPath('cccccccc-cccc-cccc-cccc-cccccccccccc', 'draft', (v) => { updateSetPayload = v; });
 
     await updateEventStatus(eventId, 'published');
     expect(updateSetPayload.archivedAt).toBeUndefined();
@@ -599,7 +601,7 @@ describe('event actions — hardening tests', () => {
   it('updateEventStatus sets cancelledAt when transitioning to cancelled', async () => {
     const eventId = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
     let updateSetPayload: Record<string, unknown> = {};
-    mockUpdateEventStatusPath('dddddddd-dddd-dddd-dddd-dddddddddddd', 'draft', 'cancelled', (v) => { updateSetPayload = v; });
+    mockUpdateEventStatusPath('dddddddd-dddd-dddd-dddd-dddddddddddd', 'draft', (v) => { updateSetPayload = v; });
 
     await updateEventStatus(eventId, 'cancelled');
     expect(updateSetPayload.cancelledAt).toBeInstanceOf(Date);
@@ -609,7 +611,7 @@ describe('event actions — hardening tests', () => {
   it('updateEventStatus does NOT set cancelledAt when transitioning to archived', async () => {
     const eventId = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
     let updateSetPayload: Record<string, unknown> = {};
-    mockUpdateEventStatusPath('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'completed', 'archived', (v) => { updateSetPayload = v; });
+    mockUpdateEventStatusPath('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', 'completed', (v) => { updateSetPayload = v; });
 
     await updateEventStatus(eventId, 'archived');
     expect(updateSetPayload.cancelledAt).toBeUndefined();
