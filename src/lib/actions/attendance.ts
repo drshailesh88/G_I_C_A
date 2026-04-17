@@ -4,7 +4,7 @@ import { db } from '@/lib/db';
 import { attendanceRecords } from '@/lib/db/schema/attendance';
 import { people } from '@/lib/db/schema/people';
 import { eventRegistrations } from '@/lib/db/schema/registrations';
-import { eq, and, sql, count, notInArray } from 'drizzle-orm';
+import { eq, and, sql, count } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
 import { attendanceQuerySchema } from '@/lib/validations/attendance';
@@ -29,6 +29,23 @@ export type AttendanceStats = {
   byMethod: Record<string, number>;
   bySession: Record<string, number>;
 };
+
+const eventIdSchema = attendanceQuerySchema.shape.eventId;
+
+function validateRouteEventId(eventId: string): string {
+  return eventIdSchema.parse(eventId);
+}
+
+function validateAttendanceQueryForEvent(eventId: string, input: unknown) {
+  const scopedEventId = validateRouteEventId(eventId);
+  const validated = attendanceQuerySchema.parse(input);
+
+  if (validated.eventId.toLowerCase() !== scopedEventId.toLowerCase()) {
+    throw new Error('Event ID mismatch');
+  }
+
+  return { scopedEventId, validated };
+}
 
 function buildDateCondition(date: string): SQL {
   return sql`${attendanceRecords.checkInAt} AT TIME ZONE 'Asia/Kolkata' >= ${date}::date AND ${attendanceRecords.checkInAt} AT TIME ZONE 'Asia/Kolkata' < (${date}::date + interval '1 day')`;
@@ -56,8 +73,8 @@ export async function listAttendanceRecords(
   eventId: string,
   input: unknown,
 ): Promise<AttendanceRecord[]> {
-  await assertEventAccess(eventId, { requireWrite: false });
-  const validated = attendanceQuerySchema.parse(input);
+  const { scopedEventId, validated } = validateAttendanceQueryForEvent(eventId, input);
+  await assertEventAccess(scopedEventId, { requireWrite: false });
 
   const conditions = buildFilterConditions(validated);
 
@@ -77,11 +94,17 @@ export async function listAttendanceRecords(
     })
     .from(attendanceRecords)
     .innerJoin(people, eq(attendanceRecords.personId, people.id))
-    .leftJoin(eventRegistrations, eq(attendanceRecords.registrationId, eventRegistrations.id))
+    .leftJoin(
+      eventRegistrations,
+      and(
+        eq(attendanceRecords.registrationId, eventRegistrations.id),
+        eq(eventRegistrations.eventId, scopedEventId),
+      )!,
+    )
     .where(
       withEventScope(
         attendanceRecords.eventId,
-        eventId,
+        scopedEventId,
         ...conditions,
       ),
     )
@@ -95,8 +118,8 @@ export async function getAttendanceStats(
   eventId: string,
   input: unknown,
 ): Promise<AttendanceStats> {
-  await assertEventAccess(eventId, { requireWrite: false });
-  const validated = attendanceQuerySchema.parse(input);
+  const { scopedEventId, validated } = validateAttendanceQueryForEvent(eventId, input);
+  await assertEventAccess(scopedEventId, { requireWrite: false });
 
   const conditions = buildFilterConditions(validated);
 
@@ -106,7 +129,7 @@ export async function getAttendanceStats(
       .select({ count: count() })
       .from(attendanceRecords)
       .where(
-        withEventScope(attendanceRecords.eventId, eventId, ...conditions),
+        withEventScope(attendanceRecords.eventId, scopedEventId, ...conditions),
       );
 
     // By method
@@ -117,7 +140,7 @@ export async function getAttendanceStats(
       })
       .from(attendanceRecords)
       .where(
-        withEventScope(attendanceRecords.eventId, eventId, ...conditions),
+        withEventScope(attendanceRecords.eventId, scopedEventId, ...conditions),
       )
       .groupBy(attendanceRecords.checkInMethod);
 
@@ -129,7 +152,7 @@ export async function getAttendanceStats(
       })
       .from(attendanceRecords)
       .where(
-        withEventScope(attendanceRecords.eventId, eventId, ...conditions),
+        withEventScope(attendanceRecords.eventId, scopedEventId, ...conditions),
       )
       .groupBy(attendanceRecords.sessionId);
 
@@ -148,7 +171,7 @@ export async function getAttendanceStats(
       byMethod,
       bySession,
     };
-  });
+  }, { isolationLevel: 'repeatable read' });
 }
 
 /**
@@ -158,7 +181,8 @@ export async function getAttendanceStats(
 export async function getConfirmedRegistrationCount(
   eventId: string,
 ): Promise<number> {
-  await assertEventAccess(eventId, { requireWrite: false });
+  const scopedEventId = validateRouteEventId(eventId);
+  await assertEventAccess(scopedEventId, { requireWrite: false });
 
   const [row] = await db
     .select({ count: count() })
@@ -166,7 +190,7 @@ export async function getConfirmedRegistrationCount(
     .where(
       withEventScope(
         eventRegistrations.eventId,
-        eventId,
+        scopedEventId,
         eq(eventRegistrations.status, 'confirmed'),
       ),
     );

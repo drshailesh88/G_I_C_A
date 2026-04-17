@@ -86,5 +86,80 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/attendance.ts",
+    "module": "src/lib/actions/attendance.ts",
+    "attacked_at": "2026-04-17T05:22:08Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "route eventId=not-a-uuid with otherwise valid attendance query input",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "route eventId for event A with body eventId for event B",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "attendance row scoped to event A joined to registration metadata by registrationId without event-scoping the joined registration table",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "concurrent check-in between total, by-method, and by-session aggregate SELECTs under default Postgres READ COMMITTED transaction isolation",
+        "result": "succeeded"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "date/sessionId query payloads containing SQL metacharacters",
+        "result": "blocked"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "read attendance as read-only user and attempt write escalation through this read-only module",
+        "result": "blocked"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized/unknown query fields and unbounded attendance list request",
+        "result": "blocked"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "<script>alert(1)</script> in returned person/registration fields",
+        "result": "no_exploitable_failure_in_action_layer"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "Attendance read actions validated the body eventId after assertEventAccess and did not validate getConfirmedRegistrationCount eventId at all, so malformed route IDs could reach auth/database queries before Zod rejected them.",
+        "fix": "Added route eventId validation before auth/database access for all attendance read actions.",
+        "fix_commit": "RED commit for this module",
+        "regression_test": "src/lib/actions/attendance.test.ts > rejects a malformed route eventId before auth or database access"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "listAttendanceRecords joined event_registrations by registrationId only. A bad or legacy attendance row in the active event could surface registrationNumber/category metadata from another event because the joined table was not scoped to eventId.",
+        "fix": "Scoped the registration left join with eventRegistrations.eventId = active eventId and rejected body/route eventId mismatches.",
+        "fix_commit": "RED commit for this module",
+        "regression_test": "src/lib/actions/attendance.test.ts > event-scopes joined registration metadata to prevent cross-tenant leakage"
+      },
+      {
+        "severity": "medium",
+        "category": "stale_state",
+        "description": "getAttendanceStats performed three aggregate SELECTs in a default transaction. Under Postgres READ COMMITTED, concurrent check-ins can appear between SELECTs and return a total that disagrees with by-method/by-session counts.",
+        "fix": "Requested repeatable-read isolation for the stats transaction so all aggregates use one stable snapshot.",
+        "fix_commit": "RED commit for this module",
+        "regression_test": "src/lib/actions/attendance.test.ts > uses repeatable-read isolation so concurrent check-ins cannot tear aggregate snapshots"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

@@ -49,7 +49,11 @@ vi.mock('@/lib/auth/event-access', () => ({
   assertEventAccess: mockAssertEventAccess,
 }));
 
-import { listAttendanceRecords, getAttendanceStats } from './attendance';
+import {
+  listAttendanceRecords,
+  getAttendanceStats,
+  getConfirmedRegistrationCount,
+} from './attendance';
 
 // ── Chain helpers ─────────────────────────────────────────────
 let selectCallCount = 0;
@@ -73,6 +77,7 @@ function chainedSelectSequence(calls: unknown[][]) {
 }
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
+const OTHER_EVENT_ID = '550e8400-e29b-41d4-a716-446655440099';
 const PERSON_ID = '550e8400-e29b-41d4-a716-446655440001';
 const SESSION_ID = '550e8400-e29b-41d4-a716-446655440010';
 
@@ -97,6 +102,24 @@ beforeEach(() => {
 
 // ── listAttendanceRecords ───────────────────────────────────
 describe('listAttendanceRecords', () => {
+  it('rejects a malformed route eventId before auth or database access', async () => {
+    await expect(
+      listAttendanceRecords('not-a-uuid', { eventId: EVENT_ID }),
+    ).rejects.toThrow();
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
+  it('rejects body and route eventId mismatches', async () => {
+    await expect(
+      listAttendanceRecords(EVENT_ID, { eventId: OTHER_EVENT_ID }),
+    ).rejects.toThrow('Event ID mismatch');
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+  });
+
   it('returns attendance records for an event', async () => {
     const now = new Date();
     chainedSelectSequence([
@@ -122,6 +145,17 @@ describe('listAttendanceRecords', () => {
     expect(results).toHaveLength(1);
     expect(results[0].fullName).toBe('Dr. Sharma');
     expect(results[0].checkInMethod).toBe('qr_scan');
+  });
+
+  it('event-scopes joined registration metadata to prevent cross-tenant leakage', async () => {
+    chainedSelectSequence([[]]);
+
+    await listAttendanceRecords(EVENT_ID, { eventId: EVENT_ID });
+
+    const registrationEventScope = mockEq.mock.calls.filter(
+      (call: unknown[]) => call[1] === EVENT_ID,
+    );
+    expect(registrationEventScope).toHaveLength(1);
   });
 
   it('allows read-only access (requireWrite: false)', async () => {
@@ -206,6 +240,24 @@ describe('listAttendanceRecords', () => {
 
 // ── getAttendanceStats ──────────────────────────────────────
 describe('getAttendanceStats', () => {
+  it('rejects a malformed route eventId before auth or database access', async () => {
+    await expect(
+      getAttendanceStats('not-a-uuid', { eventId: EVENT_ID }),
+    ).rejects.toThrow();
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects body and route eventId mismatches', async () => {
+    await expect(
+      getAttendanceStats(EVENT_ID, { eventId: OTHER_EVENT_ID }),
+    ).rejects.toThrow('Event ID mismatch');
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.transaction).not.toHaveBeenCalled();
+  });
+
   it('returns total, by-method, and by-session stats', async () => {
     chainedSelectSequence([
       // Total count
@@ -326,5 +378,30 @@ describe('getAttendanceStats', () => {
     await getAttendanceStats(EVENT_ID, { eventId: EVENT_ID });
 
     expect(mockDb.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses repeatable-read isolation so concurrent check-ins cannot tear aggregate snapshots', async () => {
+    chainedSelectSequence([
+      [{ count: 5 }],
+      [{ method: 'qr_scan', count: 3 }, { method: 'manual_search', count: 2 }],
+      [{ sessionId: SESSION_ID, count: 5 }],
+    ]);
+
+    await getAttendanceStats(EVENT_ID, { eventId: EVENT_ID });
+
+    expect(mockDb.transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ isolationLevel: 'repeatable read' }),
+    );
+  });
+});
+
+// ── getConfirmedRegistrationCount ───────────────────────────
+describe('getConfirmedRegistrationCount', () => {
+  it('rejects a malformed route eventId before auth or database access', async () => {
+    await expect(getConfirmedRegistrationCount('not-a-uuid')).rejects.toThrow();
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
   });
 });

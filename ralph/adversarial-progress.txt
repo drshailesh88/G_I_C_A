@@ -6,10 +6,19 @@
 - Logistics server actions cannot rely on UI-only filters. Enforce travel-first and event/person-scoped foreign keys inside the action or direct calls will create cross-tenant/invalid rows.
 - Logistics mutations must emit audit + cascade side effects from the server action itself. If the action only mutates the table, downstream flags/notifications are bypassable.
 - Fetch-then-update by bare `id` is unsafe in logistics flows. Include `eventId` and a compare-and-swap guard (`updatedAt` when available) in the write query to block stale concurrent writes.
+- Read actions must validate the route `eventId` before auth/database access and reject body/route `eventId` mismatches, or malformed/stale requests can bypass Zod until after DB work starts.
+- Event-scoped read joins must scope every joined event table, not just the base table. Joining by globally unique IDs alone can leak cross-event metadata from bad or legacy rows.
+- Multi-query aggregate dashboards need a stable snapshot (`repeatable read` or a single aggregate query). A default Postgres transaction can still produce torn stats under concurrent writes.
 
 ## Iteration log
 
 <!-- Dated entries per feature attacked. -->
+## 2026-04-17T05:22:08Z — src/lib/actions/attendance.ts — attendance read hardening
+- Verdict: hardened
+- Attacks tried: 8
+- Bugs found: 3
+- Key finding: malformed route IDs reached auth/DB before validation, registration metadata joins were not event-scoped, and attendance stats could tear under concurrent check-ins.
+
 ## 2026-04-17T05:09:58Z — src/lib/actions/accommodation.ts — logistics action hardening
 - Verdict: hardened
 - Attacks tried: 9
