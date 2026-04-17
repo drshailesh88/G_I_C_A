@@ -1522,5 +1522,75 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/attendance/offline-queue.ts",
+    "module": "src/lib/attendance/offline-queue.ts",
+    "attacked_at": "2026-04-17T12:30:37Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "queue a local row with invalid sessionId/empty deviceId so the next batch sync contains a schema-invalid record",
+        "result": "succeeded"
+      },
+      {
+        "category": "stale_state",
+        "payload": "queue one pending row and one synced row, then read pending items and clear synced rows by sync-state index",
+        "result": "succeeded"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "force pending-count polling over a large offline queue so getPendingCount materializes every payload",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "mix QR payloads from different events in one browser-local queue",
+        "result": "blocked_by_server_side_qr_event_validation"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "call queue helpers directly without Clerk role checks",
+        "result": "not_applicable_in_client_queue_layer"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "<script>alert(1)</script> in qrPayload/deviceId persisted locally",
+        "result": "no_exploitable_sink_in_queue_module"
+      },
+      {
+        "category": "race_condition",
+        "payload": "overlap markScansAsSynced and clearSyncedScans on the same local ids",
+        "result": "no_reproducible_loss_beyond_existing_sync_state_bug"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "high",
+        "category": "malformed_input",
+        "description": "queueOfflineScan accepted arbitrary local rows, so one malformed record with a bad sessionId/deviceId/scannedAt could be persisted and later cause processBatchSync to reject the entire offline batch until browser storage was manually cleared.",
+        "fix": "Validate and normalize offline queue rows before persisting them, and drop corrupt legacy rows while reading pending scans or counting them.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/attendance/offline-queue.test.ts > rejects malformed queue rows before they can poison later batch syncs; self-heals corrupt legacy rows instead of returning them for sync"
+      },
+      {
+        "severity": "medium",
+        "category": "stale_state",
+        "description": "The queue tracked sync state in a brittle IndexedDB shape: persisted rows exposed a boolean synced flag while pending/cleanup lookups used numeric key ranges, so pending reads and synced-row cleanup could miss records or leave them stranded.",
+        "fix": "Migrated persistence to an internal syncedKey 0/1 index, backfilled existing rows on upgrade, and updated mark/read/clear paths to use the explicit sync-state key consistently.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/attendance/offline-queue.test.ts > returns only pending rows and clears synced rows after sync"
+      },
+      {
+        "severity": "medium",
+        "category": "resource_exhaustion",
+        "description": "getPendingCount called getPendingScans and loaded the entire unsynced queue into memory on every badge/poll update. A large offline queue could therefore turn routine pending-count polling into a local memory and responsiveness sink.",
+        "fix": "Reworked pending counting to use cursor iteration with inline validation/cleanup instead of materializing every queued payload through getAll.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/attendance/offline-queue.test.ts > counts pending scans without materializing the whole queue through getAll"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]
