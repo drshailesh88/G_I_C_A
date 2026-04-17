@@ -84,6 +84,7 @@ function chainedInsert(rows: unknown[]) {
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 const PERSON_ID = '550e8400-e29b-41d4-a716-446655440001';
 const REG_ID = '550e8400-e29b-41d4-a716-446655440002';
+const SESSION_ID = '550e8400-e29b-41d4-a716-446655440010';
 const TOKEN = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef';
 
 beforeEach(() => {
@@ -99,6 +100,30 @@ beforeEach(() => {
 // ── processQrScan ────────────────────────────────────────────
 describe('processQrScan', () => {
   const validCompactPayload = `${EVENT_ID}:${TOKEN}`;
+
+  it('rejects a malformed route eventId before auth or database access', async () => {
+    await expect(processQrScan('not-a-uuid', {
+      eventId: EVENT_ID,
+      qrPayload: validCompactPayload,
+    })).rejects.toThrow('Invalid event ID');
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
+  it('rejects route/body eventId mismatches before auth or database access', async () => {
+    const otherEventId = '550e8400-e29b-41d4-a716-446655440099';
+
+    await expect(processQrScan(EVENT_ID, {
+      eventId: otherEventId,
+      qrPayload: validCompactPayload,
+    })).rejects.toThrow('Event ID mismatch');
+
+    expect(mockAssertEventAccess).not.toHaveBeenCalled();
+    expect(mockDb.select).not.toHaveBeenCalled();
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
 
   it('successfully checks in a confirmed registration', async () => {
     // Call 1: registration lookup, Call 2: person lookup, Call 3: existing attendance
@@ -277,6 +302,7 @@ describe('processQrScan', () => {
 
   it('returns duplicate instead of throwing on a concurrent QR check-in conflict', async () => {
     chainedSelectSequence([
+      [{ id: SESSION_ID }],
       [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
       [{ fullName: 'Dr. Sharma' }],
       [],
@@ -301,6 +327,19 @@ describe('processQrScan', () => {
 
 // ── processManualCheckIn ─────────────────────────────────────
 describe('processManualCheckIn', () => {
+  it('rejects sessionIds that do not belong to the active event before registration lookup', async () => {
+    chainedSelectSequence([[]]);
+
+    await expect(processManualCheckIn(EVENT_ID, {
+      eventId: EVENT_ID,
+      registrationId: REG_ID,
+      sessionId: SESSION_ID,
+    })).rejects.toThrow('Session not found for this event.');
+
+    expect(mockAssertEventAccess).toHaveBeenCalledWith(EVENT_ID, { requireWrite: true });
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
+
   it('successfully checks in by registration ID', async () => {
     chainedSelectSequence([
       [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
@@ -391,6 +430,7 @@ describe('processManualCheckIn', () => {
 
   it('returns duplicate instead of throwing on a concurrent manual check-in conflict', async () => {
     chainedSelectSequence([
+      [{ id: SESSION_ID }],
       [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
       [{ fullName: 'Dr. Sharma' }],
       [],

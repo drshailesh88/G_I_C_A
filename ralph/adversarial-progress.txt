@@ -11,6 +11,7 @@
 - Multi-query aggregate dashboards need a stable snapshot (`repeatable read` or a single aggregate query). A default Postgres transaction can still produce torn stats under concurrent writes.
 - Attendance/check-in mutations must event-scope optional `sessionId` foreign keys before inserting attendance rows, or offline/manual flows can attach active-event attendance to another event's session.
 - Session-aware check-in reads must validate optional `sessionId` parameters for UUID shape and active-event membership before using them to shape attendance state, or stale/foreign session IDs can bypass validation and mislead operators.
+- Check-in write actions must validate the route `eventId` before auth/database work, reject body/route `eventId` mismatches, and event-scope optional `sessionId`s before duplicate detection or inserts. Otherwise direct calls can create or probe attendance under stale or foreign scopes.
 - Branding and file-backed settings must event-scope stored object keys before signing URLs; direct server-action JSON updates can otherwise borrow another event's object.
 - Server actions must validate runtime enum parameters and uploaded file bytes. TypeScript unions and browser-provided MIME strings do not protect direct action callers.
 - JSON blob read-merge-write actions need compare-and-swap guards on `updatedAt`, or concurrent partial updates can silently clobber unrelated fields.
@@ -78,3 +79,9 @@
 - Attacks tried: 8
 - Bugs found: 3
 - Key finding: the search action trusted malformed route IDs, stale body/route event mismatches, and arbitrary session IDs, so direct callers could hit auth/DB work before validation and probe attendance state with foreign session scopes.
+
+## 2026-04-17T08:05:27Z — src/lib/actions/checkin.ts — check-in mutation scoping hardening
+- Verdict: hardened
+- Attacks tried: 9
+- Bugs found: 3
+- Key finding: the QR/manual write actions trusted malformed route IDs, stale body event IDs, and arbitrary session IDs, so direct callers could reach auth/DB work before validation and attach attendance to foreign session scopes.

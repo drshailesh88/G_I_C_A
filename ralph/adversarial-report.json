@@ -755,5 +755,85 @@
       }
     ],
     "verdict": "hardened"
+  },
+  {
+    "story_id": "src/lib/actions/checkin.ts",
+    "module": "src/lib/actions/checkin.ts",
+    "attacked_at": "2026-04-17T08:05:27Z",
+    "attacked_by": "codex",
+    "attacks_attempted": [
+      {
+        "category": "malformed_input",
+        "payload": "route eventId=not-a-uuid with otherwise valid QR/manual check-in bodies",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "route eventId for event A with body eventId for event B",
+        "result": "succeeded"
+      },
+      {
+        "category": "eventid_cross_tenant",
+        "payload": "optional sessionId from another event passed to QR/manual check-in",
+        "result": "succeeded"
+      },
+      {
+        "category": "role_escalation",
+        "payload": "call processQrScan/processManualCheckIn without write permission",
+        "result": "blocked"
+      },
+      {
+        "category": "race_condition",
+        "payload": "double-submit the same QR/manual check-in concurrently",
+        "result": "blocked_by_deterministic_id_and_duplicate_handling"
+      },
+      {
+        "category": "resource_exhaustion",
+        "payload": "oversized qrPayload and deviceId strings",
+        "result": "blocked_by_zod_limits"
+      },
+      {
+        "category": "sql_injection",
+        "payload": "SQL metacharacters inside qrPayload, registrationId, and deviceId",
+        "result": "blocked_by_schema_and_parameterized_drizzle_queries"
+      },
+      {
+        "category": "xss_injection",
+        "payload": "<script>alert(1)</script> in qrPayload and deviceId",
+        "result": "no_exploitable_failure_in_action_layer"
+      },
+      {
+        "category": "info_leakage",
+        "payload": "force missing-registration and duplicate-insert paths",
+        "result": "blocked_by_generic_action_responses"
+      }
+    ],
+    "bugs_found": [
+      {
+        "severity": "medium",
+        "category": "malformed_input",
+        "description": "processQrScan and processManualCheckIn called assertEventAccess before validating the route eventId, so malformed route IDs reached auth work before Zod rejected them.",
+        "fix": "Validate the route eventId up front and reuse the validated event scope for auth, QR validation, duplicate detection, inserts, and revalidation.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/checkin.test.ts > rejects a malformed route eventId before auth or database access"
+      },
+      {
+        "severity": "medium",
+        "category": "eventid_cross_tenant",
+        "description": "The check-in actions parsed input.eventId but never compared it to the route eventId, allowing stale or cross-event body payloads to be accepted under a different route scope.",
+        "fix": "Reject body/route eventId mismatches before auth or database access.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/checkin.test.ts > rejects route/body eventId mismatches before auth or database access"
+      },
+      {
+        "severity": "high",
+        "category": "eventid_cross_tenant",
+        "description": "The optional sessionId was never validated against the active event in QR or manual check-in, so direct callers could shape duplicate detection and insert attendance rows against a foreign event's session.",
+        "fix": "Require any non-null sessionId to resolve to a session in the active event before duplicate detection or inserts.",
+        "fix_commit": "this RED commit",
+        "regression_test": "src/lib/actions/checkin.test.ts > rejects sessionIds that do not belong to the active event before registration lookup"
+      }
+    ],
+    "verdict": "hardened"
   }
 ]

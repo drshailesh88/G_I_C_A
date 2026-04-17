@@ -5,11 +5,12 @@ import { db } from '@/lib/db';
 import { attendanceRecords } from '@/lib/db/schema/attendance';
 import { eventRegistrations } from '@/lib/db/schema/registrations';
 import { people } from '@/lib/db/schema/people';
+import { sessions } from '@/lib/db/schema/program';
 import { eq, and, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
-import { qrScanSchema, manualCheckInSchema } from '@/lib/validations/attendance';
+import { attendanceQuerySchema, qrScanSchema, manualCheckInSchema } from '@/lib/validations/attendance';
 import { parseQrPayload, determineScanResult, type ScanLookupResult } from '@/lib/attendance/qr-utils';
 
 type CheckInRegistration = {
@@ -20,6 +21,33 @@ type CheckInRegistration = {
   registrationNumber: string;
   category: string;
 };
+
+const eventIdSchema = qrScanSchema.shape.eventId;
+const sessionIdSchema = attendanceQuerySchema.shape.sessionId;
+
+type CheckInRequest = {
+  eventId: string;
+  sessionId?: string | null;
+};
+
+function validateCheckInRequest<T extends CheckInRequest>(
+  eventId: string,
+  input: unknown,
+  schema: { parse: (value: unknown) => T },
+) {
+  const scopedEventId = eventIdSchema.parse(eventId);
+  const validated = schema.parse(input);
+
+  if (validated.eventId.toLowerCase() !== scopedEventId.toLowerCase()) {
+    throw new Error('Event ID mismatch');
+  }
+
+  return {
+    scopedEventId,
+    validated,
+    sessionId: sessionIdSchema.parse(validated.sessionId ?? null) ?? null,
+  };
+}
 
 function buildAttendanceRecordId(eventId: string, personId: string, sessionId: string | null): string {
   const hash = createHash('sha256')
@@ -84,11 +112,35 @@ function buildDuplicateResult(
   });
 }
 
+async function assertSessionBelongsToEvent(eventId: string, sessionId: string | null) {
+  if (!sessionId) {
+    return;
+  }
+
+  const [session] = await db
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(
+      withEventScope(
+        sessions.eventId,
+        eventId,
+        eq(sessions.id, sessionId),
+      ),
+    )
+    .limit(1);
+
+  if (!session) {
+    throw new Error('Session not found for this event.');
+  }
+}
+
 // ── QR Scan Check-in ─────────────────────────────────────────
 
 export async function processQrScan(eventId: string, input: unknown): Promise<ScanLookupResult> {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
-  const validated = qrScanSchema.parse(input);
+  const { scopedEventId, validated, sessionId } = validateCheckInRequest(eventId, input, qrScanSchema);
+  const { userId } = await assertEventAccess(scopedEventId, { requireWrite: true });
+
+  await assertSessionBelongsToEvent(scopedEventId, sessionId);
 
   // Parse the QR payload
   const parsed = parseQrPayload(validated.qrPayload);
@@ -97,7 +149,7 @@ export async function processQrScan(eventId: string, input: unknown): Promise<Sc
   }
 
   // Verify the event ID matches (case-insensitive — UUIDs may differ in casing)
-  if (parsed.eventId.toLowerCase() !== eventId.toLowerCase()) {
+  if (parsed.eventId.toLowerCase() !== scopedEventId.toLowerCase()) {
     return { type: 'invalid', message: 'QR code belongs to a different event.' };
   }
 
@@ -115,7 +167,7 @@ export async function processQrScan(eventId: string, input: unknown): Promise<Sc
     .where(
       withEventScope(
         eventRegistrations.eventId,
-        eventId,
+        scopedEventId,
         eq(eventRegistrations.qrCodeToken, parsed.token),
       ),
     )
@@ -133,7 +185,6 @@ export async function processQrScan(eventId: string, input: unknown): Promise<Sc
     .limit(1);
 
   const personName = person?.fullName ?? 'Unknown';
-  const sessionId = validated.sessionId ?? null;
 
   // Check for existing attendance (duplicate detection)
   const existingConditions = buildExistingAttendanceConditions(
@@ -145,7 +196,7 @@ export async function processQrScan(eventId: string, input: unknown): Promise<Sc
     .select({ id: attendanceRecords.id })
     .from(attendanceRecords)
     .where(
-      withEventScope(attendanceRecords.eventId, eventId, existingConditions),
+      withEventScope(attendanceRecords.eventId, scopedEventId, existingConditions),
     )
     .limit(1);
 
@@ -163,8 +214,8 @@ export async function processQrScan(eventId: string, input: unknown): Promise<Sc
   if (result.type === 'success') {
     try {
       await db.insert(attendanceRecords).values({
-        id: buildAttendanceRecordId(eventId, registration.personId, sessionId),
-        eventId,
+        id: buildAttendanceRecordId(scopedEventId, registration.personId, sessionId),
+        eventId: scopedEventId,
         personId: registration.personId,
         registrationId: registration.id,
         sessionId,
@@ -180,7 +231,7 @@ export async function processQrScan(eventId: string, input: unknown): Promise<Sc
       throw error;
     }
 
-    revalidatePath(`/events/${eventId}/qr`);
+    revalidatePath(`/events/${scopedEventId}/qr`);
   }
 
   return result;
@@ -189,8 +240,14 @@ export async function processQrScan(eventId: string, input: unknown): Promise<Sc
 // ── Manual Check-in ──────────────────────────────────────────
 
 export async function processManualCheckIn(eventId: string, input: unknown): Promise<ScanLookupResult> {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
-  const validated = manualCheckInSchema.parse(input);
+  const { scopedEventId, validated, sessionId } = validateCheckInRequest(
+    eventId,
+    input,
+    manualCheckInSchema,
+  );
+  const { userId } = await assertEventAccess(scopedEventId, { requireWrite: true });
+
+  await assertSessionBelongsToEvent(scopedEventId, sessionId);
 
   // Look up registration by ID
   const [registration] = await db
@@ -206,7 +263,7 @@ export async function processManualCheckIn(eventId: string, input: unknown): Pro
     .where(
       withEventScope(
         eventRegistrations.eventId,
-        eventId,
+        scopedEventId,
         eq(eventRegistrations.id, validated.registrationId),
       ),
     )
@@ -224,7 +281,6 @@ export async function processManualCheckIn(eventId: string, input: unknown): Pro
     .limit(1);
 
   const personName = person?.fullName ?? 'Unknown';
-  const sessionId = validated.sessionId ?? null;
 
   // Check for existing attendance
   const existingConditions = buildExistingAttendanceConditions(
@@ -236,7 +292,7 @@ export async function processManualCheckIn(eventId: string, input: unknown): Pro
     .select({ id: attendanceRecords.id })
     .from(attendanceRecords)
     .where(
-      withEventScope(attendanceRecords.eventId, eventId, existingConditions),
+      withEventScope(attendanceRecords.eventId, scopedEventId, existingConditions),
     )
     .limit(1);
 
@@ -252,8 +308,8 @@ export async function processManualCheckIn(eventId: string, input: unknown): Pro
   if (result.type === 'success') {
     try {
       await db.insert(attendanceRecords).values({
-        id: buildAttendanceRecordId(eventId, registration.personId, sessionId),
-        eventId,
+        id: buildAttendanceRecordId(scopedEventId, registration.personId, sessionId),
+        eventId: scopedEventId,
         personId: registration.personId,
         registrationId: registration.id,
         sessionId,
@@ -268,7 +324,7 @@ export async function processManualCheckIn(eventId: string, input: unknown): Pro
       throw error;
     }
 
-    revalidatePath(`/events/${eventId}/qr`);
+    revalidatePath(`/events/${scopedEventId}/qr`);
   }
 
   return result;

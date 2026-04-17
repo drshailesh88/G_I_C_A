@@ -104,6 +104,7 @@ describe('processQrScan session-level behavior', () => {
 
   it('uses eq for session-level duplicate detection (not isNull)', async () => {
     chainedSelectSequence([
+      [{ id: SESSION_ID }],
       [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
       [{ fullName: 'Dr. Sharma' }],
       [],
@@ -123,6 +124,7 @@ describe('processQrScan session-level behavior', () => {
 
   it('inserts attendance record with sessionId when provided', async () => {
     chainedSelectSequence([
+      [{ id: SESSION_ID }],
       [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
       [{ fullName: 'Dr. Sharma' }],
       [],
@@ -198,11 +200,18 @@ describe('processQrScan deterministic ID', () => {
 
     for (const sid of [null, SESSION_ID]) {
       selectCallCount = 0;
-      chainedSelectSequence([
-        [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
-        [{ fullName: 'Dr. Sharma' }],
-        [],
-      ]);
+      chainedSelectSequence(sid
+        ? [
+            [{ id: SESSION_ID }],
+            [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+            [{ fullName: 'Dr. Sharma' }],
+            [],
+          ]
+        : [
+            [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
+            [{ fullName: 'Dr. Sharma' }],
+            [],
+          ]);
       const insertChain = chainedInsert([{ id: 'new-id' }]);
 
       await processQrScan(EVENT_ID, {
@@ -223,6 +232,7 @@ describe('processQrScan deterministic ID', () => {
 describe('processManualCheckIn session-level behavior', () => {
   it('uses eq for session-level duplicate detection', async () => {
     chainedSelectSequence([
+      [{ id: SESSION_ID }],
       [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
       [{ fullName: 'Dr. Sharma' }],
       [],
@@ -240,6 +250,7 @@ describe('processManualCheckIn session-level behavior', () => {
 
   it('inserts with sessionId for manual session-level check-in', async () => {
     chainedSelectSequence([
+      [{ id: SESSION_ID }],
       [{ id: REG_ID, personId: PERSON_ID, status: 'confirmed', cancelledAt: null, registrationNumber: 'GEM-DEL-00001', category: 'delegate' }],
       [{ fullName: 'Dr. Sharma' }],
       [],
