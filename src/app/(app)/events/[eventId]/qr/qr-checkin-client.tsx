@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { QrScanner } from '@/components/shared/QrScanner';
 import { ScanFeedback } from '@/components/shared/ScanFeedback';
@@ -217,6 +218,17 @@ export function QrCheckInClient({
                 <span>Manual</span>
                 <span className="font-medium text-gray-700">{initialStats.byMethod['manual_search'] ?? 0}</span>
               </div>
+            </div>
+
+            {/* Drill-down link */}
+            <div className="mt-3">
+              <Link
+                href={`/events/${eventId}/qr/report`}
+                className="block w-full rounded-lg border border-gray-200 px-3 py-2 text-center text-xs font-medium text-blue-600 hover:bg-gray-50 hover:text-blue-800"
+                data-testid="view-report-link"
+              >
+                View Full Report →
+              </Link>
             </div>
           </div>
         </div>
