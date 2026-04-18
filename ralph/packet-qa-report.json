@@ -189,5 +189,22 @@
       "The modal only rendered green added and red removed count chips, so it missed the packet's required structured diff categories for orange changed or moved items."
     ],
     "notes": "Switched preview rendering to the shared template renderer, split the rendered body around a preview placeholder, expanded diff summary handling for changed or moved categories, and added packet-focused coverage. Packet-targeted vitest checks now pass; repo-wide npm run test:run and npx tsc --noEmit still fail due unrelated baseline issues outside PKT-C-003 scope."
+  },
+  {
+    "packet_id": "PKT-A-006",
+    "story_id": "p2-m04-public-attendee-program",
+    "qa_timestamp": "2026-04-18T13:36:16Z",
+    "qa_model": "codex",
+    "status": "fail",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "fail"
+    },
+    "bugs": [
+      "The public attendee program route does not return 404 for unpublished program data. `getPublicProgramData()` returns `hasPublishedVersion: false`, and the route renders a public 'not published yet' state instead of calling `notFound()`, which violates the frozen requirement that draft or unpublished events return 404.",
+      "The data loader does not constrain results to the latest published program version. It only checks that any program version exists, then queries live `sessions` rows by `eventId` and `isPublic`, so newer unpublished edits can leak onto the public route instead of showing the latest published snapshot."
+    ],
+    "notes": "Pass1 evidence confirmed the packet-specific Vitest suite passes, but packet verification still fails against the oracle. Repo-wide `npm run test:run` and `npx tsc --noEmit` also fail due unrelated baseline issues outside PKT-A-006 scope. Packet-local root cause is in the public program route and `getPublicProgramData()` implementation."
   }
 ]
