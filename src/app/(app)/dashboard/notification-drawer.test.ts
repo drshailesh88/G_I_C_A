@@ -30,8 +30,8 @@ vi.mock('drizzle-orm', async () => {
     and: vi.fn(() => 'mocked-and'),
     count: vi.fn(),
     desc: vi.fn(),
-    not: vi.fn(() => 'mocked-not'),
     inArray: vi.fn(() => 'mocked-inarray'),
+    isNull: vi.fn(() => 'mocked-isnull'),
     gte: vi.fn(),
     sql: actual.sql,
   };
@@ -89,6 +89,7 @@ describe('getRecentNotifications', () => {
         channel: 'email',
         status: 'sent',
         queuedAt: now,
+        readAt: null,
         personFullName: 'Dr. Priya Sharma',
       },
       {
@@ -100,6 +101,7 @@ describe('getRecentNotifications', () => {
         channel: 'whatsapp',
         status: 'read',
         queuedAt: now,
+        readAt: now,
         personFullName: 'Dr. Vikram Patel',
       },
     ]);
@@ -144,6 +146,7 @@ describe('getRecentNotifications', () => {
         channel: 'email',
         status: 'delivered',
         queuedAt: new Date(),
+        readAt: null,
         personFullName: 'Dr. Test',
       },
     ]);
@@ -165,6 +168,7 @@ describe('getRecentNotifications', () => {
         channel: 'email',
         status: 'queued',
         queuedAt: new Date(),
+        readAt: null,
         personFullName: null,
       },
     ]);
@@ -189,6 +193,32 @@ describe('getRecentNotifications', () => {
 
   it('throws on invalid eventId', async () => {
     await expect(getRecentNotifications('not-a-uuid')).rejects.toThrow();
+  });
+
+  it('treats failed notifications with readAt set as read for drawer badges', async () => {
+    const chain = makeSelectChain([
+      {
+        id: 'n5',
+        renderedSubject: 'Manual resend failed',
+        templateKeySnapshot: null,
+        recipientEmail: 'ops@example.com',
+        recipientPhoneE164: null,
+        channel: 'email',
+        status: 'failed',
+        queuedAt: new Date(),
+        readAt: new Date(),
+        personFullName: 'Ops Team',
+      },
+    ]);
+    const countChain = makeSelectChain([{ count: 0 }]);
+    mockDb.select.mockReturnValueOnce(chain).mockReturnValueOnce(countChain);
+
+    const result = await getRecentNotifications(EVENT_ID);
+    expect(result.unreadCount).toBe(0);
+    expect(result.items[0]).toMatchObject({
+      status: 'failed',
+      isUnread: false,
+    });
   });
 });
 
@@ -226,9 +256,12 @@ describe('markAllNotificationsRead', () => {
     await markAllNotificationsRead(EVENT_ID);
 
     expect(mockDb.update).toHaveBeenCalledOnce();
-    expect(chain.set).toHaveBeenCalledWith(
-      expect.objectContaining({ status: 'read' }),
-    );
+    const updateData = chain.set.mock.calls[0]?.[0];
+    expect(updateData).toMatchObject({
+      readAt: expect.any(Date),
+      updatedAt: expect.any(Date),
+    });
+    expect(updateData).not.toHaveProperty('status');
     expect(chain.where).toHaveBeenCalledOnce();
   });
 

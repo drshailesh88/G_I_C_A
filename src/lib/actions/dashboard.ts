@@ -10,7 +10,7 @@ import {
   redFlags,
   people,
 } from '@/lib/db/schema';
-import { eq, and, count, sql, gte, inArray, desc, not } from 'drizzle-orm';
+import { eq, and, count, sql, gte, inArray, desc, isNull } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
 import { eventIdSchema } from '@/lib/validations/event';
@@ -190,6 +190,7 @@ export async function getRecentNotifications(
         channel: notificationLog.channel,
         status: notificationLog.status,
         queuedAt: notificationLog.queuedAt,
+        readAt: notificationLog.readAt,
         personFullName: people.fullName,
       })
       .from(notificationLog)
@@ -200,7 +201,7 @@ export async function getRecentNotifications(
     db
       .select({ count: count() })
       .from(notificationLog)
-      .where(withEventScope(notificationLog.eventId, eventId, not(eq(notificationLog.status, 'read')))),
+      .where(withEventScope(notificationLog.eventId, eventId, isNull(notificationLog.readAt))),
   ]);
 
   return {
@@ -215,7 +216,7 @@ export async function getRecentNotifications(
       channel: row.channel,
       status: row.status,
       queuedAt: row.queuedAt,
-      isUnread: row.status !== 'read',
+      isUnread: row.readAt == null,
     })),
     unreadCount: countRow?.count ?? 0,
   };
@@ -228,7 +229,7 @@ export async function getNotificationUnreadCount(eventId: string): Promise<numbe
   const [row] = await db
     .select({ count: count() })
     .from(notificationLog)
-    .where(withEventScope(notificationLog.eventId, eventId, not(eq(notificationLog.status, 'read'))));
+    .where(withEventScope(notificationLog.eventId, eventId, isNull(notificationLog.readAt)));
 
   return row?.count ?? 0;
 }
@@ -239,11 +240,11 @@ export async function markAllNotificationsRead(eventId: string): Promise<void> {
 
   await db
     .update(notificationLog)
-    .set({ status: 'read', readAt: new Date(), updatedAt: new Date() })
+    .set({ readAt: new Date(), updatedAt: new Date() })
     .where(
       and(
         eq(notificationLog.eventId, eventId),
-        not(inArray(notificationLog.status, ['read', 'failed', 'retrying', 'sending'])),
+        isNull(notificationLog.readAt),
       ),
     );
 }
