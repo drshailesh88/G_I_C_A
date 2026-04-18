@@ -50,6 +50,7 @@ export type FlagType = (typeof FLAG_TYPES)[number];
 
 // ── Target Entity Types ───────────────────────────────────────
 export const TARGET_ENTITY_TYPES = [
+  'travel_record',
   'accommodation_record',
   'transport_batch',
   'transport_passenger_assignment',

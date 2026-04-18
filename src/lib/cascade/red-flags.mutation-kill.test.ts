@@ -101,8 +101,9 @@ describe('Red flag type registries', () => {
     expect(FLAG_TYPES).toContain('system_dispatch_failure');
   });
 
-  it('TARGET_ENTITY_TYPES has exactly 4 entries', () => {
-    expect(TARGET_ENTITY_TYPES).toHaveLength(4);
+  it('TARGET_ENTITY_TYPES has exactly 5 entries', () => {
+    expect(TARGET_ENTITY_TYPES).toHaveLength(5);
+    expect(TARGET_ENTITY_TYPES).toContain('travel_record');
     expect(TARGET_ENTITY_TYPES).toContain('accommodation_record');
     expect(TARGET_ENTITY_TYPES).toContain('transport_batch');
     expect(TARGET_ENTITY_TYPES).toContain('transport_passenger_assignment');

@@ -1,5 +1,5 @@
 import { db } from '@/lib/db';
-import { accommodationRecords, transportPassengerAssignments } from '@/lib/db/schema';
+import { accommodationRecords, transportPassengerAssignments, travelRecords } from '@/lib/db/schema';
 import { eq, ne } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { upsertRedFlag } from '../red-flags';
@@ -67,7 +67,32 @@ export async function handleRegistrationCancelled(params: {
   const { eventId, payload } = params;
   const data = payload as unknown as RegistrationCancelledPayload;
 
-  // 1. Flag active accommodation records for this person
+  // 1. Flag active travel records for this person
+  const activeTravelRecords = await db
+    .select({ id: travelRecords.id })
+    .from(travelRecords)
+    .where(
+      withEventScope(
+        travelRecords.eventId,
+        eventId,
+        eq(travelRecords.personId, data.personId),
+        ne(travelRecords.recordStatus, 'cancelled'),
+      ),
+    );
+
+  for (const travelRecord of activeTravelRecords) {
+    await upsertRedFlag({
+      eventId,
+      flagType: 'registration_cancelled',
+      flagDetail: `Registration ${data.registrationId} cancelled — review travel record`,
+      targetEntityType: 'travel_record',
+      targetEntityId: travelRecord.id,
+      sourceEntityType: 'registration',
+      sourceEntityId: data.registrationId,
+    });
+  }
+
+  // 2. Flag active accommodation records for this person
   const accomRecords = await db
     .select({ id: accommodationRecords.id })
     .from(accommodationRecords)
@@ -92,7 +117,7 @@ export async function handleRegistrationCancelled(params: {
     });
   }
 
-  // 2. Flag active transport passenger assignments for this person
+  // 3. Flag active transport passenger assignments for this person
   const passengerAssignments = await db
     .select({ id: transportPassengerAssignments.id })
     .from(transportPassengerAssignments)

@@ -139,7 +139,7 @@ export const CASCADE_DIRECTION = {
   'conference/accommodation.cancelled': ['transport_flag', 'delegate_notification'],
   'conference/travel.saved': ['notify_delegate_itinerary'],
   'conference/registration.created': ['send_confirmation', 'assign_qr'],
-  'conference/registration.cancelled': ['accommodation_flag', 'transport_flag'],
+  'conference/registration.cancelled': ['travel_flag', 'accommodation_flag', 'transport_flag'],
   'conference/session.updated': ['notify_affected_faculty'],
   'conference/certificate.generated': ['notify_recipient_certificate'],
 } as const;

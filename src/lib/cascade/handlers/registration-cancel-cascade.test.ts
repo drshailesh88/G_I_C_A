@@ -6,6 +6,12 @@ vi.mock('@/lib/inngest/client', () => ({
 
 vi.mock('@/lib/db', () => ({ db: { select: vi.fn() } }));
 vi.mock('@/lib/db/schema', () => ({
+  travelRecords: {
+    id: 'travel.id',
+    eventId: 'travel.event_id',
+    personId: 'travel.person_id',
+    recordStatus: 'travel.record_status',
+  },
   accommodationRecords: {
     id: 'accom.id',
     eventId: 'accom.event_id',
@@ -79,6 +85,7 @@ beforeEach(() => {
 
 describe('handleRegistrationCancelled — accommodation flags', () => {
   it('creates a registration_cancelled flag on each active accommodation record', async () => {
+    chainSelect([]);
     chainSelect([{ id: 'accom-1' }, { id: 'accom-2' }]);
     chainSelect([]);
 
@@ -107,6 +114,7 @@ describe('handleRegistrationCancelled — accommodation flags', () => {
   it('does not error when person has no accommodation records', async () => {
     chainSelect([]);
     chainSelect([]);
+    chainSelect([]);
 
     await expect(
       emitCascadeEvent(
@@ -122,8 +130,56 @@ describe('handleRegistrationCancelled — accommodation flags', () => {
   });
 });
 
+describe('handleRegistrationCancelled — travel flags', () => {
+  it('creates a registration_cancelled flag on each active travel record', async () => {
+    chainSelect([{ id: 'travel-1' }, { id: 'travel-2' }]);
+    chainSelect([]);
+    chainSelect([]);
+
+    await emitCascadeEvent(
+      CASCADE_EVENTS.REGISTRATION_CANCELLED,
+      EVENT_ID,
+      { type: 'user', id: 'admin-1' },
+      basePayload,
+    );
+
+    const calls = vi.mocked(upsertRedFlag).mock.calls;
+    const travelCalls = calls.filter(c => c[0].targetEntityType === 'travel_record');
+
+    expect(travelCalls).toHaveLength(2);
+    expect(travelCalls[0][0]).toMatchObject({
+      eventId: EVENT_ID,
+      flagType: 'registration_cancelled',
+      targetEntityType: 'travel_record',
+      targetEntityId: 'travel-1',
+      sourceEntityType: 'registration',
+      sourceEntityId: REG_ID,
+    });
+    expect(travelCalls[1][0].targetEntityId).toBe('travel-2');
+  });
+
+  it('does not error when person has no travel records', async () => {
+    chainSelect([]);
+    chainSelect([]);
+    chainSelect([]);
+
+    await expect(
+      emitCascadeEvent(
+        CASCADE_EVENTS.REGISTRATION_CANCELLED,
+        EVENT_ID,
+        { type: 'user', id: 'admin-1' },
+        basePayload,
+      ),
+    ).resolves.not.toThrow();
+
+    const calls = vi.mocked(upsertRedFlag).mock.calls;
+    expect(calls.filter(c => c[0].targetEntityType === 'travel_record')).toHaveLength(0);
+  });
+});
+
 describe('handleRegistrationCancelled — transport flags', () => {
   it('creates a registration_cancelled flag on each active transport passenger assignment', async () => {
+    chainSelect([]);
     chainSelect([]);
     chainSelect([{ id: 'tpa-1' }, { id: 'tpa-2' }]);
 
@@ -151,6 +207,7 @@ describe('handleRegistrationCancelled — transport flags', () => {
   it('does not error when person has no transport assignments', async () => {
     chainSelect([]);
     chainSelect([]);
+    chainSelect([]);
 
     await expect(
       emitCascadeEvent(
@@ -166,7 +223,8 @@ describe('handleRegistrationCancelled — transport flags', () => {
 });
 
 describe('handleRegistrationCancelled — combined', () => {
-  it('flags both accommodation and transport records when both exist', async () => {
+  it('flags travel, accommodation, and transport records when all exist', async () => {
+    chainSelect([{ id: 'travel-1' }]);
     chainSelect([{ id: 'accom-1' }]);
     chainSelect([{ id: 'tpa-1' }]);
 
@@ -178,14 +236,16 @@ describe('handleRegistrationCancelled — combined', () => {
     );
 
     const calls = vi.mocked(upsertRedFlag).mock.calls;
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
     const types = calls.map(c => c[0].targetEntityType);
+    expect(types).toContain('travel_record');
     expect(types).toContain('accommodation_record');
     expect(types).toContain('transport_passenger_assignment');
   });
 
   it('passes the correct eventId for event scoping', async () => {
     const { withEventScope } = await import('@/lib/db/with-event-scope');
+    chainSelect([{ id: 'travel-1' }]);
     chainSelect([{ id: 'accom-1' }]);
     chainSelect([]);
 
@@ -203,6 +263,7 @@ describe('handleRegistrationCancelled — combined', () => {
 
 describe('handleRegistrationCancelled — no logistics records', () => {
   it('completes without flagging anything when no logistics records exist', async () => {
+    chainSelect([]);
     chainSelect([]);
     chainSelect([]);
 
