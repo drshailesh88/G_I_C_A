@@ -25,8 +25,10 @@ import { ROLES } from '@/lib/auth/roles';
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440001';
 const ACTOR_ID = 'user_superadmin';
+const CURRENT_OWNER_ID = 'user_current_owner';
 const NEW_OWNER_ID = 'user_new_owner';
 const EXISTING_ROW_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+const CURRENT_OWNER_ROW_ID = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 
 function authAsSuperAdmin(userId = ACTOR_ID) {
   mockAuth.mockResolvedValue({
@@ -63,30 +65,51 @@ function mockInsertChain() {
   return { values };
 }
 
-// Insert path: db.update x2 (deactivate owner, event metadata), db.insert x1
-function setupInsertPath() {
-  const deactivateUpdate = mockUpdateChain();
-  const eventMetaUpdate = mockUpdateChain();
-  mockDb.update
-    .mockReturnValueOnce(deactivateUpdate)
-    .mockReturnValueOnce(eventMetaUpdate);
-  mockDb.select.mockReturnValue(mockSelectChain([]));
-  const insert = mockInsertChain();
-  mockDb.insert.mockReturnValue(insert);
-  return { deactivateUpdate, eventMetaUpdate, insert };
+function setupSelectSequence(rowsList: unknown[][]) {
+  mockDb.select
+    .mockReturnValueOnce(mockSelectChain(rowsList[0] ?? []))
+    .mockReturnValueOnce(mockSelectChain(rowsList[1] ?? []));
 }
 
-// Reactivate path: db.update x3 (deactivate owner, reactivate, event metadata), no insert
+// Insert path: db.update x2 (downgrade old owner, event metadata), db.insert x1
+function setupInsertPath() {
+  const downgradeUpdate = mockUpdateChain();
+  const eventMetaUpdate = mockUpdateChain();
+  mockDb.update
+    .mockReturnValueOnce(downgradeUpdate)
+    .mockReturnValueOnce(eventMetaUpdate);
+  setupSelectSequence([
+    [{ id: CURRENT_OWNER_ROW_ID, authUserId: CURRENT_OWNER_ID }],
+    [],
+  ]);
+  const insert = mockInsertChain();
+  mockDb.insert.mockReturnValue(insert);
+  return { downgradeUpdate, eventMetaUpdate, insert };
+}
+
+// Reactivate path: db.update x3 (downgrade old owner, reactivate new owner, event metadata), no insert
 function setupReactivatePath() {
-  const deactivateUpdate = mockUpdateChain();
+  const downgradeUpdate = mockUpdateChain();
   const reactivateUpdate = mockUpdateChain();
   const eventMetaUpdate = mockUpdateChain();
   mockDb.update
-    .mockReturnValueOnce(deactivateUpdate)
+    .mockReturnValueOnce(downgradeUpdate)
     .mockReturnValueOnce(reactivateUpdate)
     .mockReturnValueOnce(eventMetaUpdate);
-  mockDb.select.mockReturnValue(mockSelectChain([{ id: EXISTING_ROW_ID }]));
-  return { deactivateUpdate, reactivateUpdate, eventMetaUpdate };
+  setupSelectSequence([
+    [{ id: CURRENT_OWNER_ROW_ID, authUserId: CURRENT_OWNER_ID }],
+    [{ id: EXISTING_ROW_ID }],
+  ]);
+  return { downgradeUpdate, reactivateUpdate, eventMetaUpdate };
+}
+
+function setupSelfTransferPath() {
+  const eventMetaUpdate = mockUpdateChain();
+  mockDb.update.mockReturnValueOnce(eventMetaUpdate);
+  mockDb.select.mockReturnValue(
+    mockSelectChain([{ id: CURRENT_OWNER_ROW_ID, authUserId: CURRENT_OWNER_ID }]),
+  );
+  return { eventMetaUpdate };
 }
 
 beforeEach(() => {
@@ -138,12 +161,15 @@ describe('transferEventOwnership — input validation', () => {
 });
 
 describe('transferEventOwnership — ownership mutations (spec req 2–5)', () => {
-  it('deactivates the current active owner assignment (req 2)', async () => {
+  it('deactivates the current active owner assignment as owner by downgrading it to collaborator access (req 2, req 5)', async () => {
     authAsSuperAdmin();
-    const { deactivateUpdate } = setupInsertPath();
+    const { downgradeUpdate } = setupInsertPath();
     await transferEventOwnership(EVENT_ID, NEW_OWNER_ID);
-    expect(deactivateUpdate.set).toHaveBeenCalledWith(
-      expect.objectContaining({ isActive: false }),
+    expect(downgradeUpdate.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assignmentType: 'collaborator',
+        isActive: true,
+      }),
     );
   });
 
@@ -182,11 +208,16 @@ describe('transferEventOwnership — ownership mutations (spec req 2–5)', () =
     );
   });
 
-  it('only deactivates owner-type rows — does not touch collaborators (req 5)', async () => {
+  it('preserves prior collaborator access instead of removing the previous owner from the event (req 5)', async () => {
     authAsSuperAdmin();
-    setupInsertPath();
+    const { downgradeUpdate } = setupInsertPath();
     await transferEventOwnership(EVENT_ID, NEW_OWNER_ID);
-    // Insert path: deactivate(owner) + eventMetadata = 2 updates only
+    expect(downgradeUpdate.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assignmentType: 'collaborator',
+        isActive: true,
+      }),
+    );
     expect(mockDb.update).toHaveBeenCalledTimes(2);
   });
 
@@ -205,5 +236,17 @@ describe('transferEventOwnership — ownership mutations (spec req 2–5)', () =
     // withEventScope must be called with the correct eventId every time
     expect(mockWithEventScope.mock.calls.every((args) => args[1] === EVENT_ID)).toBe(true);
     expect(mockWithEventScope).toHaveBeenCalled();
+  });
+
+  it('treats a transfer to the current owner as a no-op on assignment history', async () => {
+    authAsSuperAdmin();
+    const { eventMetaUpdate } = setupSelfTransferPath();
+    const result = await transferEventOwnership(EVENT_ID, CURRENT_OWNER_ID);
+    expect(result).toEqual({ ok: true });
+    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(mockDb.update).toHaveBeenCalledTimes(1);
+    expect(eventMetaUpdate.set).toHaveBeenCalledWith(
+      expect.objectContaining({ updatedBy: ACTOR_ID }),
+    );
   });
 });

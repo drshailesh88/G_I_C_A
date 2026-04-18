@@ -350,10 +350,15 @@ export async function transferEventOwnership(
     return { ok: false, error: 'New owner user ID is required' };
   }
 
-  // Deactivate current active owner assignments for this event (collaborators untouched)
-  await db
-    .update(eventUserAssignments)
-    .set({ isActive: false, updatedAt: new Date() })
+  const normalizedNewOwnerUserId = newOwnerUserId.trim();
+  const updatedAt = new Date();
+
+  const [currentOwner] = await db
+    .select({
+      id: eventUserAssignments.id,
+      authUserId: eventUserAssignments.authUserId,
+    })
+    .from(eventUserAssignments)
     .where(
       withEventScope(
         eventUserAssignments.eventId,
@@ -361,7 +366,31 @@ export async function transferEventOwnership(
         eq(eventUserAssignments.assignmentType, 'owner'),
         eq(eventUserAssignments.isActive, true),
       ),
-    );
+    )
+    .limit(1);
+
+  if (currentOwner?.authUserId === normalizedNewOwnerUserId) {
+    await db
+      .update(events)
+      .set({ updatedBy: userId, updatedAt })
+      .where(eq(events.id, eventId));
+
+    revalidatePath(`/events/${eventId}/team`);
+    revalidatePath(`/events/${eventId}`);
+
+    return { ok: true };
+  }
+
+  if (currentOwner) {
+    await db
+      .update(eventUserAssignments)
+      .set({
+        assignmentType: 'collaborator',
+        isActive: true,
+        updatedAt,
+      })
+      .where(eq(eventUserAssignments.id, currentOwner.id));
+  }
 
   // Insert new owner or reactivate existing record for the new owner
   const [existing] = await db
@@ -371,7 +400,7 @@ export async function transferEventOwnership(
       withEventScope(
         eventUserAssignments.eventId,
         eventId,
-        eq(eventUserAssignments.authUserId, newOwnerUserId),
+        eq(eventUserAssignments.authUserId, normalizedNewOwnerUserId),
       ),
     )
     .limit(1);
@@ -379,12 +408,12 @@ export async function transferEventOwnership(
   if (existing) {
     await db
       .update(eventUserAssignments)
-      .set({ isActive: true, assignmentType: 'owner', assignedBy: userId, updatedAt: new Date() })
+      .set({ isActive: true, assignmentType: 'owner', assignedBy: userId, updatedAt })
       .where(eq(eventUserAssignments.id, existing.id));
   } else {
     await db.insert(eventUserAssignments).values({
       eventId,
-      authUserId: newOwnerUserId,
+      authUserId: normalizedNewOwnerUserId,
       assignmentType: 'owner',
       assignedBy: userId,
     });
@@ -393,7 +422,7 @@ export async function transferEventOwnership(
   // Reflect actor in event metadata (req 4)
   await db
     .update(events)
-    .set({ updatedBy: userId, updatedAt: new Date() })
+    .set({ updatedBy: userId, updatedAt })
     .where(eq(events.id, eventId));
 
   revalidatePath(`/events/${eventId}/team`);
