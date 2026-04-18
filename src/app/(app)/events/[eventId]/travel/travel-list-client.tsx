@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Plane, Train, Car, Bus, AlertTriangle, MoreVertical, Send } from 'lucide-react';
+import { ArrowLeft, Plus, Plane, Train, Car, Bus, AlertTriangle, MoreVertical, Send, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { cancelTravelRecord } from '@/lib/actions/travel';
@@ -363,24 +363,35 @@ export function TravelListClient({
           </Link>
           <h1 className="text-xl font-bold text-text-primary">Travel</h1>
         </div>
-        {canWrite ? (
-          <Link
-            href={`/events/${eventId}/travel/new`}
-            className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-light"
-          >
-            <Plus className="h-4 w-4" />
-            Add
-          </Link>
-        ) : (
-          <button
-            disabled
-            aria-disabled="true"
-            className="flex cursor-not-allowed items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white opacity-50"
-          >
-            <Plus className="h-4 w-4" />
-            Add
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canWrite && (
+            <Link
+              href={`/events/${eventId}/travel/import`}
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-secondary hover:bg-background"
+            >
+              <Upload className="h-4 w-4" />
+              Import CSV
+            </Link>
+          )}
+          {canWrite ? (
+            <Link
+              href={`/events/${eventId}/travel/new`}
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-light"
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </Link>
+          ) : (
+            <button
+              disabled
+              aria-disabled="true"
+              className="flex cursor-not-allowed items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white opacity-50"
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Active Records */}

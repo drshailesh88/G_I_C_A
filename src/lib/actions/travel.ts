@@ -18,10 +18,13 @@ import {
   travelRecordIdSchema,
   TRAVEL_RECORD_TRANSITIONS,
   TRAVEL_RECORD_STATUSES,
+  TRAVEL_DIRECTIONS,
+  TRAVEL_MODES,
   buildTravelChangeSummary,
   hasCascadeTriggerChanges,
   type TravelRecordStatus,
 } from '@/lib/validations/travel';
+import { normalizePhone } from '@/lib/validations/person';
 
 const eventIdSchema = z.string().uuid('Invalid event ID');
 const travelStatusSchema = z.enum(TRAVEL_RECORD_STATUSES);
@@ -535,4 +538,186 @@ export async function getPersonTravelRecords(eventId: string, personId: string) 
     .orderBy(desc(travelRecords.departureAtUtc));
 
   return rows;
+}
+
+// ── CSV batch import ──────────────────────────────────────────
+
+export interface TravelImportRow {
+  rowNumber: number;
+  personEmail?: string;
+  personPhone?: string;
+  direction: string;
+  travelMode: string;
+  fromCity: string;
+  toCity: string;
+  fromLocation?: string;
+  toLocation?: string;
+  departureAtUtc?: string;
+  arrivalAtUtc?: string;
+  carrierName?: string;
+  serviceNumber?: string;
+  pnrOrBookingRef?: string;
+  terminalOrGate?: string;
+}
+
+export type TravelImportRowResult =
+  | { rowNumber: number; status: 'imported'; recordId: string }
+  | { rowNumber: number; status: 'skipped'; reason: string }
+  | { rowNumber: number; status: 'error'; error: string };
+
+const TRAVEL_IMPORT_MAX_ROWS = 500;
+
+export async function importTravelBatch(
+  eventId: string,
+  rows: TravelImportRow[],
+): Promise<{ results: TravelImportRowResult[]; imported: number; skipped: number; errors: number }> {
+  const { userId, eventId: scopedEventId } = await assertTravelEventAccess(eventId, { requireWrite: true });
+
+  if (rows.length > TRAVEL_IMPORT_MAX_ROWS) {
+    throw new Error(`Import batch exceeds ${TRAVEL_IMPORT_MAX_ROWS} rows`);
+  }
+
+  const results: TravelImportRowResult[] = [];
+  let imported = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (const row of rows) {
+    try {
+      const directionResult = z.enum(TRAVEL_DIRECTIONS).safeParse(row.direction);
+      if (!directionResult.success) {
+        results.push({ rowNumber: row.rowNumber, status: 'error', error: `Invalid direction: ${row.direction}` });
+        errors++;
+        continue;
+      }
+
+      const modeResult = z.enum(TRAVEL_MODES).safeParse(row.travelMode);
+      if (!modeResult.success) {
+        results.push({ rowNumber: row.rowNumber, status: 'error', error: `Invalid travel mode: ${row.travelMode}` });
+        errors++;
+        continue;
+      }
+
+      // Person lookup: email first, phone as fallback
+      let personId: string | null = null;
+
+      if (row.personEmail) {
+        const [found] = await db
+          .select({ id: people.id })
+          .from(people)
+          .where(eq(people.email, row.personEmail.toLowerCase().trim()))
+          .limit(1);
+        if (found) personId = found.id;
+      }
+
+      if (!personId && row.personPhone) {
+        let phoneE164: string;
+        try {
+          phoneE164 = normalizePhone(row.personPhone);
+        } catch {
+          results.push({ rowNumber: row.rowNumber, status: 'skipped', reason: `Invalid phone number: ${row.personPhone}` });
+          skipped++;
+          continue;
+        }
+        const [found] = await db
+          .select({ id: people.id })
+          .from(people)
+          .where(eq(people.phoneE164, phoneE164))
+          .limit(1);
+        if (found) personId = found.id;
+      }
+
+      if (!personId) {
+        results.push({ rowNumber: row.rowNumber, status: 'skipped', reason: 'Person not found by email or phone' });
+        skipped++;
+        continue;
+      }
+
+      // Duplicate check: same PNR + same person + same event
+      const pnr = row.pnrOrBookingRef?.trim();
+      if (pnr) {
+        const [dup] = await db
+          .select({ id: travelRecords.id })
+          .from(travelRecords)
+          .where(
+            withEventScope(
+              travelRecords.eventId,
+              scopedEventId,
+              eq(travelRecords.personId, personId),
+              eq(travelRecords.pnrOrBookingRef, pnr),
+            ),
+          )
+          .limit(1);
+
+        if (dup) {
+          results.push({ rowNumber: row.rowNumber, status: 'skipped', reason: `Duplicate PNR ${pnr} for this person in this event` });
+          skipped++;
+          continue;
+        }
+      }
+
+      const [record] = await db
+        .insert(travelRecords)
+        .values({
+          eventId: scopedEventId,
+          personId,
+          direction: row.direction,
+          travelMode: row.travelMode,
+          fromCity: row.fromCity.trim(),
+          fromLocation: row.fromLocation?.trim() || null,
+          toCity: row.toCity.trim(),
+          toLocation: row.toLocation?.trim() || null,
+          departureAtUtc: row.departureAtUtc ? new Date(row.departureAtUtc) : null,
+          arrivalAtUtc: row.arrivalAtUtc ? new Date(row.arrivalAtUtc) : null,
+          carrierName: row.carrierName?.trim() || null,
+          serviceNumber: row.serviceNumber?.trim() || null,
+          pnrOrBookingRef: pnr || null,
+          terminalOrGate: row.terminalOrGate?.trim() || null,
+          recordStatus: 'draft',
+          createdBy: userId,
+          updatedBy: userId,
+        })
+        .returning();
+
+      await db
+        .insert(eventPeople)
+        .values({ eventId: scopedEventId, personId, source: 'travel' })
+        .onConflictDoNothing({ target: [eventPeople.eventId, eventPeople.personId] });
+
+      await writeAudit({
+        actorUserId: userId,
+        eventId: scopedEventId,
+        action: 'create',
+        resource: 'travel',
+        resourceId: record.id,
+        meta: {
+          personId,
+          direction: record.direction,
+          travelMode: record.travelMode,
+          recordStatus: record.recordStatus,
+          importedVia: 'csv',
+        },
+      });
+
+      await emitCascadeEvent(
+        CASCADE_EVENTS.TRAVEL_SAVED,
+        scopedEventId,
+        { type: 'user', id: userId },
+        buildTravelSavedPayload(record),
+      );
+
+      results.push({ rowNumber: row.rowNumber, status: 'imported', recordId: record.id });
+      imported++;
+    } catch (err) {
+      results.push({
+        rowNumber: row.rowNumber,
+        status: 'error',
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+      errors++;
+    }
+  }
+
+  revalidatePath(`/events/${scopedEventId}/travel`);
+  return { results, imported, skipped, errors };
 }
