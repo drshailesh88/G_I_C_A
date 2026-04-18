@@ -14,6 +14,19 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-18T11:35:00Z — PKT-C-003 — Preview revised emails modal
+
+- Story ID: p2-d1-preview-revised-emails
+- Implemented: Added three server actions to `program.ts` — `getVersionPreviewData(eventId, versionId)` (returns version, eventName, affectedFaculty list), `getVersionEmailParts(eventId, versionId, personId)` (interpolates program_update template body split around `{{changesSummary}}`, returns subject/bodyBefore/bodyAfter/changesSummaryJson/recipientEmail), and `sendVersionEmails(eventId, versionId)` (sends program_update email per affected person via notification service, updates version notificationStatus). Created `PreviewEmailsModal` client component — full-screen sheet on mobile (fixed inset-0), centered 560px modal on desktop (max-w-[560px]). Modal opens from "Preview Emails" button on version cards (only shown when affectedPersonIdsJson is non-empty). Shows faculty dropdown ("Preview as"), "X of N affected" counter, rendered email preview with To/Subject header and color-coded diff blocks (green = added sessions, red = removed sessions), "Close" and "Send All" footer buttons, and "N faculty will receive this email" count. Extended `ProgramVersion` type to include `affectedPersonIdsJson`. Updated `changes.test.ts` with mock for new program actions.
+- Files changed:
+  - src/lib/actions/program.ts (added inArray/interpolate imports; added buildChangesSummaryText helper; added getVersionPreviewData, getVersionEmailParts, sendVersionEmails server actions)
+  - src/app/(app)/events/[eventId]/changes/preview-emails-modal.tsx (new — PreviewEmailsModal client component)
+  - src/app/(app)/events/[eventId]/changes/preview-emails-modal.test.ts (new — 21 tests: 4 getVersionPreviewData + 7 getVersionEmailParts + 4 sendVersionEmails + 6 modal structure)
+  - src/app/(app)/events/[eventId]/changes/changes-client.tsx (added useState, PreviewEmailsModal import, affectedPersonIdsJson to ProgramVersion type, "Preview Emails" button in VersionCard, modal wiring)
+  - src/app/(app)/events/[eventId]/changes/changes.test.ts (added vi.mock for @/lib/actions/program; added affectedPersonIdsJson to baseVersion fixture)
+- Tests run: `npm run test:run` — 38 new tests pass (21 new + 17 pre-existing in changes.test.ts); 6 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, travel-cascade, full-journey, mutation-kill-2).
+- Risks/follow-ups: Template body is hardcoded from system-templates seed rather than resolved via renderTemplate DB lookup — event-specific template overrides will not be reflected in preview. Upgrade to DB-resolved templates in a future packet. Diff blocks show session counts ("+2 sessions added") not individual session titles (titles require snapshot join — deferred). The `sendVersionEmails` dynamic import of `@/lib/notifications/send` is used to avoid polluting program.ts bundle, but static import would also work.
+
 ## 2026-04-18T10:01:45Z — PKT-A-010 — Program version history page
 
 - Story ID: p2-m52-version-history

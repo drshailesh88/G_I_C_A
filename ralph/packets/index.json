@@ -2,7 +2,7 @@
   "version": 1,
   "pipeline": "ralph-packets",
   "updated_at": "2026-04-17T00:00:00Z",
-  "current_packet_id": "PKT-A-010",
+  "current_packet_id": "PKT-C-003",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -181,7 +181,7 @@
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "b05d562",
-      "qa_commit": null,
+      "qa_commit": "8d430e0",
       "last_status_at": "2026-04-18T10:22:18Z",
       "depends_on": []
     },
@@ -460,9 +460,9 @@
       "bucket": "C",
       "module": "program",
       "priority": 31,
-      "status": "BACKLOG",
+      "status": "NEEDS_REVIEW",
       "packet_file": "ralph/packets/PKT-C-003-p2-d1-preview-revised-emails.md",
-      "spec_status": "frozen-blocked-on-dependency",
+      "spec_status": "frozen",
       "wireframe_status": "frozen",
       "wireframe_refs": {
         "design_decisions": ".planning/wireframes/bucket-c-design-decisions.md#6-p2-d1-preview-revised-emails-d1",
@@ -477,12 +477,10 @@
         ]
       },
       "linear_issue_id": null,
-      "build_commit": null,
+      "build_commit": "7e2c7a6",
       "qa_commit": null,
-      "last_status_at": null,
-      "depends_on": [
-        "PKT-A-010"
-      ]
+      "last_status_at": "2026-04-18T11:35:00Z",
+      "depends_on": []
     },
     {
       "packet_id": "PKT-C-004",
