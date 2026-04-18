@@ -99,3 +99,43 @@ describe('SessionFormClient — responsive layout', () => {
     expect(html).toContain('gap-4');
   });
 });
+
+describe('SessionFormClient — conflict mode', () => {
+  it('shows mobile conflict alert banner when conflictMode=true', () => {
+    const html = render({ conflictMode: true });
+    expect(html).toContain('data-testid="conflict-alert-mobile"');
+    expect(html).toContain('Scheduling Conflict');
+  });
+
+  it('does not show mobile conflict alert when conflictMode is false', () => {
+    const html = render({ conflictMode: false });
+    expect(html).not.toContain('data-testid="conflict-alert-mobile"');
+  });
+
+  it('renders desktop conflict card when conflictMode=true', () => {
+    const html = render({ conflictMode: true });
+    expect(html).toContain('data-testid="conflict-card-desktop"');
+    expect(html).toContain('Conflict Detected');
+  });
+
+  it('highlights time field with warning ring when conflictMode=true', () => {
+    const html = render({ conflictMode: true });
+    expect(html).toContain('data-testid="conflict-time-field"');
+    expect(html).toContain('ring-warning');
+  });
+
+  it('does not highlight time field when conflictMode is false', () => {
+    const html = render({ conflictMode: false });
+    expect(html).not.toContain('data-testid="conflict-time-field"');
+  });
+
+  it('renders desktop grid layout wrapper when conflictMode=true', () => {
+    const html = render({ conflictMode: true });
+    expect(html).toContain('lg:grid-cols-[280px_1fr]');
+  });
+
+  it('does not render conflict grid layout when conflictMode is false', () => {
+    const html = render({ conflictMode: false });
+    expect(html).not.toContain('lg:grid-cols-[280px_1fr]');
+  });
+});

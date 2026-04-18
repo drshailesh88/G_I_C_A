@@ -634,11 +634,22 @@ export function ScheduleGridClient({
                 {conflicts[0].message}
               </span>
             </div>
-            {conflicts.length > 1 && (
-              <span className="text-[10px] text-text-muted">
-                +{conflicts.length - 1} more
-              </span>
-            )}
+            <div className="flex items-center gap-2">
+              {conflicts.length > 1 && (
+                <span className="text-[10px] text-text-muted">
+                  +{conflicts.length - 1} more
+                </span>
+              )}
+              {conflicts[0].sessionIds[1] && (
+                <Link
+                  href={`/events/${eventId}/sessions/${conflicts[0].sessionIds[1]}?conflict=true`}
+                  data-testid="conflict-fix-cta"
+                  className="rounded bg-warning px-2.5 py-1 text-xs font-semibold text-white hover:bg-warning/90"
+                >
+                  Fix
+                </Link>
+              )}
+            </div>
           </div>
         </div>
       )}

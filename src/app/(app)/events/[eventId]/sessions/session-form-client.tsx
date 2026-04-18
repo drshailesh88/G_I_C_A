@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Save, Plus, Trash2, Users } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Save, Plus, Trash2, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRole } from '@/hooks/use-role';
 import { FormGrid } from '@/components/responsive/form-grid';
@@ -96,6 +96,7 @@ export function SessionFormClient({
   roleRequirements = [],
   assignments = [],
   canWriteOverride,
+  conflictMode = false,
 }: {
   eventId: string;
   halls: Hall[];
@@ -105,6 +106,7 @@ export function SessionFormClient({
   roleRequirements?: RoleRequirement[];
   assignments?: Assignment[];
   canWriteOverride?: boolean;
+  conflictMode?: boolean;
 }) {
   const router = useRouter();
   const { canWrite } = useRole();
@@ -166,7 +168,7 @@ export function SessionFormClient({
           await updateSession(eventId, { sessionId: session.id, ...formData });
         }
 
-        router.push(`/events/${eventId}/sessions`);
+        router.push(`/events/${eventId}/${conflictMode ? 'schedule' : 'sessions'}`);
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to save session');
@@ -258,6 +260,38 @@ export function SessionFormClient({
         )}
       </div>
 
+      {conflictMode && (
+        <div
+          data-testid="conflict-alert-mobile"
+          className="mt-4 flex items-start gap-2 rounded-lg border border-warning bg-warning/10 p-3 lg:hidden"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+          <div>
+            <p className="text-sm font-semibold text-warning">Scheduling Conflict</p>
+            <p className="mt-0.5 text-xs text-text-muted">
+              Update the Time or Faculty fields below to resolve this conflict.
+            </p>
+          </div>
+        </div>
+      )}
+      <div className={cn(conflictMode && 'lg:mt-6 lg:grid lg:grid-cols-[280px_1fr] lg:gap-6 lg:items-start')}>
+        {conflictMode && (
+          <div
+            data-testid="conflict-card-desktop"
+            className="hidden rounded-lg border-2 border-warning bg-warning/5 p-4 lg:block"
+          >
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-warning" />
+              <h3 className="text-sm font-semibold text-warning">Conflict Detected</h3>
+            </div>
+            <p className="mt-2 text-xs text-text-muted">
+              This session overlaps with another session in time or faculty assignment.
+              Update the highlighted fields to resolve the conflict.
+            </p>
+          </div>
+        )}
+        <div>
+
       {/* Error */}
       {error && (
         <div className="mt-4 rounded-lg border border-error/20 bg-error/5 p-3">
@@ -288,6 +322,10 @@ export function SessionFormClient({
         </div>
 
         {/* Date + Time row */}
+        <div
+          className={cn(conflictMode && 'rounded-lg ring-2 ring-warning ring-offset-1')}
+          data-testid={conflictMode ? 'conflict-time-field' : undefined}
+        >
         <FormGrid>
           <div>
             <label className="mb-1 block text-sm font-medium text-text-primary">
@@ -327,6 +365,7 @@ export function SessionFormClient({
             </div>
           </div>
         </FormGrid>
+        </div>
 
         {/* Hall + Session Type row */}
         <FormGrid>
@@ -528,9 +567,13 @@ export function SessionFormClient({
 
       {/* Assignments Section (edit mode only, read-only display) */}
       {mode === 'edit' && session && assignments.length > 0 && (
-        <div className="mt-8">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-text-primary">
+        <div
+          className={cn('mt-8', conflictMode && 'rounded-lg p-3 ring-2 ring-warning ring-offset-1')}
+          data-testid={conflictMode ? 'conflict-faculty-field' : undefined}
+        >
+          <h2 className={cn('flex items-center gap-2 text-sm font-semibold', conflictMode ? 'text-warning' : 'text-text-primary')}>
             <Users className="h-4 w-4" />
+            {conflictMode && <AlertTriangle className="h-3.5 w-3.5" />}
             Current Assignments
           </h2>
           <div className="mt-3 space-y-2">
@@ -570,6 +613,8 @@ export function SessionFormClient({
           </button>
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }

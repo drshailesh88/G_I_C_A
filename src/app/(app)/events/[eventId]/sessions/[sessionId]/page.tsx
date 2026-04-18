@@ -12,16 +12,21 @@ import { ROLES } from '@/lib/auth/roles';
 import { SessionFormClient } from '../session-form-client';
 
 type Params = Promise<{ eventId: string; sessionId: string }>;
+type SearchParams = Promise<{ conflict?: string }>;
 
 export default async function EditSessionPage({
   params,
+  searchParams,
 }: {
   params: Params;
+  searchParams: SearchParams;
 }) {
   const { userId } = await auth();
   if (!userId) redirect('/login');
 
   const { eventId, sessionId } = await params;
+  const resolvedSearch = await searchParams;
+  const conflictMode = resolvedSearch.conflict === 'true';
 
   try {
     const { role } = await assertEventAccess(eventId);
@@ -53,6 +58,7 @@ export default async function EditSessionPage({
         roleRequirements={roleRequirements.map((r) => r.session_role_requirements)}
         assignments={assignments}
         canWriteOverride={canWrite}
+        conflictMode={conflictMode}
       />
     );
   } catch {
