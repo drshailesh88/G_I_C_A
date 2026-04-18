@@ -17,7 +17,7 @@
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "4a63d37bde196cca4f64c4a26525d951d2dc5b06",
-      "qa_commit": null,
+      "qa_commit": "3a68950",
       "last_status_at": "2026-04-18T01:20:54.746142Z",
       "depends_on": []
     },
