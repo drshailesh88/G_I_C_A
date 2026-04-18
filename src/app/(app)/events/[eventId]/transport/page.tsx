@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { assertEventAccess } from '@/lib/auth/event-access';
-import { getEventTransportBatches } from '@/lib/actions/transport';
+import { getEventTransportBatches, getSuggestedBatches } from '@/lib/actions/transport';
 import { TransportPlanningClient } from './transport-planning-client';
 
 type Params = Promise<{ eventId: string }>;
@@ -18,6 +18,10 @@ export default async function TransportPage({
     redirect('/login');
   }
 
-  const batches = await getEventTransportBatches(eventId);
-  return <TransportPlanningClient eventId={eventId} batches={batches} />;
+  const [batches, suggestions] = await Promise.all([
+    getEventTransportBatches(eventId),
+    getSuggestedBatches(eventId),
+  ]);
+
+  return <TransportPlanningClient eventId={eventId} batches={batches} suggestions={suggestions} />;
 }

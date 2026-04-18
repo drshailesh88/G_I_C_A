@@ -139,14 +139,14 @@ export type CascadeEventName = (typeof CASCADE_EVENTS)[keyof typeof CASCADE_EVEN
 // ── Cascade Event Map ─────────────────────────────────────────
 // Documents which events trigger which downstream effects
 export const CASCADE_DIRECTION = {
-  'conference/travel.created': ['notify_delegate_itinerary'],
+  'conference/travel.created': ['notify_delegate_itinerary', 'transport_suggestion_refresh'],
   'conference/travel.updated': ['accommodation_flag', 'transport_recalc', 'delegate_notification'],
   'conference/travel.cancelled': ['accommodation_flag', 'transport_flag', 'delegate_notification'],
   'conference/accommodation.created': ['accommodation_notification'],
   'conference/accommodation.saved': ['accommodation_notification'],
   'conference/accommodation.updated': ['transport_flag', 'delegate_notification', 'shared_room_flags'],
   'conference/accommodation.cancelled': ['transport_flag', 'delegate_notification'],
-  'conference/travel.saved': ['notify_delegate_itinerary'],
+  'conference/travel.saved': ['notify_delegate_itinerary', 'transport_suggestion_refresh'],
   'conference/registration.created': ['send_confirmation', 'assign_qr'],
   'conference/registration.cancelled': ['travel_flag', 'accommodation_flag', 'transport_flag'],
   'conference/session.updated': ['notify_affected_faculty'],

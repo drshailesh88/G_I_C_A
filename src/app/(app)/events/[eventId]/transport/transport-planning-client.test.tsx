@@ -64,7 +64,7 @@ const BATCHES = [
 
 function render(batches = BATCHES) {
   return renderToStaticMarkup(
-    createElement(TransportPlanningClient, { eventId: EVENT_ID, batches }),
+    createElement(TransportPlanningClient, { eventId: EVENT_ID, batches, suggestions: [] }),
   );
 }
 

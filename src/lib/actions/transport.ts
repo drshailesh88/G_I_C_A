@@ -8,7 +8,7 @@ import {
   travelRecords,
   people,
 } from '@/lib/db/schema';
-import { eq, and, desc, ne } from 'drizzle-orm';
+import { eq, and, desc, ne, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
@@ -33,6 +33,12 @@ import {
 } from '@/lib/validations/transport';
 
 const eventIdSchema = z.string().uuid('Invalid event ID');
+
+type CreateBatchInput = z.infer<typeof createBatchSchema>;
+type UpdateBatchInput = z.infer<typeof updateBatchSchema>;
+type CreateVehicleInput = z.infer<typeof createVehicleSchema>;
+type AssignPassengerInput = z.infer<typeof assignPassengerSchema>;
+type MovePassengerInput = z.infer<typeof movePassengerSchema>;
 
 function parseTransportInput<T>(schema: ZodType<T>, input: unknown): T {
   try {
@@ -219,7 +225,7 @@ function buildPassengerWriteFilters(passenger: {
 
 export async function createTransportBatch(eventId: string, input: unknown) {
   const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
-  const validated = parseTransportInput(createBatchSchema, input);
+  const validated = parseTransportInput(createBatchSchema, input) as CreateBatchInput;
 
   const [batch] = await db
     .insert(transportBatches)
@@ -261,7 +267,7 @@ export async function createTransportBatch(eventId: string, input: unknown) {
 
 export async function updateTransportBatch(eventId: string, input: unknown) {
   const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
-  const validated = parseTransportInput(updateBatchSchema, input);
+  const validated = parseTransportInput(updateBatchSchema, input) as UpdateBatchInput;
   const { batchId, ...fields } = validated;
 
   const existing = await getScopedBatch(scopedEventId, batchId);
@@ -360,7 +366,12 @@ export async function getEventTransportBatches(eventId: string) {
   return db
     .select()
     .from(transportBatches)
-    .where(eq(transportBatches.eventId, scopedEventId))
+    .where(
+      and(
+        eq(transportBatches.eventId, scopedEventId),
+        eq(transportBatches.batchSource, 'manual'),
+      ),
+    )
     .orderBy(desc(transportBatches.serviceDate));
 }
 
@@ -384,7 +395,7 @@ export async function getTransportBatch(eventId: string, batchId: string) {
 
 export async function createVehicleAssignment(eventId: string, input: unknown) {
   const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
-  const validated = parseTransportInput(createVehicleSchema, input);
+  const validated = parseTransportInput(createVehicleSchema, input) as CreateVehicleInput;
 
   const batch = await assertBatchExistsForAssignment(scopedEventId, validated.batchId);
 
@@ -498,7 +509,7 @@ export async function getBatchVehicles(eventId: string, batchId: string) {
 
 export async function assignPassenger(eventId: string, input: unknown) {
   const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
-  const validated = parseTransportInput(assignPassengerSchema, input);
+  const validated = parseTransportInput(assignPassengerSchema, input) as AssignPassengerInput;
 
   const batch = await assertBatchExistsForAssignment(scopedEventId, validated.batchId);
   await assertTravelRecordBelongsToEventPerson(scopedEventId, validated.personId, validated.travelRecordId);
@@ -543,7 +554,7 @@ export async function assignPassenger(eventId: string, input: unknown) {
 
 export async function movePassenger(eventId: string, input: unknown) {
   const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
-  const validated = parseTransportInput(movePassengerSchema, input);
+  const validated = parseTransportInput(movePassengerSchema, input) as MovePassengerInput;
 
   const [existing] = await db
     .select({
@@ -692,4 +703,229 @@ export async function getBatchPassengers(eventId: string, batchId: string) {
         eq(transportPassengerAssignments.batchId, batchId),
       ),
     );
+}
+
+const THREE_HOURS_MS = 3 * 60 * 60 * 1000;
+const SUGGESTION_ACTOR = 'system';
+
+export function floorToThreeHourWindowUtc(date: Date): { start: Date; end: Date } {
+  const bucket = Math.floor(date.getUTCHours() / 3) * 3;
+  const start = new Date(Date.UTC(
+    date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), bucket, 0, 0, 0,
+  ));
+  return { start, end: new Date(start.getTime() + THREE_HOURS_MS) };
+}
+
+type TravelRow = {
+  id: string;
+  personId: string;
+  direction: string;
+  toCity: string;
+  toLocation: string | null;
+  fromCity: string;
+  fromLocation: string | null;
+  arrivalAtUtc: Date | null;
+  departureAtUtc: Date | null;
+};
+
+type TravelCluster = {
+  movementType: 'arrival' | 'departure';
+  serviceDate: Date;
+  timeWindowStart: Date;
+  timeWindowEnd: Date;
+  sourceCity: string;
+  pickupHub: string;
+  dropHub: string;
+  records: Array<{ personId: string; travelRecordId: string }>;
+};
+
+export function buildClusters(records: TravelRow[]): TravelCluster[] {
+  const map = new Map<string, TravelCluster>();
+  for (const r of records) {
+    const isInbound = r.direction === 'inbound' && r.arrivalAtUtc !== null;
+    const isOutbound = r.direction === 'outbound' && r.departureAtUtc !== null;
+    if (!isInbound && !isOutbound) continue;
+    const movementType = isInbound ? 'arrival' : 'departure';
+    const timestamp = isInbound ? r.arrivalAtUtc : r.departureAtUtc;
+    if (timestamp === null) continue;
+    const city = isInbound ? r.toCity : r.fromCity;
+    const { start: winStart, end: winEnd } = floorToThreeHourWindowUtc(timestamp);
+    const serviceDate = new Date(Date.UTC(
+      timestamp.getUTCFullYear(), timestamp.getUTCMonth(), timestamp.getUTCDate(),
+    ));
+    const key = movementType + '|' + city + '|' + winStart.toISOString();
+    if (!map.has(key)) {
+      map.set(key, {
+        movementType, serviceDate, timeWindowStart: winStart, timeWindowEnd: winEnd,
+        sourceCity: city,
+        pickupHub: isInbound ? (r.toLocation || city) : 'Event Venue',
+        dropHub: isInbound ? 'Event Venue' : (r.fromLocation || city),
+        records: [],
+      });
+    }
+    map.get(key)?.records.push({ personId: r.personId, travelRecordId: r.id });
+  }
+  return Array.from(map.values());
+}
+
+export type SuggestedBatch = {
+  id: string;
+  eventId: string;
+  movementType: string;
+  serviceDate: Date;
+  timeWindowStart: Date;
+  timeWindowEnd: Date;
+  sourceCity: string;
+  pickupHub: string;
+  dropHub: string;
+  batchStatus: string;
+  batchSource: string;
+  passengers: Array<{ id: string; personId: string; travelRecordId: string; personName: string | null }>;
+};
+
+export async function generateTransportSuggestions(eventId: string): Promise<{ created: number; skipped: number }> {
+  const scopedEventId = z.string().uuid('Invalid event ID').parse(eventId);
+
+  const assignedRows = await db
+    .select({ travelRecordId: transportPassengerAssignments.travelRecordId })
+    .from(transportPassengerAssignments)
+    .where(and(eq(transportPassengerAssignments.eventId, scopedEventId), ne(transportPassengerAssignments.assignmentStatus, 'cancelled')));
+  const assignedIds = new Set(assignedRows.map((r) => r.travelRecordId));
+
+  const allRecords = await db
+    .select({
+      id: travelRecords.id, personId: travelRecords.personId, direction: travelRecords.direction,
+      toCity: travelRecords.toCity, toLocation: travelRecords.toLocation,
+      fromCity: travelRecords.fromCity, fromLocation: travelRecords.fromLocation,
+      arrivalAtUtc: travelRecords.arrivalAtUtc, departureAtUtc: travelRecords.departureAtUtc,
+    })
+    .from(travelRecords)
+    .where(and(eq(travelRecords.eventId, scopedEventId), inArray(travelRecords.recordStatus, ['confirmed', 'sent', 'changed'])));
+
+  const unassigned = allRecords.filter((r) => !assignedIds.has(r.id));
+  const clusters = buildClusters(unassigned);
+
+  const existingAuto = await db
+    .select({ movementType: transportBatches.movementType, sourceCity: transportBatches.sourceCity, timeWindowStart: transportBatches.timeWindowStart })
+    .from(transportBatches)
+    .where(and(eq(transportBatches.eventId, scopedEventId), eq(transportBatches.batchSource, 'auto'), ne(transportBatches.batchStatus, 'cancelled')));
+
+  const existingKeys = new Set(existingAuto.map((b) => b.movementType + '|' + b.sourceCity + '|' + b.timeWindowStart.toISOString()));
+
+  let created = 0; let skipped = 0;
+  for (const cluster of clusters) {
+    const key = cluster.movementType + '|' + cluster.sourceCity + '|' + cluster.timeWindowStart.toISOString();
+    if (existingKeys.has(key)) { skipped++; continue; }
+    const [batch] = await db.insert(transportBatches).values({
+      eventId: scopedEventId, movementType: cluster.movementType, batchSource: 'auto',
+      serviceDate: cluster.serviceDate, timeWindowStart: cluster.timeWindowStart, timeWindowEnd: cluster.timeWindowEnd,
+      sourceCity: cluster.sourceCity, pickupHub: cluster.pickupHub, pickupHubType: 'other',
+      dropHub: cluster.dropHub, dropHubType: 'other', batchStatus: 'planned',
+      createdBy: SUGGESTION_ACTOR, updatedBy: SUGGESTION_ACTOR,
+    }).returning();
+    if (cluster.records.length > 0) {
+      await db.insert(transportPassengerAssignments).values(
+        cluster.records.map((r) => ({ eventId: scopedEventId, batchId: batch.id, vehicleAssignmentId: null, personId: r.personId, travelRecordId: r.travelRecordId, assignmentStatus: 'pending' })),
+      );
+    }
+    created++;
+  }
+  if (created > 0) revalidatePath('/events/' + scopedEventId + '/transport');
+  return { created, skipped };
+}
+
+export async function refreshTransportSuggestions(eventId: string) {
+  await assertTransportEventAccess(eventId, { requireWrite: true });
+  return generateTransportSuggestions(eventId);
+}
+
+export async function getSuggestedBatches(eventId: string): Promise<SuggestedBatch[]> {
+  const { eventId: scopedEventId } = await assertTransportEventAccess(eventId);
+  const batches = await db.select().from(transportBatches)
+    .where(and(eq(transportBatches.eventId, scopedEventId), eq(transportBatches.batchSource, 'auto'), ne(transportBatches.batchStatus, 'cancelled')))
+    .orderBy(transportBatches.serviceDate);
+  if (batches.length === 0) return [];
+  const batchIds = batches.map((b) => b.id);
+  const passengerRows = await db
+    .select({ id: transportPassengerAssignments.id, batchId: transportPassengerAssignments.batchId, personId: transportPassengerAssignments.personId, travelRecordId: transportPassengerAssignments.travelRecordId, personName: people.fullName })
+    .from(transportPassengerAssignments)
+    .innerJoin(people, eq(transportPassengerAssignments.personId, people.id))
+    .where(and(eq(transportPassengerAssignments.eventId, scopedEventId), inArray(transportPassengerAssignments.batchId, batchIds), ne(transportPassengerAssignments.assignmentStatus, 'cancelled')));
+  const byBatch = new Map<string, typeof passengerRows>();
+  for (const p of passengerRows) { const list = byBatch.get(p.batchId) || []; list.push(p); byBatch.set(p.batchId, list); }
+  return batches.map((b) => ({ id: b.id, eventId: b.eventId, movementType: b.movementType, serviceDate: b.serviceDate, timeWindowStart: b.timeWindowStart, timeWindowEnd: b.timeWindowEnd, sourceCity: b.sourceCity, pickupHub: b.pickupHub, dropHub: b.dropHub, batchStatus: b.batchStatus, batchSource: b.batchSource, passengers: (byBatch.get(b.id) || []).map((p) => ({ id: p.id, personId: p.personId, travelRecordId: p.travelRecordId, personName: p.personName })) }));
+}
+
+export async function acceptSuggestion(eventId: string, batchId: string) {
+  const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
+  parseTransportInput(batchIdSchema, batchId);
+  const [batch] = await db.select({ id: transportBatches.id, eventId: transportBatches.eventId, batchSource: transportBatches.batchSource, batchStatus: transportBatches.batchStatus })
+    .from(transportBatches).where(withEventScope(transportBatches.eventId, scopedEventId, eq(transportBatches.id, batchId))).limit(1);
+  if (!batch) throw new Error('Suggestion not found');
+  if (batch.batchSource !== 'auto') throw new Error('Batch is not a suggestion');
+  if (batch.batchStatus === 'cancelled') throw new Error('Suggestion is already cancelled');
+  const [updated] = await db.update(transportBatches).set({ batchSource: 'manual', updatedBy: userId, updatedAt: new Date() })
+    .where(and(eq(transportBatches.id, batch.id), eq(transportBatches.eventId, batch.eventId))).returning();
+  if (!updated) throw new Error('Suggestion changed. Refresh and try again.');
+  await writeAudit({ actorUserId: userId, eventId: scopedEventId, action: 'update', resource: 'transport_batch', resourceId: updated.id, meta: { previousSource: 'auto', currentSource: 'manual', action: 'accept_suggestion' } });
+  revalidatePath('/events/' + scopedEventId + '/transport');
+  return updated;
+}
+
+export async function discardSuggestion(eventId: string, batchId: string) {
+  const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
+  parseTransportInput(batchIdSchema, batchId);
+  const [batch] = await db.select({ id: transportBatches.id, eventId: transportBatches.eventId, batchSource: transportBatches.batchSource, batchStatus: transportBatches.batchStatus })
+    .from(transportBatches).where(withEventScope(transportBatches.eventId, scopedEventId, eq(transportBatches.id, batchId))).limit(1);
+  if (!batch) throw new Error('Suggestion not found');
+  if (batch.batchSource !== 'auto') throw new Error('Batch is not a suggestion');
+  if (batch.batchStatus === 'cancelled') throw new Error('Suggestion is already cancelled');
+  await db.update(transportPassengerAssignments).set({ assignmentStatus: 'cancelled', updatedAt: new Date() })
+    .where(and(eq(transportPassengerAssignments.eventId, scopedEventId), eq(transportPassengerAssignments.batchId, batchId), ne(transportPassengerAssignments.assignmentStatus, 'cancelled')));
+  await db.update(transportBatches).set({ batchStatus: 'cancelled', updatedBy: userId, updatedAt: new Date() })
+    .where(and(eq(transportBatches.id, batch.id), eq(transportBatches.eventId, batch.eventId)));
+  await writeAudit({ actorUserId: userId, eventId: scopedEventId, action: 'update', resource: 'transport_batch', resourceId: batchId, meta: { action: 'discard_suggestion' } });
+  revalidatePath('/events/' + scopedEventId + '/transport');
+  return { ok: true };
+}
+
+export async function mergeSuggestions(eventId: string, keepBatchId: string, discardBatchId: string) {
+  const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
+  parseTransportInput(batchIdSchema, keepBatchId);
+  parseTransportInput(batchIdSchema, discardBatchId);
+  if (keepBatchId === discardBatchId) throw new Error('Cannot merge a suggestion with itself');
+  const batches = await db.select({ id: transportBatches.id }).from(transportBatches)
+    .where(and(eq(transportBatches.eventId, scopedEventId), inArray(transportBatches.id, [keepBatchId, discardBatchId]), eq(transportBatches.batchSource, 'auto'), ne(transportBatches.batchStatus, 'cancelled')));
+  const keep = batches.find((b) => b.id === keepBatchId);
+  const discard = batches.find((b) => b.id === discardBatchId);
+  if (!keep) throw new Error('Keep batch not found or not a valid suggestion');
+  if (!discard) throw new Error('Discard batch not found or not a valid suggestion');
+  await db.update(transportPassengerAssignments).set({ batchId: keepBatchId, updatedAt: new Date() })
+    .where(and(eq(transportPassengerAssignments.eventId, scopedEventId), eq(transportPassengerAssignments.batchId, discardBatchId), ne(transportPassengerAssignments.assignmentStatus, 'cancelled')));
+  await db.update(transportBatches).set({ batchStatus: 'cancelled', updatedBy: userId, updatedAt: new Date() })
+    .where(and(eq(transportBatches.id, discardBatchId), eq(transportBatches.eventId, scopedEventId)));
+  await writeAudit({ actorUserId: userId, eventId: scopedEventId, action: 'update', resource: 'transport_batch', resourceId: keepBatchId, meta: { action: 'merge_suggestions', discardBatchId } });
+  revalidatePath('/events/' + scopedEventId + '/transport');
+  return { ok: true };
+}
+
+export async function splitSuggestion(eventId: string, batchId: string, passengerAssignmentIds: string[]) {
+  const { userId, eventId: scopedEventId } = await assertTransportEventAccess(eventId, { requireWrite: true });
+  parseTransportInput(batchIdSchema, batchId);
+  if (!Array.isArray(passengerAssignmentIds) || passengerAssignmentIds.length === 0) throw new Error('At least one passenger must be selected for split');
+  const [original] = await db.select().from(transportBatches).where(withEventScope(transportBatches.eventId, scopedEventId, eq(transportBatches.id, batchId))).limit(1);
+  if (!original) throw new Error('Suggestion not found');
+  if (original.batchSource !== 'auto') throw new Error('Batch is not a suggestion');
+  if (original.batchStatus === 'cancelled') throw new Error('Suggestion is already cancelled');
+  const allPassengers = await db.select({ id: transportPassengerAssignments.id }).from(transportPassengerAssignments)
+    .where(and(eq(transportPassengerAssignments.eventId, scopedEventId), eq(transportPassengerAssignments.batchId, batchId), ne(transportPassengerAssignments.assignmentStatus, 'cancelled')));
+  const allIds = new Set(allPassengers.map((p) => p.id));
+  for (const pid of passengerAssignmentIds) { if (!allIds.has(pid)) throw new Error('Passenger ' + pid + ' does not belong to this suggestion'); }
+  if (passengerAssignmentIds.length >= allPassengers.length) throw new Error('Cannot split all passengers — at least one must remain in the original suggestion');
+  const [newBatch] = await db.insert(transportBatches).values({ eventId: scopedEventId, movementType: original.movementType, batchSource: 'auto', serviceDate: original.serviceDate, timeWindowStart: original.timeWindowStart, timeWindowEnd: original.timeWindowEnd, sourceCity: original.sourceCity, pickupHub: original.pickupHub, pickupHubType: original.pickupHubType, dropHub: original.dropHub, dropHubType: original.dropHubType, batchStatus: 'planned', notes: original.notes, createdBy: userId, updatedBy: userId }).returning();
+  await db.update(transportPassengerAssignments).set({ batchId: newBatch.id, updatedAt: new Date() })
+    .where(and(eq(transportPassengerAssignments.eventId, scopedEventId), inArray(transportPassengerAssignments.id, passengerAssignmentIds)));
+  await writeAudit({ actorUserId: userId, eventId: scopedEventId, action: 'create', resource: 'transport_batch', resourceId: newBatch.id, meta: { action: 'split_suggestion', originalBatchId: batchId, splitCount: passengerAssignmentIds.length } });
+  revalidatePath('/events/' + scopedEventId + '/transport');
+  return { newBatchId: newBatch.id };
 }

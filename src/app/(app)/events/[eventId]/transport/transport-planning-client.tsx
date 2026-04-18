@@ -7,6 +7,8 @@ import { ArrowLeft, Plus, Bus, Users, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { useResponsiveNav } from '@/hooks/use-responsive-nav';
+import type { SuggestedBatch } from '@/lib/actions/transport';
+import { SuggestionsPanel } from './suggestions-panel';
 
 type TransportBatch = {
   id: string;
@@ -62,9 +64,11 @@ export function buildTransportBatchPayload(form: FormData): Record<string, strin
 export function TransportPlanningClient({
   eventId,
   batches,
+  suggestions,
 }: {
   eventId: string;
   batches: TransportBatch[];
+  suggestions: SuggestedBatch[];
 }) {
   const router = useRouter();
   const { isMobile } = useResponsiveNav();
@@ -172,6 +176,8 @@ export function TransportPlanningClient({
           </div>
         </form>
       )}
+
+      <SuggestionsPanel eventId={eventId} suggestions={suggestions} />
 
       {/* Batch List — card view (mobile/tablet) or table view (desktop) */}
       {grouped.length > 0 ? (
