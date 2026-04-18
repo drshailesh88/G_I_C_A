@@ -1,7 +1,7 @@
 {
   "version": 1,
   "pipeline": "ralph-packets",
-  "updated_at": "2026-04-18T18:55:00Z",
+  "updated_at": "2026-04-18T19:01:07Z",
   "current_packet_id": "PKT-B-004",
   "packets": [
     {
@@ -334,14 +334,14 @@
       "bucket": "B",
       "module": "events",
       "priority": 104,
-      "status": "NEEDS_REVIEW",
+      "status": "VERIFIED",
       "packet_file": "ralph/packets/PKT-B-004-p6-m51-event-field-builder.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "a2fcf66",
       "qa_commit": null,
-      "last_status_at": "2026-04-19T00:24:30Z",
+      "last_status_at": "2026-04-18T19:01:07Z",
       "depends_on": []
     },
     {

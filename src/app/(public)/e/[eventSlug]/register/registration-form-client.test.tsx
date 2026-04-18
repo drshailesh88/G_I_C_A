@@ -10,7 +10,7 @@ vi.mock('@/lib/actions/registration', () => ({
   registerForEvent: vi.fn(),
 }));
 
-import { RegistrationFormClient } from './registration-form-client';
+import { RegistrationFormClient, serializeCustomFieldValue } from './registration-form-client';
 
 function render() {
   return renderToStaticMarkup(
@@ -88,5 +88,39 @@ describe('RegistrationFormClient responsive layout', () => {
   it('renders event name', () => {
     const html = render();
     expect(html).toContain('Test Conference');
+  });
+});
+
+describe('serializeCustomFieldValue', () => {
+  it('preserves file metadata instead of coercing File objects to [object File]', () => {
+    const value = serializeCustomFieldValue(
+      {
+        id: '99999999-9999-9999-9999-999999999999',
+        type: 'file',
+        label: 'Supporting Document',
+        required: false,
+      },
+      new File(['hello'], 'proof.pdf', { type: 'application/pdf' }),
+    );
+
+    expect(value).toEqual({
+      name: 'proof.pdf',
+      size: 5,
+      type: 'application/pdf',
+    });
+  });
+
+  it('skips empty file selections', () => {
+    const value = serializeCustomFieldValue(
+      {
+        id: '99999999-9999-9999-9999-999999999999',
+        type: 'file',
+        label: 'Supporting Document',
+        required: false,
+      },
+      new File([], '', { type: 'application/pdf' }),
+    );
+
+    expect(value).toBeUndefined();
   });
 });

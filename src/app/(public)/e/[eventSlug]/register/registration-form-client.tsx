@@ -15,6 +15,12 @@ type ParsedFieldConfig = {
   customFields: CustomField[];
 };
 
+type FileFieldValue = {
+  name: string;
+  size: number;
+  type: string | null;
+};
+
 function parseFieldConfig(raw: unknown): ParsedFieldConfig {
   const fc = (raw ?? {}) as Record<string, unknown>;
   const sf = (fc.standardFields ?? {}) as Record<string, boolean>;
@@ -25,6 +31,33 @@ function parseFieldConfig(raw: unknown): ParsedFieldConfig {
     ),
     customFields: cf,
   };
+}
+
+export function serializeCustomFieldValue(
+  field: CustomField,
+  rawValue: FormDataEntryValue | null,
+): string | number | FileFieldValue | undefined {
+  if (rawValue === null || rawValue === '') {
+    return undefined;
+  }
+
+  if (field.type === 'number') {
+    return Number(rawValue);
+  }
+
+  if (field.type === 'file') {
+    if (!(rawValue instanceof File) || !rawValue.name) {
+      return undefined;
+    }
+
+    return {
+      name: rawValue.name,
+      size: rawValue.size,
+      type: rawValue.type || null,
+    };
+  }
+
+  return String(rawValue);
 }
 
 export function RegistrationFormClient({
@@ -63,10 +96,9 @@ export function RegistrationFormClient({
     // Collect custom field values into preferences
     const preferences: Record<string, unknown> = {};
     for (const cf of customFields) {
-      const rawValue = formData.get(`custom_${cf.id}`);
-      if (rawValue !== null && rawValue !== '') {
-        preferences[`custom_${cf.id}`] =
-          cf.type === 'number' ? Number(rawValue) : String(rawValue);
+      const value = serializeCustomFieldValue(cf, formData.get(`custom_${cf.id}`));
+      if (value !== undefined) {
+        preferences[`custom_${cf.id}`] = value;
       }
     }
 

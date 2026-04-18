@@ -209,3 +209,11 @@ Evaluate ex
 - bug count: 0
 - fix commit(s): none
 - notes: Verified against the frozen packet file. The existing implementation creates a new event and deep-copies halls, sessions, role requirements, branding, event-scoped templates, and triggers with fresh ids and the new eventId, shifts dates from the new start date, leaves person-linked operational tables untouched, and restricts duplication to Event Coordinator or Super Admin.
+
+## 2026-04-18T19:01:07Z — PKT-B-004 — Event field builder
+
+- QA status: fixed
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated baseline failures; manual acceptance pass against packet oracle
+- bug count: 1
+- fix commit(s): pending
+- notes: Fixed public registration handling for configured file custom fields so future registrations persist JSON-safe file metadata instead of the unusable string `[object File]`, and added packet-local regression coverage for the file-field serializer.
