@@ -53,7 +53,7 @@
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "5d6e3b9",
-      "qa_commit": null,
+      "qa_commit": "40effbc",
       "last_status_at": "2026-04-18T01:58:46Z",
       "depends_on": [
         "PKT-A-002"

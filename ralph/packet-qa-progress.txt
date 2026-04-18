@@ -21,5 +21,5 @@
 - QA status: fixed
 - checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated modules; typecheck fail due unrelated repo-wide errors
 - bug count: 2
-- fix commit(s): pending scoped QA commit for PKT-A-003
+- fix commit(s): `40effbc`
 - notes: Fixed the contract mismatch between saved registration settings and the public registration action, enforced cutoff-date closure in the public flow, and added packet-focused coverage for approval, waitlist, cutoff, and closed-form rendering.
