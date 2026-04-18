@@ -9,6 +9,7 @@ import { ZodError, ZodIssue } from 'zod';
 import { createEventSchema, updateEventSchema, eventIdSchema, EVENT_TRANSITIONS, type EventStatus } from '@/lib/validations/event';
 import { assertEventAccess, getEventListContext } from '@/lib/auth/event-access';
 import { withEventScope } from '@/lib/db/with-event-scope';
+import { ROLES } from '@/lib/auth/roles';
 
 function slugify(text: string): string {
   return text
@@ -325,6 +326,80 @@ export async function updateEventStatus(eventId: string, newStatus: EventStatus)
   revalidatePath(`/events/${eventId}`);
 
   return { success: true };
+}
+
+export type TransferOwnershipResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+export async function transferEventOwnership(
+  eventId: string,
+  newOwnerUserId: string,
+): Promise<TransferOwnershipResult> {
+  const session = await auth();
+  const { userId } = session;
+  if (!userId) return { ok: false, error: 'Not authenticated' };
+
+  const isSuperAdmin = session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
+  if (!isSuperAdmin) return { ok: false, error: 'Forbidden: only Super Admin can transfer event ownership' };
+
+  const parsedEventId = eventIdSchema.safeParse(eventId);
+  if (!parsedEventId.success) return { ok: false, error: 'Invalid event ID' };
+
+  if (!newOwnerUserId || typeof newOwnerUserId !== 'string' || newOwnerUserId.trim().length === 0) {
+    return { ok: false, error: 'New owner user ID is required' };
+  }
+
+  // Deactivate current active owner assignments for this event (collaborators untouched)
+  await db
+    .update(eventUserAssignments)
+    .set({ isActive: false, updatedAt: new Date() })
+    .where(
+      withEventScope(
+        eventUserAssignments.eventId,
+        eventId,
+        eq(eventUserAssignments.assignmentType, 'owner'),
+        eq(eventUserAssignments.isActive, true),
+      ),
+    );
+
+  // Insert new owner or reactivate existing record for the new owner
+  const [existing] = await db
+    .select({ id: eventUserAssignments.id })
+    .from(eventUserAssignments)
+    .where(
+      withEventScope(
+        eventUserAssignments.eventId,
+        eventId,
+        eq(eventUserAssignments.authUserId, newOwnerUserId),
+      ),
+    )
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(eventUserAssignments)
+      .set({ isActive: true, assignmentType: 'owner', assignedBy: userId, updatedAt: new Date() })
+      .where(eq(eventUserAssignments.id, existing.id));
+  } else {
+    await db.insert(eventUserAssignments).values({
+      eventId,
+      authUserId: newOwnerUserId,
+      assignmentType: 'owner',
+      assignedBy: userId,
+    });
+  }
+
+  // Reflect actor in event metadata (req 4)
+  await db
+    .update(events)
+    .set({ updatedBy: userId, updatedAt: new Date() })
+    .where(eq(events.id, eventId));
+
+  revalidatePath(`/events/${eventId}/team`);
+  revalidatePath(`/events/${eventId}`);
+
+  return { ok: true };
 }
 
 export async function updateEvent(eventId: string, formData: FormData): Promise<UpdateEventResult> {
