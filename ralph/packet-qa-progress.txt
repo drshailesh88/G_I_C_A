@@ -64,3 +64,11 @@ Evaluate ex
 - bug count: 3
 - fix commit(s): `6706061deca377e59a67ebcd4867d727bb720609`
 - notes: Corrected the /terms shell to match the centered registration layout, replaced hardcoded root navigation with back-to-registration controls, and added the missing /terms footer link on the alternate public registration page.
+
+## 2026-04-18T03:50:46Z — PKT-C-005 — Notification drawer
+
+- QA status: fixed
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated modules; typecheck fail due unrelated repo-wide errors
+- bug count: 2
+- fix commit(s): `df067de2dc418ce4d4106c6dc2d1934453efc6c0`
+- notes: Added the missing `/events/[eventId]/communications` route and switched drawer unread tracking to `notification_log.readAt` so failed notifications can still be marked read without breaking the failed filter or badge counts.

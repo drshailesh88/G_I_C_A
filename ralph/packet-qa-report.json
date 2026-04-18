@@ -79,5 +79,22 @@
       "The alternate public registration page at /register/[eventId] did not expose the required footer link to /terms."
     ],
     "notes": "Updated the /terms route to use the centered public registration shell, replaced hardcoded root navigation with back-to-registration controls, and added the missing /terms footer link on the alternate public registration page. Packet-focused vitest checks passed; repo-wide npm run test:run and npx tsc --noEmit still fail due pre-existing issues outside PKT-C-001 scope."
+  },
+  {
+    "packet_id": "PKT-C-005",
+    "story_id": "p6-d8-notification-drawer",
+    "qa_timestamp": "2026-04-18T03:50:46Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "pass"
+    },
+    "bugs": [
+      "The drawer footer linked to /events/[eventId]/communications, but that route did not exist, so the required handoff target was a broken navigation path.",
+      "Unread state was derived from delivery status instead of read state, so failed notifications could remain permanently counted as unread while Mark all read intentionally refused to mutate failed delivery statuses."
+    ],
+    "notes": "Added the missing /events/[eventId]/communications route, switched drawer unread tracking to notification_log.readAt so failed items can still be marked read without losing failure status, and expanded packet-local coverage for the route and read/unread behavior. Packet-focused vitest checks passed; repo-wide npm run test:run and npx tsc --noEmit still fail due pre-existing issues outside PKT-C-005 scope."
   }
 ]
