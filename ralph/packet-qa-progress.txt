@@ -145,3 +145,11 @@ Evaluate ex
 - bug count: 2
 - fix commit(s): none
 - notes: The public route currently renders a visible "program not published yet" state instead of returning `404` for unpublished program data, and `getPublicProgramData()` only checks whether any program version exists before querying live public sessions. That means the route can expose sessions outside the latest published snapshot, violating the packet's unpublished-data and latest-published-version requirements.
+
+## 2026-04-18T14:16:30Z — PKT-A-007 — Communications hub page
+
+- QA status: fail
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated baseline failures; manual acceptance fail against packet oracle
+- bug count: 1
+- fix commit(s): none
+- notes: The hub route exists, groups templates by channel, and reads the full event-scoped notification log with filtering and pagination, but the template cards point at `/events/[eventId]/templates/[templateId]/edit` and there is no matching communications editor route under `src/app/(app)/events/[eventId]/templates`. That leaves the packet blocked on its required editor navigation flow.

@@ -206,5 +206,21 @@
       "The data loader does not constrain results to the latest published program version. It only checks that any program version exists, then queries live `sessions` rows by `eventId` and `isPublic`, so newer unpublished edits can leak onto the public route instead of showing the latest published snapshot."
     ],
     "notes": "Pass1 evidence confirmed the packet-specific Vitest suite passes, but packet verification still fails against the oracle. Repo-wide `npm run test:run` and `npx tsc --noEmit` also fail due unrelated baseline issues outside PKT-A-006 scope. Packet-local root cause is in the public program route and `getPublicProgramData()` implementation."
+  },
+  {
+    "packet_id": "PKT-A-007",
+    "story_id": "p4-m13-template-list-hub",
+    "qa_timestamp": "2026-04-18T14:16:30Z",
+    "qa_model": "codex",
+    "status": "fail",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "fail"
+    },
+    "bugs": [
+      "Template cards link to `/events/[eventId]/templates/[templateId]/edit`, but the communications template editor route does not exist under `src/app/(app)/events/[eventId]/templates`, so the hub does not satisfy the packet requirement that cards navigate into the template editor flow."
+    ],
+    "notes": "Packet-targeted `templates-hub.test.ts` passes, and the page does render event-scoped grouped templates plus a full event-scoped log with filtering and pagination. Verification still fails against the frozen packet oracle because the editor destination route is absent. Repo-wide `npm run test:run` and `npx tsc --noEmit` also fail due unrelated baseline issues outside PKT-A-007 scope."
   }
 ]
