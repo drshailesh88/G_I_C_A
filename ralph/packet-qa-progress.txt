@@ -56,3 +56,11 @@ Evaluate ex
 - bug count: 1
 - fix commit(s): `7b692bb577c0ad8ef3f24d20aeb499f0d001b110`
 - notes: Added travel-record flagging to the registration cancellation cascade, updated cascade metadata, and expanded packet-local red-flag coverage so cancellation now marks travel, accommodation, and transport records for review.
+
+## 2026-04-18T03:30:18Z — PKT-C-001 — Terms and privacy pages
+
+- QA status: fixed
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated modules; typecheck fail due unrelated repo-wide errors
+- bug count: 3
+- fix commit(s): `6706061deca377e59a67ebcd4867d727bb720609`
+- notes: Corrected the /terms shell to match the centered registration layout, replaced hardcoded root navigation with back-to-registration controls, and added the missing /terms footer link on the alternate public registration page.

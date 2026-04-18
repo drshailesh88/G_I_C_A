@@ -61,5 +61,23 @@
       "Registration cancellation emitted a cascade but only flagged accommodation and transport records, leaving linked travel records unflagged despite the packet requirement to review all affected travel, accommodation, and transport logistics."
     ],
     "notes": "Added travel-record red flags to the registration cancellation cascade, updated the cascade direction metadata, and expanded packet-local red-flag coverage. Packet-focused vitest checks passed; repo-wide npm run test:run and npx tsc --noEmit still fail due pre-existing issues outside PKT-A-005 scope."
+  },
+  {
+    "packet_id": "PKT-C-001",
+    "story_id": "p2-d7-terms-privacy-page",
+    "qa_timestamp": "2026-04-18T03:30:18Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "pass"
+    },
+    "bugs": [
+      "The /terms page used a full-width shell instead of the required centered max-w-lg registration-style layout.",
+      "The /terms header and footer back controls hardcoded navigation to / instead of returning the user to their registration flow.",
+      "The alternate public registration page at /register/[eventId] did not expose the required footer link to /terms."
+    ],
+    "notes": "Updated the /terms route to use the centered public registration shell, replaced hardcoded root navigation with back-to-registration controls, and added the missing /terms footer link on the alternate public registration page. Packet-focused vitest checks passed; repo-wide npm run test:run and npx tsc --noEmit still fail due pre-existing issues outside PKT-C-001 scope."
   }
 ]
