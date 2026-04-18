@@ -41,6 +41,8 @@ import {
 } from '@/lib/validations/program';
 import { z } from 'zod';
 import { generateRegistrationNumber, generateQrToken } from '@/lib/validations/registration';
+import { emitCascadeEvent } from '@/lib/cascade/emit';
+import { CASCADE_EVENTS } from '@/lib/cascade/events';
 
 const PROGRAM_READ_ROLES = new Set([
   ROLES.SUPER_ADMIN,
@@ -1162,6 +1164,19 @@ export async function publishProgramVersion(eventId: string, input: unknown) {
 
   revalidatePath(`/events/${scopedEventId}/sessions`);
   revalidatePath(`/events/${scopedEventId}/schedule`);
+
+  await emitCascadeEvent(
+    CASCADE_EVENTS.PROGRAM_VERSION_PUBLISHED,
+    scopedEventId,
+    { type: 'user', id: userId! },
+    {
+      versionId: version.id,
+      versionNo: version.versionNo,
+      baseVersionId: version.baseVersionId ?? null,
+      affectedPersonIds,
+    },
+  );
+
   return version;
 }
 

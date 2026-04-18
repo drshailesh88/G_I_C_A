@@ -102,6 +102,14 @@ export type SessionUpdatedPayload = {
   affectedFacultyIds: string[];
 };
 
+// ── Program Events ───────────────────────────────────────────
+export type ProgramVersionPublishedPayload = {
+  versionId: string;
+  versionNo: number;
+  baseVersionId: string | null;
+  affectedPersonIds: string[];
+};
+
 // ── Certificate Events ───────────────────────────────────────
 export type CertificateGeneratedPayload = {
   certificateId: string;
@@ -123,6 +131,7 @@ export const CASCADE_EVENTS = {
   REGISTRATION_CANCELLED: 'conference/registration.cancelled',
   SESSION_UPDATED: 'conference/session.updated',
   CERTIFICATE_GENERATED: 'conference/certificate.generated',
+  PROGRAM_VERSION_PUBLISHED: 'conference/program.version_published',
 } as const;
 
 export type CascadeEventName = (typeof CASCADE_EVENTS)[keyof typeof CASCADE_EVENTS];
@@ -142,4 +151,5 @@ export const CASCADE_DIRECTION = {
   'conference/registration.cancelled': ['travel_flag', 'accommodation_flag', 'transport_flag'],
   'conference/session.updated': ['notify_affected_faculty'],
   'conference/certificate.generated': ['notify_recipient_certificate'],
+  'conference/program.version_published': ['notify_affected_faculty_diffs'],
 } as const;

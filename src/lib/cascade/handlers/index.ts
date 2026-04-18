@@ -3,6 +3,7 @@ import { registerAccommodationCascadeHandlers } from './accommodation-cascade';
 import { registerRegistrationCascadeHandlers } from './registration-cascade';
 import { registerSessionCascadeHandlers } from './session-cascade';
 import { registerCertificateCascadeHandlers } from './certificate-cascade';
+import { registerProgramCascadeHandlers } from './program-cascade';
 
 let registered = false;
 
@@ -13,5 +14,6 @@ export function registerAllCascadeHandlers() {
   registerRegistrationCascadeHandlers();
   registerSessionCascadeHandlers();
   registerCertificateCascadeHandlers();
+  registerProgramCascadeHandlers();
   registered = true;
 }

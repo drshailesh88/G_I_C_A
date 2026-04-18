@@ -94,6 +94,12 @@ const certificateGeneratedPayloadSchema = payloadBaseSchema.extend({
   personId: nonEmptyStringSchema,
   templateId: nonEmptyStringSchema,
 });
+const programVersionPublishedPayloadSchema = payloadBaseSchema.extend({
+  versionId: nonEmptyStringSchema,
+  versionNo: z.number().int().positive(),
+  baseVersionId: z.string().nullable().optional(),
+  affectedPersonIds: z.array(nonEmptyStringSchema),
+});
 
 const productionPayloadSchemas = {
   [CASCADE_EVENTS.TRAVEL_CREATED]: savedTravelPayloadSchema,
@@ -108,6 +114,7 @@ const productionPayloadSchemas = {
   [CASCADE_EVENTS.REGISTRATION_CANCELLED]: registrationCancelledPayloadSchema,
   [CASCADE_EVENTS.SESSION_UPDATED]: sessionUpdatedPayloadSchema,
   [CASCADE_EVENTS.CERTIFICATE_GENERATED]: certificateGeneratedPayloadSchema,
+  [CASCADE_EVENTS.PROGRAM_VERSION_PUBLISHED]: programVersionPublishedPayloadSchema,
 } satisfies Record<CascadeEventName, z.ZodTypeAny>;
 
 function validateProductionEmitInput(
