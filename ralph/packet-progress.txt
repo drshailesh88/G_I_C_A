@@ -14,6 +14,18 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-19T01:35:00Z — PKT-B-005 — Global cross-event reports
+
+- Story ID: p6-m47-global-reports
+- Implemented: Added `getEventsForGlobalReports()` server action to `src/lib/actions/reports.ts` — Super Admin only gate via `session.has({ role: ROLES.SUPER_ADMIN })`; queries all events ordered by startDate desc, returns `{ ok: true, events }` or `{ ok: false, error }`. Added `generateGlobalExport(eventId, type)` server action — Super Admin only; two modes: (1) single-event mode: validates eventId UUID, calls existing `generateExport(eventId, type)` from `lib/exports/excel.ts` for the 6 known types, or runs a dedicated `exportNotificationLog(eventId)` query for the new `notification-log` type; (2) all-events combined mode (`eventId === 'all'`): runs 7 distinct combined query functions that join with the events table to add "Event Name" as the first column (transport-plan generates two sheets: Combined Batches + Combined Passengers; all others generate a single sheet). All combined functions return an ExcelJS Buffer with styled headers and auto-width columns. Returns `{ ok: true, base64: string, filename: string }` — the buffer is encoded as base64 so it can be transferred over a server action boundary. Created server page `src/app/(app)/reports/page.tsx` — checks Super Admin via `auth()`, redirects non-SA to `/dashboard`, fetches event list, passes to client. Created `GlobalReportsClient` client component — event scope dropdown (All Events + individual events by name with status), 7 report type cards with icons/labels/descriptions, download button per card calls `generateGlobalExport` via `useTransition`, decodes base64 and triggers browser download, error banner on failure, link to per-event reports page when a specific event is selected.
+- Files changed:
+  - src/lib/actions/reports.ts (new — GLOBAL_EXPORT_TYPES registry, assertSuperAdmin, exportNotificationLog, exportAll* combined query functions x6, getEventsForGlobalReports, generateGlobalExport)
+  - src/lib/actions/reports.test.ts (new — 13 spec-derived tests: 2 getEventsForGlobalReports + 11 generateGlobalExport covering RBAC x3, validation, single-event x3, all-events x4, error handling)
+  - src/app/(app)/reports/page.tsx (new — Super Admin gate + data fetch)
+  - src/app/(app)/reports/global-reports-client.tsx (new — GlobalReportsClient with event selector + 7 report cards + base64 download pattern)
+- Tests run: `npm run test:run` — 13 new tests pass (reports.test.ts); 8 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, full-journey, mutation-kill-2, notifications.adversarial, notifications.mutation-kill, travel-cascade).
+- Risks/follow-ups: `src/app/(app)/reports/` is in `.gitignore` (matches the `reports/` pattern for playwright output) — files were force-added with `git add -f`. A `.gitignore` exception could be added in a future infra packet. No navigation link to `/reports` was added to the dashboard or sidebar (outside allowed write scope); Super Admin must navigate directly to the URL. The combined "all events" export has no eventId filter — in a multi-tenant setup with multiple organizations this would leak cross-org data; current assumption is single-org deployment consistent with the rest of the app. Notification log export for a specific event uses `eq(notificationLog.eventId, eventId)` without `withEventScope` helper (direct eq filter is equivalent for this scalar equality check). `ExcelJS.Workbook` is not shared across the combined export functions — each call allocates a fresh workbook, which is correct for separate downloads.
+
 ## 2026-04-19T00:24:30Z — PKT-B-004 — Event field builder
 
 - Story ID: p6-m51-event-field-builder

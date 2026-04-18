@@ -2,7 +2,7 @@
   "version": 1,
   "pipeline": "ralph-packets",
   "updated_at": "2026-04-18T19:01:07Z",
-  "current_packet_id": "PKT-B-004",
+  "current_packet_id": "PKT-B-005",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -351,14 +351,14 @@
       "bucket": "B",
       "module": "reports",
       "priority": 105,
-      "status": "READY",
+      "status": "NEEDS_REVIEW",
       "packet_file": "ralph/packets/PKT-B-005-p6-m47-global-reports.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
-      "build_commit": null,
+      "build_commit": "290add0",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T13:21:04.686332Z",
+      "last_status_at": "2026-04-19T01:35:00Z",
       "depends_on": []
     },
     {
