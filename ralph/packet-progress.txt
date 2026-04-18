@@ -14,6 +14,18 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-18T13:35:00Z — PKT-A-006 — Public attendee-facing scientific program route
+
+- Story ID: p2-m04-public-attendee-program
+- Implemented: Added `getPublicProgramData(eventId)` server action to `program.ts` — validates UUID, checks for at least one published program version (returns `hasPublishedVersion: false` if none), then queries live public non-cancelled sessions with hall and speaker name joins from people table, builds parent/child session tree, returns `{ sessions, halls, hasPublishedVersion }`. Exported `PublicProgramData` type alias. Created server page at `/e/[eventSlug]/program/page.tsx` — calls `getEventBySlug` (404 for draft/missing events), calls `getPublicProgramData`, reads `?d=YYYY-MM-DD` from searchParams for date deep-linking. Created `PublicProgramClient` client component — shows "not published" state when `hasPublishedVersion = false`, shows "empty" state when sessions is empty, otherwise shows date tabs (URL-synced via `useRouter.replace`), mobile card list (`md:hidden`) with session type badge/time/hall/speakers/child sessions, and desktop pixel-positioned time-axis schedule grid (`hidden md:block`) with halls as columns and hour grid lines.
+- Files changed:
+  - src/lib/actions/program.ts (added getPublicProgramData, PublicProgramSession type, PublicProgramData export)
+  - src/app/(public)/e/[eventSlug]/program/page.tsx (new — server page)
+  - src/app/(public)/e/[eventSlug]/program/program-client.tsx (new — PublicProgramClient with mobile card + desktop grid views)
+  - src/app/(public)/e/[eventSlug]/program/program.test.ts (new — 12 spec-derived tests for getPublicProgramData)
+- Tests run: `npm run test:run` — 12 new tests pass; 6 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, travel-cascade, full-journey, mutation-kill-2).
+- Risks/follow-ups: Desktop grid positions sessions using UTC+5:30 fixed offset for IST conversion — does not handle DST (IST has no DST, so this is correct). Sessions without `startAtUtc`/`endAtUtc` are rendered in the mobile list but not positioned in the desktop grid (they would overlap at top). No link from the event landing page to the program page — attendees must navigate to `/e/[eventSlug]/program` directly or via shared link. Photo/avatar not shown in program view (not in spec scope).
+
 ## 2026-04-18T11:35:00Z — PKT-C-003 — Preview revised emails modal
 
 - Story ID: p2-d1-preview-revised-emails
