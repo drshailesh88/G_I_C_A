@@ -6,6 +6,7 @@ import Link from 'next/link';
 import {
   ArrowLeft,
   ArrowRightLeft,
+  Copy,
   Settings,
   SlidersHorizontal,
   ToggleRight,
@@ -79,6 +80,7 @@ const MODULE_TILES = [
   { key: 'qr_checkin', section: 'CERTIFICATES & QR', label: 'QR Check-in', icon: QrCode, href: '/qr' },
   // ADMIN
   { key: null, section: 'ADMIN', label: 'Team', icon: Users2, href: '/team' },
+  { key: null, section: 'ADMIN', label: 'Duplicate Event', icon: Copy, href: '/duplicate' },
   { key: null, section: 'ADMIN', label: 'Transfer Ownership', icon: ArrowRightLeft, href: '/transfer-ownership' },
   { key: null, section: 'ADMIN', label: 'Feature Flags', icon: ToggleRight, href: '/flags' },
 ];
