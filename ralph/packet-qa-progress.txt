@@ -72,3 +72,28 @@ Evaluate ex
 - bug count: 2
 - fix commit(s): `df067de2dc418ce4d4106c6dc2d1934453efc6c0`
 - notes: Added the missing `/events/[eventId]/communications` route and switched drawer unread tracking to `notification_log.readAt` so failed notifications can still be marked read without breaking the failed filter or badge counts.
+
+## 2026-04-18T05:43:30.282543Z — PKT-C-004 — Conflict fix CTA destination state
+- Status: pass (mini evaluator only)
+- Model: default
+- Bugs: 0
+- Fix commits: none
+- Notes: 2026-04-18T05:41:38.678607Z ERROR codex_core::codex: failed to load skill /Users/shaileshsingh/dev/build_playbook/portable-skills/anneal/SKILL.md: missing YAML frontmatter delimited by ---
+OpenAI Codex v0.121.0 (research preview)
+--------
+workdir: /Users/shaileshsingh/G_I_C_A
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: none
+reasoning summaries: none
+session id: 019d9f1b-ecca-7db1-ba58-5063e9f9b835
+--------
+user
+Read @ralph/qa-packets-pass1-prompt.md @CLAUDE.md @ralph/packets/index.json
+
+ITERATION: 1 of 999
+CURRENT_PACKET: PKT-C-004
+
+Evaluate ex
