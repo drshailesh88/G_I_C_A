@@ -4,6 +4,10 @@ import { assertEventAccess } from '@/lib/auth/event-access';
 import { ROLES } from '@/lib/auth/roles';
 import { listFailedLogs, getLogById } from '@/lib/notifications/log-queries';
 import { retryFailedNotification, resendNotification } from '@/lib/notifications/send';
+import { listTemplatesForEvent } from '@/lib/notifications/template-queries';
+import { db } from '@/lib/db';
+import { notificationLog } from '@/lib/db/schema';
+import { eq, and, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
@@ -99,6 +103,53 @@ export async function manualResend(input: unknown) {
 
   revalidatePath(`/events/${validated.eventId}/communications/failed`);
   return result;
+}
+
+// ── Templates hub — list templates for event ─────────────────
+
+const listTemplatesHubSchema = z.object({
+  eventId: z.string().uuid(),
+  channel: z.enum(['email', 'whatsapp']).optional(),
+});
+
+export async function getTemplatesHub(input: unknown) {
+  const validated = listTemplatesHubSchema.parse(input);
+  const { role } = await assertEventAccess(validated.eventId);
+  assertNotificationsRole(role);
+  return listTemplatesForEvent(validated.eventId, { channel: validated.channel });
+}
+
+// ── Notification log — all statuses (hub delivery log) ───────
+
+const listAllLogsSchema = z.object({
+  eventId: z.string().uuid(),
+  channel: z.enum(['email', 'whatsapp']).optional(),
+  status: z.enum(['queued', 'sending', 'sent', 'delivered', 'read', 'failed', 'retrying']).optional(),
+  limit: z.number().int().min(1).max(200).optional(),
+  offset: z.number().int().min(0).optional(),
+});
+
+export async function getNotificationLog(input: unknown) {
+  const validated = listAllLogsSchema.parse(input);
+  const { role } = await assertEventAccess(validated.eventId);
+  assertNotificationsRole(role);
+
+  const limit = validated.limit ?? 50;
+  const offset = validated.offset ?? 0;
+
+  return db
+    .select()
+    .from(notificationLog)
+    .where(
+      and(
+        eq(notificationLog.eventId, validated.eventId),
+        validated.channel ? eq(notificationLog.channel, validated.channel) : undefined,
+        validated.status ? eq(notificationLog.status, validated.status) : undefined,
+      ),
+    )
+    .orderBy(desc(notificationLog.createdAt))
+    .limit(limit)
+    .offset(offset);
 }
 
 // ── Get single notification log detail ───────────────────────
