@@ -14,5 +14,22 @@
       "The /events/[eventId]/settings page did not convert inaccessible or cross-event access failures into notFound(), so it could reject inaccessible events inconsistently with the workspace route."
     ],
     "notes": "Added route-level notFound handling and packet-specific page coverage. npx tsc --noEmit still fails due unrelated pre-existing repo-wide errors outside PKT-A-002 scope."
+  },
+  {
+    "packet_id": "PKT-A-003",
+    "story_id": "p2-registration-settings-ui",
+    "qa_timestamp": "2026-04-18T01:58:46Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "pass"
+    },
+    "bugs": [
+      "The registration settings UI saved `approvalRequired` and `waitlistEnabled`, but the public registration action still read legacy keys, so approval and waitlist behavior never changed for saved events.",
+      "Saved cutoff dates were not consumed by the public registration surfaces, so registration could remain open past the configured close date."
+    ],
+    "notes": "Normalized saved registration setting keys in the public registration action, enforced cutoff-date closure, and updated public registration surfaces to reflect the closed state. Packet-focused vitest checks passed; repo-wide npm run test:run and npx tsc --noEmit still fail due pre-existing issues outside PKT-A-003 scope."
   }
 ]

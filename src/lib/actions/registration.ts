@@ -34,6 +34,41 @@ const REGISTRATION_WRITE_ROLES = new Set([
   ROLES.EVENT_COORDINATOR,
 ]);
 
+type RegistrationSettingsRecord = Record<string, unknown>;
+
+function readBooleanSetting(
+  settings: RegistrationSettingsRecord,
+  primaryKey: string,
+  legacyKey?: string,
+) {
+  const primaryValue = settings[primaryKey];
+  if (typeof primaryValue === 'boolean') {
+    return primaryValue;
+  }
+
+  if (!legacyKey) {
+    return false;
+  }
+
+  const legacyValue = settings[legacyKey];
+  return typeof legacyValue === 'boolean' ? legacyValue : false;
+}
+
+function readCutoffDate(settings: RegistrationSettingsRecord) {
+  const cutoffDate = settings.cutoffDate;
+  return typeof cutoffDate === 'string' ? cutoffDate : null;
+}
+
+function getIstDateStamp(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+  }).format(now);
+}
+
+function isRegistrationPastCutoff(cutoffDate: string, now = new Date()) {
+  return getIstDateStamp(now) > cutoffDate;
+}
+
 function assertRegistrationRole(
   role: string | null | undefined,
   options?: { requireWrite?: boolean },
@@ -106,7 +141,14 @@ export async function registerForEvent(eventId: string, input: unknown) {
   if (!event) throw new Error('Event not found');
   if (event.status !== 'published') throw new Error('Event is not accepting registrations');
 
-  const regSettings = event.registrationSettings as Record<string, unknown> ?? {};
+  const regSettings = (event.registrationSettings as RegistrationSettingsRecord) ?? {};
+  const requiresApproval = readBooleanSetting(regSettings, 'approvalRequired', 'requiresApproval');
+  const waitlistEnabled = readBooleanSetting(regSettings, 'waitlistEnabled', 'enableWaitlist');
+  const cutoffDate = readCutoffDate(regSettings);
+
+  if (cutoffDate && isRegistrationPastCutoff(cutoffDate)) {
+    throw new Error('Registration is currently closed for this event');
+  }
 
   // Capacity enforcement
   if (regSettings.maxCapacity) {
@@ -125,7 +167,7 @@ export async function registerForEvent(eventId: string, input: unknown) {
     const maxCapacity = Number(regSettings.maxCapacity);
 
     if (currentCount >= maxCapacity) {
-      if (regSettings.enableWaitlist) {
+      if (waitlistEnabled) {
         // Will be created as waitlisted below
       } else {
         throw new Error('Event has reached maximum capacity');
@@ -175,7 +217,7 @@ export async function registerForEvent(eventId: string, input: unknown) {
   // Determine initial status
   let initialStatus: RegistrationStatus = 'confirmed';
 
-  if (regSettings.requiresApproval) {
+  if (requiresApproval) {
     initialStatus = 'pending';
   }
 
@@ -192,7 +234,7 @@ export async function registerForEvent(eventId: string, input: unknown) {
         ),
       );
 
-    if (Number(count) >= Number(regSettings.maxCapacity) && regSettings.enableWaitlist) {
+    if (Number(count) >= Number(regSettings.maxCapacity) && waitlistEnabled) {
       initialStatus = 'waitlisted';
     }
   }

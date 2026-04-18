@@ -4,6 +4,17 @@ import { RegistrationFormClient } from './registration-form-client';
 
 type Params = Promise<{ eventSlug: string }>;
 
+function isRegistrationOpen(registrationSettings: unknown, now = new Date()) {
+  const settings = (registrationSettings ?? {}) as Record<string, unknown>;
+  const cutoffDate = typeof settings.cutoffDate === 'string' ? settings.cutoffDate : null;
+  const openFlag = settings.open !== false;
+  const todayIst = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+  }).format(now);
+
+  return openFlag && (!cutoffDate || todayIst <= cutoffDate);
+}
+
 export default async function RegistrationPage({
   params,
 }: {
@@ -25,5 +36,12 @@ export default async function RegistrationPage({
     notFound();
   }
 
-  return <RegistrationFormClient eventId={event.id} eventSlug={event.slug} eventName={event.name} />;
+  return (
+    <RegistrationFormClient
+      eventId={event.id}
+      eventSlug={event.slug}
+      eventName={event.name}
+      registrationOpen={isRegistrationOpen(event.registrationSettings)}
+    />
+  );
 }

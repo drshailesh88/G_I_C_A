@@ -18,6 +18,7 @@ function render() {
       eventId: 'evt1',
       eventSlug: 'test-event',
       eventName: 'Test Conference',
+      registrationOpen: true,
     })
   );
 }
@@ -63,6 +64,20 @@ describe('RegistrationFormClient responsive layout', () => {
   it('renders the submit button', () => {
     const html = render();
     expect(html).toContain('Complete Registration');
+  });
+
+  it('shows a closed message and disables the form when registration is closed', () => {
+    const html = renderToStaticMarkup(
+      createElement(RegistrationFormClient, {
+        eventId: 'evt1',
+        eventSlug: 'test-event',
+        eventName: 'Test Conference',
+        registrationOpen: false,
+      })
+    );
+
+    expect(html).toContain('Registration closed');
+    expect(html).toContain('<fieldset disabled=""');
   });
 
   it('renders the back link', () => {

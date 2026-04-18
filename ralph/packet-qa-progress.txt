@@ -15,3 +15,11 @@
 - bug count: 1
 - fix commit(s): recorded in git history for this QA pass
 - notes: Added notFound handling for inaccessible settings routes and added route-level coverage for accessible, read-only, inaccessible, and unauthenticated states.
+
+## 2026-04-18T01:58:46Z — PKT-A-003 — Per-event registration settings UI
+
+- QA status: fixed
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated modules; typecheck fail due unrelated repo-wide errors
+- bug count: 2
+- fix commit(s): pending scoped QA commit for PKT-A-003
+- notes: Fixed the contract mismatch between saved registration settings and the public registration action, enforced cutoff-date closure in the public flow, and added packet-focused coverage for approval, waitlist, cutoff, and closed-form rendering.

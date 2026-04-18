@@ -192,6 +192,153 @@ describe('registerForEvent', () => {
     ).rejects.toThrow('Event not found');
   });
 
+  it('uses approvalRequired from registration settings UI to create pending registrations', async () => {
+    const event = {
+      id: 'event-1',
+      slug: 'gem-2026',
+      status: 'published',
+      registrationSettings: { approvalRequired: true },
+    };
+
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      const makeChain = (resolveValue: unknown) => {
+        const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+        chain.from = vi.fn().mockReturnValue(chain);
+        chain.where = vi.fn().mockImplementation(() => Object.assign(Promise.resolve(resolveValue), chain));
+        chain.innerJoin = vi.fn().mockReturnValue(chain);
+        chain.orderBy = vi.fn().mockReturnValue(chain);
+        chain.limit = vi.fn().mockResolvedValue(resolveValue);
+        return chain;
+      };
+
+      if (selectCallCount === 1) return makeChain([event]);
+      if (selectCallCount === 2) return makeChain([]);
+      return makeChain([{ count: 0 }]);
+    });
+
+    mockFindDuplicatePerson.mockResolvedValue(null);
+
+    const newPerson = { id: 'person-new', fullName: 'Test' };
+    const newReg = {
+      id: 'reg-1',
+      registrationNumber: 'GEM2026-DEL-00001',
+      qrCodeToken: 'abc123',
+      status: 'pending',
+    };
+
+    let insertCallCount = 0;
+    mockDb.insert.mockImplementation(() => {
+      insertCallCount++;
+      const chain = {
+        values: vi.fn().mockReturnThis(),
+        returning: vi.fn(),
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+      };
+
+      if (insertCallCount === 1) {
+        chain.returning.mockResolvedValue([newPerson]);
+      } else if (insertCallCount === 2) {
+        chain.returning.mockResolvedValue([newReg]);
+      }
+
+      return chain;
+    });
+
+    const result = await registerForEvent('event-1', {
+      fullName: 'Dr. Rajesh Kumar',
+      email: 'rajesh@example.com',
+      phone: '+919876543210',
+    });
+
+    expect(result.status).toBe('pending');
+  });
+
+  it('uses waitlistEnabled from registration settings UI when capacity is full', async () => {
+    const event = {
+      id: 'event-1',
+      slug: 'gem-2026',
+      status: 'published',
+      registrationSettings: { maxCapacity: 1, waitlistEnabled: true },
+    };
+
+    let selectCallCount = 0;
+    mockDb.select.mockImplementation(() => {
+      selectCallCount++;
+      const makeChain = (resolveValue: unknown) => {
+        const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+        chain.from = vi.fn().mockReturnValue(chain);
+        chain.where = vi.fn().mockImplementation(() => Object.assign(Promise.resolve(resolveValue), chain));
+        chain.innerJoin = vi.fn().mockReturnValue(chain);
+        chain.orderBy = vi.fn().mockReturnValue(chain);
+        chain.limit = vi.fn().mockResolvedValue(resolveValue);
+        return chain;
+      };
+
+      if (selectCallCount === 1) return makeChain([event]);
+      if (selectCallCount === 2) return makeChain([{ count: 1 }]);
+      if (selectCallCount === 3) return makeChain([]);
+      if (selectCallCount === 4) return makeChain([{ count: 1 }]);
+      return makeChain([{ count: 1 }]);
+    });
+
+    mockFindDuplicatePerson.mockResolvedValue({ id: 'existing-person-id' });
+
+    let insertCallCount = 0;
+    mockDb.insert.mockImplementation(() => {
+      insertCallCount++;
+      const chain = {
+        values: vi.fn().mockReturnThis(),
+        returning: vi.fn(),
+        onConflictDoNothing: vi.fn().mockResolvedValue(undefined),
+      };
+
+      if (insertCallCount === 1) {
+        chain.returning.mockResolvedValue([{
+          id: 'reg-1',
+          registrationNumber: 'GEM2026-DEL-00002',
+          qrCodeToken: 'abc123',
+          status: 'waitlisted',
+        }]);
+      }
+
+      return chain;
+    });
+
+    const result = await registerForEvent('event-1', {
+      fullName: 'Dr. Rajesh Kumar',
+      email: 'rajesh@example.com',
+      phone: '+919876543210',
+    });
+
+    expect(result.status).toBe('waitlisted');
+  });
+
+  it('rejects registrations after the saved cutoff date has passed', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-02T00:00:00.000Z'));
+
+    const event = {
+      id: 'event-1',
+      slug: 'gem-2026',
+      status: 'published',
+      registrationSettings: { cutoffDate: '2026-05-01' },
+    };
+
+    chainedSelect([event]);
+
+    await expect(
+      registerForEvent('event-1', {
+        fullName: 'Test',
+        email: 'test@example.com',
+        phone: '+919876543210',
+      }),
+    ).rejects.toThrow('Registration is currently closed for this event');
+
+    vi.useRealTimers();
+  });
+
   it('dedupe matches existing person by email — reuses id, does not create duplicate', async () => {
     const event = {
       id: 'event-1',

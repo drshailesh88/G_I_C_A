@@ -2,7 +2,7 @@
   "version": 1,
   "pipeline": "ralph-packets",
   "updated_at": "2026-04-17T00:00:00Z",
-  "current_packet_id": "PKT-C-004",
+  "current_packet_id": "PKT-A-003",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -11,14 +11,14 @@
       "bucket": "A",
       "module": "events",
       "priority": 1,
-      "status": "NEEDS_REVIEW",
+      "status": "VERIFIED",
       "packet_file": "ralph/packets/PKT-A-001-p2-per-event-user-assignment.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "4a63d37bde196cca4f64c4a26525d951d2dc5b06",
       "qa_commit": null,
-      "last_status_at": "2026-04-17T23:10:50.000000Z",
+      "last_status_at": "2026-04-18T01:20:54.746142Z",
       "depends_on": []
     },
     {
@@ -47,14 +47,14 @@
       "bucket": "A",
       "module": "registration",
       "priority": 3,
-      "status": "NEEDS_REVIEW",
+      "status": "VERIFIED",
       "packet_file": "ralph/packets/PKT-A-003-p2-registration-settings-ui.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "5d6e3b9",
       "qa_commit": null,
-      "last_status_at": "2026-04-17T23:20:00.000000Z",
+      "last_status_at": "2026-04-18T01:58:46Z",
       "depends_on": [
         "PKT-A-002"
       ]
@@ -491,7 +491,7 @@
       "bucket": "C",
       "module": "program",
       "priority": 7,
-      "status": "BUILDING",
+      "status": "READY",
       "packet_file": "ralph/packets/PKT-C-004-p2-m30-conflict-fix-action.md",
       "spec_status": "frozen",
       "wireframe_status": "frozen",
@@ -510,7 +510,7 @@
       "linear_issue_id": null,
       "build_commit": null,
       "qa_commit": null,
-      "last_status_at": "2026-04-17T18:09:06.270540Z",
+      "last_status_at": "2026-04-17T18:15:58.505383Z",
       "depends_on": []
     },
     {

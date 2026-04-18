@@ -6,6 +6,17 @@ import { RegisterPageClient } from './register-page-client';
 
 type Params = Promise<{ eventId: string }>;
 
+function isRegistrationOpen(registrationSettings: unknown, now = new Date()) {
+  const settings = (registrationSettings ?? {}) as Record<string, unknown>;
+  const cutoffDate = typeof settings.cutoffDate === 'string' ? settings.cutoffDate : null;
+  const openFlag = settings.open !== false;
+  const todayIst = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+  }).format(now);
+
+  return openFlag && (!cutoffDate || todayIst <= cutoffDate);
+}
+
 export default async function RegisterByIdPage({
   params,
 }: {
@@ -40,8 +51,7 @@ export default async function RegisterByIdPage({
     notFound();
   }
 
-  const regSettings = (event.registrationSettings as Record<string, unknown>) ?? {};
-  const isOpen = regSettings.open !== false;
+  const isOpen = isRegistrationOpen(event.registrationSettings);
 
   return (
     <RegisterPageClient

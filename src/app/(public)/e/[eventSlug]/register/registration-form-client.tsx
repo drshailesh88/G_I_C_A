@@ -11,10 +11,12 @@ export function RegistrationFormClient({
   eventId,
   eventSlug,
   eventName,
+  registrationOpen,
 }: {
   eventId: string;
   eventSlug: string;
   eventName: string;
+  registrationOpen: boolean;
 }) {
   const router = useRouter();
   const [isHydrated, setIsHydrated] = useState(false);
@@ -97,97 +99,104 @@ export function RegistrationFormClient({
         </div>
       )}
 
+      {!registrationOpen && (
+        <div className="mt-4 rounded-lg border border-border bg-surface p-4">
+          <p className="text-sm font-medium text-text-secondary">Registration closed</p>
+        </div>
+      )}
+
       {/* Form */}
       <form onSubmit={handleSubmit} className="mt-6">
-        <FormGrid columns={2}>
-          {/* Side-by-side on desktop: fullName + email */}
-          <FormField
-            name="fullName"
-            label="Full Name"
-            required
-            error={fieldErrors.fullName}
-            placeholder="Dr. Rajesh Kumar"
-          />
-          <FormField
-            name="email"
-            label="Email"
-            type="email"
-            required
-            error={fieldErrors.email}
-            placeholder="rajesh@hospital.org"
-          />
-
-          {/* Side-by-side on desktop: phone + designation */}
-          <FormField
-            name="phone"
-            label="Mobile Number"
-            type="tel"
-            required
-            error={fieldErrors.phone}
-            placeholder="+91 98765 43210"
-          />
-          <FormField
-            name="designation"
-            label="Designation"
-            error={fieldErrors.designation}
-            placeholder="Senior Consultant"
-          />
-
-          {/* Full-width fields */}
-          <div className="col-span-full">
+        <fieldset disabled={!registrationOpen}>
+          <FormGrid columns={2}>
+            {/* Side-by-side on desktop: fullName + email */}
             <FormField
-              name="specialty"
-              label="Specialty"
-              error={fieldErrors.specialty}
-              placeholder="Gastroenterology"
+              name="fullName"
+              label="Full Name"
+              required
+              error={fieldErrors.fullName}
+              placeholder="Dr. Rajesh Kumar"
             />
-          </div>
-          <div className="col-span-full">
             <FormField
-              name="organization"
-              label="Organization / Hospital"
-              error={fieldErrors.organization}
-              placeholder="AIIMS Delhi"
+              name="email"
+              label="Email"
+              type="email"
+              required
+              error={fieldErrors.email}
+              placeholder="rajesh@hospital.org"
             />
-          </div>
+            {/* Side-by-side on desktop: phone + designation */}
+            <FormField
+              name="phone"
+              label="Mobile Number"
+              type="tel"
+              required
+              error={fieldErrors.phone}
+              placeholder="+91 98765 43210"
+            />
+            <FormField
+              name="designation"
+              label="Designation"
+              error={fieldErrors.designation}
+              placeholder="Senior Consultant"
+            />
 
-          {/* Side-by-side on desktop: city + age */}
-          <FormField
-            name="city"
-            label="City"
-            error={fieldErrors.city}
-            placeholder="New Delhi"
-          />
-          <FormField
-            name="age"
-            label="Age"
-            type="number"
-            error={fieldErrors.age}
-            placeholder="35"
-          />
-        </FormGrid>
+            {/* Full-width fields */}
+            <div className="col-span-full">
+              <FormField
+                name="specialty"
+                label="Specialty"
+                error={fieldErrors.specialty}
+                placeholder="Gastroenterology"
+              />
+            </div>
+            <div className="col-span-full">
+              <FormField
+                name="organization"
+                label="Organization / Hospital"
+                error={fieldErrors.organization}
+                placeholder="AIIMS Delhi"
+              />
+            </div>
 
-        <button
-          type="submit"
-          disabled={!isHydrated || isSubmitting}
-          className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-base font-semibold text-white hover:bg-primary-light disabled:opacity-50"
-        >
-          {isSubmitting ? (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Registering...
-            </>
-          ) : (
-            'Complete Registration'
-          )}
-        </button>
+            {/* Side-by-side on desktop: city + age */}
+            <FormField
+              name="city"
+              label="City"
+              error={fieldErrors.city}
+              placeholder="New Delhi"
+            />
+            <FormField
+              name="age"
+              label="Age"
+              type="number"
+              error={fieldErrors.age}
+              placeholder="35"
+            />
+          </FormGrid>
 
-        <p className="mt-4 text-center text-xs text-text-secondary">
-          By registering you agree to our{' '}
-          <Link href="/terms" className="text-primary hover:underline">
-            Terms &amp; Privacy Policy
-          </Link>
-        </p>
+          <button
+            type="submit"
+            disabled={!isHydrated || isSubmitting || !registrationOpen}
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-base font-semibold text-white hover:bg-primary-light disabled:opacity-50"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Registering...
+              </>
+            ) : (
+              'Complete Registration'
+            )}
+          </button>
+
+          <p className="mt-4 text-center text-xs text-text-secondary">
+            By registering you agree to our{' '}
+            <Link href="/terms" className="text-primary hover:underline">
+              Terms &amp; Privacy Policy
+            </Link>
+          </p>
+        </fieldset>
       </form>
     </div>
   );
