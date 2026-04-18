@@ -14,6 +14,18 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-18T14:10:00Z — PKT-A-007 — Communications hub page
+
+- Story ID: p4-m13-template-list-hub
+- Implemented: Added two new server actions to `notifications.ts` — `getTemplatesHub(input)` calls `listTemplatesForEvent` with eventId + optional channel filter, asserts COMMUNICATIONS_READ_ROLES (OPS forbidden); `getNotificationLog(input)` queries `notificationLog` for ALL statuses (not only failed), applies optional channel/status filters, paginates with limit/offset. Created server page at `/events/[eventId]/templates/page.tsx` — reads searchParams for tab/channel/status/offset, fetches templates + log in parallel, passes to client. Created `TemplatesHubClient` — two-tab layout (Templates | Delivery Log); Templates tab shows channel-grouped template cards (email section, whatsapp section) with status badges and links to `/events/[eventId]/templates/[id]/edit`; global (system) templates marked with "Global" badge; channel filter pills; Delivery Log tab shows all send statuses with recipient/template/channel/status/IST timestamp, channel + status filter pills, and Prev/Next pagination.
+- Files changed:
+  - src/lib/actions/notifications.ts (added listTemplatesForEvent + db/drizzle imports; added getTemplatesHub and getNotificationLog server actions)
+  - src/app/(app)/events/[eventId]/templates/page.tsx (new — server page, auth + parallel data fetch)
+  - src/app/(app)/events/[eventId]/templates/templates-hub-client.tsx (new — TemplatesHubClient with two-tab UI)
+  - src/app/(app)/events/[eventId]/templates/templates-hub.test.ts (new — 27 spec-derived tests: 5 getTemplatesHub + 8 getNotificationLog + 14 client)
+- Tests run: `npm run test:run` — 27 new tests pass; 5 pre-existing failing files unchanged (certificate-issuance, archive-bypass, full-journey, mutation-kill-2).
+- Risks/follow-ups: Template editor route `/events/[eventId]/templates/[id]/edit` is not built yet (PKT-A-008 depends on this packet). The "Communications" tile in the workspace already points to `/templates` (already wired). The Delivery Log tab fetches up to 50 rows per page; recipients without a person join are not name-resolved (only email/phone shown). IST timestamps use `toLocaleString` with `Asia/Kolkata`.
+
 ## 2026-04-18T13:35:00Z — PKT-A-006 — Public attendee-facing scientific program route
 
 - Story ID: p2-m04-public-attendee-program
