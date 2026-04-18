@@ -14,6 +14,19 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-18T05:10:00Z — PKT-C-004 — Conflict fix CTA destination state
+
+- Story ID: p2-m30-conflict-fix-action
+- Implemented: Added orange "Fix" CTA Link to the conflict banner in `schedule-grid-client.tsx` — navigates to `/events/[eventId]/sessions/[sessionIds[1]]?conflict=true`. Updated `sessions/[sessionId]/page.tsx` to accept `searchParams`, resolve `conflict=true`, and pass `conflictMode` to `SessionFormClient`. Extended `SessionFormClient` with `conflictMode?: boolean` prop: (1) mobile alert banner (`lg:hidden`) at top, (2) desktop side-by-side grid (`lg:grid-cols-[280px_1fr]`) with a read-only conflict warning card on the left, (3) warning ring (`ring-2 ring-warning`) on the Date+Time field wrapper with `data-testid="conflict-time-field"`, (4) warning ring and orange section header on the Assignments section with `data-testid="conflict-faculty-field"`, (5) post-save redirect to `/events/[eventId]/schedule` instead of `/sessions` when `conflictMode`.
+- Files changed:
+  - src/app/(app)/events/[eventId]/schedule/schedule-grid-client.tsx (added Fix CTA Link to conflict banner)
+  - src/app/(app)/events/[eventId]/schedule/schedule-grid-conflict.test.tsx (new — 6 tests: Fix CTA presence, URL, missing second sessionId, banner message, +N more, no banner)
+  - src/app/(app)/events/[eventId]/sessions/[sessionId]/page.tsx (added searchParams type + conflictMode extraction + prop pass)
+  - src/app/(app)/events/[eventId]/sessions/session-form-client.tsx (conflictMode prop, mobile alert, desktop conflict card, field highlights, schedule redirect)
+  - src/app/(app)/events/[eventId]/sessions/session-form-client.test.tsx (added 7 conflict mode tests)
+- Tests run: `npm run test:run` — 21 new tests pass (6 + 7 + 8 existing); pre-existing failures unchanged (certificate-issuance, circuit-breaker, archive-bypass, travel-cascade, full-journey).
+- Risks/follow-ups: Desktop conflict card shows a generic warning message — it does not fetch the conflicting session's data (URL only carries `?conflict=true`, not the conflicting sessionId). If the team wants to show the conflicting session's title/time in the card, a future packet should extend the URL with `?conflictWith=[id]` and fetch it server-side. The assignments section warning ring only applies when assignments exist (edit mode, `assignments.length > 0`).
+
 ## 2026-04-17T23:55:00Z — PKT-C-005 — Notification drawer
 
 - Story ID: p6-d8-notification-drawer
