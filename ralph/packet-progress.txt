@@ -14,6 +14,24 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-18T10:47:00Z — PKT-C-006 — Ops resend logistics notification actions
+
+- Story ID: p3-ops-resend-logistics-notification
+- Implemented: Added `···` ellipsis DropdownMenu to every non-cancelled travel and accommodation row/card. Clicking "Resend Notification" opens a `ResendNotificationDialog` — bottom sheet on mobile, modal on desktop. The dialog fetches the most recent notification log entry for the record via `getLastLogisticsNotification`, displays a cooldown warning ("Last sent X ago via Email/WhatsApp"), lets the user pick a single channel (Email with address, WhatsApp with phone number), then calls `resendLogisticsNotification` to resend via the existing `resendNotification` infrastructure. Returns `no_prior_notification` if no prior log exists for the selected channel. Ops, Coordinator, and Super Admin roles can resend; Read-only is forbidden. Server actions isolated in `src/lib/actions/logistics-notifications.ts` (separate from notifications.ts to avoid DB import pollution in pre-existing notification tests).
+- Files changed:
+  - src/lib/actions/logistics-notifications.ts (new — getLastLogisticsNotification, resendLogisticsNotification server actions)
+  - src/lib/actions/logistics-resend.test.ts (new — 11 tests for both server actions)
+  - src/app/(app)/events/[eventId]/travel/resend-notification-dialog.tsx (new — ResendNotificationDialog client component)
+  - src/app/(app)/events/[eventId]/travel/resend-notification-dialog.test.ts (new — 9 spec-derived tests)
+  - src/app/(app)/events/[eventId]/travel/travel-list-client.tsx (added RowActionsMenu, ResendNotificationDialog wiring)
+  - src/app/(app)/events/[eventId]/travel/travel-list-client.test.tsx (added logistics-notifications mock to fix DB init)
+  - src/app/(app)/events/[eventId]/travel/travel-list-interactions.test.tsx (added logistics-notifications mock)
+  - src/app/(app)/events/[eventId]/accommodation/resend-notification-dialog.tsx (new — copy of travel dialog, imports from logistics-notifications)
+  - src/app/(app)/events/[eventId]/accommodation/accommodation-list-client.tsx (added RowActionsMenu, ResendNotificationDialog wiring to table and card views)
+  - src/app/(app)/events/[eventId]/accommodation/accommodation-list-client.test.tsx (added logistics-notifications mock)
+- Tests run: `npm run test:run` — 20 new tests pass (11 action + 9 dialog); 3 existing test files (19+14+14 tests) remain green; 6 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, travel-cascade, full-journey, mutation-kill-2).
+- Risks/follow-ups: `no_prior_notification` path shows an error message in the dialog — there is no fallback "send fresh notification" path since `resendNotification` requires an existing log entry. If no cascade has ever run for a travel/accommodation record, Ops cannot initiate the first send from this UI. Transport resend UI deferred per spec (no template exists yet).
+
 ## 2026-04-18T05:10:00Z — PKT-C-004 — Conflict fix CTA destination state
 
 - Story ID: p2-m30-conflict-fix-action

@@ -2,7 +2,7 @@
   "version": 1,
   "pipeline": "ralph-packets",
   "updated_at": "2026-04-17T00:00:00Z",
-  "current_packet_id": "PKT-C-004",
+  "current_packet_id": "PKT-C-006",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -549,7 +549,7 @@
       "bucket": "C",
       "module": "logistics",
       "priority": 9,
-      "status": "READY",
+      "status": "NEEDS_REVIEW",
       "packet_file": "ralph/packets/PKT-C-006-p3-ops-resend-logistics-notification.md",
       "spec_status": "frozen",
       "wireframe_status": "frozen",
@@ -566,9 +566,9 @@
         ]
       },
       "linear_issue_id": null,
-      "build_commit": null,
+      "build_commit": "3c19c89",
       "qa_commit": null,
-      "last_status_at": null,
+      "last_status_at": "2026-04-18T10:47:00Z",
       "depends_on": []
     }
   ]
