@@ -12,6 +12,7 @@ import {
   travelRecords,
   accommodationRecords,
   transportPassengerAssignments,
+  auditLog,
 } from '@/lib/db/schema';
 import { eq, or, and, ilike, desc, sql, isNull, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
@@ -157,6 +158,25 @@ export async function createPerson(input: unknown) {
     })
     .returning();
 
+  const createdFields: string[] = ['fullName'];
+  if (validated.salutation) createdFields.push('salutation');
+  if (validated.email) createdFields.push('email');
+  if (phoneE164) createdFields.push('phoneE164');
+  if (validated.designation) createdFields.push('designation');
+  if (validated.specialty) createdFields.push('specialty');
+  if (validated.organization) createdFields.push('organization');
+  if (validated.city) createdFields.push('city');
+  if (validated.tags.length > 0) createdFields.push('tags');
+
+  await writeAudit({
+    actorUserId: userId,
+    eventId: null,
+    action: 'create',
+    resource: 'people',
+    resourceId: person.id,
+    meta: { changedFields: createdFields },
+  });
+
   revalidatePath('/people');
   return { duplicate: false, person };
 }
@@ -201,6 +221,18 @@ export async function updatePerson(input: unknown) {
     .returning();
 
   if (!updated) throw new Error('Person not found');
+
+  const changedFieldNames = Object.keys(updateData).filter(
+    (k) => k !== 'updatedBy' && k !== 'updatedAt',
+  );
+  await writeAudit({
+    actorUserId: userId,
+    eventId: null,
+    action: 'update',
+    resource: 'people',
+    resourceId: personId,
+    meta: { changedFields: changedFieldNames },
+  });
 
   revalidatePath('/people');
   revalidatePath(`/people/${personId}`);
@@ -314,6 +346,15 @@ export async function archivePerson(personId: string) {
 
   if (!updated) throw new Error('Person not found or already archived');
 
+  await writeAudit({
+    actorUserId: userId,
+    eventId: null,
+    action: 'delete',
+    resource: 'people',
+    resourceId: personId,
+    meta: { changedFields: ['archivedAt'] },
+  });
+
   revalidatePath('/people');
   return updated;
 }
@@ -336,6 +377,15 @@ export async function restorePerson(personId: string) {
     .returning();
 
   if (!updated) throw new Error('Person not found');
+
+  await writeAudit({
+    actorUserId: userId,
+    eventId: null,
+    action: 'update',
+    resource: 'people',
+    resourceId: personId,
+    meta: { changedFields: ['archivedAt'], action: 'restore' },
+  });
 
   revalidatePath('/people');
   return updated;
@@ -367,6 +417,18 @@ export async function anonymizePerson(personId: string) {
     .returning();
 
   if (!updated) throw new Error('Person not found or already anonymized');
+
+  await writeAudit({
+    actorUserId: userId,
+    eventId: null,
+    action: 'delete',
+    resource: 'people',
+    resourceId: personId,
+    meta: {
+      changedFields: ['fullName', 'email', 'phoneE164', 'designation', 'specialty', 'organization', 'city', 'tags'],
+      action: 'anonymize',
+    },
+  });
 
   revalidatePath('/people');
   return updated;
@@ -654,4 +716,78 @@ export async function mergePeople(input: unknown): Promise<MergePeopleResult> {
   revalidatePath(`/people/${keepId}`);
 
   return { ok: true, survivorId: keepId };
+}
+
+// ── Person Change History ──────────────────────────────────────
+
+const HISTORY_PAGE_SIZE = 25;
+
+export type PersonHistoryRow = {
+  id: string;
+  actorUserId: string;
+  action: string;
+  resource: string;
+  timestamp: Date;
+  meta: Record<string, unknown>;
+};
+
+export type PersonHistoryResult = {
+  rows: PersonHistoryRow[];
+  total: number;
+  page: number;
+  totalPages: number;
+};
+
+export async function getPersonHistory(
+  personId: string,
+  page = 1,
+): Promise<PersonHistoryResult> {
+  const session = await auth();
+  if (!session.userId) throw new Error('Unauthorized');
+  if (!hasPeopleRole(session.has)) throw new Error('Forbidden');
+
+  personIdSchema.parse(personId);
+
+  const isSuperAdmin =
+    typeof session.has === 'function' && session.has({ role: ROLES.SUPER_ADMIN });
+  const offset = (page - 1) * HISTORY_PAGE_SIZE;
+
+  // Super Admin sees all history; others only see global (eventId IS NULL) rows
+  // to prevent cross-event history leakage.
+  const scopeCondition = isSuperAdmin
+    ? and(eq(auditLog.resource, 'people'), eq(auditLog.resourceId, personId))
+    : and(
+        eq(auditLog.resource, 'people'),
+        eq(auditLog.resourceId, personId),
+        isNull(auditLog.eventId),
+      );
+
+  const rows = await db
+    .select()
+    .from(auditLog)
+    .where(scopeCondition)
+    .orderBy(desc(auditLog.timestamp))
+    .limit(HISTORY_PAGE_SIZE)
+    .offset(offset);
+
+  const [{ count }] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(auditLog)
+    .where(scopeCondition);
+
+  const total = Number(count);
+
+  return {
+    rows: rows.map((r) => ({
+      id: r.id,
+      actorUserId: r.actorUserId,
+      action: r.action,
+      resource: r.resource,
+      timestamp: r.timestamp,
+      meta: (r.meta ?? {}) as Record<string, unknown>,
+    })),
+    total,
+    page,
+    totalPages: Math.ceil(total / HISTORY_PAGE_SIZE),
+  };
 }

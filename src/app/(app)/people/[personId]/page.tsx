@@ -1,9 +1,11 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect, notFound } from 'next/navigation';
-import { getPerson } from '@/lib/actions/person';
+import { getPerson, getPersonHistory, type PersonHistoryResult } from '@/lib/actions/person';
 import { PersonDetailClient } from './person-detail-client';
 
 type Params = Promise<{ personId: string }>;
+
+const EMPTY_HISTORY: PersonHistoryResult = { rows: [], total: 0, page: 1, totalPages: 0 };
 
 export default async function PersonDetailPage({
   params,
@@ -19,12 +21,13 @@ export default async function PersonDetailPage({
   try {
     person = await getPerson(personId);
   } catch (err) {
-    // Only treat "not found" errors as 404; re-throw others for error boundary
     if (err instanceof Error && (err.message === 'Person not found' || err.message.includes('Invalid person ID'))) {
       notFound();
     }
     throw err;
   }
 
-  return <PersonDetailClient person={person} />;
+  const initialHistory = await getPersonHistory(personId, 1).catch(() => EMPTY_HISTORY);
+
+  return <PersonDetailClient person={person} initialHistory={initialHistory} />;
 }

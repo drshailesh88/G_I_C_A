@@ -35,6 +35,8 @@ vi.mock('next/cache', () => ({
   revalidatePath: mockRevalidatePath,
 }));
 
+vi.mock('@/lib/audit/write', () => ({ writeAudit: vi.fn() }));
+
 import {
   createPerson, updatePerson, getPerson, searchPeople,
   archivePerson, restorePerson, anonymizePerson,

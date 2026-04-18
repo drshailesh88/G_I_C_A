@@ -48,6 +48,8 @@ vi.mock('@/lib/auth/event-access', () => ({
   assertEventAccess: mockAssertEventAccess,
 }));
 
+vi.mock('@/lib/audit/write', () => ({ writeAudit: vi.fn() }));
+
 vi.mock('next/cache', () => ({
   revalidatePath: mockRevalidatePath,
 }));

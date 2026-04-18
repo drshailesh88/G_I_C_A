@@ -19,6 +19,7 @@ vi.mock('@/lib/actions/person', () => ({
   archivePerson: vi.fn(),
   restorePerson: vi.fn(),
   anonymizePerson: vi.fn(),
+  getPersonHistory: vi.fn(),
 }));
 
 import { PersonDetailClient } from './person-detail-client';

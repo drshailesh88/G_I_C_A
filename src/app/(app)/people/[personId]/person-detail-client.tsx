@@ -14,11 +14,13 @@ import {
   RotateCcw,
   ShieldAlert,
   Pencil,
-  Clock,
+  ChevronLeft,
+  ChevronRight,
   GitMerge,
+  Clock,
 } from 'lucide-react';
 import { useRole } from '@/hooks/use-role';
-import { archivePerson, restorePerson, anonymizePerson } from '@/lib/actions/person';
+import { archivePerson, restorePerson, anonymizePerson, getPersonHistory, type PersonHistoryResult, type PersonHistoryRow } from '@/lib/actions/person';
 
 type Person = {
   id: string;
@@ -38,7 +40,15 @@ type Person = {
   createdBy: string;
 };
 
-export function PersonDetailClient({ person }: { person: Person }) {
+const EMPTY_HISTORY: PersonHistoryResult = { rows: [], total: 0, page: 1, totalPages: 0 };
+
+export function PersonDetailClient({
+  person,
+  initialHistory = EMPTY_HISTORY,
+}: {
+  person: Person;
+  initialHistory?: PersonHistoryResult;
+}) {
   const router = useRouter();
   const { isLoaded, isSuperAdmin, isReadOnly } = useRole();
   const canWrite = isLoaded && !isReadOnly;
@@ -46,6 +56,22 @@ export function PersonDetailClient({ person }: { person: Person }) {
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   const [showAnonymizeConfirm, setShowAnonymizeConfirm] = useState(false);
   const [error, setError] = useState('');
+  const [history, setHistory] = useState<PersonHistoryResult>(initialHistory);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  function loadHistoryPage(page: number) {
+    setHistoryLoading(true);
+    startTransition(async () => {
+      try {
+        const result = await getPersonHistory(person.id, page);
+        setHistory(result);
+      } catch {
+        // history load failure is non-fatal; keep current view
+      } finally {
+        setHistoryLoading(false);
+      }
+    });
+  }
 
   const isArchived = !!person.archivedAt;
   const tags = Array.isArray(person.tags)
@@ -99,9 +125,6 @@ export function PersonDetailClient({ person }: { person: Person }) {
         .join('')
         .toUpperCase()
     : '??';
-
-  const createdDate = new Date(person.createdAt);
-  const updatedDate = new Date(person.updatedAt);
 
   return (
     <div style={{ padding: 'var(--space-md) var(--space-sm)' }}>
@@ -213,28 +236,57 @@ export function PersonDetailClient({ person }: { person: Person }) {
 
       {/* Change History */}
       <div style={{ marginTop: 'var(--space-lg)' }}>
-        <h2 style={{ fontSize: 'var(--font-size-sm)' }} className="font-semibold text-text-primary">Change History</h2>
-        <div className="mt-2 rounded-xl border border-border bg-surface" style={{ padding: 'var(--space-sm)' }}>
-          <div className="flex items-center gap-2 text-text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>
-            <Clock className="h-4 w-4" />
-            <span>
-              Created {createdDate.toLocaleDateString('en-IN', {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric',
-              })}
+        <div className="flex items-center justify-between">
+          <h2 style={{ fontSize: 'var(--font-size-sm)' }} className="font-semibold text-text-primary">
+            Change History
+          </h2>
+          {history.total > 0 && (
+            <span style={{ fontSize: 'var(--font-size-xs)' }} className="text-text-muted">
+              {history.total} {history.total === 1 ? 'entry' : 'entries'}
             </span>
-          </div>
-          {updatedDate.getTime() > createdDate.getTime() && (
-            <div className="mt-1 flex items-center gap-2 text-text-muted" style={{ fontSize: 'var(--font-size-sm)' }}>
-              <Clock className="h-4 w-4" />
-              <span>
-                Last updated {updatedDate.toLocaleDateString('en-IN', {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                })}
+          )}
+        </div>
+        <div className="mt-2 rounded-xl border border-border bg-surface" style={{ padding: 'var(--space-sm)' }}>
+          {historyLoading && (
+            <p style={{ fontSize: 'var(--font-size-sm)' }} className="text-text-muted text-center py-2">
+              Loading…
+            </p>
+          )}
+          {!historyLoading && history.rows.length === 0 && (
+            <p style={{ fontSize: 'var(--font-size-sm)' }} className="text-text-muted text-center py-2">
+              No history available.
+            </p>
+          )}
+          {!historyLoading && history.rows.length > 0 && (
+            <ul className="divide-y divide-border">
+              {history.rows.map((row) => (
+                <HistoryRow key={row.id} row={row} />
+              ))}
+            </ul>
+          )}
+          {history.totalPages > 1 && (
+            <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+              <button
+                onClick={() => loadHistoryPage(history.page - 1)}
+                disabled={history.page <= 1 || historyLoading}
+                className="flex items-center gap-1 rounded-lg border border-border bg-surface px-3 py-1.5 font-medium text-text-secondary hover:bg-background disabled:opacity-40"
+                style={{ fontSize: 'var(--font-size-xs)', minHeight: 'var(--touch-min)' }}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                Prev
+              </button>
+              <span style={{ fontSize: 'var(--font-size-xs)' }} className="text-text-muted">
+                Page {history.page} of {history.totalPages}
               </span>
+              <button
+                onClick={() => loadHistoryPage(history.page + 1)}
+                disabled={history.page >= history.totalPages || historyLoading}
+                className="flex items-center gap-1 rounded-lg border border-border bg-surface px-3 py-1.5 font-medium text-text-secondary hover:bg-background disabled:opacity-40"
+                style={{ fontSize: 'var(--font-size-xs)', minHeight: 'var(--touch-min)' }}
+              >
+                Next
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
             </div>
           )}
         </div>
@@ -347,5 +399,72 @@ function InfoRow({
         <p className="truncate text-text-primary" style={{ fontSize: 'var(--font-size-sm)' }}>{value}</p>
       </div>
     </div>
+  );
+}
+
+const ACTION_LABEL: Record<string, string> = {
+  create: 'Created',
+  update: 'Updated',
+  delete: 'Archived',
+  read: 'Viewed',
+  restore: 'Restored',
+  anonymize: 'Anonymized',
+  merge: 'Merged',
+};
+
+function HistoryRow({ row }: { row: PersonHistoryRow }) {
+  const ts = new Date(row.timestamp).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  const metaAction = typeof row.meta?.action === 'string' ? row.meta.action : null;
+  const actionLabel = ACTION_LABEL[metaAction ?? row.action] ?? row.action;
+
+  const changedFields = Array.isArray(row.meta?.changedFields)
+    ? (row.meta.changedFields as string[])
+    : [];
+
+  const actorShort = row.actorUserId.length > 12
+    ? `${row.actorUserId.slice(0, 12)}…`
+    : row.actorUserId;
+
+  return (
+    <li className="py-2.5" style={{ fontSize: 'var(--font-size-sm)' }}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-text-secondary">
+          <Clock className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+          <span className="font-medium text-text-primary">{actionLabel}</span>
+          <span className="text-text-muted">by</span>
+          <span
+            className="rounded bg-background px-1 font-mono text-text-secondary"
+            style={{ fontSize: 'var(--font-size-xs)' }}
+            title={row.actorUserId}
+          >
+            {actorShort}
+          </span>
+        </div>
+        <span style={{ fontSize: 'var(--font-size-xs)' }} className="shrink-0 text-text-muted">
+          {ts}
+        </span>
+      </div>
+      {changedFields.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {changedFields.map((f) => (
+            <span
+              key={f}
+              className="rounded bg-background px-1.5 py-0.5 text-text-secondary"
+              style={{ fontSize: 'var(--font-size-xs)' }}
+            >
+              {f}
+            </span>
+          ))}
+        </div>
+      )}
+    </li>
   );
 }
