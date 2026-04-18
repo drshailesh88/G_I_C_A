@@ -142,5 +142,19 @@
       "The packet oracle explicitly blocks this feature until the user approves schema changes for people.bio and people.photoStorageKey, but the repo already added those fields and shipped the public speaker-profile implementation, so the packet cannot be VERIFIED under its own governance gate."
     ],
     "notes": "Packet-local speaker profile tests passed and the public route stays on /e/[eventSlug] with event-scoped sessions, but PKT-C-002 remains BLOCKED because its frozen packet file says schema approval is mandatory before build. Repo-wide npm run test:run and npx tsc --noEmit also fail due unrelated baseline issues outside PKT-C-002 scope."
+  },
+  {
+    "packet_id": "PKT-C-002",
+    "story_id": "p2-d5-speaker-profile",
+    "qa_timestamp": "2026-04-18T08:37:01Z",
+    "qa_model": "codex",
+    "status": "pass",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "pass"
+    },
+    "bugs": [],
+    "notes": "Superseded the earlier stale schema-approval block: the current packet oracle explicitly says the people.bio and people.photoStorageKey fields are already landed and approved. Packet-targeted speaker profile tests passed, the implementation stays on /e/[eventSlug], and speaker sessions are filtered to the active event. Repo-wide npm run test:run and npx tsc --noEmit still fail due unrelated baseline issues outside PKT-C-002 scope."
   }
 ]

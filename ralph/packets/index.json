@@ -431,7 +431,7 @@
       "bucket": "C",
       "module": "public",
       "priority": 30,
-      "status": "BLOCKED",
+      "status": "VERIFIED",
       "packet_file": "ralph/packets/PKT-C-002-p2-d5-speaker-profile.md",
       "spec_status": "frozen",
       "wireframe_status": "frozen",
@@ -450,7 +450,7 @@
       "linear_issue_id": null,
       "build_commit": "1c0d11c5a945d580ee8e19c687dc61916659ff5f",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T07:26:49Z",
+      "last_status_at": "2026-04-18T08:37:01Z",
       "depends_on": []
     },
     {

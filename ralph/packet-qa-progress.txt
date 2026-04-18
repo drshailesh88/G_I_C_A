@@ -113,3 +113,11 @@ Evaluate ex
 - bug count: 1
 - fix commit(s): none
 - notes: The public speaker-profile overlay implementation exists and packet-local tests pass, but the frozen packet file still marks this work BLOCKED until the user explicitly approves the required people schema additions (`bio`, `photoStorageKey`). Recorded as a packet-level governance block rather than a production-code verification.
+
+## 2026-04-18T08:37:01Z — PKT-C-002 — Speaker profile public view
+
+- QA status: pass
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated repo-wide errors
+- bug count: 0
+- fix commit(s): none
+- notes: Verified the current packet oracle now treats the speaker-profile schema fields as already landed and approved. The existing implementation satisfies the overlay, event-scoped session list, and no-route-change requirements, so this pass corrects the stale earlier block without changing production code.
