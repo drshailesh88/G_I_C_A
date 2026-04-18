@@ -7,6 +7,12 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
+vi.mock('@/lib/actions/program', () => ({
+  getVersionPreviewData: vi.fn(),
+  getVersionEmailParts: vi.fn(),
+  sendVersionEmails: vi.fn(),
+}));
+
 import { ChangesClient } from './changes-client';
 
 const componentSource = fs.readFileSync(
@@ -24,6 +30,7 @@ const baseVersion: {
   changesSummaryJson: unknown;
   changesDescription: string | null;
   publishReason: string | null;
+  affectedPersonIdsJson: unknown;
 } = {
   id: 'ver-001',
   versionNo: 1,
@@ -37,6 +44,7 @@ const baseVersion: {
   },
   changesDescription: 'Updated panel schedule',
   publishReason: 'Final confirmed schedule',
+  affectedPersonIdsJson: [],
 };
 
 type TestVersion = typeof baseVersion;

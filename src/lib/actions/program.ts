@@ -13,7 +13,8 @@ import {
   eventRegistrations,
   events,
 } from '@/lib/db/schema';
-import { eq, and, or, sql, desc, asc, ne, lt, gt, isNull } from 'drizzle-orm';
+import { eq, and, or, sql, desc, asc, ne, lt, gt, isNull, inArray } from 'drizzle-orm';
+import { interpolate } from '@/lib/notifications/template-utils';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
@@ -1187,6 +1188,184 @@ export async function getProgramVersion(eventId: string, versionId: string) {
 
   if (!version) throw new Error('Program version not found');
   return version;
+}
+
+// ══════════════════════════════════════════════════════════════
+// PREVIEW REVISED EMAILS (PKT-C-003)
+// ══════════════════════════════════════════════════════════════
+
+const PROGRAM_UPDATE_EMAIL_BODY = `Dear {{salutation}} {{fullName}},
+
+The scientific program for {{eventName}} has been updated (Version {{versionNo}}).
+
+Changes affecting you:
+{{changesSummary}}
+
+Please review your updated responsibilities. If you have concerns, contact the event coordinator.
+
+Regards,
+{{eventName}} Organizing Committee`;
+
+const PROGRAM_UPDATE_EMAIL_SUBJECT = 'Program Update — {{eventName}}';
+
+function buildChangesSummaryText(
+  summary: { added_sessions?: string[]; removed_sessions?: string[] } | null,
+): string {
+  if (!summary) return 'Program has been updated.';
+  const parts: string[] = [];
+  const added = summary.added_sessions ?? [];
+  const removed = summary.removed_sessions ?? [];
+  if (added.length > 0) parts.push(`${added.length} session${added.length > 1 ? 's' : ''} added`);
+  if (removed.length > 0) parts.push(`${removed.length} session${removed.length > 1 ? 's' : ''} removed`);
+  if (parts.length === 0) return 'Sessions have been updated.';
+  return `${parts.join(', ')}.`;
+}
+
+export async function getVersionPreviewData(eventId: string, versionId: string) {
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
+
+  const [version] = await db
+    .select()
+    .from(programVersions)
+    .where(withEventScope(programVersions.eventId, scopedEventId, eq(programVersions.id, versionId)))
+    .limit(1);
+
+  if (!version) throw new Error('Program version not found');
+
+  const [event] = await db
+    .select({ name: events.name })
+    .from(events)
+    .where(eq(events.id, scopedEventId))
+    .limit(1);
+
+  const affectedPersonIds = (version.affectedPersonIdsJson as string[]) ?? [];
+  let affectedFaculty: Array<{ id: string; fullName: string; salutation: string | null; email: string | null }> = [];
+
+  if (affectedPersonIds.length > 0) {
+    affectedFaculty = await db
+      .select({ id: people.id, fullName: people.fullName, salutation: people.salutation, email: people.email })
+      .from(people)
+      .where(inArray(people.id, affectedPersonIds));
+  }
+
+  return { version, eventName: event?.name ?? '', affectedFaculty };
+}
+
+type ChangesSummaryJson = { added_sessions?: string[]; removed_sessions?: string[] } | null;
+
+export async function getVersionEmailParts(eventId: string, versionId: string, personId: string) {
+  const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
+
+  const [[version], [event], [person]] = await Promise.all([
+    db
+      .select()
+      .from(programVersions)
+      .where(withEventScope(programVersions.eventId, scopedEventId, eq(programVersions.id, versionId)))
+      .limit(1),
+    db.select({ name: events.name }).from(events).where(eq(events.id, scopedEventId)).limit(1),
+    db
+      .select({ fullName: people.fullName, salutation: people.salutation, email: people.email })
+      .from(people)
+      .where(eq(people.id, personId))
+      .limit(1),
+  ]);
+
+  if (!version) throw new Error('Program version not found');
+  if (!person) throw new Error('Person not found');
+
+  const vars = {
+    salutation: person.salutation ?? '',
+    fullName: person.fullName,
+    eventName: event?.name ?? '',
+    versionNo: String(version.versionNo),
+  };
+
+  const [beforeTemplate = '', afterTemplate = ''] = PROGRAM_UPDATE_EMAIL_BODY.split('{{changesSummary}}');
+  const bodyBefore = interpolate(beforeTemplate, vars);
+  const bodyAfter = interpolate(afterTemplate, vars);
+  const subject = interpolate(PROGRAM_UPDATE_EMAIL_SUBJECT, vars);
+
+  return {
+    subject,
+    bodyBefore,
+    bodyAfter,
+    changesSummaryJson: version.changesSummaryJson as ChangesSummaryJson,
+    recipientEmail: person.email,
+  };
+}
+
+export async function sendVersionEmails(eventId: string, versionId: string) {
+  const { userId, eventId: scopedEventId } = await assertProgramEventAccess(eventId, { requireWrite: true });
+
+  const [version] = await db
+    .select()
+    .from(programVersions)
+    .where(withEventScope(programVersions.eventId, scopedEventId, eq(programVersions.id, versionId)))
+    .limit(1);
+
+  if (!version) throw new Error('Program version not found');
+
+  const [event] = await db
+    .select({ name: events.name })
+    .from(events)
+    .where(eq(events.id, scopedEventId))
+    .limit(1);
+
+  const eventName = event?.name ?? '';
+  const affectedPersonIds = (version.affectedPersonIdsJson as string[]) ?? [];
+
+  if (affectedPersonIds.length === 0) return { sent: 0, failed: 0 };
+
+  const facultyList = await db
+    .select({ id: people.id, fullName: people.fullName, salutation: people.salutation, email: people.email })
+    .from(people)
+    .where(inArray(people.id, affectedPersonIds));
+
+  const changesSummaryJson = version.changesSummaryJson as ChangesSummaryJson;
+  const changesSummary = buildChangesSummaryText(changesSummaryJson);
+
+  const { sendNotification } = await import('@/lib/notifications/send');
+
+  let sent = 0;
+  let failed = 0;
+
+  for (const person of facultyList) {
+    if (!person.email) continue;
+    try {
+      await sendNotification({
+        eventId: scopedEventId,
+        personId: person.id,
+        channel: 'email',
+        templateKey: 'program_update',
+        triggerType: 'program.version_published',
+        triggerEntityType: 'program_version',
+        triggerEntityId: version.id,
+        sendMode: 'automatic',
+        initiatedByUserId: userId,
+        idempotencyKey: `notify:program.version_published:${version.id}:${person.id}:email`,
+        variables: {
+          salutation: person.salutation ?? '',
+          fullName: person.fullName,
+          eventName,
+          versionNo: String(version.versionNo),
+          changesSummary,
+          recipientEmail: person.email,
+        },
+      });
+      sent++;
+    } catch {
+      failed++;
+    }
+  }
+
+  const newStatus = failed === 0 ? 'sent' : sent > 0 ? 'partially_failed' : 'failed';
+  await db
+    .update(programVersions)
+    .set({ notificationStatus: newStatus, notificationTriggeredAt: new Date() })
+    .where(eq(programVersions.id, version.id));
+
+  revalidatePath(`/events/${scopedEventId}/changes`);
+  return { sent, failed };
 }
 
 // ══════════════════════════════════════════════════════════════

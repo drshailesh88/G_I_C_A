@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, History } from 'lucide-react';
+import { ArrowLeft, History, Mail } from 'lucide-react';
+import { PreviewEmailsModal } from './preview-emails-modal';
 
 type ChangesSummary = {
   added_sessions?: string[];
@@ -18,6 +20,7 @@ type ProgramVersion = {
   changesSummaryJson: unknown;
   changesDescription: string | null;
   publishReason: string | null;
+  affectedPersonIdsJson: unknown;
 };
 
 function formatIST(dt: Date | string): string {
@@ -29,7 +32,18 @@ function parseSummary(raw: unknown): ChangesSummary {
   return raw as ChangesSummary;
 }
 
-function VersionCard({ version }: { version: ProgramVersion }) {
+function hasAffectedFaculty(raw: unknown): boolean {
+  if (!Array.isArray(raw)) return false;
+  return raw.length > 0;
+}
+
+function VersionCard({
+  version,
+  onPreview,
+}: {
+  version: ProgramVersion;
+  onPreview: (versionId: string) => void;
+}) {
   const summary = parseSummary(version.changesSummaryJson);
 
   return (
@@ -92,6 +106,19 @@ function VersionCard({ version }: { version: ProgramVersion }) {
           {version.changesDescription}
         </p>
       )}
+
+      {hasAffectedFaculty(version.affectedPersonIdsJson) && (
+        <div className="pt-1">
+          <button
+            onClick={() => onPreview(version.id)}
+            className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+            data-testid="preview-emails-btn"
+          >
+            <Mail className="h-3.5 w-3.5" />
+            Preview Emails
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -103,6 +130,9 @@ export function ChangesClient({
   eventId: string;
   versions: ProgramVersion[];
 }) {
+  const [previewVersionId, setPreviewVersionId] = useState<string | null>(null);
+  const previewVersion = previewVersionId ? versions.find((v) => v.id === previewVersionId) : null;
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-6 space-y-4">
       <div className="flex items-center gap-3">
@@ -131,10 +161,20 @@ export function ChangesClient({
         </div>
       ) : (
         <div className="space-y-3" data-testid="versions-list">
-          {versions.map(v => (
-            <VersionCard key={v.id} version={v} />
+          {versions.map((v) => (
+            <VersionCard key={v.id} version={v} onPreview={setPreviewVersionId} />
           ))}
         </div>
+      )}
+
+      {previewVersionId && previewVersion && (
+        <PreviewEmailsModal
+          eventId={eventId}
+          versionId={previewVersionId}
+          versionNo={previewVersion.versionNo}
+          isOpen
+          onClose={() => setPreviewVersionId(null)}
+        />
       )}
     </div>
   );
