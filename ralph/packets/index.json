@@ -351,14 +351,14 @@
       "bucket": "B",
       "module": "reports",
       "priority": 105,
-      "status": "NEEDS_REVIEW",
+      "status": "BLOCKED",
       "packet_file": "ralph/packets/PKT-B-005-p6-m47-global-reports.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "290add0",
       "qa_commit": null,
-      "last_status_at": "2026-04-19T01:35:00Z",
+      "last_status_at": "2026-04-18T20:10:09Z",
       "depends_on": []
     },
     {

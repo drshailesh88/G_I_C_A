@@ -352,5 +352,22 @@
       "Public registration serialized configured file custom fields with String(rawValue), collapsing uploaded files into the unusable literal \"[object File]\" instead of preserving meaningful future-registration data."
     ],
     "notes": "Fixed the public registration custom-field serializer so configured file fields persist JSON-safe file metadata instead of `[object File]`, and added packet-local regression coverage. Packet-targeted event-field-builder and registration-form vitest checks passed. Repo-wide `npm run test:run` and `npx tsc --noEmit` still fail due unrelated baseline issues outside PKT-B-004 scope."
+  },
+  {
+    "packet_id": "PKT-B-005",
+    "story_id": "p6-m47-global-reports",
+    "qa_timestamp": "2026-04-18T20:10:09Z",
+    "qa_model": "codex",
+    "status": "fail",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "fail"
+    },
+    "bugs": [
+      "The global reports hub is linked from `/reports` for Event Coordinator and Read-only users in the More menu, even though the packet requires cross-event reporting to be Super Admin only.",
+      "The Super Admin dashboard quick actions still route to `/events/[eventId]/reports`, so the intended global cross-event hub is not actually reachable from the packet's required dashboard entry points."
+    ],
+    "notes": "Packet-targeted `src/lib/actions/reports.test.ts` passes, and the implementation does provide single-event and all-events export modes plus a Super Admin guard inside the server actions. Verification still fails against the packet oracle because lower roles are offered `/reports` navigation and the dashboard entry points continue to send Super Admins to the per-event reports page. Repo-wide `npm run test:run` and `npx tsc --noEmit` also fail due unrelated baseline issues outside PKT-B-005 scope."
   }
 ]

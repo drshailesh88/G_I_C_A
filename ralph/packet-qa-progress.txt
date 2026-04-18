@@ -217,3 +217,11 @@ Evaluate ex
 - bug count: 1
 - fix commit(s): pending
 - notes: Fixed public registration handling for configured file custom fields so future registrations persist JSON-safe file metadata instead of the unusable string `[object File]`, and added packet-local regression coverage for the file-field serializer.
+
+## 2026-04-18T20:10:09Z — PKT-B-005 — Global cross-event reports
+
+- QA status: fail
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated baseline failures; manual acceptance fail against packet oracle
+- bug count: 2
+- fix commit(s): none
+- notes: The implementation includes a Super Admin-only `/reports` page and server-side cross-event export guard, but the More menu still exposes `/reports` to Event Coordinator and Read-only users, and the Super Admin dashboard quick actions still point to `/events/[eventId]/reports` instead of the new global hub. That leaves the packet failing on both required access control/navigation acceptance checks.
