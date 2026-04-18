@@ -113,7 +113,42 @@ export const registrationSettingsSchema = z.object({
   }).default({}),
 });
 
+// Standard registration fields that coordinators can toggle on/off
+// fullName, email, phone are always required and cannot be toggled
+export const STANDARD_TOGGLE_FIELDS = [
+  'designation',
+  'specialty',
+  'organization',
+  'city',
+  'age',
+] as const;
+export type StandardToggleField = (typeof STANDARD_TOGGLE_FIELDS)[number];
+
+export const CUSTOM_FIELD_TYPES = ['text', 'number', 'select', 'date', 'file'] as const;
+export type CustomFieldType = (typeof CUSTOM_FIELD_TYPES)[number];
+
+export const customFieldSchema = z.object({
+  id: z.string().uuid(),
+  type: z.enum(CUSTOM_FIELD_TYPES),
+  label: z.string().trim().min(1, 'Label is required').max(100),
+  required: z.boolean().default(false),
+  options: z.array(z.string().trim().min(1).max(100)).max(20).optional(),
+});
+
+export const fieldConfigSchema = z.object({
+  standardFields: z
+    .object(
+      Object.fromEntries(
+        STANDARD_TOGGLE_FIELDS.map((f) => [f, z.boolean().default(true)]),
+      ) as Record<StandardToggleField, z.ZodDefault<z.ZodBoolean>>,
+    )
+    .default({}),
+  customFields: z.array(customFieldSchema).max(10, 'Maximum 10 custom fields allowed').default([]),
+});
+
 export type CreateEventInput = z.infer<typeof createEventSchema>;
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 export type UpdateEventStatusInput = z.infer<typeof updateEventStatusSchema>;
 export type RegistrationSettings = z.infer<typeof registrationSettingsSchema>;
+export type FieldConfig = z.infer<typeof fieldConfigSchema>;
+export type CustomField = z.infer<typeof customFieldSchema>;

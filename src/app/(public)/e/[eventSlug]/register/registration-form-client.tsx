@@ -6,23 +6,47 @@ import Link from 'next/link';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { registerForEvent } from '@/lib/actions/registration';
 import { FormGrid } from '@/components/responsive/form-grid';
+import type { CustomField } from '@/lib/validations/event';
+
+const STANDARD_TOGGLE_FIELDS = ['designation', 'specialty', 'organization', 'city', 'age'] as const;
+
+type ParsedFieldConfig = {
+  standardFields: Record<string, boolean>;
+  customFields: CustomField[];
+};
+
+function parseFieldConfig(raw: unknown): ParsedFieldConfig {
+  const fc = (raw ?? {}) as Record<string, unknown>;
+  const sf = (fc.standardFields ?? {}) as Record<string, boolean>;
+  const cf = Array.isArray(fc.customFields) ? (fc.customFields as CustomField[]) : [];
+  return {
+    standardFields: Object.fromEntries(
+      STANDARD_TOGGLE_FIELDS.map((f) => [f, sf[f] !== false]),
+    ),
+    customFields: cf,
+  };
+}
 
 export function RegistrationFormClient({
   eventId,
   eventSlug,
   eventName,
   registrationOpen,
+  fieldConfig,
 }: {
   eventId: string;
   eventSlug: string;
   eventName: string;
   registrationOpen: boolean;
+  fieldConfig?: unknown;
 }) {
   const router = useRouter();
   const [isHydrated, setIsHydrated] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const { standardFields, customFields } = parseFieldConfig(fieldConfig);
 
   useEffect(() => {
     setIsHydrated(true);
@@ -35,16 +59,38 @@ export function RegistrationFormClient({
     setIsSubmitting(true);
 
     const formData = new FormData(e.currentTarget);
+
+    // Collect custom field values into preferences
+    const preferences: Record<string, unknown> = {};
+    for (const cf of customFields) {
+      const rawValue = formData.get(`custom_${cf.id}`);
+      if (rawValue !== null && rawValue !== '') {
+        preferences[`custom_${cf.id}`] =
+          cf.type === 'number' ? Number(rawValue) : String(rawValue);
+      }
+    }
+
     const data = {
       fullName: (formData.get('fullName') as string).trim(),
       email: (formData.get('email') as string).trim(),
       phone: (formData.get('phone') as string).trim(),
-      designation: (formData.get('designation') as string).trim(),
-      specialty: (formData.get('specialty') as string).trim(),
-      organization: (formData.get('organization') as string).trim(),
-      city: (formData.get('city') as string).trim(),
-      age: formData.get('age') ? Number(formData.get('age')) : undefined,
-      preferences: {},
+      designation: standardFields.designation
+        ? (formData.get('designation') as string | null)?.trim() || undefined
+        : undefined,
+      specialty: standardFields.specialty
+        ? (formData.get('specialty') as string | null)?.trim() || undefined
+        : undefined,
+      organization: standardFields.organization
+        ? (formData.get('organization') as string | null)?.trim() || undefined
+        : undefined,
+      city: standardFields.city
+        ? (formData.get('city') as string | null)?.trim() || undefined
+        : undefined,
+      age:
+        standardFields.age && formData.get('age')
+          ? Number(formData.get('age'))
+          : undefined,
+      preferences,
     };
 
     try {
@@ -109,7 +155,7 @@ export function RegistrationFormClient({
       <form onSubmit={handleSubmit} className="mt-6">
         <fieldset disabled={!registrationOpen}>
           <FormGrid columns={2}>
-            {/* Side-by-side on desktop: fullName + email */}
+            {/* Always-on: fullName + email */}
             <FormField
               name="fullName"
               label="Full Name"
@@ -125,7 +171,8 @@ export function RegistrationFormClient({
               error={fieldErrors.email}
               placeholder="rajesh@hospital.org"
             />
-            {/* Side-by-side on desktop: phone + designation */}
+
+            {/* Always-on: phone */}
             <FormField
               name="phone"
               label="Mobile Number"
@@ -134,45 +181,64 @@ export function RegistrationFormClient({
               error={fieldErrors.phone}
               placeholder="+91 98765 43210"
             />
-            <FormField
-              name="designation"
-              label="Designation"
-              error={fieldErrors.designation}
-              placeholder="Senior Consultant"
-            />
 
-            {/* Full-width fields */}
-            <div className="col-span-full">
+            {/* Conditionally rendered standard fields */}
+            {standardFields.designation && (
               <FormField
-                name="specialty"
-                label="Specialty"
-                error={fieldErrors.specialty}
-                placeholder="Gastroenterology"
+                name="designation"
+                label="Designation"
+                error={fieldErrors.designation}
+                placeholder="Senior Consultant"
               />
-            </div>
-            <div className="col-span-full">
-              <FormField
-                name="organization"
-                label="Organization / Hospital"
-                error={fieldErrors.organization}
-                placeholder="AIIMS Delhi"
-              />
-            </div>
+            )}
 
-            {/* Side-by-side on desktop: city + age */}
-            <FormField
-              name="city"
-              label="City"
-              error={fieldErrors.city}
-              placeholder="New Delhi"
-            />
-            <FormField
-              name="age"
-              label="Age"
-              type="number"
-              error={fieldErrors.age}
-              placeholder="35"
-            />
+            {standardFields.specialty && (
+              <div className="col-span-full">
+                <FormField
+                  name="specialty"
+                  label="Specialty"
+                  error={fieldErrors.specialty}
+                  placeholder="Gastroenterology"
+                />
+              </div>
+            )}
+
+            {standardFields.organization && (
+              <div className="col-span-full">
+                <FormField
+                  name="organization"
+                  label="Organization / Hospital"
+                  error={fieldErrors.organization}
+                  placeholder="AIIMS Delhi"
+                />
+              </div>
+            )}
+
+            {standardFields.city && (
+              <FormField
+                name="city"
+                label="City"
+                error={fieldErrors.city}
+                placeholder="New Delhi"
+              />
+            )}
+
+            {standardFields.age && (
+              <FormField
+                name="age"
+                label="Age"
+                type="number"
+                error={fieldErrors.age}
+                placeholder="35"
+              />
+            )}
+
+            {/* Custom fields */}
+            {customFields.map((cf) => (
+              <div key={cf.id} className={cf.type === 'select' ? 'col-span-full' : ''}>
+                <CustomFormField field={cf} error={fieldErrors[`custom_${cf.id}`]} />
+              </div>
+            ))}
           </FormGrid>
 
           <button
@@ -229,6 +295,77 @@ function FormField({
         type={type}
         required={required}
         placeholder={placeholder}
+        className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+      />
+      {error && <p className="mt-1 text-xs text-error">{error}</p>}
+    </div>
+  );
+}
+
+function CustomFormField({
+  field,
+  error,
+}: {
+  field: CustomField;
+  error?: string;
+}) {
+  const inputName = `custom_${field.id}`;
+  const labelEl = (
+    <label htmlFor={inputName} className="block text-sm font-medium text-text-primary">
+      {field.label}
+      {field.required && <span className="text-error"> *</span>}
+    </label>
+  );
+
+  if (field.type === 'select') {
+    return (
+      <div>
+        {labelEl}
+        <select
+          id={inputName}
+          name={inputName}
+          required={field.required}
+          className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+        >
+          <option value="">Select…</option>
+          {(field.options ?? []).map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+        {error && <p className="mt-1 text-xs text-error">{error}</p>}
+      </div>
+    );
+  }
+
+  if (field.type === 'file') {
+    return (
+      <div>
+        {labelEl}
+        <input
+          id={inputName}
+          name={inputName}
+          type="file"
+          required={field.required}
+          className="mt-1 w-full text-sm text-text-primary file:mr-4 file:rounded-lg file:border-0 file:bg-surface file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-text-secondary hover:file:bg-border"
+        />
+        {error && <p className="mt-1 text-xs text-error">{error}</p>}
+      </div>
+    );
+  }
+
+  const inputType =
+    field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text';
+
+  return (
+    <div>
+      {labelEl}
+      <input
+        id={inputName}
+        name={inputName}
+        type={inputType}
+        required={field.required}
         className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
       />
       {error && <p className="mt-1 text-xs text-error">{error}</p>}

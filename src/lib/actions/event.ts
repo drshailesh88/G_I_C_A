@@ -15,7 +15,7 @@ import {
 import { eq, desc, and, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { z, ZodError, ZodIssue } from 'zod';
-import { createEventSchema, updateEventSchema, eventIdSchema, EVENT_TRANSITIONS, type EventStatus } from '@/lib/validations/event';
+import { createEventSchema, updateEventSchema, eventIdSchema, EVENT_TRANSITIONS, fieldConfigSchema, type EventStatus, type FieldConfig } from '@/lib/validations/event';
 import { assertEventAccess, getEventListContext } from '@/lib/auth/event-access';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { ROLES } from '@/lib/auth/roles';
@@ -267,6 +267,7 @@ export async function getEventBySlug(slug: string) {
       venueAddress: events.venueAddress,
       venueCity: events.venueCity,
       venueMapUrl: events.venueMapUrl,
+      fieldConfig: events.fieldConfig,
       branding: events.branding,
       registrationSettings: events.registrationSettings,
       publicPageSettings: events.publicPageSettings,
@@ -768,6 +769,46 @@ export async function updateEvent(eventId: string, formData: FormData): Promise<
 
   revalidatePath(`/events/${eventId}`);
   revalidatePath(`/events/${eventId}/settings`);
+
+  return { ok: true };
+}
+
+export type UpdateFieldConfigResult = { ok: true } | { ok: false; error: string };
+
+export async function updateFieldConfig(
+  eventId: string,
+  input: unknown,
+): Promise<UpdateFieldConfigResult> {
+  const session = await auth();
+  if (!session.userId) return { ok: false, error: 'Not authenticated' };
+
+  const isSuperAdmin = session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
+  const isCoordinator = session.has?.({ role: ROLES.EVENT_COORDINATOR }) ?? false;
+  if (!isSuperAdmin && !isCoordinator) {
+    return {
+      ok: false,
+      error: 'Only Event Coordinators and Super Admins can configure event fields',
+    };
+  }
+
+  const eventIdResult = eventIdSchema.safeParse(eventId);
+  if (!eventIdResult.success) return { ok: false, error: 'Invalid event ID' };
+
+  const parsed = fieldConfigSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'Invalid field configuration' };
+
+  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+
+  await db
+    .update(events)
+    .set({
+      fieldConfig: parsed.data as unknown as FieldConfig,
+      updatedBy: userId,
+      updatedAt: new Date(),
+    })
+    .where(eq(events.id, eventId));
+
+  revalidatePath(`/events/${eventId}/fields`);
 
   return { ok: true };
 }

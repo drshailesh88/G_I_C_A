@@ -42,6 +42,7 @@ export default async function RegistrationPage({
       eventSlug={event.slug}
       eventName={event.name}
       registrationOpen={isRegistrationOpen(event.registrationSettings)}
+      fieldConfig={event.fieldConfig}
     />
   );
 }
