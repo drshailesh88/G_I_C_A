@@ -1,8 +1,8 @@
 {
   "version": 1,
   "pipeline": "ralph-packets",
-  "updated_at": "2026-04-18T15:52:00Z",
-  "current_packet_id": "PKT-B-002",
+  "updated_at": "2026-04-18T18:55:00Z",
+  "current_packet_id": "PKT-B-004",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -317,14 +317,14 @@
       "bucket": "B",
       "module": "events",
       "priority": 103,
-      "status": "READY",
+      "status": "NEEDS_REVIEW",
       "packet_file": "ralph/packets/PKT-B-003-p6-event-duplicate.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
-      "build_commit": null,
+      "build_commit": "f4c3a167d8452ecfe64dbfb1b9621ca2b8cc87d7",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T13:21:04.686332Z",
+      "last_status_at": "2026-04-18T18:55:00Z",
       "depends_on": []
     },
     {

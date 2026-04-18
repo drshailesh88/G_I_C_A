@@ -14,6 +14,19 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-18T18:55:00Z — PKT-B-003 — Duplicate event structure
+
+- Story ID: p6-event-duplicate
+- Implemented: Added `duplicateEvent(sourceEventId, { name, newStartDate })` server action to `src/lib/actions/event.ts` — RBAC-gated (canCreateEvents: super_admin or event_coordinator), validates sourceEventId UUID + input via `duplicateEventSchema`. Loads source event, calculates `shiftMs = newStart - srcStart`, preserves event duration for new endDate. Creates new event (status='draft') with branding/moduleToggles/fieldConfig/communicationSettings copied from source. Deep-copies: `halls` (builds old→new ID map), `sessions` (two-pass for parent-child hierarchy — parents first to build map, then children with mapped parentSessionId; all dates shifted by `shiftMs`; status reset to 'draft'), `sessionRoleRequirements` (mapped sessionIds), `notificationTemplates` (event-specific only — `isSystemTemplate=false` filter; status='draft', versionNo=1), `automationTriggers` (templateId mapped to new IDs; triggers that reference global system templates keep original templateId). Assigns duplicating user as event owner via `eventUserAssignments`. Created server page `/events/[eventId]/duplicate/page.tsx` — auth gate + RBAC check (super_admin or coordinator), loads source event, passes to client. Created `DuplicateEventClient` — form with pre-filled name ("Copy of {source name}") and new start date; shows source event info and what IS/ISN'T copied; displays calculated new end date preview; submit calls `duplicateEvent`, redirects to new event workspace on success. Added "Duplicate Event" tile (Copy icon) to ADMIN section of `event-workspace-client.tsx`. Added `halls, sessions, sessionRoleRequirements, notificationTemplates, automationTriggers` imports + `z`, `inArray` imports to event.ts.
+- Files changed:
+  - src/lib/actions/event.ts (added halls/sessions/sessionRoleRequirements/notificationTemplates/automationTriggers/z/inArray imports; added shiftDate helper; added duplicateEventSchema, DuplicateEventResult type, duplicateEvent action)
+  - src/lib/actions/event-duplicate.test.ts (new — 25 spec-derived tests: 3 RBAC + 4 validation + 5 new event properties + 3 date shifting + 4 structural copy + 3 templates/triggers + 1 person-linked exclusion + 2 owner assignment)
+  - src/app/(app)/events/[eventId]/duplicate/page.tsx (new — server page, auth + RBAC gate)
+  - src/app/(app)/events/[eventId]/duplicate/duplicate-event-client.tsx (new — DuplicateEventClient form with name, newStartDate, end date preview)
+  - src/app/(app)/events/[eventId]/event-workspace-client.tsx (added Copy import + Duplicate Event tile in ADMIN section)
+- Tests run: `npm run test:run` — 25 new tests pass (event-duplicate.test.ts); 8 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, full-journey, mutation-kill-2, notifications.adversarial, notifications.mutation-kill, travel-cascade).
+- Risks/follow-ups: Mock order in tests is critical — `duplicateEvent` loads the source event BEFORE calling `getOrCreateDefaultOrg`, so the select mocks must be queued: source event (where+limit) first, then org (limit). Child sessions (parentSessionId != null) are handled in a second INSERT pass; if the source has no child sessions (default fixture), that insert is skipped. Branding image storage keys (`logoStorageKey`, `headerImageStorageKey`) inside the copied `branding` JSONB still reference the source event's R2 paths — future enhancement should re-key the images under the new eventId. `registrationSettings` is copied as-is (structural config, not operational data); callers should review capacity settings before publishing the duplicate.
+
 ## 2026-04-18T17:52:00Z — PKT-B-002 — Attendance report drill-down page
 
 - Story ID: p5-m58-attendance-report-page
