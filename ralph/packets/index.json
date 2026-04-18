@@ -1,8 +1,8 @@
 {
   "version": 1,
   "pipeline": "ralph-packets",
-  "updated_at": "2026-04-18T13:21:04.686332Z",
-  "current_packet_id": "PKT-A-011",
+  "updated_at": "2026-04-18T14:52:26Z",
+  "current_packet_id": "PKT-A-013",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -192,14 +192,14 @@
       "bucket": "A",
       "module": "program",
       "priority": 25,
-      "status": "NEEDS_REVIEW",
+      "status": "BLOCKED",
       "packet_file": "ralph/packets/PKT-A-011-p2-program-revised-responsibility-notifications.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "dd9637d",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T14:46:00Z",
+      "last_status_at": "2026-04-18T14:52:26Z",
       "depends_on": [
         "PKT-A-010"
       ]
@@ -230,14 +230,14 @@
       "bucket": "A",
       "module": "events",
       "priority": 27,
-      "status": "READY",
+      "status": "NEEDS_REVIEW",
       "packet_file": "ralph/packets/PKT-A-013-p1-transfer-event-ownership.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
-      "build_commit": null,
+      "build_commit": "b512492ee3fedec1f0119bf8645d30f5f6128239",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T13:21:04.686332Z",
+      "last_status_at": "2026-04-18T15:10:00Z",
       "depends_on": [
         "PKT-A-001"
       ]

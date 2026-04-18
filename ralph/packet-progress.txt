@@ -14,6 +14,19 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-18T15:10:00Z — PKT-A-013 — Transfer event ownership workflow
+
+- Story ID: p1-transfer-event-ownership
+- Implemented: Added `transferEventOwnership(eventId, newOwnerUserId)` server action to `src/lib/actions/event.ts` — asserts Super Admin via `session.has`, validates eventId UUID + non-empty newOwnerUserId, deactivates all active `owner`-type assignments for the event (collaborator assignments untouched), then inserts a new owner record or reactivates an existing one for the new owner, then updates `events.updatedBy`/`updatedAt` to reflect the actor. Returns `{ ok: true }` or `{ ok: false; error: string }`. Added `TransferOwnershipResult` export type. Created server page at `/events/[eventId]/transfer-ownership/page.tsx` — super-admin gate (redirect to /dashboard if not SA), loads event + assignments + teamMembers in parallel, resolves current owner display name. Created `TransferOwnershipClient` — shows current owner card, candidate dropdown (excludes current owner), confirm button with transition, success state with back-to-team link, inline error feedback. Added "Transfer Ownership" tile (ArrowRightLeft icon) to ADMIN section in `event-workspace-client.tsx`.
+- Files changed:
+  - src/lib/actions/event.ts (added ROLES import; added TransferOwnershipResult type + transferEventOwnership action)
+  - src/lib/actions/event-transfer-ownership.test.ts (new — 13 spec-derived tests: 3 RBAC + 3 validation + 7 ownership mutation)
+  - src/app/(app)/events/[eventId]/transfer-ownership/page.tsx (new — server page, super-admin gate + parallel data fetch)
+  - src/app/(app)/events/[eventId]/transfer-ownership/transfer-ownership-client.tsx (new — TransferOwnershipClient)
+  - src/app/(app)/events/[eventId]/event-workspace-client.tsx (added ArrowRightLeft import + Transfer Ownership tile in ADMIN section)
+- Tests run: `npm run test:run` — 13 new tests pass; 8 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, full-journey, mutation-kill-2, notifications.adversarial, notifications.mutation-kill, travel-cascade).
+- Risks/follow-ups: Transferring ownership to the currently active owner is allowed (no-op from DB perspective — deactivate then reactivate with same userId). No guard prevents transfer to a Clerk user who has no event access yet (they'd get owner assignment added). The workspace "Transfer Ownership" tile is visible to all roles, but the page and action gate on Super Admin — non-SA users who navigate directly see a dashboard redirect.
+
 ## 2026-04-18T14:46:00Z — PKT-A-011 — Revised responsibility notifications on publish
 
 - Story ID: p2-program-revised-responsibility-notifications
