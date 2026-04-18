@@ -46,6 +46,11 @@ function VersionCard({ version }: { version: ProgramVersion }) {
         </span>
       </div>
 
+      <p className="text-sm text-muted-foreground" data-testid="published-by">
+        <span className="font-medium text-foreground">Published by: </span>
+        {version.publishedBy}
+      </p>
+
       {summary && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-sm" data-testid="changes-summary">
           <div className="rounded-md bg-muted px-3 py-2 text-center">

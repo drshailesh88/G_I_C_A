@@ -175,14 +175,14 @@
       "bucket": "A",
       "module": "program",
       "priority": 24,
-      "status": "NEEDS_REVIEW",
+      "status": "VERIFIED",
       "packet_file": "ralph/packets/PKT-A-010-p2-m52-version-history.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "b05d562",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T10:01:45.000000Z",
+      "last_status_at": "2026-04-18T10:22:18Z",
       "depends_on": []
     },
     {

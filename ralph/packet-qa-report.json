@@ -156,5 +156,21 @@
     },
     "bugs": [],
     "notes": "Superseded the earlier stale schema-approval block: the current packet oracle explicitly says the people.bio and people.photoStorageKey fields are already landed and approved. Packet-targeted speaker profile tests passed, the implementation stays on /e/[eventSlug], and speaker sessions are filtered to the active event. Repo-wide npm run test:run and npx tsc --noEmit still fail due unrelated baseline issues outside PKT-C-002 scope."
+  },
+  {
+    "packet_id": "PKT-A-010",
+    "story_id": "p2-m52-version-history",
+    "qa_timestamp": "2026-04-18T10:22:18Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "pass"
+    },
+    "bugs": [
+      "The version-history cards showed the version number and timestamp but omitted the publisher, so the page did not satisfy the packet requirement to surface visible publish metadata."
+    ],
+    "notes": "Rendered publishedBy on each version card and added packet-focused coverage for the publisher metadata. Packet-targeted vitest now passes; repo-wide npm run test:run and npx tsc --noEmit still fail due unrelated baseline issues outside PKT-A-010 scope."
   }
 ]

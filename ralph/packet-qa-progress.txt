@@ -121,3 +121,11 @@ Evaluate ex
 - bug count: 0
 - fix commit(s): none
 - notes: Verified the current packet oracle now treats the speaker-profile schema fields as already landed and approved. The existing implementation satisfies the overlay, event-scoped session list, and no-route-change requirements, so this pass corrects the stale earlier block without changing production code.
+
+## 2026-04-18T10:22:18Z — PKT-A-010 — Program version history page
+
+- QA status: fixed
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated repo-wide errors
+- bug count: 1
+- fix commit(s): pending
+- notes: Added visible published-by metadata to each version card and packet-local coverage for that requirement. Latest-first ordering, structured counts, workspace routing, and empty state remain satisfied by the existing event-scoped implementation.

@@ -76,6 +76,12 @@ describe('ChangesClient — PKT-A-010 version history page', () => {
     expect(html).toContain('Version 1');
   });
 
+  it('renders published-by metadata for each version', () => {
+    const html = render([baseVersion]);
+    expect(html).toContain('data-testid="published-by"');
+    expect(html).toContain('user_clerk_abc');
+  });
+
   it('renders the changes-summary section with correct added count', () => {
     const html = render([baseVersion]);
     // added_sessions has 2 IDs → count 2
