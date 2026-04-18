@@ -153,3 +153,19 @@ Evaluate ex
 - bug count: 1
 - fix commit(s): none
 - notes: The hub route exists, groups templates by channel, and reads the full event-scoped notification log with filtering and pagination, but the template cards point at `/events/[eventId]/templates/[templateId]/edit` and there is no matching communications editor route under `src/app/(app)/events/[eventId]/templates`. That leaves the packet blocked on its required editor navigation flow.
+
+## 2026-04-18T14:52:26Z — PKT-A-011 — Revised responsibility notifications on publish
+
+- QA status: fail
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated baseline failures; manual acceptance fail against packet oracle
+- bug count: 2
+- fix commit(s): none
+- notes: The program-version cascade compares only assignment membership and emits added/removed session IDs, so it never computes the packet's required changed bucket for role, hall, or time shifts. It also calls the `program_update` notification template with `versionId`, `versionNo`, `addedSessions`, and `removedSessions` instead of the template's required `fullName`, `eventName`, and `changesSummary`, so the implemented diff-notification flow does not satisfy the packet contract even though the packet-local handler test passes.
+
+## 2026-04-18T15:15:50Z — PKT-A-013 — Transfer event ownership workflow
+
+- QA status: fixed
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated baseline failures; manual acceptance pass against packet oracle
+- bug count: 1
+- fix commit(s): `7e05de4`
+- notes: Fixed ownership transfer so the previous owner is downgraded to an active collaborator instead of losing event access, kept the new owner promotion event-scoped, and added packet-local coverage for preserved access and self-transfer idempotency.

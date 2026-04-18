@@ -222,5 +222,38 @@
       "Template cards link to `/events/[eventId]/templates/[templateId]/edit`, but the communications template editor route does not exist under `src/app/(app)/events/[eventId]/templates`, so the hub does not satisfy the packet requirement that cards navigate into the template editor flow."
     ],
     "notes": "Packet-targeted `templates-hub.test.ts` passes, and the page does render event-scoped grouped templates plus a full event-scoped log with filtering and pagination. Verification still fails against the frozen packet oracle because the editor destination route is absent. Repo-wide `npm run test:run` and `npx tsc --noEmit` also fail due unrelated baseline issues outside PKT-A-007 scope."
+  },
+  {
+    "packet_id": "PKT-A-011",
+    "story_id": "p2-program-revised-responsibility-notifications",
+    "qa_timestamp": "2026-04-18T14:52:26Z",
+    "qa_model": "codex",
+    "status": "fail",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "fail"
+    },
+    "bugs": [
+      "The publish cascade only computes added and removed session IDs from assignment membership, but the packet requires faculty-specific A/B/C diffs with a distinct changed bucket for role, hall, or time shifts.",
+      "The cascade sends `versionId`, `versionNo`, `addedSessions`, and `removedSessions` to the `program_update` template, but that template requires `fullName`, `eventName`, and `changesSummary`, so the implemented notification payload does not match the packet's diff-notification contract."
+    ],
+    "notes": "Packet-local `src/lib/cascade/handlers/program-cascade.test.ts` passes, but the implementation in `src/lib/cascade/handlers/program-cascade.ts` fails the frozen oracle for revised-responsibility notifications. Repo-wide `npm run test:run` and `npx tsc --noEmit` also fail due unrelated baseline issues outside PKT-A-011 scope."
+  },
+  {
+    "packet_id": "PKT-A-013",
+    "story_id": "p1-transfer-event-ownership",
+    "qa_timestamp": "2026-04-18T15:15:50Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "pass"
+    },
+    "bugs": [
+      "The transfer action deactivated the current owner row outright, which removed the prior owner’s event access and broke the packet requirement to preserve collaborator access and consistent assignment history during ownership transfer."
+    ],
+    "notes": "Fixed ownership transfer to downgrade the previous owner to an active collaborator row, preserve event-scoped access, and treat self-transfer as a no-op on assignment history. Packet-targeted `src/lib/actions/event-transfer-ownership.test.ts` passes; repo-wide `npm run test:run` and `npx tsc --noEmit` still fail due unrelated baseline issues outside PKT-A-013 scope."
   }
 ]
