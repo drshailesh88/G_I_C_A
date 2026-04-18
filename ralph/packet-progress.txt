@@ -14,6 +14,19 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-19T02:30:00Z — PKT-B-006 — Travel CSV import
+
+- Story ID: p3-travel-csv-import
+- Implemented: Added `importTravelBatch(eventId, rows[])` server action to `src/lib/actions/travel.ts` — TRAVEL_WRITE_ROLES only (super_admin, ops); validates batch size ≤500; for each row: validates direction/travelMode enums, looks up person by email (lowercase) first then E.164 phone (normalizePhone) as fallback, skips with warning when person not found or phone invalid, checks for duplicate PNR+personId+eventId (skips with warning when found), inserts travel record with `recordStatus='draft'`, auto-upserts event_people junction with `source='travel'`, writes audit log (`action:'create', resource:'travel', meta.importedVia:'csv'`), emits `TRAVEL_SAVED` cascade event. Returns `{ results, imported, skipped, errors }`. Added `TravelImportRow` interface and `TravelImportRowResult` discriminated union type. Added `normalizePhone` import from `@/lib/validations/person`; added `TRAVEL_DIRECTIONS, TRAVEL_MODES` to travel validations import. Created server page `src/app/(app)/events/[eventId]/travel/import/page.tsx` — asserts TRAVEL_WRITE_ROLES via `assertEventAccess`, redirects to travel list if forbidden or not logged in. Created `TravelImportClient` client component — 4-step flow (Upload → Map Columns → Preview → Importing → Done); reuses `parseCsvString` from `@/lib/import/csv-import`; travel-specific `autoMapTravelColumns` using Fuse.js fuzzy matching across 14 known column aliases; `parseTravelRows` validates required fields client-side (direction/mode enums, required cities, person identifier); result done screen shows imported/skipped/error counts with per-row detail for non-imported rows. Added "Import CSV" link (Upload icon) to travel list client header (visible to write roles only). 21 spec-derived tests in `travel-import.test.ts` using `vi.resetAllMocks()` in `beforeEach` to prevent mockReturnValueOnce queue leakage across tests.
+- Files changed:
+  - src/lib/actions/travel.ts (added TRAVEL_DIRECTIONS, TRAVEL_MODES, normalizePhone imports; added TravelImportRow, TravelImportRowResult types, TRAVEL_IMPORT_MAX_ROWS const, importTravelBatch action)
+  - src/lib/actions/travel-import.test.ts (new — 21 spec-derived tests: 4 RBAC + 2 batch size + 2 validation + 5 person lookup + 3 duplicate PNR + 3 audit/cascade + 2 result counters)
+  - src/app/(app)/events/[eventId]/travel/import/page.tsx (new — server page, write-role gate)
+  - src/app/(app)/events/[eventId]/travel/import/travel-import-client.tsx (new — TravelImportClient with 5-step flow + travel-specific column mapping)
+  - src/app/(app)/events/[eventId]/travel/travel-list-client.tsx (added Upload icon + Import CSV link in header)
+- Tests run: `npm run test:run` — 21 new tests pass (travel-import.test.ts); 8 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, full-journey, mutation-kill-2, notifications.adversarial, notifications.mutation-kill, travel-cascade).
+- Risks/follow-ups: Person lookup is case-insensitive on email (lowercased before query) but relies on the DB column collation for exact match — assumes email stored lowercase (consistent with createPerson which lowercases on input). Phone lookup uses E.164 normalization with libphonenumber-js; if the phone number country is ambiguous (no country code), normalization may fail and the row will be skipped. The duplicate PNR check is scoped per (event, person, pnr) — two different people can have the same PNR (e.g., on the same flight) without being considered duplicates. Import button only visible to write roles (ops, super_admin); read-only users see neither the button nor the page.
+
 ## 2026-04-19T01:35:00Z — PKT-B-005 — Global cross-event reports
 
 - Story ID: p6-m47-global-reports
