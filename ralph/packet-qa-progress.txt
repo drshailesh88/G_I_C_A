@@ -23,3 +23,28 @@
 - bug count: 2
 - fix commit(s): `40effbc`
 - notes: Fixed the contract mismatch between saved registration settings and the public registration action, enforced cutoff-date closure in the public flow, and added packet-focused coverage for approval, waitlist, cutoff, and closed-form rendering.
+
+## 2026-04-18T02:09:47.754075Z — PKT-A-004 — Faculty acceptance creates or confirms registration
+- Status: pass (mini evaluator only)
+- Model: default
+- Bugs: 0
+- Fix commits: none
+- Notes: 2026-04-18T02:08:10.212650Z ERROR codex_core::codex: failed to load skill /Users/shaileshsingh/dev/build_playbook/portable-skills/anneal/SKILL.md: missing YAML frontmatter delimited by ---
+OpenAI Codex v0.121.0 (research preview)
+--------
+workdir: /Users/shaileshsingh/G_I_C_A
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: none
+reasoning summaries: none
+session id: 019d9e58-74fa-7633-95f6-5ac9c8a330a9
+--------
+user
+Read @ralph/qa-packets-pass1-prompt.md @CLAUDE.md @ralph/packets/index.json
+
+ITERATION: 3 of 999
+CURRENT_PACKET: PKT-A-004
+
+Evaluate ex
