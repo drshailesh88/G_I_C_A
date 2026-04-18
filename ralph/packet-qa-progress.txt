@@ -1,0 +1,17 @@
+# Ralph Packet QA Progress
+
+## QA Patterns
+
+<!-- Reusable packet QA patterns and bug classes. -->
+
+## Iteration log
+
+<!-- Dated entries per completed packet QA pass. -->
+
+## 2026-04-18T01:42:57Z — PKT-A-002 — Event settings page and updateEvent action
+
+- QA status: fixed
+- checks run: targeted vitest pass; typecheck fail due unrelated repo-wide errors
+- bug count: 1
+- fix commit(s): recorded in git history for this QA pass
+- notes: Added notFound handling for inaccessible settings routes and added route-level coverage for accessible, read-only, inaccessible, and unauthenticated states.

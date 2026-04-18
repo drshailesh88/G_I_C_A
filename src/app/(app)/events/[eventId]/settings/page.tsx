@@ -1,5 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getEvent } from '@/lib/actions/event';
 import { ROLES } from '@/lib/auth/roles';
 import { EventSettingsClient } from './event-settings-client';
@@ -13,9 +13,13 @@ export default async function EventSettingsPage({
   if (!session.userId) redirect('/login');
 
   const { eventId } = await params;
-  const event = await getEvent(eventId);
+  try {
+    const event = await getEvent(eventId);
 
-  const isReadOnly = session.has?.({ role: ROLES.READ_ONLY }) ?? false;
+    const isReadOnly = session.has?.({ role: ROLES.READ_ONLY }) ?? false;
 
-  return <EventSettingsClient event={event} canWrite={!isReadOnly} />;
+    return <EventSettingsClient event={event} canWrite={!isReadOnly} />;
+  } catch {
+    notFound();
+  }
 }

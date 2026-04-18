@@ -1,0 +1,18 @@
+[
+  {
+    "packet_id": "PKT-A-002",
+    "story_id": "p1-event-edit-settings",
+    "qa_timestamp": "2026-04-18T01:42:57Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "pass",
+      "typecheck": "fail",
+      "manual_acceptance": "pass"
+    },
+    "bugs": [
+      "The /events/[eventId]/settings page did not convert inaccessible or cross-event access failures into notFound(), so it could reject inaccessible events inconsistently with the workspace route."
+    ],
+    "notes": "Added route-level notFound handling and packet-specific page coverage. npx tsc --noEmit still fails due unrelated pre-existing repo-wide errors outside PKT-A-002 scope."
+  }
+]
