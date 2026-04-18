@@ -105,3 +105,11 @@ Evaluate ex
 - bug count: 1
 - fix commit(s): pending in git history for this QA pass
 - notes: Fixed resend RBAC in the travel and accommodation row-action UIs so read-only users cannot trigger the packet's write action, while preserving the travel/accommodation-only resend flow and packet-targeted coverage.
+
+## 2026-04-18T07:26:49Z — PKT-C-002 — Speaker profile public view
+
+- QA status: fail (blocked by packet governance)
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated repo-wide errors
+- bug count: 1
+- fix commit(s): none
+- notes: The public speaker-profile overlay implementation exists and packet-local tests pass, but the frozen packet file still marks this work BLOCKED until the user explicitly approves the required people schema additions (`bio`, `photoStorageKey`). Recorded as a packet-level governance block rather than a production-code verification.

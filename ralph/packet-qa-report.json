@@ -126,5 +126,21 @@
       "The new resend row action remained writable from the travel UI and active for read-only accommodation users, so the packet violated the project's write-permission rules for logistics mutations."
     ],
     "notes": "Fixed resend RBAC in travel and accommodation list UIs, added packet-focused read-only coverage, and verified the packet-targeted vitest suite passes. Repo-wide npm run test:run and npx tsc --noEmit still fail due unrelated baseline issues outside PKT-C-006 scope."
+  },
+  {
+    "packet_id": "PKT-C-002",
+    "story_id": "p2-d5-speaker-profile",
+    "qa_timestamp": "2026-04-18T07:26:49Z",
+    "qa_model": "codex",
+    "status": "fail",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "fail"
+    },
+    "bugs": [
+      "The packet oracle explicitly blocks this feature until the user approves schema changes for people.bio and people.photoStorageKey, but the repo already added those fields and shipped the public speaker-profile implementation, so the packet cannot be VERIFIED under its own governance gate."
+    ],
+    "notes": "Packet-local speaker profile tests passed and the public route stays on /e/[eventSlug] with event-scoped sessions, but PKT-C-002 remains BLOCKED because its frozen packet file says schema approval is mandatory before build. Repo-wide npm run test:run and npx tsc --noEmit also fail due unrelated baseline issues outside PKT-C-002 scope."
   }
 ]
