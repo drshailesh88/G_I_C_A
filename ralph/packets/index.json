@@ -460,7 +460,7 @@
       "bucket": "C",
       "module": "program",
       "priority": 31,
-      "status": "NEEDS_REVIEW",
+      "status": "VERIFIED",
       "packet_file": "ralph/packets/PKT-C-003-p2-d1-preview-revised-emails.md",
       "spec_status": "frozen",
       "wireframe_status": "frozen",
@@ -479,7 +479,7 @@
       "linear_issue_id": null,
       "build_commit": "7e2c7a6",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T11:35:00Z",
+      "last_status_at": "2026-04-18T11:44:35Z",
       "depends_on": []
     },
     {

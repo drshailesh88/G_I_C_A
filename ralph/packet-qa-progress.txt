@@ -127,5 +127,13 @@ Evaluate ex
 - QA status: fixed
 - checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated repo-wide errors
 - bug count: 1
-- fix commit(s): pending
+- fix commit(s): `8d430e0`
 - notes: Added visible published-by metadata to each version card and packet-local coverage for that requirement. Latest-first ordering, structured counts, workspace routing, and empty state remain satisfied by the existing event-scoped implementation.
+
+## 2026-04-18T11:44:35Z — PKT-C-003 — Preview revised emails modal
+
+- QA status: fixed
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated repo-wide errors
+- bug count: 2
+- fix commit(s): pending in git history for this QA pass
+- notes: Switched preview rendering to the shared `program_update` template renderer, split the rendered body around a preview placeholder, and expanded the modal diff blocks and send summary text to cover orange changed or moved categories alongside added and removed items.

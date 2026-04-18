@@ -14,7 +14,7 @@ import {
   events,
 } from '@/lib/db/schema';
 import { eq, and, or, sql, desc, asc, ne, lt, gt, isNull, inArray } from 'drizzle-orm';
-import { interpolate } from '@/lib/notifications/template-utils';
+import { renderTemplate } from '@/lib/notifications/template-renderer';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
@@ -1194,29 +1194,45 @@ export async function getProgramVersion(eventId: string, versionId: string) {
 // PREVIEW REVISED EMAILS (PKT-C-003)
 // ══════════════════════════════════════════════════════════════
 
-const PROGRAM_UPDATE_EMAIL_BODY = `Dear {{salutation}} {{fullName}},
+const PROGRAM_UPDATE_PREVIEW_SPLIT_TOKEN = '__PROGRAM_UPDATE_PREVIEW_SPLIT__';
 
-The scientific program for {{eventName}} has been updated (Version {{versionNo}}).
+type ChangesSummaryJson = {
+  added_sessions?: unknown[];
+  removed_sessions?: unknown[];
+  moved_sessions?: unknown[];
+  assignment_changes?: unknown[];
+  tba_filled?: unknown[];
+  tba_reopened?: unknown[];
+} | null;
 
-Changes affecting you:
-{{changesSummary}}
+function countSummaryEntries(entries: unknown): number {
+  return Array.isArray(entries) ? entries.length : 0;
+}
 
-Please review your updated responsibilities. If you have concerns, contact the event coordinator.
+function pluralizeSessions(count: number): string {
+  return `${count} session${count === 1 ? '' : 's'}`;
+}
 
-Regards,
-{{eventName}} Organizing Committee`;
-
-const PROGRAM_UPDATE_EMAIL_SUBJECT = 'Program Update — {{eventName}}';
-
-function buildChangesSummaryText(
-  summary: { added_sessions?: string[]; removed_sessions?: string[] } | null,
-): string {
+function buildChangesSummaryText(summary: ChangesSummaryJson): string {
   if (!summary) return 'Program has been updated.';
+
   const parts: string[] = [];
-  const added = summary.added_sessions ?? [];
-  const removed = summary.removed_sessions ?? [];
-  if (added.length > 0) parts.push(`${added.length} session${added.length > 1 ? 's' : ''} added`);
-  if (removed.length > 0) parts.push(`${removed.length} session${removed.length > 1 ? 's' : ''} removed`);
+  const added = countSummaryEntries(summary.added_sessions);
+  const moved = countSummaryEntries(summary.moved_sessions);
+  const assignmentChanges = countSummaryEntries(summary.assignment_changes);
+  const removed = countSummaryEntries(summary.removed_sessions);
+  const tbaFilled = countSummaryEntries(summary.tba_filled);
+  const tbaReopened = countSummaryEntries(summary.tba_reopened);
+
+  if (added > 0) parts.push(`${pluralizeSessions(added)} added`);
+  if (moved > 0) parts.push(`${pluralizeSessions(moved)} changed or moved`);
+  if (assignmentChanges > 0) {
+    parts.push(`${assignmentChanges} assignment${assignmentChanges === 1 ? '' : 's'} changed`);
+  }
+  if (removed > 0) parts.push(`${pluralizeSessions(removed)} removed`);
+  if (tbaFilled > 0) parts.push(`${tbaFilled} TBA slot${tbaFilled === 1 ? '' : 's'} filled`);
+  if (tbaReopened > 0) parts.push(`${tbaReopened} TBA slot${tbaReopened === 1 ? '' : 's'} reopened`);
+
   if (parts.length === 0) return 'Sessions have been updated.';
   return `${parts.join(', ')}.`;
 }
@@ -1251,8 +1267,6 @@ export async function getVersionPreviewData(eventId: string, versionId: string) 
   return { version, eventName: event?.name ?? '', affectedFaculty };
 }
 
-type ChangesSummaryJson = { added_sessions?: string[]; removed_sessions?: string[] } | null;
-
 export async function getVersionEmailParts(eventId: string, versionId: string, personId: string) {
   const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
 
@@ -1278,15 +1292,18 @@ export async function getVersionEmailParts(eventId: string, versionId: string, p
     fullName: person.fullName,
     eventName: event?.name ?? '',
     versionNo: String(version.versionNo),
+    changesSummary: PROGRAM_UPDATE_PREVIEW_SPLIT_TOKEN,
   };
-
-  const [beforeTemplate = '', afterTemplate = ''] = PROGRAM_UPDATE_EMAIL_BODY.split('{{changesSummary}}');
-  const bodyBefore = interpolate(beforeTemplate, vars);
-  const bodyAfter = interpolate(afterTemplate, vars);
-  const subject = interpolate(PROGRAM_UPDATE_EMAIL_SUBJECT, vars);
+  const rendered = await renderTemplate({
+    eventId: scopedEventId,
+    channel: 'email',
+    templateKey: 'program_update',
+    variables: vars,
+  });
+  const [bodyBefore = rendered.body, bodyAfter = ''] = rendered.body.split(PROGRAM_UPDATE_PREVIEW_SPLIT_TOKEN);
 
   return {
-    subject,
+    subject: rendered.subject ?? '',
     bodyBefore,
     bodyAfter,
     changesSummaryJson: version.changesSummaryJson as ChangesSummaryJson,

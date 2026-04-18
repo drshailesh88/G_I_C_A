@@ -3,6 +3,7 @@
  * Expectations derived from specs and domain rules, never from implementation.
  */
 
+import fs from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Constants ────────────────────────────────────────────────────
@@ -90,6 +91,25 @@ vi.mock('@/lib/notifications/template-utils', () => ({
   ),
 }));
 
+vi.mock('@/lib/notifications/template-renderer', () => ({
+  renderTemplate: vi.fn().mockImplementation(async ({ variables }: { variables: Record<string, unknown> }) => ({
+    templateId: 'tpl-01',
+    templateVersionNo: 1,
+    subject: `Program Update — ${variables.eventName}`,
+    body: `Dear ${variables.salutation} ${variables.fullName},\n\nBefore\n${variables.changesSummary}\nAfter\n\n${variables.eventName} Organizing Committee`,
+    variables,
+    brandingVars: {
+      logoUrl: '',
+      headerImageUrl: '',
+      primaryColor: '#00325B',
+      secondaryColor: '#00B9F5',
+      emailSenderName: 'GEM India',
+      emailFooterText: '',
+      whatsappPrefix: '',
+    },
+  })),
+}));
+
 vi.mock('@/lib/notifications/send', () => ({
   sendNotification: vi.fn().mockResolvedValue({ notificationLogId: 'log-01', status: 'sent', provider: 'resend' }),
 }));
@@ -143,6 +163,11 @@ const PERSON_B = {
   salutation: null,
   email: null,
 };
+
+const previewModalSource = fs.readFileSync(
+  new URL('./preview-emails-modal.tsx', import.meta.url),
+  'utf8',
+);
 
 // Helper: build a DB mock that returns values in sequence (one per .select().from().where().limit() call)
 function makeSequentialSelectMock(returnValues: unknown[][]) {
@@ -224,6 +249,23 @@ describe('getVersionEmailParts', () => {
     expect(result.subject).toContain('GEM India 2026');
   });
 
+  it('uses the real template renderer for preview output instead of hardcoded template slices', async () => {
+    const { getVersionEmailParts } = await import('@/lib/actions/program');
+    const { renderTemplate } = await import('@/lib/notifications/template-renderer');
+
+    makeSequentialSelectMock([[VERSION], [EVENT], [PERSON_A]]);
+
+    await getVersionEmailParts(EVENT_UUID, VERSION_UUID, PERSON_UUID_A);
+
+    expect(vi.mocked(renderTemplate)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventId: EVENT_UUID,
+        channel: 'email',
+        templateKey: 'program_update',
+      }),
+    );
+  });
+
   it('bodyBefore contains greeting with salutation and full name', async () => {
     const { getVersionEmailParts } = await import('@/lib/actions/program');
 
@@ -241,6 +283,18 @@ describe('getVersionEmailParts', () => {
 
     const result = await getVersionEmailParts(EVENT_UUID, VERSION_UUID, PERSON_UUID_A);
     expect(result.bodyAfter).toContain('Organizing Committee');
+  });
+
+  it('splits the rendered template body around the changesSummary placeholder', async () => {
+    const { getVersionEmailParts } = await import('@/lib/actions/program');
+
+    makeSequentialSelectMock([[VERSION], [EVENT], [PERSON_A]]);
+
+    const result = await getVersionEmailParts(EVENT_UUID, VERSION_UUID, PERSON_UUID_A);
+    expect(result.bodyBefore).toContain('Before');
+    expect(result.bodyAfter).toContain('After');
+    expect(result.bodyBefore).not.toContain('__PROGRAM_UPDATE_PREVIEW_SPLIT__');
+    expect(result.bodyAfter).not.toContain('__PROGRAM_UPDATE_PREVIEW_SPLIT__');
   });
 
   it('returns correct recipientEmail for person with email', async () => {
@@ -330,6 +384,46 @@ describe('sendVersionEmails', () => {
         templateKey: 'program_update',
         triggerType: 'program.version_published',
         channel: 'email',
+      }),
+    );
+  });
+
+  it('includes changed or moved summary text when orange-category diff items exist', async () => {
+    const { sendVersionEmails } = await import('@/lib/actions/program');
+    const versionWithChangedItems = {
+      ...VERSION,
+      changesSummaryJson: {
+        added_sessions: ['s1'],
+        moved_sessions: ['s2'],
+        assignment_changes: ['a1', 'a2'],
+        removed_sessions: ['s3'],
+      },
+    };
+
+    makeSequentialSelectMock([[versionWithChangedItems], [EVENT], [PERSON_A]]);
+    mockUpdate.mockReturnValue({ set: () => ({ where: () => Promise.resolve([]) }) });
+
+    const { sendNotification } = await import('@/lib/notifications/send');
+    vi.mocked(sendNotification).mockResolvedValue({
+      notificationLogId: 'log-01',
+      status: 'sent',
+      provider: 'resend',
+    });
+
+    await sendVersionEmails(EVENT_UUID, VERSION_UUID);
+
+    expect(vi.mocked(sendNotification)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variables: expect.objectContaining({
+          changesSummary: expect.stringContaining('changed or moved'),
+        }),
+      }),
+    );
+    expect(vi.mocked(sendNotification)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        variables: expect.objectContaining({
+          changesSummary: expect.stringContaining('assignments changed'),
+        }),
       }),
     );
   });
@@ -464,5 +558,11 @@ describe('PreviewEmailsModal — static structure', () => {
     );
     expect(html).toContain('data-testid="faculty-count-footer"');
     expect(html).toContain('0 faculty will receive this email');
+  });
+
+  it('includes orange diff block support for changed or moved categories from the packet decisions', () => {
+    expect(previewModalSource).toContain("testId: 'diff-changed'");
+    expect(previewModalSource).toContain('bg-orange-50');
+    expect(previewModalSource).toContain('changed or moved');
   });
 });

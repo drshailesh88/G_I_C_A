@@ -172,5 +172,22 @@
       "The version-history cards showed the version number and timestamp but omitted the publisher, so the page did not satisfy the packet requirement to surface visible publish metadata."
     ],
     "notes": "Rendered publishedBy on each version card and added packet-focused coverage for the publisher metadata. Packet-targeted vitest now passes; repo-wide npm run test:run and npx tsc --noEmit still fail due unrelated baseline issues outside PKT-A-010 scope."
+  },
+  {
+    "packet_id": "PKT-C-003",
+    "story_id": "p2-d1-preview-revised-emails",
+    "qa_timestamp": "2026-04-18T11:44:35Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "pass"
+    },
+    "bugs": [
+      "The preview path hardcoded the program-update template body instead of rendering the active `program_update` template through the shared template renderer, so packet-specific template overrides and actual variables were not faithfully previewed.",
+      "The modal only rendered green added and red removed count chips, so it missed the packet's required structured diff categories for orange changed or moved items."
+    ],
+    "notes": "Switched preview rendering to the shared template renderer, split the rendered body around a preview placeholder, expanded diff summary handling for changed or moved categories, and added packet-focused coverage. Packet-targeted vitest checks now pass; repo-wide npm run test:run and npx tsc --noEmit still fail due unrelated baseline issues outside PKT-C-003 scope."
   }
 ]

@@ -24,9 +24,139 @@ type EmailParts = {
   subject: string;
   bodyBefore: string;
   bodyAfter: string;
-  changesSummaryJson: { added_sessions?: string[]; removed_sessions?: string[] } | null;
+  changesSummaryJson: {
+    added_sessions?: unknown[];
+    removed_sessions?: unknown[];
+    moved_sessions?: unknown[];
+    assignment_changes?: unknown[];
+    tba_filled?: unknown[];
+    tba_reopened?: unknown[];
+  } | null;
   recipientEmail: string | null;
 };
+
+type DiffTone = 'green' | 'orange' | 'red';
+
+type DiffBlock = {
+  key: string;
+  count: number;
+  tone: DiffTone;
+  icon: string;
+  description: string;
+  testId: string;
+};
+
+function countEntries(entries: unknown): number {
+  return Array.isArray(entries) ? entries.length : 0;
+}
+
+function buildDiffBlocks(
+  changesSummaryJson: EmailParts['changesSummaryJson'],
+): DiffBlock[] {
+  if (!changesSummaryJson) {
+    return [];
+  }
+
+  const blocks: DiffBlock[] = [];
+  const added = countEntries(changesSummaryJson.added_sessions);
+  const moved = countEntries(changesSummaryJson.moved_sessions);
+  const assignmentChanges = countEntries(changesSummaryJson.assignment_changes);
+  const removed = countEntries(changesSummaryJson.removed_sessions);
+  const tbaFilled = countEntries(changesSummaryJson.tba_filled);
+  const tbaReopened = countEntries(changesSummaryJson.tba_reopened);
+
+  if (added > 0) {
+    blocks.push({
+      key: 'added',
+      count: added,
+      tone: 'green',
+      icon: '+',
+      description: `${added} session${added === 1 ? '' : 's'} added`,
+      testId: 'diff-added',
+    });
+  }
+
+  if (moved > 0) {
+    blocks.push({
+      key: 'moved',
+      count: moved,
+      tone: 'orange',
+      icon: '~',
+      description: `${moved} session${moved === 1 ? '' : 's'} changed or moved`,
+      testId: 'diff-changed',
+    });
+  }
+
+  if (assignmentChanges > 0) {
+    blocks.push({
+      key: 'assignment_changes',
+      count: assignmentChanges,
+      tone: 'orange',
+      icon: '~',
+      description: `${assignmentChanges} assignment${assignmentChanges === 1 ? '' : 's'} changed`,
+      testId: 'diff-assignment-changes',
+    });
+  }
+
+  if (removed > 0) {
+    blocks.push({
+      key: 'removed',
+      count: removed,
+      tone: 'red',
+      icon: '−',
+      description: `${removed} session${removed === 1 ? '' : 's'} removed`,
+      testId: 'diff-removed',
+    });
+  }
+
+  if (tbaFilled > 0) {
+    blocks.push({
+      key: 'tba_filled',
+      count: tbaFilled,
+      tone: 'green',
+      icon: '+',
+      description: `${tbaFilled} TBA slot${tbaFilled === 1 ? '' : 's'} filled`,
+      testId: 'diff-tba-filled',
+    });
+  }
+
+  if (tbaReopened > 0) {
+    blocks.push({
+      key: 'tba_reopened',
+      count: tbaReopened,
+      tone: 'orange',
+      icon: '~',
+      description: `${tbaReopened} TBA slot${tbaReopened === 1 ? '' : 's'} reopened`,
+      testId: 'diff-tba-reopened',
+    });
+  }
+
+  return blocks;
+}
+
+function diffBlockClasses(tone: DiffTone): string {
+  if (tone === 'green') {
+    return 'bg-green-50 border-green-200 text-green-800';
+  }
+
+  if (tone === 'red') {
+    return 'bg-red-50 border-red-200 text-red-800';
+  }
+
+  return 'bg-orange-50 border-orange-200 text-orange-800';
+}
+
+function diffIconClasses(tone: DiffTone): string {
+  if (tone === 'green') {
+    return 'text-green-600';
+  }
+
+  if (tone === 'red') {
+    return 'text-red-600';
+  }
+
+  return 'text-orange-600';
+}
 
 export function PreviewEmailsModal({
   eventId,
@@ -97,6 +227,7 @@ export function PreviewEmailsModal({
 
   const affectedCount = previewData?.affectedFaculty.length ?? 0;
   const selectedIndex = previewData?.affectedFaculty.findIndex((f) => f.id === selectedPersonId) ?? -1;
+  const diffBlocks = buildDiffBlocks(emailParts?.changesSummaryJson ?? null);
 
   return (
     <div
@@ -188,38 +319,18 @@ export function PreviewEmailsModal({
                       {emailParts.bodyBefore}
                     </div>
 
-                    {emailParts.changesSummaryJson && (
+                    {diffBlocks.length > 0 && (
                       <div className="space-y-1.5" data-testid="diff-blocks">
-                        {(emailParts.changesSummaryJson.added_sessions ?? []).length > 0 && (
+                        {diffBlocks.map((block) => (
                           <div
-                            className="flex items-center gap-2 rounded-md bg-green-50 border border-green-200 px-3 py-2 text-xs text-green-800"
-                            data-testid="diff-added"
+                            key={block.key}
+                            className={`flex items-center gap-2 rounded-md border px-3 py-2 text-xs ${diffBlockClasses(block.tone)}`}
+                            data-testid={block.testId}
                           >
-                            <span className="font-bold text-green-600">+</span>
-                            <span>
-                              {(emailParts.changesSummaryJson.added_sessions ?? []).length} session
-                              {(emailParts.changesSummaryJson.added_sessions ?? []).length > 1
-                                ? 's'
-                                : ''}{' '}
-                              added
-                            </span>
+                            <span className={`font-bold ${diffIconClasses(block.tone)}`}>{block.icon}</span>
+                            <span>{block.description}</span>
                           </div>
-                        )}
-                        {(emailParts.changesSummaryJson.removed_sessions ?? []).length > 0 && (
-                          <div
-                            className="flex items-center gap-2 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-800"
-                            data-testid="diff-removed"
-                          >
-                            <span className="font-bold text-red-600">−</span>
-                            <span>
-                              {(emailParts.changesSummaryJson.removed_sessions ?? []).length} session
-                              {(emailParts.changesSummaryJson.removed_sessions ?? []).length > 1
-                                ? 's'
-                                : ''}{' '}
-                              removed
-                            </span>
-                          </div>
-                        )}
+                        ))}
                       </div>
                     )}
 
