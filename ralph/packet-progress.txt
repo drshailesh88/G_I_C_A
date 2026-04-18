@@ -14,6 +14,17 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-18T10:01:45Z — PKT-A-010 — Program version history page
+
+- Story ID: p2-m52-version-history
+- Implemented: Created `/events/[eventId]/changes` route. Server page (`page.tsx`) authenticates via Clerk, calls existing `getProgramVersions(eventId)` action, passes result to `ChangesClient`. Client component renders versions newest-first (backend returns desc order). Each version card shows: version number, publishedAt in IST, structured change counts from `changesSummaryJson` (added_sessions count, removed_sessions count, total_sessions, total_assignments), `changesDescription` and `publishReason` when non-null. Graceful empty state when no versions exist. The existing "Changes" tile in event-workspace-client already links to `/changes`, so no workspace file change needed.
+- Files changed:
+  - src/app/(app)/events/[eventId]/changes/page.tsx (new — server page, auth + getProgramVersions)
+  - src/app/(app)/events/[eventId]/changes/changes-client.tsx (new — ChangesClient with VersionCard)
+  - src/app/(app)/events/[eventId]/changes/changes.test.ts (new — 16 spec-derived tests, all pass)
+- Tests run: `npm run test:run` — 16 new tests pass; 6 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, travel-cascade, full-journey, mutation-kill-2).
+- Risks/follow-ups: publishedBy displays the raw Clerk user ID — a future packet may resolve it to a display name. The "Changes" tile always shows in workspace regardless of module toggle (key: null), consistent with existing behaviour. PKT-C-003 (preview revised emails) depends on this page and can now be unblocked.
+
 ## 2026-04-18T11:20:00Z — PKT-C-002 — Speaker profile public view
 
 - Story ID: p2-d5-speaker-profile
