@@ -15,6 +15,7 @@ import {
   ShieldAlert,
   Pencil,
   Clock,
+  GitMerge,
 } from 'lucide-react';
 import { useRole } from '@/hooks/use-role';
 import { archivePerson, restorePerson, anonymizePerson } from '@/lib/actions/person';
@@ -116,6 +117,14 @@ export function PersonDetailClient({ person }: { person: Person }) {
         </Link>
         {canWrite && (
           <div className="flex items-center gap-2">
+            <Link
+              href={`/people/merge?a=${person.id}`}
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 font-medium text-text-primary hover:bg-background"
+              style={{ fontSize: 'var(--font-size-sm)', minHeight: 'var(--touch-min)' }}
+            >
+              <GitMerge className="h-3.5 w-3.5" />
+              Merge
+            </Link>
             <Link
               href={`/people/${person.id}/edit`}
               className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 font-medium text-text-primary hover:bg-background"

@@ -3,8 +3,17 @@
 import { auth } from '@clerk/nextjs/server';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { people, eventPeople } from '@/lib/db/schema';
-import { eq, or, and, ilike, desc, sql, isNull } from 'drizzle-orm';
+import {
+  people,
+  eventPeople,
+  eventRegistrations,
+  sessionAssignments,
+  facultyInvites,
+  travelRecords,
+  accommodationRecords,
+  transportPassengerAssignments,
+} from '@/lib/db/schema';
+import { eq, or, and, ilike, desc, sql, isNull, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { writeAudit } from '@/lib/audit/write';
 import { assertEventAccess } from '@/lib/auth/event-access';
@@ -488,4 +497,161 @@ export async function getEventPeople(eventId: string) {
   }
 
   return rows;
+}
+
+// ── Merge Duplicate People ─────────────────────────────────────
+
+const mergeFieldChoiceSchema = z.enum(['left', 'right', 'both']);
+
+const mergePeopleSchema = z.object({
+  keepId: z.string().uuid('keepId must be a valid UUID'),
+  dropId: z.string().uuid('dropId must be a valid UUID'),
+  fieldChoices: z.object({
+    fullName: mergeFieldChoiceSchema.default('left'),
+    salutation: mergeFieldChoiceSchema.default('left'),
+    email: mergeFieldChoiceSchema.default('left'),
+    phoneE164: mergeFieldChoiceSchema.default('left'),
+    designation: mergeFieldChoiceSchema.default('left'),
+    specialty: mergeFieldChoiceSchema.default('left'),
+    organization: mergeFieldChoiceSchema.default('left'),
+    city: mergeFieldChoiceSchema.default('left'),
+    bio: mergeFieldChoiceSchema.default('left'),
+    photoStorageKey: mergeFieldChoiceSchema.default('left'),
+  }).default({}),
+});
+
+export type MergePeopleResult =
+  | { ok: true; survivorId: string }
+  | { ok: false; error: string };
+
+function pickTextField(
+  choice: 'left' | 'right' | 'both',
+  leftVal: string | null | undefined,
+  rightVal: string | null | undefined,
+  separator = ' / ',
+): string | null {
+  if (choice === 'left') return leftVal ?? null;
+  if (choice === 'right') return rightVal ?? null;
+  const parts = [leftVal, rightVal].filter((v): v is string => Boolean(v));
+  return parts.length > 0 ? parts.join(separator) : null;
+}
+
+export async function mergePeople(input: unknown): Promise<MergePeopleResult> {
+  const { userId } = await assertPeopleModuleAccess({ requireWrite: true });
+  if (!userId) throw new Error('Unauthorized');
+
+  const validated = mergePeopleSchema.parse(input);
+  const { keepId, dropId, fieldChoices: fc } = validated;
+
+  if (keepId === dropId) {
+    return { ok: false, error: 'Cannot merge a person with themselves' };
+  }
+
+  const [keeperRows, loserRows] = await Promise.all([
+    db.select().from(people).where(and(eq(people.id, keepId), isNull(people.anonymizedAt))).limit(1),
+    db.select().from(people).where(and(eq(people.id, dropId), isNull(people.anonymizedAt))).limit(1),
+  ]);
+
+  if (!keeperRows[0]) return { ok: false, error: 'Keeper person not found' };
+  if (!loserRows[0]) return { ok: false, error: 'Drop person not found' };
+
+  const keeper = keeperRows[0];
+  const loser = loserRows[0];
+
+  const mergedFields = {
+    fullName: pickTextField(fc.fullName, keeper.fullName, loser.fullName) ?? keeper.fullName,
+    salutation: pickTextField(fc.salutation, keeper.salutation, loser.salutation),
+    email: pickTextField(fc.email, keeper.email, loser.email),
+    phoneE164: pickTextField(fc.phoneE164, keeper.phoneE164, loser.phoneE164),
+    designation: pickTextField(fc.designation, keeper.designation, loser.designation),
+    specialty: pickTextField(fc.specialty, keeper.specialty, loser.specialty),
+    organization: pickTextField(fc.organization, keeper.organization, loser.organization),
+    city: pickTextField(fc.city, keeper.city, loser.city),
+    bio: pickTextField(fc.bio, keeper.bio ?? null, loser.bio ?? null, '\n\n---\n\n'),
+    photoStorageKey: pickTextField(fc.photoStorageKey, keeper.photoStorageKey ?? null, loser.photoStorageKey ?? null),
+    tags: Array.from(new Set([
+      ...(Array.isArray(keeper.tags) ? keeper.tags as string[] : []),
+      ...(Array.isArray(loser.tags) ? loser.tags as string[] : []),
+    ])),
+  };
+
+  const now = new Date();
+
+  await db.transaction(async (tx) => {
+    // Re-point event_people (unique: eventId + personId) — delete conflicts, then update remaining
+    const keeperEventRows = await tx
+      .select({ eventId: eventPeople.eventId })
+      .from(eventPeople)
+      .where(eq(eventPeople.personId, keepId));
+
+    if (keeperEventRows.length > 0) {
+      await tx.delete(eventPeople).where(and(
+        eq(eventPeople.personId, dropId),
+        inArray(eventPeople.eventId, keeperEventRows.map((r) => r.eventId)),
+      ));
+    }
+    await tx.update(eventPeople).set({ personId: keepId }).where(eq(eventPeople.personId, dropId));
+
+    // Re-point event_registrations (unique: eventId + personId)
+    const keeperRegRows = await tx
+      .select({ eventId: eventRegistrations.eventId })
+      .from(eventRegistrations)
+      .where(eq(eventRegistrations.personId, keepId));
+
+    if (keeperRegRows.length > 0) {
+      await tx.delete(eventRegistrations).where(and(
+        eq(eventRegistrations.personId, dropId),
+        inArray(eventRegistrations.eventId, keeperRegRows.map((r) => r.eventId)),
+      ));
+    }
+    await tx.update(eventRegistrations).set({ personId: keepId }).where(eq(eventRegistrations.personId, dropId));
+
+    // Re-point session_assignments (unique: sessionId + personId + role)
+    const keeperAssignPairs = await tx
+      .select({ sessionId: sessionAssignments.sessionId, role: sessionAssignments.role })
+      .from(sessionAssignments)
+      .where(eq(sessionAssignments.personId, keepId));
+
+    for (const pair of keeperAssignPairs) {
+      await tx.delete(sessionAssignments).where(and(
+        eq(sessionAssignments.personId, dropId),
+        eq(sessionAssignments.sessionId, pair.sessionId),
+        eq(sessionAssignments.role, pair.role),
+      ));
+    }
+    await tx.update(sessionAssignments).set({ personId: keepId }).where(eq(sessionAssignments.personId, dropId));
+
+    // Re-point faculty_invites, travel, accommodation, transport (no conflicting unique constraints)
+    await tx.update(facultyInvites).set({ personId: keepId }).where(eq(facultyInvites.personId, dropId));
+    await tx.update(travelRecords).set({ personId: keepId }).where(eq(travelRecords.personId, dropId));
+    await tx.update(accommodationRecords).set({ personId: keepId }).where(eq(accommodationRecords.personId, dropId));
+    await tx.update(transportPassengerAssignments)
+      .set({ personId: keepId })
+      .where(eq(transportPassengerAssignments.personId, dropId));
+
+    // Update winner with merged fields
+    await tx.update(people).set({ ...mergedFields, updatedBy: userId, updatedAt: now }).where(eq(people.id, keepId));
+
+    // Soft-delete loser with tombstone metadata in audit log
+    await tx.update(people).set({
+      archivedAt: now,
+      archivedBy: userId,
+      updatedBy: userId,
+      updatedAt: now,
+    }).where(eq(people.id, dropId));
+  });
+
+  await writeAudit({
+    actorUserId: userId,
+    eventId: null,
+    action: 'delete',
+    resource: 'people',
+    resourceId: dropId,
+    meta: { action: 'merge', mergedIntoId: keepId, fieldChoices: fc },
+  });
+
+  revalidatePath('/people');
+  revalidatePath(`/people/${keepId}`);
+
+  return { ok: true, survivorId: keepId };
 }

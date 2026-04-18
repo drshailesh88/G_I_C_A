@@ -13,6 +13,7 @@ import {
   Phone,
   Building2,
   MapPin,
+  GitMerge,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRole } from '@/hooks/use-role';
@@ -235,6 +236,13 @@ export function PeopleListClient({
         </div>
         {canWrite && (
           <div className="flex items-center gap-2">
+            <Link
+              href="/people/merge"
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-primary hover:bg-background"
+            >
+              <GitMerge className="h-4 w-4" />
+              Merge
+            </Link>
             <Link
               href="/people/import"
               className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-primary hover:bg-background"
