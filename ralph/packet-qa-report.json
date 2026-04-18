@@ -322,5 +322,19 @@
       "The report's `overall.totalCheckedIn` counts all attendance rows while the By Session tab only groups session-level rows, so the session totals do not reconcile with the overall count when event-level check-ins exist."
     ],
     "notes": "Packet-targeted `src/lib/actions/attendance-report.test.ts` passes and the report does reuse the existing `/api/events/[eventId]/exports/attendance-report` export path with event-scoped queries. Repo-wide `npm run test:run` and `npx tsc --noEmit` still fail due unrelated baseline issues outside PKT-B-002 scope."
+  },
+  {
+    "packet_id": "PKT-B-003",
+    "story_id": "p6-event-duplicate",
+    "qa_timestamp": "2026-04-18T18:30:31Z",
+    "qa_model": "codex",
+    "status": "pass",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "pass"
+    },
+    "bugs": [],
+    "notes": "Verified against the packet file oracle, not the broader PRD wording used by the earlier pass. Packet-targeted `src/lib/actions/event-duplicate.test.ts` passes, and the implementation deep-copies halls, sessions, role requirements, branding, event-level templates, and triggers while leaving person-linked operational rows behind and restricting the action to Event Coordinator or Super Admin. Repo-wide `npm run test:run` and `npx tsc --noEmit` still fail due unrelated baseline issues outside PKT-B-003 scope."
   }
 ]

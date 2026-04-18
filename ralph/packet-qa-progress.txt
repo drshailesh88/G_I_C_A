@@ -201,3 +201,11 @@ Evaluate ex
 - bug count: 2
 - fix commit(s): none
 - notes: The QR page exposes the report through a generic `View Full Report` link instead of making the attendance stat cards themselves the drill-down entry point required by the packet. The report aggregation also uses `overall.totalCheckedIn` for all attendance rows while `bySession` includes only session-level rows, so session totals cannot reconcile with the overall count whenever event-level check-ins exist.
+
+## 2026-04-18T18:30:31Z — PKT-B-003 — Duplicate event structure
+
+- QA status: pass
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated baseline failures; manual acceptance pass against packet oracle
+- bug count: 0
+- fix commit(s): none
+- notes: Verified against the frozen packet file. The existing implementation creates a new event and deep-copies halls, sessions, role requirements, branding, event-scoped templates, and triggers with fresh ids and the new eventId, shifts dates from the new start date, leaves person-linked operational tables untouched, and restricts duplication to Event Coordinator or Super Admin.
