@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import Link from 'next/link';
 import { registerForEvent } from '@/lib/actions/registration';
 import { FormGrid } from '@/components/responsive/form-grid';
 
@@ -182,6 +183,13 @@ export function RegisterPageClient({
               'Complete Registration'
             )}
           </button>
+
+          <p className="mt-4 text-center text-xs text-text-secondary">
+            By registering you agree to our{' '}
+            <Link href="/terms" className="text-primary hover:underline">
+              Terms &amp; Privacy Policy
+            </Link>
+          </p>
         </fieldset>
       </form>
     </div>

@@ -54,4 +54,10 @@ describe('RegisterPageClient', () => {
     expect(html).toContain('GEM India 2026');
     expect(html).toContain('AIIMS Delhi');
   });
+
+  it('links the registration footer to /terms', () => {
+    const html = renderToStaticMarkup(createElement(RegisterPageClient, baseProps));
+    expect(html).toContain('Terms &amp; Privacy Policy');
+    expect(html).toContain('href="/terms"');
+  });
 });

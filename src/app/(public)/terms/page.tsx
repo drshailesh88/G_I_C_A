@@ -1,8 +1,8 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { ArrowLeft, ChevronDown } from 'lucide-react';
-import Link from 'next/link';
 
 type Tab = 'terms' | 'privacy';
 
@@ -82,6 +82,33 @@ function AccordionSection({ title, body }: { title: string; body: string }) {
   );
 }
 
+function BackToRegistrationButton({
+  className,
+  children,
+}: {
+  className: string;
+  children: ReactNode;
+}) {
+  function handleClick() {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+
+    window.location.assign('/');
+  }
+
+  return (
+    <button type="button" onClick={handleClick} className={className}>
+      {children}
+    </button>
+  );
+}
+
 export default function TermsPage() {
   const [tab, setTab] = useState<Tab>('terms');
 
@@ -89,80 +116,80 @@ export default function TermsPage() {
 
   return (
     <div className="min-h-screen px-4 py-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Link href="/" className="text-text-secondary hover:text-text-primary">
-          <ArrowLeft className="h-5 w-5" />
-        </Link>
-        <h1 className="text-lg font-semibold text-text-primary">Terms &amp; Privacy</h1>
-      </div>
-
-      {/* Tab toggle */}
-      <div className="mt-6 flex gap-1 border-b border-border">
-        <button
-          type="button"
-          onClick={() => setTab('terms')}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'terms'
-              ? 'border-b-2 border-primary text-primary'
-              : 'text-text-secondary hover:text-text-primary'
-          }`}
-        >
-          Terms of Service
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('privacy')}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
-            tab === 'privacy'
-              ? 'border-b-2 border-primary text-primary'
-              : 'text-text-secondary hover:text-text-primary'
-          }`}
-        >
-          Privacy Policy
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="mt-6">
-        <h2 className="text-2xl font-bold text-text-primary">
-          {tab === 'terms' ? 'Terms of Service' : 'Privacy Policy'}
-        </h2>
-        <p className="mt-1 text-xs text-text-secondary">Last updated: April 10, 2026</p>
-        <p className="mt-3 text-sm leading-relaxed text-text-secondary">
-          {tab === 'terms'
-            ? 'By registering for a GEM India conference, you agree to the following terms governing your participation, data usage, and communication preferences.'
-            : 'This policy describes how GEM India collects, uses, and protects your personal information when you register for and attend our conferences.'}
-        </p>
-
-        {/* Accordion sections */}
-        <div className="mt-6 rounded-lg border border-border px-4">
-          {sections.map((s) => (
-            <AccordionSection key={s.title} title={s.title} body={s.body} />
-          ))}
+      <div className="mx-auto max-w-lg">
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <BackToRegistrationButton className="text-text-secondary hover:text-text-primary">
+            <span className="sr-only">Back to Registration</span>
+            <ArrowLeft className="h-5 w-5" />
+          </BackToRegistrationButton>
+          <h1 className="text-lg font-semibold text-text-primary">Terms &amp; Privacy</h1>
         </div>
 
-        {/* Questions callout */}
-        <div className="mt-6 rounded-lg bg-muted/50 p-4">
-          <p className="text-sm font-medium text-text-primary">Questions?</p>
-          <p className="mt-1 text-sm text-text-secondary">
-            Contact the organising committee at{' '}
-            <a href="mailto:support@gemindia.org" className="text-primary hover:underline">
-              support@gemindia.org
-            </a>{' '}
-            for any questions about these terms.
+        {/* Tab toggle */}
+        <div className="mt-6 flex gap-1 border-b border-border">
+          <button
+            type="button"
+            onClick={() => setTab('terms')}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              tab === 'terms'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            Terms of Service
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('privacy')}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              tab === 'privacy'
+                ? 'border-b-2 border-primary text-primary'
+                : 'text-text-secondary hover:text-text-primary'
+            }`}
+          >
+            Privacy Policy
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="mt-6">
+          <h2 className="text-2xl font-bold text-text-primary">
+            {tab === 'terms' ? 'Terms of Service' : 'Privacy Policy'}
+          </h2>
+          <p className="mt-1 text-xs text-text-secondary">Last updated: April 10, 2026</p>
+          <p className="mt-3 text-sm leading-relaxed text-text-secondary">
+            {tab === 'terms'
+              ? 'By registering for a GEM India conference, you agree to the following terms governing your participation, data usage, and communication preferences.'
+              : 'This policy describes how GEM India collects, uses, and protects your personal information when you register for and attend our conferences.'}
           </p>
-        </div>
-      </div>
 
-      {/* Back to Registration */}
-      <div className="mt-10 pb-8 text-center">
-        <Link
-          href="/"
-          className="rounded-lg border border-border px-6 py-2.5 text-sm font-medium text-text-primary hover:bg-muted/50"
-        >
-          Back to Registration
-        </Link>
+          {/* Accordion sections */}
+          <div className="mt-6 rounded-lg border border-border px-4">
+            {sections.map((s) => (
+              <AccordionSection key={s.title} title={s.title} body={s.body} />
+            ))}
+          </div>
+
+          {/* Questions callout */}
+          <div className="mt-6 rounded-lg bg-muted/50 p-4">
+            <p className="text-sm font-medium text-text-primary">Questions?</p>
+            <p className="mt-1 text-sm text-text-secondary">
+              Contact the organising committee at{' '}
+              <a href="mailto:support@gemindia.org" className="text-primary hover:underline">
+                support@gemindia.org
+              </a>{' '}
+              for any questions about these terms.
+            </p>
+          </div>
+        </div>
+
+        {/* Back to Registration */}
+        <div className="mt-10 pb-8 text-center">
+          <BackToRegistrationButton className="rounded-lg border border-border px-6 py-2.5 text-sm font-medium text-text-primary hover:bg-muted/50">
+            Back to Registration
+          </BackToRegistrationButton>
+        </div>
       </div>
     </div>
   );
