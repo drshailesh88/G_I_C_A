@@ -274,14 +274,19 @@ describe('generateTransportSuggestions', () => {
       ]))
       .mockReturnValueOnce(selectChain([
         {
+          id: BATCH_ID,
           movementType: 'arrival',
           sourceCity: 'Mumbai',
           timeWindowStart: new Date('2026-05-01T06:00:00.000Z'),
         },
       ]));
 
+    insertChain([], { rowCount: 1 });
+
     await expect(generateTransportSuggestions(EVENT_ID)).resolves.toEqual({ created: 0, skipped: 1 });
-    expect(mockDb.insert).not.toHaveBeenCalled();
+    expect(mockDb.insert).toHaveBeenCalledTimes(1);
+    expect(mockDb.insert).toHaveBeenCalledWith(expect.anything());
+    expect(mockRevalidatePath).toHaveBeenCalledWith(`/events/${EVENT_ID}/transport`);
   });
 });
 

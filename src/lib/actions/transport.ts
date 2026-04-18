@@ -806,16 +806,41 @@ export async function generateTransportSuggestions(eventId: string): Promise<{ c
   const clusters = buildClusters(unassigned);
 
   const existingAuto = await db
-    .select({ movementType: transportBatches.movementType, sourceCity: transportBatches.sourceCity, timeWindowStart: transportBatches.timeWindowStart })
+    .select({
+      id: transportBatches.id,
+      movementType: transportBatches.movementType,
+      sourceCity: transportBatches.sourceCity,
+      timeWindowStart: transportBatches.timeWindowStart,
+    })
     .from(transportBatches)
     .where(and(eq(transportBatches.eventId, scopedEventId), eq(transportBatches.batchSource, 'auto'), ne(transportBatches.batchStatus, 'cancelled')));
 
-  const existingKeys = new Set(existingAuto.map((b) => b.movementType + '|' + b.sourceCity + '|' + b.timeWindowStart.toISOString()));
+  const existingByKey = new Map(
+    existingAuto.map((b) => [b.movementType + '|' + b.sourceCity + '|' + b.timeWindowStart.toISOString(), b.id]),
+  );
 
   let created = 0; let skipped = 0;
+  let refreshed = false;
   for (const cluster of clusters) {
     const key = cluster.movementType + '|' + cluster.sourceCity + '|' + cluster.timeWindowStart.toISOString();
-    if (existingKeys.has(key)) { skipped++; continue; }
+    const existingBatchId = existingByKey.get(key);
+    if (existingBatchId) {
+      if (cluster.records.length > 0) {
+        await db.insert(transportPassengerAssignments).values(
+          cluster.records.map((r) => ({
+            eventId: scopedEventId,
+            batchId: existingBatchId,
+            vehicleAssignmentId: null,
+            personId: r.personId,
+            travelRecordId: r.travelRecordId,
+            assignmentStatus: 'pending',
+          })),
+        );
+        refreshed = true;
+      }
+      skipped++;
+      continue;
+    }
     const [batch] = await db.insert(transportBatches).values({
       eventId: scopedEventId, movementType: cluster.movementType, batchSource: 'auto',
       serviceDate: cluster.serviceDate, timeWindowStart: cluster.timeWindowStart, timeWindowEnd: cluster.timeWindowEnd,
@@ -829,8 +854,9 @@ export async function generateTransportSuggestions(eventId: string): Promise<{ c
       );
     }
     created++;
+    refreshed = true;
   }
-  if (created > 0) revalidatePath('/events/' + scopedEventId + '/transport');
+  if (refreshed) revalidatePath('/events/' + scopedEventId + '/transport');
   return { created, skipped };
 }
 
