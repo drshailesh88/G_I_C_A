@@ -1633,3 +1633,131 @@ export async function getPublicScheduleData(eventId: string) {
 
   return { sessions: parentSessions, halls: allHalls };
 }
+
+export async function getPublicProgramData(eventId: string) {
+  const scopedEventId = validateEventId(eventId);
+
+  // Only show program if at least one version has been published
+  const [latestVersion] = await db
+    .select({ id: programVersions.id })
+    .from(programVersions)
+    .where(eq(programVersions.eventId, scopedEventId))
+    .orderBy(desc(programVersions.versionNo))
+    .limit(1);
+
+  if (!latestVersion) {
+    return { sessions: [] as PublicProgramSession[], halls: [] as { id: string; name: string; sortOrder: number | null }[], hasPublishedVersion: false };
+  }
+
+  const allSessions = await db
+    .select()
+    .from(sessions)
+    .where(
+      withEventScope(
+        sessions.eventId,
+        scopedEventId,
+        eq(sessions.isPublic, true),
+        ne(sessions.status, 'cancelled'),
+      ),
+    )
+    .orderBy(asc(sessions.sessionDate), asc(sessions.startAtUtc), asc(sessions.sortOrder));
+
+  const allHalls = await db
+    .select({ id: halls.id, name: halls.name, sortOrder: halls.sortOrder })
+    .from(halls)
+    .where(eq(halls.eventId, scopedEventId))
+    .orderBy(asc(halls.sortOrder));
+
+  const sessionIds = allSessions.map(s => s.id);
+
+  const rawAssignments = sessionIds.length > 0
+    ? await db
+        .select({
+          sessionId: sessionAssignments.sessionId,
+          personId: sessionAssignments.personId,
+          role: sessionAssignments.role,
+          presentationTitle: sessionAssignments.presentationTitle,
+          fullName: people.fullName,
+          designation: people.designation,
+          sortOrder: sessionAssignments.sortOrder,
+        })
+        .from(sessionAssignments)
+        .innerJoin(people, eq(sessionAssignments.personId, people.id))
+        .where(eq(sessionAssignments.eventId, scopedEventId))
+        .orderBy(asc(sessionAssignments.sortOrder))
+    : [];
+
+  const hallMap = new Map(allHalls.map(h => [h.id, h.name]));
+  const sessionIdSet = new Set(sessionIds);
+  const publicAssignments = rawAssignments.filter(a => sessionIdSet.has(a.sessionId));
+
+  const assignmentsBySession = new Map<string, typeof publicAssignments>();
+  for (const a of publicAssignments) {
+    const list = assignmentsBySession.get(a.sessionId) ?? [];
+    list.push(a);
+    assignmentsBySession.set(a.sessionId, list);
+  }
+
+  const parentSessions: PublicProgramSession[] = [];
+  const childMap = new Map<string, PublicProgramSession[]>();
+
+  for (const s of allSessions) {
+    const built: PublicProgramSession = {
+      id: s.id,
+      title: s.title,
+      description: s.description,
+      sessionDate: s.sessionDate,
+      startAtUtc: s.startAtUtc,
+      endAtUtc: s.endAtUtc,
+      hallName: s.hallId ? hallMap.get(s.hallId) ?? null : null,
+      sessionType: s.sessionType,
+      track: s.track,
+      cmeCredits: s.cmeCredits,
+      speakers: (assignmentsBySession.get(s.id) ?? []).map(a => ({
+        personId: a.personId,
+        fullName: a.fullName,
+        designation: a.designation ?? null,
+        role: a.role,
+        presentationTitle: a.presentationTitle,
+      })),
+      childSessions: [],
+    };
+
+    if (s.parentSessionId) {
+      const children = childMap.get(s.parentSessionId) ?? [];
+      children.push(built);
+      childMap.set(s.parentSessionId, children);
+    } else {
+      parentSessions.push(built);
+    }
+  }
+
+  for (const parent of parentSessions) {
+    parent.childSessions = childMap.get(parent.id) ?? [];
+  }
+
+  return { sessions: parentSessions, halls: allHalls, hasPublishedVersion: true };
+}
+
+type PublicProgramSession = {
+  id: string;
+  title: string;
+  description: string | null;
+  sessionDate: Date | null;
+  startAtUtc: Date | null;
+  endAtUtc: Date | null;
+  hallName: string | null;
+  sessionType: string;
+  track: string | null;
+  cmeCredits: number | null;
+  speakers: Array<{
+    personId: string;
+    fullName: string;
+    designation: string | null;
+    role: string;
+    presentationTitle: string | null;
+  }>;
+  childSessions: PublicProgramSession[];
+};
+
+export type PublicProgramData = Awaited<ReturnType<typeof getPublicProgramData>>;
