@@ -48,3 +48,11 @@ ITERATION: 3 of 999
 CURRENT_PACKET: PKT-A-004
 
 Evaluate ex
+
+## 2026-04-18T02:13:43Z — PKT-A-005 — Registration cancellation cascade creates linked red flags
+
+- QA status: fixed
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated modules; typecheck fail due unrelated repo-wide errors
+- bug count: 1
+- fix commit(s): `7b692bb577c0ad8ef3f24d20aeb499f0d001b110`
+- notes: Added travel-record flagging to the registration cancellation cascade, updated cascade metadata, and expanded packet-local red-flag coverage so cancellation now marks travel, accommodation, and transport records for review.
