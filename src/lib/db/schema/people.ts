@@ -29,6 +29,10 @@ export const people = pgTable('people', {
   organization: text('organization'),
   city: text('city'),
 
+  // Profile (public speaker profile)
+  bio: text('bio'),
+  photoStorageKey: text('photo_storage_key'), // R2 object key for signed URL
+
   // Categorization
   tags: jsonb('tags').notNull().default('[]'),
   // Array of strings: ["VIP", "sponsor", "volunteer"]

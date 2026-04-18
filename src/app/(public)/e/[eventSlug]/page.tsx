@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getEventBySlug } from '@/lib/actions/event';
+import { getPublicSpeakers } from '@/lib/actions/speaker-profile';
 import { EventLandingClient } from './event-landing-client';
 
 type Params = Promise<{ eventSlug: string }>;
@@ -21,5 +22,7 @@ export default async function EventLandingPage({
     throw err;
   }
 
-  return <EventLandingClient event={event} />;
+  const speakers = await getPublicSpeakers(event.id).catch(() => []);
+
+  return <EventLandingClient event={event} speakers={speakers} />;
 }
