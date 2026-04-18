@@ -14,6 +14,22 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-18T11:20:00Z — PKT-C-002 — Speaker profile public view
+
+- Story ID: p2-d5-speaker-profile
+- Implemented: Added `bio` and `photoStorageKey` schema fields (migration already present in git working tree). Created `getPublicSpeakers(eventId)` server action (`src/lib/actions/speaker-profile.ts`) — queries public non-cancelled sessions, joins sessionAssignments with people, deduplicates by personId, returns each speaker with their event-scoped session list including hallName. Updated `src/app/(public)/e/[eventSlug]/page.tsx` to call `getPublicSpeakers` and pass result to `EventLandingClient`. Updated `event-landing-client.tsx` to add "Featured Speakers" section with speaker cards (avatar placeholder, name, designation, org) that open `SpeakerProfileOverlay` on click. Overlay is a full-height bottom sheet on mobile (`bottom-0 rounded-t-2xl`) and a two-column centered modal on desktop (`md:w-[640px] md:grid-cols-[200px_1fr]`), showing photo placeholder, identity, About section, and Sessions at this event list with role badges.
+- Files changed:
+  - src/lib/actions/speaker-profile.ts (new — getPublicSpeakers server action)
+  - src/lib/actions/speaker-profile.test.ts (new — 8 tests, all pass)
+  - src/app/(public)/e/[eventSlug]/speaker-profile-overlay.tsx (new — SpeakerProfileOverlay client component)
+  - src/app/(public)/e/[eventSlug]/speaker-profile-overlay.test.tsx (new — 17 tests, all pass)
+  - src/app/(public)/e/[eventSlug]/page.tsx (added getPublicSpeakers fetch, speakers prop)
+  - src/app/(public)/e/[eventSlug]/event-landing-client.tsx (added useState, Featured Speakers section, SpeakerProfileOverlay wiring)
+  - src/lib/db/schema/people.ts (bio + photoStorageKey fields — already in working tree)
+  - drizzle/migrations/0008_add_people_bio_and_photo.sql (already in working tree)
+- Tests run: `npm run test:run` — 26 new tests pass (8 action + 17 overlay + 1 spec); 6 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, travel-cascade, full-journey, mutation-kill-2).
+- Risks/follow-ups: Photo placeholder used for all speakers — actual R2 signed URL generation for `photoStorageKey` deferred (requires authenticated infrastructure not yet wired to public route). The packet spec says "photo placeholder" in the wireframe, consistent with v1. No signed URLs generated.
+
 ## 2026-04-18T10:47:00Z — PKT-C-006 — Ops resend logistics notification actions
 
 - Story ID: p3-ops-resend-logistics-notification
