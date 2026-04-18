@@ -14,6 +14,19 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-18T17:52:00Z — PKT-B-002 — Attendance report drill-down page
+
+- Story ID: p5-m58-attendance-report-page
+- Implemented: Added `getAttendanceReportData(eventId)` server action to `attendance.ts` — validates UUID, gates access via `assertEventAccess`, runs 6 queries inside a `repeatable read` transaction: (1) confirmed registration count, (2) total attendance count, (3) by-method group, (4) by-category group (left join to handle walk-ins), (5) by-day group using `AT TIME ZONE 'Asia/Kolkata'` cast, (6) by-session group inner-joined with `sessions` table using `isNotNull` filter. Returns `AttendanceReportData` with `overall` (totalRegistrations, totalCheckedIn, checkInRate, byMethod, byCategory), `byDay` (date string, count, percentage), `bySession` (sessionId, title, sessionDate ISO, startAtUtc, endAtUtc, count, percentage). Results sorted in JS by date/time. Added new types: `AttendanceReportOverall`, `AttendanceReportDay`, `AttendanceReportSession`, `AttendanceReportData`. Created `/events/[eventId]/qr/report` server page — auth gate + `getAttendanceReportData` fetch, passes to client. Created `AttendanceReportClient` — three-tab UI (Overall | By Day | By Session); Overall tab shows Total Registered / Checked In / Rate stat cards, By Method table, By Category table; By Day tab shows date/count/% table; By Session tab shows session title, IST date+time, count, % table; Export Excel button reuses existing `/api/events/${eventId}/exports/attendance-report` endpoint via fetch+blob pattern; back-link to QR Check-In. Updated `qr-checkin-client.tsx` to import `Link` and add "View Full Report →" link in the statistics panel (below method breakdown), satisfying requirement 1 (drill-down reachable from attendance stat cards). 12 spec-derived tests in `attendance-report.test.ts` cover: UUID validation, RBAC propagation, transaction isolation level, totalRegistrations shape, totalCheckedIn shape, checkInRate calculation, divide-by-zero safety, byMethod shape, byCategory null filtering, byDay date+percentage, bySession metadata+percentage, zero-percentage edge case.
+- Files changed:
+  - src/lib/actions/attendance.ts (added sessions import, isNotNull import; added AttendanceReportOverall/Day/Session/Data types; added getAttendanceReportData action)
+  - src/lib/actions/attendance-report.test.ts (new — 12 spec-derived tests, all pass)
+  - src/app/(app)/events/[eventId]/qr/report/page.tsx (new — server page, auth gate + data fetch)
+  - src/app/(app)/events/[eventId]/qr/report/attendance-report-client.tsx (new — AttendanceReportClient with 3-tab UI + export)
+  - src/app/(app)/events/[eventId]/qr/qr-checkin-client.tsx (added Link import + View Full Report link in stats panel)
+- Tests run: `npm run test:run` — 12 new tests pass (attendance-report.test.ts); 8 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, full-journey, mutation-kill-2, notifications.adversarial, notifications.mutation-kill, travel-cascade).
+- Risks/follow-ups: `bySession` only shows sessions that have at least one check-in record — sessions with 0 check-ins are not shown; a future enhancement could include all scheduled sessions with a 0 count. The Export Excel button reuses the existing `attendance-report` export type which outputs all check-in records in a flat list; a multi-sheet export (one per day/session) is deferred. `startAtUtc`/`endAtUtc` in the client are cast via `new Date(row.startAtUtc as unknown as string)` because Next.js serializes Date objects to ISO strings during RSC→client prop transfer.
+
 ## 2026-04-18T17:30:00Z — PKT-B-001 — Suggested transport batches
 
 - Story ID: p3-transport-suggest-batches

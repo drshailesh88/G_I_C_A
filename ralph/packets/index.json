@@ -2,7 +2,7 @@
   "version": 1,
   "pipeline": "ralph-packets",
   "updated_at": "2026-04-18T15:52:00Z",
-  "current_packet_id": "PKT-B-001",
+  "current_packet_id": "PKT-B-002",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -283,14 +283,14 @@
       "bucket": "B",
       "module": "transport",
       "priority": 101,
-      "status": "NEEDS_REVIEW",
+      "status": "VERIFIED",
       "packet_file": "ralph/packets/PKT-B-001-p3-transport-suggest-batches.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "302d6c7b72e5457acba9800f38642e3a6baf7902",
-      "qa_commit": null,
-      "last_status_at": "2026-04-18T17:30:00Z",
+      "qa_commit": "437bb22620b94b3f3a4ca14d793ba6afaf45feab",
+      "last_status_at": "2026-04-18T17:17:28Z",
       "depends_on": []
     },
     {
@@ -300,14 +300,14 @@
       "bucket": "B",
       "module": "qr",
       "priority": 102,
-      "status": "READY",
+      "status": "NEEDS_REVIEW",
       "packet_file": "ralph/packets/PKT-B-002-p5-m58-attendance-report-page.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
-      "build_commit": null,
+      "build_commit": "2aa8f1f3043698b6519c46d768cbfd11e14d523f",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T13:21:04.686332Z",
+      "last_status_at": "2026-04-18T17:52:00Z",
       "depends_on": []
     },
     {
