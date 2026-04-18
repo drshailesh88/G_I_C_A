@@ -38,6 +38,7 @@ MAX_PLATEAU="${MAX_PLATEAU:-3}"
 
 if [ ! -f "$STATE" ]; then
   echo "ERROR: $STATE not found. Run qa-controller baseline first (/playbook:qa-baseline)." >&2
+  echo "  equivalent: ${QA_CONTROLLER_CMD[*]} baseline" >&2
   exit 1
 fi
 
@@ -55,6 +56,24 @@ else
   echo "WARNING: no timeout command found. Install 'brew install coreutils' for gtimeout." >&2
   TIMEOUT_CMD=()
 fi
+
+# Resolve the qa-controller CLI. Order of preference:
+#   1. ./bin/qa-controller      — repo-local shim (created by scaffold)
+#   2. npx tsx qa/controller.ts — repo-local harness (installed by qa-harness)
+#   3. qa-controller on PATH    — globally installed binary
+#   4. npx qa-controller        — registry fallback (will 404 if not published)
+# NEVER fall through silently: the controller is the ungameable verifier; without
+# it the loop's score re-measurement is a no-op and plateau detection mis-fires.
+if [ -x ./bin/qa-controller ]; then
+  QA_CONTROLLER_CMD=(./bin/qa-controller)
+elif [ -f ./qa/controller.ts ]; then
+  QA_CONTROLLER_CMD=(npx tsx ./qa/controller.ts)
+elif command -v qa-controller >/dev/null 2>&1; then
+  QA_CONTROLLER_CMD=(qa-controller)
+else
+  QA_CONTROLLER_CMD=(npx qa-controller)
+fi
+echo "[harden] qa-controller resolver: ${QA_CONTROLLER_CMD[*]}"
 
 # Initialize harden-report.json if missing.
 if [ ! -f "$HARDEN_REPORT" ]; then
@@ -259,13 +278,17 @@ print(prev[-1].get('signature', '') if prev else '')
   fi
 
   # Post-iteration: re-invoke the controller's gates to measure the new floor status.
-  # The controller writes state.json with updated module.belowFloor.
-  echo "[harden] running qa-controller baseline --module $MODULE to refresh score..."
+  # The controller writes state.json with updated module.has_exceeded_floor.
+  echo "[harden] running ${QA_CONTROLLER_CMD[*]} baseline --module $MODULE to refresh score..."
   set +e
-  npx qa-controller baseline --module "$MODULE" > /tmp/harden-gate-$i.log 2>&1
+  "${QA_CONTROLLER_CMD[@]}" baseline --module "$MODULE" > /tmp/harden-gate-$i.log 2>&1
   GATE_EXIT=$?
   set -e
   tail -n 20 /tmp/harden-gate-$i.log
+  if [ "$GATE_EXIT" -ne 0 ]; then
+    echo "[harden] WARNING: baseline refresh exited $GATE_EXIT — state.json may be stale for this iter." >&2
+    echo "[harden]   check /tmp/harden-gate-$i.log for the failure reason." >&2
+  fi
 
   # Compute post-iteration signature (failure shape if still below floor).
   SIG_AFTER=$(python3 -c "
@@ -308,9 +331,17 @@ else:
 json.dump(r, open(path, 'w'), indent=2)
 PY
 
-  # Auto-commit any uncommitted changes as a safety net (HARDEN prefix).
-  if ! git diff --quiet || ! git diff --cached --quiet; then
-    git add -A
+  # Auto-commit any uncommitted hardening artifacts as a safety net (HARDEN prefix).
+  # SAFELIST ONLY — the agent should only touch src/ (tests + real bug fixes) and
+  # the two ralph/harden-* artifacts. `git add -A` here would sweep in unrelated
+  # uncommitted work the founder was doing in parallel (planning drafts, configs,
+  # logs, other tooling). Keep the snapshot tight.
+  git add -- \
+    ':(glob)src/**' \
+    ralph/harden-progress.txt \
+    ralph/harden-report.json \
+    2>/dev/null || true
+  if ! git diff --cached --quiet; then
     git commit -m "HARDEN: $MODULE iter $i — auto-snapshot (score→$SIG_AFTER)" || true
   fi
 

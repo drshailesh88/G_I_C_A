@@ -18,6 +18,7 @@ const COMMUNICATIONS_WRITE_ROLES = new Set([
   ROLES.EVENT_COORDINATOR,
 ]);
 
+
 function assertNotificationsRole(
   role: string | null | undefined,
   options?: { requireWrite?: boolean },
@@ -115,3 +116,4 @@ export async function getNotificationDetail(input: unknown) {
   if (!log) throw new Error('Notification not found');
   return log;
 }
+

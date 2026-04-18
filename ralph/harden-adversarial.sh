@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# Ralph adversarial loop — Codex red-teams features that already passed QA.
+# Ralph adversarial loop — Codex red-teams EVERY module in the app.
 #
 # Different from qa.sh: qa.sh verifies features against their specs. This loop
 # goes further — it actively tries to BREAK the app: injection, auth bypass,
 # race conditions, resource exhaustion, stale-state bugs, unexpected input
-# shapes. For each qa_tested:true feature, Codex attacks it adversarially,
+# shapes. For each module in .quality/state.json, Codex attacks it adversarially,
 # finds bugs, fixes them in production code, and adds regression tests.
 #
-# Work source: ralph/prd.json  (features where passes:true AND qa_tested:true
-#   AND no matching adversarial-report entry)
+# Work source: .quality/state.json  (ALL modules — full app, every phase)
+#   Iterates every module regardless of tier or mutation floor.
+#   Skips modules already in adversarial-report.json with status GREEN/BLOCKED.
 #
 # Progress tracking:
-#   ralph/adversarial-report.json   — per-feature findings (attacks tried + bugs)
+#   ralph/adversarial-report.json   — per-module findings (attacks tried + bugs)
 #   ralph/adversarial-progress.txt  — running log
 #
 # Dual-account failover: same pattern as qa.sh. Tries CODEX_ACC1 first,
@@ -29,7 +30,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 MAX_ITER="${1:-999}"
-PRD=ralph/prd.json
+STATE=.quality/state.json
 ADV_REPORT=ralph/adversarial-report.json
 ADV_PROGRESS=ralph/adversarial-progress.txt
 ITER_TIMEOUT=1800
@@ -40,11 +41,15 @@ CODEX_ACC2="${CODEX_ACC2:-$HOME/.codex-acc2}"
 CODEX_SINGLE_ACCOUNT="${CODEX_SINGLE_ACCOUNT:-0}"
 MAX_PLATEAU="${MAX_PLATEAU:-3}"
 
-QUOTA_REGEX='429|rate.?limit|rate_limit|quota.?exceeded|quota_exceeded|usage.?limit|insufficient_quota|retry.?after|RESOURCE_EXHAUSTED|hit your usage limit|try again at|unauthorized|invalid.?api.?key|401|402|403'
+# NARROWED: the old regex matched bare 401/403/unauthorized which triggered
+# on Codex's own adversarial OUTPUT ("server returned 401 Unauthorized") —
+# causing false "quota exhausted" failovers on perfectly good accounts.
+# Now matches ONLY actual API/quota error patterns, not HTTP status descriptions.
+QUOTA_REGEX='HTTP 429|rate.limit.exceeded|rate_limit_exceeded|quota.exceeded|quota_exceeded|usage.limit.exceeded|insufficient_quota|retry.after.*seconds|RESOURCE_EXHAUSTED|hit your usage limit|try again at [0-9]|billing.*hard.*limit|exceeded.*current.*quota'
 BOTH_EXHAUSTED_SLEEP=300
 
-if [ ! -f "$PRD" ]; then
-  echo "ERROR: $PRD not found." >&2
+if [ ! -f "$STATE" ]; then
+  echo "ERROR: $STATE not found. Run qa-controller baseline first." >&2
   exit 1
 fi
 
@@ -78,25 +83,38 @@ if [ ! -f "$ADV_PROGRESS" ]; then
 EOF
 fi
 
-count_qad() {
-  python3 -c "import json; d=json.load(open('$PRD')); print(sum(1 for x in d if x.get('qa_tested', False)))"
+count_total_modules() {
+  python3 -c "import json; print(len(json.load(open('$STATE')).get('modules', {})))"
 }
 count_adv() {
-  python3 -c "import json; d=json.load(open('$ADV_REPORT')); print(len({x['story_id'] for x in d if x.get('story_id')}))"
+  python3 -c "import json; d=json.load(open('$ADV_REPORT')); print(len({x['module'] for x in d if x.get('module') and x.get('verdict') in ('hardened','no_bugs_found')}))"
+}
+first_un_attacked() {
+  python3 -c "
+import json
+s = json.load(open('$STATE'))
+r = json.load(open('$ADV_REPORT'))
+done = {e['module'] for e in r if e.get('module') and e.get('verdict') in ('hardened','no_bugs_found','blocked')}
+for path in sorted(s.get('modules', {}).keys()):
+    if path not in done:
+        m = s['modules'][path]
+        print(f\"{path}\t{m.get('tier','?')}\")
+        break
+"
 }
 validate_account() {
   local dir="$1"
   [ -d "$dir" ] && [ -s "$dir/auth.json" ]
 }
 
-QAD=$(count_qad)
+TOTAL_MODULES=$(count_total_modules)
 ADVD=$(count_adv)
 ACC1_OK=$(validate_account "$CODEX_ACC1" && echo yes || echo no)
 ACC2_OK=$(validate_account "$CODEX_ACC2" && echo yes || echo no)
 
 echo "───────────────────────────────────────────────────────────────"
-echo "Ralph adversarial loop — Codex red-team attacker"
-echo "  prd:        $PRD  ($QAD features QA'd, $ADVD already attacked)"
+echo "Ralph adversarial loop — Codex red-team attacker (FULL APP)"
+echo "  state:      $STATE  ($TOTAL_MODULES modules, $ADVD already attacked)"
 echo "  report:     $ADV_REPORT"
 echo "  progress:   $ADV_PROGRESS"
 echo "  max iter:   $MAX_ITER"
@@ -120,8 +138,8 @@ if [ "$ACC1_OK" = "no" ]; then
   exit 1
 fi
 
-if [ "$QAD" -eq 0 ]; then
-  echo "No features QA'd yet. Nothing to attack. Run ralph/qa.sh first."
+if [ "$TOTAL_MODULES" -eq 0 ]; then
+  echo "No modules in state.json. Run qa-controller baseline first."
   exit 0
 fi
 
@@ -192,38 +210,45 @@ run_red_with_failover() {
 }
 
 for i in $(seq 1 "$MAX_ITER"); do
-  QAD=$(count_qad)
   ADVD=$(count_adv)
-  REMAINING=$((QAD - ADVD))
+  REMAINING=$((TOTAL_MODULES - ADVD))
   echo ""
-  echo "═══ red-team iter $i/$MAX_ITER — $ADVD/$QAD attacked ($REMAINING remaining) ══"
+  echo "═══ red-team iter $i/$MAX_ITER — $ADVD/$TOTAL_MODULES attacked ($REMAINING remaining) ══"
   echo ""
 
-  if [ "$ADVD" -ge "$QAD" ]; then
-    echo "All QA'd features have been red-teamed. Adversarial done."
+  TARGET=$(first_un_attacked)
+  if [ -z "$TARGET" ]; then
+    echo "All modules have been red-teamed. Adversarial done."
     break
   fi
+
+  MODULE=$(echo "$TARGET" | cut -f1)
+  TIER=$(echo "$TARGET" | cut -f2)
+  echo "[red-team] target: $MODULE  (tier=$TIER)"
 
   RECENT_COMMITS=$(git log --grep='^RED:' -n 10 --format='%H%n%ad%n%B---' --date=short 2>/dev/null || echo '(no RED commits yet)')
 
   PROMPT="You are a RED-TEAM attacker for this app. Your goal is to BREAK it.
 Read @ralph/harden-adversarial-prompt.md for your full protocol. Also read
-@CLAUDE.md, @$PRD, @$ADV_REPORT, and @$ADV_PROGRESS.
+@CLAUDE.md, @$STATE, @$ADV_REPORT, and @$ADV_PROGRESS.
 
 ITERATION: $i of $MAX_ITER
-PROGRESS: $ADVD of $QAD QA'd features already red-teamed
+TARGET MODULE: $MODULE
+TIER: $TIER
+PROGRESS: $ADVD of $TOTAL_MODULES modules already red-teamed
 Previous RED commits:
 $RECENT_COMMITS
 
-Pick the FIRST story in $PRD where passes:true AND qa_tested:true AND no
-entry in $ADV_REPORT has a matching story_id. Attack it adversarially:
+Attack the module at $MODULE adversarially. Read the source code, understand
+what it does, then try EVERY applicable attack from the catalog in the prompt:
 injection, auth bypass, race conditions, resource exhaustion, stale state,
-malformed input. Fix any bugs found in PRODUCTION code only. Add regression
-tests. Append a structured entry to $ADV_REPORT. Update $ADV_PROGRESS.
-Commit with 'RED: <story-id> — <summary>' prefix.
+malformed input, eventId cross-tenant, role escalation.
+Fix any bugs found in PRODUCTION code only. Add regression tests.
+Append a structured entry to $ADV_REPORT with 'module' key set to '$MODULE'.
+Update $ADV_PROGRESS. Commit with 'RED: $MODULE — <summary>' prefix.
 
-Output <promise>NEXT</promise> when done.
-Output <promise>RED_COMPLETE</promise> only if every qa_tested:true story has an adversarial-report entry.
+Output <promise>NEXT</promise> when done with this module.
+Output <promise>RED_COMPLETE</promise> only if every module in $STATE has been attacked.
 Output <promise>ABORT</promise> if blocked (explain why above the tag)."
 
   set +e
@@ -242,18 +267,18 @@ Output <promise>ABORT</promise> if blocked (explain why above the tag)."
   if echo "$result_tail" | grep -q '<promise>RED_COMPLETE</promise>' && [ "$quota_tail" -eq 0 ]; then
     un_attacked=$(python3 -c "
 import json
-d = json.load(open('$PRD'))
+s = json.load(open('$STATE'))
 r = json.load(open('$ADV_REPORT'))
-done = {e['story_id'] for e in r if e.get('story_id')}
-print(sum(1 for x in d if x.get('passes') and x.get('qa_tested') and x.get('id') not in done))
+done = {e['module'] for e in r if e.get('module') and e.get('verdict') in ('hardened','no_bugs_found','blocked')}
+print(sum(1 for p in s.get('modules',{}) if p not in done))
 ")
     if [ "$un_attacked" -eq 0 ]; then
       echo ""
-      echo "Red-team signaled RED_COMPLETE (verified: 0 stories un-attacked)."
+      echo "Red-team signaled RED_COMPLETE (verified: 0 modules un-attacked)."
       break
     else
       echo ""
-      echo "Red-team emitted RED_COMPLETE but $un_attacked stories un-attacked — ignoring false signal."
+      echo "Red-team emitted RED_COMPLETE but $un_attacked modules un-attacked — ignoring false signal."
     fi
   elif echo "$result_tail" | grep -q '<promise>ABORT</promise>' && [ "$quota_tail" -eq 0 ]; then
     echo ""
@@ -270,7 +295,6 @@ print(sum(1 for x in d if x.get('passes') and x.get('qa_tested') and x.get('id')
 done
 
 FINAL_ADVD=$(count_adv)
-QAD=$(count_qad)
 
 python3 - <<PY
 import json
@@ -284,7 +308,7 @@ for x in d:
         by_severity[sev] = by_severity.get(sev, 0) + 1
 print('')
 print('───────────────────────────────────────────────────────────────')
-print(f"Red-team summary: {$FINAL_ADVD}/{$QAD} features attacked")
+print(f"Red-team summary: {$FINAL_ADVD}/{$TOTAL_MODULES} modules attacked")
 print(f'  bugs found:   {total_bugs}')
 print(f'  bugs fixed:   {fixed}')
 print(f'  by severity:  {by_severity}')

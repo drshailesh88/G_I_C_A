@@ -32,7 +32,7 @@ CODEX_ACC2="${CODEX_ACC2:-$HOME/.codex-acc2}"
 CODEX_SINGLE_ACCOUNT="${CODEX_SINGLE_ACCOUNT:-0}"
 
 # Quota / auth / transport detection
-QUOTA_REGEX='429|rate.?limit|rate_limit|quota.?exceeded|quota_exceeded|usage.?limit|insufficient_quota|retry.?after|RESOURCE_EXHAUSTED|hit your usage limit|try again at|unauthorized|invalid.?api.?key|401|402|403'
+QUOTA_REGEX='HTTP 429|rate.limit.exceeded|rate_limit_exceeded|quota.exceeded|quota_exceeded|usage.limit.exceeded|insufficient_quota|retry.after.*seconds|RESOURCE_EXHAUSTED|hit your usage limit|try again at [0-9]|billing.*hard.*limit|exceeded.*current.*quota'
 BOTH_EXHAUSTED_SLEEP=300   # 5 min
 
 if [ ! -f "$PRD" ]; then

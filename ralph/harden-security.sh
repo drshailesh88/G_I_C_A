@@ -38,7 +38,7 @@ CODEX_SINGLE_ACCOUNT="${CODEX_SINGLE_ACCOUNT:-0}"
 MAX_PLATEAU="${MAX_PLATEAU:-3}"
 OWASP_CATEGORIES="${OWASP_CATEGORIES:-A01,A02,A03,A04,A05,A06,A07,A08,A09,A10}"
 
-QUOTA_REGEX='429|rate.?limit|rate_limit|quota.?exceeded|quota_exceeded|usage.?limit|insufficient_quota|retry.?after|RESOURCE_EXHAUSTED|hit your usage limit|try again at|unauthorized|invalid.?api.?key|401|402|403'
+QUOTA_REGEX='HTTP 429|rate.limit.exceeded|rate_limit_exceeded|quota.exceeded|quota_exceeded|usage.limit.exceeded|insufficient_quota|retry.after.*seconds|RESOURCE_EXHAUSTED|hit your usage limit|try again at [0-9]|billing.*hard.*limit|exceeded.*current.*quota'
 BOTH_EXHAUSTED_SLEEP=300
 
 if ! command -v codex >/dev/null 2>&1; then

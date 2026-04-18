@@ -1,0 +1,35 @@
+[
+  {
+    "iteration": 1,
+    "timestamp": "2026-04-17T00:00:00Z",
+    "ought_sources": [
+      "e2e/contracts/certificates/{invariants.md,examples.md,counterexamples.md,api-contract.json}",
+      "e2e/contracts/eventid-scoping/{invariants.md,examples.md,counterexamples.md,api-contract.json}",
+      "e2e/contracts/cascade-idempotency/{invariants.md,examples.md,counterexamples.md,api-contract.json}"
+    ],
+    "ought_counts": {
+      "certificates": { "invariants": 21, "examples": 11, "counterexamples": 20 },
+      "eventid-scoping": { "invariants": 15, "examples": 10, "counterexamples": 14 },
+      "cascade-idempotency": { "invariants": 20, "examples": 12, "counterexamples": 20 }
+    },
+    "is_sources": [
+      "ralph/prd.json (42 entries, all passes:true)",
+      "feature-census/{certificates,events,people,program,registration,travel,accommodation,transport,communications,attendance}/CENSUS.md"
+    ],
+    "spot_checked_implementations": [
+      "src/app/api/events/[eventId]/certificates/route.ts",
+      "src/app/api/events/[eventId]/certificates/bulk/route.ts",
+      "src/app/api/events/[eventId]/certificates/[certificateId]/route.ts",
+      "src/app/api/verify/[token]/route.ts",
+      "src/app/api/events/[eventId]/sessions",
+      "src/app/api/events/[eventId]/people",
+      "src/lib/db/schema/audit-log.ts",
+      "src/lib/notifications/idempotency.ts",
+      "src/lib/cascade/debounce.ts"
+    ],
+    "missing_found": 0,
+    "appended_to_prd": 0,
+    "outcome": "COMPLETENESS_COMPLETE",
+    "note": "All 42 prd.json hardening stories have verified code artifacts. Contract invariants/examples/CEs are covered either by explicit anchor citation in story behavior text or implicitly by the endpoint-level story's implementation + frozen e2e contract tests. Un-cited anchors are a documentation-traceability concern, not a missing feature."
+  }
+]

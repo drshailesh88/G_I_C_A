@@ -166,13 +166,13 @@ is_auto_snapshot() {
   [[ "$1" == *"auto-snapshot"* ]] || [[ "$1" == *"update harden-progress"* ]]
 }
 
-# Count adversarial-report entries (one per feature red-teamed).
+# Count adversarial-report entries (one per module red-teamed).
 count_red_done() {
   python3 -c "
 try:
     import json
     r = json.load(open('ralph/adversarial-report.json'))
-    print(len({e['story_id'] for e in r if e.get('story_id')}))
+    print(len({e.get('module') or e.get('story_id','') for e in r if e.get('module') or e.get('story_id')}))
 except Exception:
     print(0)
 " 2>/dev/null
