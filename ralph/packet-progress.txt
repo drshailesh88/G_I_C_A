@@ -14,6 +14,20 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-18T15:52:00Z — PKT-A-014 — Merge duplicate people UI
+
+- Story ID: p2-people-merge-duplicates-ui
+- Implemented: Added `mergePeopleSchema`, `MergePeopleResult` type, and `mergePeople(input)` server action to `src/lib/actions/person.ts`. Action: RBAC-gated (write roles only), validates keepId/dropId as UUIDs, rejects self-merge, fetches both people, runs atomic DB transaction that (1) re-points `event_people` (deletes conflicts by eventId, then updates), (2) re-points `event_registrations` (same conflict pattern), (3) re-points `session_assignments` (loops over keeper's sessionId+role pairs to delete conflicts, then updates), (4) updates `faculty_invites`, `travelRecords`, `accommodationRecords`, `transportPassengerAssignments` directly, (5) updates winner with merged field values (left/right/both choices; tags always unioned), (6) soft-archives loser with `archivedAt`/`archivedBy`. Tombstone metadata (mergedIntoId, fieldChoices) written to audit log. Created `/people/merge/page.tsx` server page — auth + write-role gate, reads `?a` and `?b` UUID params, fetches both people via `getPerson`, passes to `MergeClient`. Created `MergeClient` — three states: (1) no personA: instruction page; (2) personA only: person card + UUID input to pick person B; (3) both: side-by-side comparison table with per-field Keep Left / Keep Right / Both buttons, warning banner, Confirm Merge button, success state with link to survivor. Added "Merge" button (GitMerge icon) to people list header and "Merge" link to person detail page header as entrypoints.
+- Files changed:
+  - src/lib/actions/person.ts (added eventRegistrations, sessionAssignments, facultyInvites, travelRecords, accommodationRecords, transportPassengerAssignments imports; added inArray import; added mergePeopleSchema, MergePeopleResult, pickTextField, mergePeople)
+  - src/lib/actions/person-merge.test.ts (new — 22 spec-derived tests: 4 RBAC + 5 validation + 5 field choices + 5 transaction integrity + 2 audit log + 1 return value)
+  - src/app/(app)/people/merge/page.tsx (new — server page, auth gate + parallel getPerson fetch)
+  - src/app/(app)/people/merge/merge-client.tsx (new — MergeClient with 3 states: NoPeople, PickSecond, Comparison)
+  - src/app/(app)/people/people-list-client.tsx (added GitMerge import + Merge button in header)
+  - src/app/(app)/people/[personId]/person-detail-client.tsx (added GitMerge import + Merge link in actions)
+- Tests run: `npm run test:run` — 22 new tests pass; 8 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, full-journey, mutation-kill-2, notifications.adversarial, notifications.mutation-kill, travel-cascade).
+- Risks/follow-ups: `git stash pop` conflicted with tsconfig.tsbuildinfo during pre-existing baseline check — stash was discarded and all changes re-applied manually. Conflict detection for session_assignments loops over keeper's pairs (N+1 deletes per pair); acceptable for the rare merge operation. The "Find second person" step uses a bare UUID input — a search-based picker with autocomplete is deferred (not in spec scope). The merge page entry point from the people list links to /people/merge (no person preselected); from the person detail page, it links to /people/merge?a=personId (person A preselected).
+
 ## 2026-04-18T15:10:00Z — PKT-A-013 — Transfer event ownership workflow
 
 - Story ID: p1-transfer-event-ownership
