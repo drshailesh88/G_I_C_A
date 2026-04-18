@@ -14,6 +14,22 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-19T00:24:30Z — PKT-B-004 — Event field builder
+
+- Story ID: p6-m51-event-field-builder
+- Implemented: Added `STANDARD_TOGGLE_FIELDS`, `CUSTOM_FIELD_TYPES`, `customFieldSchema`, `fieldConfigSchema`, `FieldConfig`, `CustomField` types to `src/lib/validations/event.ts`. Added `updateFieldConfig(eventId, input)` server action to `src/lib/actions/event.ts` — RBAC-gated (super_admin or event_coordinator only; ops and read_only rejected), validates eventId UUID, validates fieldConfig via `fieldConfigSchema` (standardFields map + customFields array ≤10), then calls `assertEventAccess` and updates `events.fieldConfig` JSONB. Updated `getEventBySlug` to include `fieldConfig` in its select projection so public registration page can access it. Created server page at `/events/[eventId]/fields/page.tsx` — auth + coordinator/super_admin canWrite gate, loads event, passes to `FieldBuilderClient`. Created `FieldBuilderClient` — standard fields section with always-on rows (fullName/email/phone) and toggle switches for designation/specialty/organization/city/age; custom fields section with per-field cards showing label input, type dropdown (text/number/select/date/file), required checkbox, options textarea (for select type), remove button; Add Field button (disabled at 10); Save button calls `updateFieldConfig`. Updated public `/e/[eventSlug]/register/page.tsx` to pass `fieldConfig` prop to `RegistrationFormClient`. Rewrote `RegistrationFormClient` to render dynamic fields: fullName/email/phone always shown; standard toggle fields conditionally rendered; custom fields appended at end (select renders `<select>`, file renders `<input type="file">`, others use appropriate `<input type>`); custom field values collected into `preferences` object on submit (stored as `custom_{id}` keys in `preferencesJson` JSONB — existing registrations unaffected since preferences schema accepts arbitrary plain objects).
+- Files changed:
+  - src/lib/validations/event.ts (added STANDARD_TOGGLE_FIELDS, CUSTOM_FIELD_TYPES, customFieldSchema, fieldConfigSchema, FieldConfig, CustomField exports)
+  - src/lib/actions/event.ts (added fieldConfigSchema import + FieldConfig type import; added fieldConfig to getEventBySlug select; added UpdateFieldConfigResult type + updateFieldConfig action)
+  - src/lib/actions/event-field-builder.test.ts (new — 19 spec-derived tests: 5 RBAC + 6 validation + 2 standard field toggles + 3 custom fields + 3 side effects)
+  - src/app/(app)/events/[eventId]/fields/page.tsx (new — server page, auth + canWrite gate)
+  - src/app/(app)/events/[eventId]/fields/field-builder-client.tsx (new — FieldBuilderClient + CustomFieldCard)
+  - src/app/(app)/events/[eventId]/fields/field-builder.test.ts (new — 21 spec-derived tests: 4 parseFieldConfig default + 2 custom passthrough + 4 visibility logic + 2 max count + 6 type coverage + 2 data integrity + 1 scope)
+  - src/app/(public)/e/[eventSlug]/register/page.tsx (added fieldConfig prop pass to RegistrationFormClient)
+  - src/app/(public)/e/[eventSlug]/register/registration-form-client.tsx (rewrote to accept fieldConfig, render dynamic standard + custom fields, collect custom values into preferences)
+- Tests run: `npm run test:run` — 19 new tests pass (event-field-builder.test.ts); 21 new tests pass (field-builder.test.ts); 8 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, full-journey, mutation-kill-2, notifications.adversarial, notifications.mutation-kill, travel-cascade).
+- Risks/follow-ups: File type custom fields render `<input type="file">` in the public form but the file content is not uploaded — only the filename string is stored in preferences. Full file upload to R2 with a presigned URL flow is deferred. Custom field ID generation uses `crypto.randomUUID()` client-side in the field builder — UUIDs are generated at add-field time and persisted with the config, so they remain stable across saves. Standard field toggles affect only the UI — `publicRegistrationSchema` keeps all standard fields optional, so existing registrations with those fields stored remain valid when a field is later toggled off.
+
 ## 2026-04-18T18:55:00Z — PKT-B-003 — Duplicate event structure
 
 - Story ID: p6-event-duplicate
