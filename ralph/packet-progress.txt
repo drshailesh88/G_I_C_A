@@ -14,6 +14,21 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-18T14:46:00Z — PKT-A-011 — Revised responsibility notifications on publish
+
+- Story ID: p2-program-revised-responsibility-notifications
+- Implemented: Added `ProgramVersionPublishedPayload` type and `PROGRAM_VERSION_PUBLISHED: 'conference/program.version_published'` event to `cascade/events.ts`. Added `programVersionPublishedPayloadSchema` Zod schema to `cascade/emit.ts` and registered it in `productionPayloadSchemas`. Created `src/lib/cascade/handlers/program-cascade.ts` with `handleProgramVersionPublished` — skips if no baseVersionId (first publish), fetches both version snapshots from DB, computes faculty-specific added/removed session sets by filtering assignments per personId, skips faculty with zero net changes, sends `program_update` email notification per changed faculty via `sendNotification` with idempotency key `notify:program-version:<versionId>:<personId>:email`. Registered `registerProgramCascadeHandlers` in `cascade/handlers/index.ts`. Added `emitCascadeEvent` call in `publishProgramVersion` (program.ts) after successful DB insert — passes versionId, versionNo, baseVersionId, affectedPersonIds in payload.
+- Files changed:
+  - src/lib/cascade/events.ts (ProgramVersionPublishedPayload type, PROGRAM_VERSION_PUBLISHED event, CASCADE_DIRECTION entry)
+  - src/lib/cascade/emit.ts (programVersionPublishedPayloadSchema, registered in productionPayloadSchemas)
+  - src/lib/cascade/handlers/program-cascade.ts (new — handleProgramVersionPublished, registerProgramCascadeHandlers)
+  - src/lib/cascade/handlers/index.ts (import + registerProgramCascadeHandlers() call)
+  - src/lib/actions/program.ts (emitCascadeEvent import + CASCADE_EVENTS import + emit call in publishProgramVersion)
+  - src/lib/cascade/handlers/program-cascade.test.ts (new — 11 spec-derived handler tests)
+  - src/lib/actions/program-version-publish-emit.test.ts (new — 4 action emit tests)
+- Tests run: `npm run test:run` — 15 new tests pass (11 handler + 4 action); 8 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, full-journey, mutation-kill-2, notifications.adversarial, notifications.mutation-kill).
+- Risks/follow-ups: Pattern fix documented — `vi.clearAllMocks()` does NOT clear `mockReturnValueOnce` queues; use `vi.resetAllMocks()` + re-apply implementations in `beforeEach` for tests with multiple sequential DB mock calls. Faculty diff uses `sessionId` from snapshot assignments to detect changes; if the same faculty is reassigned to the same session (same sessionId, different role), no notification is sent (role changes are not diffed). WhatsApp channel notification for program diffs is not included in this packet (spec says email only); PKT-A-012 covers the aggregated bundle.
+
 ## 2026-04-18T14:10:00Z — PKT-A-007 — Communications hub page
 
 - Story ID: p4-m13-template-list-hub
