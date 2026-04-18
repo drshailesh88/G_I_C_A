@@ -14,6 +14,21 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-18T16:35:00Z — PKT-A-015 — People change history backed by audit log
+
+- Story ID: p2-people-change-history
+- Implemented: Added `writeAudit` calls to `createPerson`, `updatePerson`, `archivePerson`, `restorePerson`, and `anonymizePerson` in `person.ts`, each writing a `resource='people'` row with `changedFields` in meta. Added `getPersonHistory(personId, page)` server action — RBAC-gated (PEOPLE_READ_ROLES; OPS is forbidden), validates personId UUID, queries `auditLog` where `resource='people' AND resourceId=personId`; Super Admin sees all rows, others see `eventId IS NULL` rows only to prevent cross-event leakage. Ordered newest-first, paginated at 25 per page, returns `{ rows, total, page, totalPages }`. Updated `PersonDetailPage` (server page) to fetch initial history in parallel with person and pass as `initialHistory` prop. Updated `PersonDetailClient` to accept `initialHistory?: PersonHistoryResult` (defaults to empty), replace the simple createdAt/updatedAt section with a full paginated audit history list showing actor (truncated Clerk ID), action label (Create/Update/Archived/Restored/Anonymized/Merged), IST timestamp, and changed-field tags. Prev/Next pagination calls `getPersonHistory` as a server action on click. Added `writeAudit` mock to `person.test.ts` and `person.mutation-kill.test.ts` to prevent db.insert conflicts from new audit calls. Updated `person-detail-client.test.tsx` mock to include `getPersonHistory`.
+- Files changed:
+  - src/lib/actions/person.ts (added auditLog schema import; writeAudit calls in createPerson/updatePerson/archivePerson/restorePerson/anonymizePerson; added HISTORY_PAGE_SIZE const, PersonHistoryRow type, PersonHistoryResult type, getPersonHistory action)
+  - src/lib/actions/person-history.test.ts (new — 12 spec-derived tests: 4 RBAC + 1 validation + 3 data shape + 3 pagination + 1 meta passthrough)
+  - src/lib/actions/person.test.ts (added vi.mock('@/lib/audit/write', ...) to prevent insert-chain conflicts)
+  - src/lib/actions/person.mutation-kill.test.ts (added same writeAudit mock)
+  - src/app/(app)/people/[personId]/page.tsx (added getPersonHistory parallel fetch, EMPTY_HISTORY constant, initialHistory prop pass)
+  - src/app/(app)/people/[personId]/person-detail-client.tsx (added history state/pagination, HistoryRow component, ACTION_LABEL map, Clock+ChevronLeft+ChevronRight icons; replaced simple date display with full audit list)
+  - src/app/(app)/people/[personId]/person-detail-client.test.tsx (added getPersonHistory: vi.fn() to mock)
+- Tests run: `npm run test:run` — 12 new tests pass (person-history.test.ts); 197 pre-existing tests in person.test.ts + person.mutation-kill.test.ts pass; 8 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, full-journey, mutation-kill-2, notifications.adversarial, notifications.mutation-kill, travel-cascade).
+- Risks/follow-ups: Actor is shown as a truncated Clerk user ID — a future packet can resolve it to a display name via Clerk Users API. The `getPersonHistory` server action is called from the client for pagination; on the initial load it's fetched server-side (no waterfall). OPS role cannot read person history even though it can read travel/accommodation records for the same person; consistent with the people module RBAC boundary. `vi.clearAllMocks()` (not `resetAllMocks()`) in person.test.ts preserves mockReturnValue implementations across tests within a describe block — the writeAudit mock fully prevents this ambiguity.
+
 ## 2026-04-18T15:52:00Z — PKT-A-014 — Merge duplicate people UI
 
 - Story ID: p2-people-merge-duplicates-ui

@@ -2,7 +2,7 @@
   "version": 1,
   "pipeline": "ralph-packets",
   "updated_at": "2026-04-18T15:52:00Z",
-  "current_packet_id": "PKT-A-014",
+  "current_packet_id": "PKT-A-015",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -249,14 +249,14 @@
       "bucket": "A",
       "module": "people",
       "priority": 28,
-      "status": "NEEDS_REVIEW",
+      "status": "BLOCKED",
       "packet_file": "ralph/packets/PKT-A-014-p2-people-merge-duplicates-ui.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "0563cf9",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T15:52:00Z",
+      "last_status_at": "2026-04-18T15:57:31Z",
       "depends_on": []
     },
     {
@@ -266,14 +266,14 @@
       "bucket": "A",
       "module": "people",
       "priority": 29,
-      "status": "READY",
+      "status": "NEEDS_REVIEW",
       "packet_file": "ralph/packets/PKT-A-015-p2-people-change-history.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
-      "build_commit": null,
+      "build_commit": "41bf65cd9cbc17d7f2557e429c765122b90db2db",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T13:21:04.686332Z",
+      "last_status_at": "2026-04-18T16:35:00Z",
       "depends_on": []
     },
     {
