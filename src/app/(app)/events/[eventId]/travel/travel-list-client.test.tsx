@@ -23,6 +23,17 @@ vi.mock('@/lib/actions/logistics-notifications', () => ({
   getLastLogisticsNotification: vi.fn().mockResolvedValue(null),
   resendLogisticsNotification: vi.fn().mockResolvedValue({ status: 'sent' }),
 }));
+const mockCanWrite = vi.hoisted(() => ({ value: true }));
+vi.mock('@/hooks/use-role', () => ({
+  useRole: () => ({
+    isLoaded: true,
+    isSuperAdmin: false,
+    isCoordinator: false,
+    isOps: false,
+    isReadOnly: !mockCanWrite.value,
+    canWrite: mockCanWrite.value,
+  }),
+}));
 
 import { TravelListClient } from './travel-list-client';
 
@@ -181,6 +192,24 @@ describe('TravelListClient — responsive', () => {
     it('applies opacity to cancelled records', () => {
       const html = render([makeRecord({ recordStatus: 'cancelled' })]);
       expect(html).toContain('opacity-60');
+    });
+  });
+
+  describe('read_only disabled buttons', () => {
+    it('renders Add button as disabled for read_only', () => {
+      mockCanWrite.value = false;
+      const html = render();
+      expect(html).toContain('aria-disabled="true"');
+      expect(html).toMatch(/<button[^>]*disabled[^>]*>[^]*?Add/);
+      mockCanWrite.value = true;
+    });
+
+    it('disables row resend trigger for read_only', () => {
+      mockCanWrite.value = false;
+      const html = render();
+      expect(html).toContain('data-testid="row-actions-trigger"');
+      expect(html).toContain('disabled=""');
+      mockCanWrite.value = true;
     });
   });
 });

@@ -97,3 +97,11 @@ ITERATION: 1 of 999
 CURRENT_PACKET: PKT-C-004
 
 Evaluate ex
+
+## 2026-04-18T05:49:07Z — PKT-C-006 — Ops resend logistics notification actions
+
+- QA status: fixed
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated repo-wide errors
+- bug count: 1
+- fix commit(s): pending in git history for this QA pass
+- notes: Fixed resend RBAC in the travel and accommodation row-action UIs so read-only users cannot trigger the packet's write action, while preserving the travel/accommodation-only resend flow and packet-targeted coverage.

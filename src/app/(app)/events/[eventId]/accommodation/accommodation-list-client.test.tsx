@@ -199,6 +199,14 @@ describe('AccommodationListClient', () => {
       mockCanWrite.value = true;
     });
 
+    it('renders row resend trigger as disabled for read_only', () => {
+      mockCanWrite.value = false;
+      const html = render();
+      expect(html).toContain('data-testid="row-actions-trigger"');
+      expect(html).toContain('disabled=""');
+      mockCanWrite.value = true;
+    });
+
     it('renders Add as a link for writable roles', () => {
       mockCanWrite.value = true;
       const html = render();

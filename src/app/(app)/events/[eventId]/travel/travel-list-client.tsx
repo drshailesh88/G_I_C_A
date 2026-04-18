@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { cancelTravelRecord } from '@/lib/actions/travel';
 import { ResponsiveList, type Column } from '@/components/responsive/responsive-list';
+import { useRole } from '@/hooks/use-role';
 import { ResendNotificationDialog } from './resend-notification-dialog';
 
 type TravelRecord = {
@@ -71,9 +72,21 @@ function formatDates(record: TravelRecord) {
   return parts.join(' · ');
 }
 
-function RowActionsMenu({ onResend }: { onResend: () => void }) {
+function RowActionsMenu({
+  onResend,
+  disabled = false,
+}: {
+  onResend: () => void;
+  disabled?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (disabled) {
+      setOpen(false);
+    }
+  }, [disabled]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -89,8 +102,15 @@ function RowActionsMenu({ onResend }: { onResend: () => void }) {
     <div ref={ref} className="relative" data-testid="row-actions-menu">
       <button
         type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        className="rounded p-1.5 hover:bg-border/50"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!disabled) {
+            setOpen((v) => !v);
+          }
+        }}
+        disabled={disabled}
+        aria-disabled={disabled}
+        className="rounded p-1.5 hover:bg-border/50 disabled:cursor-not-allowed disabled:opacity-50"
         aria-label="More actions"
         data-testid="row-actions-trigger"
       >
@@ -120,10 +140,12 @@ function buildColumns({
   onCancel,
   cancellingId,
   onResend,
+  canWrite,
 }: {
   onCancel: (id: string) => void;
   cancellingId: string | null;
   onResend: (record: TravelRecord) => void;
+  canWrite: boolean;
 }): Column<TravelRecord>[] {
   return [
     {
@@ -196,12 +218,13 @@ function buildColumns({
                 event.stopPropagation();
                 onCancel(r.id);
               }}
-              disabled={cancellingId === r.id}
-              className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
+              disabled={!canWrite || cancellingId === r.id}
+              aria-disabled={!canWrite || cancellingId === r.id}
+              className="text-xs text-red-500 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {cancellingId === r.id ? 'Cancelling...' : 'Cancel'}
             </button>
-            <RowActionsMenu onResend={() => onResend(r)} />
+            <RowActionsMenu onResend={() => onResend(r)} disabled={!canWrite} />
           </div>
         ),
     },
@@ -228,12 +251,14 @@ function TravelCard({
   onCancel,
   cancelling,
   onResend,
+  canWrite,
 }: {
   record: TravelRecord;
   eventId: string;
   onCancel: (id: string) => void;
   cancelling: boolean;
   onResend: (record: TravelRecord) => void;
+  canWrite: boolean;
 }) {
   const style = STATUS_STYLES[record.recordStatus] || STATUS_STYLES.draft;
   const ModeIcon = MODE_ICONS[record.travelMode] || Plane;
@@ -281,12 +306,13 @@ function TravelCard({
         <div className="mt-3 flex items-center justify-end gap-3">
           <button
             onClick={() => onCancel(record.id)}
-            disabled={cancelling}
-            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
+            disabled={!canWrite || cancelling}
+            aria-disabled={!canWrite || cancelling}
+            className="text-xs text-red-500 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {cancelling ? 'Cancelling...' : 'Cancel'}
           </button>
-          <RowActionsMenu onResend={() => onResend(record)} />
+          <RowActionsMenu onResend={() => onResend(record)} disabled={!canWrite} />
         </div>
       )}
     </div>
@@ -301,9 +327,15 @@ export function TravelListClient({
   records: TravelRecord[];
 }) {
   const router = useRouter();
+  const { canWrite } = useRole();
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [resendRecord, setResendRecord] = useState<TravelRecord | null>(null);
-  const columns = buildColumns({ onCancel: handleCancel, cancellingId: cancelling, onResend: setResendRecord });
+  const columns = buildColumns({
+    onCancel: handleCancel,
+    cancellingId: cancelling,
+    onResend: setResendRecord,
+    canWrite,
+  });
 
   const active = records.filter((r) => r.recordStatus !== 'cancelled');
   const cancelled = records.filter((r) => r.recordStatus === 'cancelled');
@@ -331,13 +363,24 @@ export function TravelListClient({
           </Link>
           <h1 className="text-xl font-bold text-text-primary">Travel</h1>
         </div>
-        <Link
-          href={`/events/${eventId}/travel/new`}
-          className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-light"
-        >
-          <Plus className="h-4 w-4" />
-          Add
-        </Link>
+        {canWrite ? (
+          <Link
+            href={`/events/${eventId}/travel/new`}
+            className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-light"
+          >
+            <Plus className="h-4 w-4" />
+            Add
+          </Link>
+        ) : (
+          <button
+            disabled
+            aria-disabled="true"
+            className="flex cursor-not-allowed items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white opacity-50"
+          >
+            <Plus className="h-4 w-4" />
+            Add
+          </button>
+        )}
       </div>
 
       {/* Active Records */}
@@ -357,6 +400,7 @@ export function TravelListClient({
                 onCancel={handleCancel}
                 cancelling={cancelling === record.id}
                 onResend={setResendRecord}
+                canWrite={canWrite}
               />
             )}
             onRowClick={(record) => router.push(`/events/${eventId}/travel/${record.id}`)}
@@ -381,6 +425,7 @@ export function TravelListClient({
                 onCancel={handleCancel}
                 cancelling={false}
                 onResend={setResendRecord}
+                canWrite={canWrite}
               />
             )}
           />
@@ -410,12 +455,22 @@ export function TravelListClient({
             <p className="font-semibold text-text-primary">No travel records</p>
             <p className="text-sm text-text-secondary">Add travel details for event participants</p>
           </div>
-          <Link
-            href={`/events/${eventId}/travel/new`}
-            className="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-light"
-          >
-            Add Travel Record
-          </Link>
+          {canWrite ? (
+            <Link
+              href={`/events/${eventId}/travel/new`}
+              className="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-white hover:bg-primary-light"
+            >
+              Add Travel Record
+            </Link>
+          ) : (
+            <button
+              disabled
+              aria-disabled="true"
+              className="rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-white opacity-50"
+            >
+              Add Travel Record
+            </button>
+          )}
         </div>
       )}
     </div>

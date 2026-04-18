@@ -52,9 +52,21 @@ const FLAG_STATUS_STYLES: Record<string, { color: string; bgColor: string }> = {
   reviewed: { color: 'text-amber-700', bgColor: 'bg-amber-100 border-amber-300' },
 };
 
-function RowActionsMenu({ onResend }: { onResend: () => void }) {
+function RowActionsMenu({
+  onResend,
+  disabled = false,
+}: {
+  onResend: () => void;
+  disabled?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (disabled) {
+      setOpen(false);
+    }
+  }, [disabled]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -70,8 +82,15 @@ function RowActionsMenu({ onResend }: { onResend: () => void }) {
     <div ref={ref} className="relative" data-testid="row-actions-menu">
       <button
         type="button"
-        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-        className="rounded p-1.5 hover:bg-border/50"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!disabled) {
+            setOpen((v) => !v);
+          }
+        }}
+        disabled={disabled}
+        aria-disabled={disabled}
+        className="rounded p-1.5 hover:bg-border/50 disabled:cursor-not-allowed disabled:opacity-50"
         aria-label="More actions"
         data-testid="row-actions-trigger"
       >
@@ -488,7 +507,7 @@ function AccommodationTable({
                       >
                         {cancelling === record.id ? 'Cancelling...' : 'Cancel'}
                       </button>
-                      <RowActionsMenu onResend={() => onResend(record)} />
+                      <RowActionsMenu onResend={() => onResend(record)} disabled={!canWrite} />
                     </div>
                   )}
                 </td>
@@ -611,7 +630,7 @@ function AccommodationCard({
           >
             {cancelling ? 'Cancelling...' : 'Cancel'}
           </button>
-          <RowActionsMenu onResend={() => onResend(record)} />
+          <RowActionsMenu onResend={() => onResend(record)} disabled={!canWrite} />
         </div>
       )}
     </div>

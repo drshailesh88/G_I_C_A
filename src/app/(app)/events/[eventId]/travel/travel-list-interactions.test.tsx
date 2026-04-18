@@ -23,6 +23,16 @@ vi.mock('@/lib/actions/logistics-notifications', () => ({
   getLastLogisticsNotification: vi.fn().mockResolvedValue(null),
   resendLogisticsNotification: vi.fn().mockResolvedValue({ status: 'sent' }),
 }));
+vi.mock('@/hooks/use-role', () => ({
+  useRole: () => ({
+    isLoaded: true,
+    isSuperAdmin: false,
+    isCoordinator: false,
+    isOps: true,
+    isReadOnly: false,
+    canWrite: true,
+  }),
+}));
 
 import { TravelListClient } from './travel-list-client';
 
