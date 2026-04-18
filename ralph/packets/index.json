@@ -2,7 +2,7 @@
   "version": 1,
   "pipeline": "ralph-packets",
   "updated_at": "2026-04-18T15:52:00Z",
-  "current_packet_id": "PKT-A-015",
+  "current_packet_id": "PKT-B-001",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -266,14 +266,14 @@
       "bucket": "A",
       "module": "people",
       "priority": 29,
-      "status": "NEEDS_REVIEW",
+      "status": "BLOCKED",
       "packet_file": "ralph/packets/PKT-A-015-p2-people-change-history.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "41bf65cd9cbc17d7f2557e429c765122b90db2db",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T16:35:00Z",
+      "last_status_at": "2026-04-18T16:26:11Z",
       "depends_on": []
     },
     {
@@ -283,14 +283,14 @@
       "bucket": "B",
       "module": "transport",
       "priority": 101,
-      "status": "READY",
+      "status": "NEEDS_REVIEW",
       "packet_file": "ralph/packets/PKT-B-001-p3-transport-suggest-batches.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
-      "build_commit": null,
+      "build_commit": "302d6c7b72e5457acba9800f38642e3a6baf7902",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T13:21:04.686332Z",
+      "last_status_at": "2026-04-18T17:30:00Z",
       "depends_on": []
     },
     {
