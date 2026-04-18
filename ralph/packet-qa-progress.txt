@@ -169,3 +169,35 @@ Evaluate ex
 - bug count: 1
 - fix commit(s): `7e05de4`
 - notes: Fixed ownership transfer so the previous owner is downgraded to an active collaborator instead of losing event access, kept the new owner promotion event-scoped, and added packet-local coverage for preserved access and self-transfer idempotency.
+
+## 2026-04-18T15:57:31Z — PKT-A-014 — Merge duplicate people UI
+
+- QA status: fail
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated baseline failures; manual acceptance fail against packet oracle
+- bug count: 2
+- fix commit(s): none
+- notes: The merge action repoints several dependent tables but misses packet-required `attendance_records` and `issued_certificates`, so referential integrity is not fully preserved after merge. The merge screen also enables the destructive CTA with implicit default-left choices instead of forcing explicit per-field conflict resolution before submit.
+
+## 2026-04-18T16:26:11Z — PKT-A-015 — People change history backed by audit log
+
+- QA status: fail
+- checks run: repo-wide vitest fail; repo-wide typecheck fail; manual acceptance fail against packet oracle
+- bug count: 2
+- fix commit(s): none
+- notes: The person detail history section exists and paginates at 25 rows, but it does not render the required source or before→after diff, only actor/action/timestamp plus changed-field chips. The query also restricts non-super-admin users to global audit rows (`eventId IS NULL`) rather than showing Event Coordinators history for events they are assigned to.
+
+## 2026-04-18T17:17:28Z — PKT-B-001 — Suggested transport batches
+
+- QA status: fixed
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated baseline failures; manual acceptance pass against packet oracle
+- bug count: 1
+- fix commit(s): `437bb22620b94b3f3a4ca14d793ba6afaf45feab`
+- notes: Fixed transport suggestion refresh so new unassigned travel records in an existing suggestion cluster are appended to that auto suggestion instead of being skipped. Packet-targeted transport suggestion, transport action, transport UI, and transport cascade tests passed after the fix.
+
+## 2026-04-18T17:52:46Z — PKT-B-002 — Attendance report drill-down page
+
+- QA status: fail
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated baseline failures; manual acceptance fail against packet oracle
+- bug count: 2
+- fix commit(s): none
+- notes: The QR page exposes the report through a generic `View Full Report` link instead of making the attendance stat cards themselves the drill-down entry point required by the packet. The report aggregation also uses `overall.totalCheckedIn` for all attendance rows while `bySession` includes only session-level rows, so session totals cannot reconcile with the overall count whenever event-level check-ins exist.

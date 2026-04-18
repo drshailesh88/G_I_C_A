@@ -255,5 +255,72 @@
       "The transfer action deactivated the current owner row outright, which removed the prior owner’s event access and broke the packet requirement to preserve collaborator access and consistent assignment history during ownership transfer."
     ],
     "notes": "Fixed ownership transfer to downgrade the previous owner to an active collaborator row, preserve event-scoped access, and treat self-transfer as a no-op on assignment history. Packet-targeted `src/lib/actions/event-transfer-ownership.test.ts` passes; repo-wide `npm run test:run` and `npx tsc --noEmit` still fail due unrelated baseline issues outside PKT-A-013 scope."
+  },
+  {
+    "packet_id": "PKT-A-014",
+    "story_id": "p2-people-merge-duplicates-ui",
+    "qa_timestamp": "2026-04-18T15:57:31Z",
+    "qa_model": "codex",
+    "status": "fail",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "fail"
+    },
+    "bugs": [
+      "The merge action does not repoint all required dependent records: it updates event_people, event_registrations, session_assignments, faculty_invites, travel_records, accommodation_records, and transport_passenger_assignments, but it does not repoint attendance_records or issued_certificates required by the packet oracle.",
+      "The merge UI allows submission with implicit default-left choices instead of disabling the Merge CTA until every differing field is explicitly resolved."
+    ],
+    "notes": "Pass-1 targeted checks for the merge page and action passed, but manual packet verification failed against the frozen oracle. Repo-wide `npm run test:run` and `npx tsc --noEmit` also fail due unrelated baseline issues outside PKT-A-014 scope."
+  },
+  {
+    "packet_id": "PKT-A-015",
+    "story_id": "p2-people-change-history",
+    "qa_timestamp": "2026-04-18T16:26:11Z",
+    "qa_model": "codex",
+    "status": "fail",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "fail"
+    },
+    "bugs": [
+      "The person detail history UI omits the packet-required source and before→after field diff, rendering only actor, action, timestamp, and a flat changed-fields tag list.",
+      "The history query hard-filters non-super-admin users to `audit_log.event_id IS NULL`, which blocks authorized event-scoped history instead of allowing Event Coordinators to see rows for events they are assigned to."
+    ],
+    "notes": "Pass-1 ran `npm run test:run`, `npx tsc --noEmit`, and targeted packet inspection. Existing packet-local history tests only lock in the reduced shape and do not cover source, diff rendering, or event-assignment visibility. Repo-wide vitest and typecheck also fail due unrelated baseline issues outside PKT-A-015 scope."
+  },
+  {
+    "packet_id": "PKT-B-001",
+    "story_id": "p3-transport-suggest-batches",
+    "qa_timestamp": "2026-04-18T17:17:28Z",
+    "qa_model": "codex",
+    "status": "fixed",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "pass"
+    },
+    "bugs": [
+      "Transport suggestion refresh skipped existing matching auto batches entirely, so new travel records arriving in an already-suggested cluster never got attached to that suggestion."
+    ],
+    "notes": "Updated transport suggestion refresh to append newly arrived unassigned travel records into existing matching auto suggestions instead of skipping the cluster, and added packet-local regression coverage. Packet-targeted transport suggestion, transport action, transport UI, and transport cascade vitest checks passed. Repo-wide `npm run test:run` and `npx tsc --noEmit` still fail due unrelated baseline issues outside PKT-B-001 scope."
+  },
+  {
+    "packet_id": "PKT-B-002",
+    "story_id": "p5-m58-attendance-report-page",
+    "qa_timestamp": "2026-04-18T17:52:46Z",
+    "qa_model": "codex",
+    "status": "fail",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "fail"
+    },
+    "bugs": [
+      "The attendance report is reachable from a separate `View Full Report` link, but the packet requires the drill-down to be reached directly from the attendance stat cards.",
+      "The report's `overall.totalCheckedIn` counts all attendance rows while the By Session tab only groups session-level rows, so the session totals do not reconcile with the overall count when event-level check-ins exist."
+    ],
+    "notes": "Packet-targeted `src/lib/actions/attendance-report.test.ts` passes and the report does reuse the existing `/api/events/[eventId]/exports/attendance-report` export path with event-scoped queries. Repo-wide `npm run test:run` and `npx tsc --noEmit` still fail due unrelated baseline issues outside PKT-B-002 scope."
   }
 ]
