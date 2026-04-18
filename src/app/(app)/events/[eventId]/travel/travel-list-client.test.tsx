@@ -18,6 +18,12 @@ vi.mock('@/lib/actions/travel', () => ({
   cancelTravelRecord: vi.fn(),
 }));
 
+// Mock logistics notifications (prevents DB initialization in tests)
+vi.mock('@/lib/actions/logistics-notifications', () => ({
+  getLastLogisticsNotification: vi.fn().mockResolvedValue(null),
+  resendLogisticsNotification: vi.fn().mockResolvedValue({ status: 'sent' }),
+}));
+
 import { TravelListClient } from './travel-list-client';
 
 type TravelRecord = Parameters<typeof TravelListClient>[0]['records'][number];

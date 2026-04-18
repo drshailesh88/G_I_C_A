@@ -7,6 +7,12 @@ const mockCanWrite = vi.hoisted(() => ({ value: true }));
 vi.mock('@/lib/actions/accommodation', () => ({
   cancelAccommodationRecord: vi.fn(),
 }));
+
+// Mock logistics notifications (prevents DB initialization in tests)
+vi.mock('@/lib/actions/logistics-notifications', () => ({
+  getLastLogisticsNotification: vi.fn().mockResolvedValue(null),
+  resendLogisticsNotification: vi.fn().mockResolvedValue({ status: 'sent' }),
+}));
 vi.mock('@/lib/actions/red-flag-actions', () => ({
   reviewFlag: vi.fn(),
   resolveFlag: vi.fn(),

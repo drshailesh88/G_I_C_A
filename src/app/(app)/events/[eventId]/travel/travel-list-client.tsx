@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Plane, Train, Car, Bus, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Plus, Plane, Train, Car, Bus, AlertTriangle, MoreVertical, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { cancelTravelRecord } from '@/lib/actions/travel';
 import { ResponsiveList, type Column } from '@/components/responsive/responsive-list';
+import { ResendNotificationDialog } from './resend-notification-dialog';
 
 type TravelRecord = {
   id: string;
@@ -70,12 +71,59 @@ function formatDates(record: TravelRecord) {
   return parts.join(' · ');
 }
 
+function RowActionsMenu({ onResend }: { onResend: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative" data-testid="row-actions-menu">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="rounded p-1.5 hover:bg-border/50"
+        aria-label="More actions"
+        data-testid="row-actions-trigger"
+      >
+        <MoreVertical className="h-4 w-4 text-text-muted" />
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 top-8 z-10 w-52 rounded-lg border border-border bg-white py-1 shadow-lg"
+          data-testid="row-actions-dropdown"
+        >
+          <button
+            type="button"
+            onClick={() => { setOpen(false); onResend(); }}
+            className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-text-primary hover:bg-border/30"
+            data-testid="resend-menu-item"
+          >
+            <Send className="h-4 w-4 text-text-muted" />
+            Resend Notification
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function buildColumns({
   onCancel,
   cancellingId,
+  onResend,
 }: {
   onCancel: (id: string) => void;
   cancellingId: string | null;
+  onResend: (record: TravelRecord) => void;
 }): Column<TravelRecord>[] {
   return [
     {
@@ -141,17 +189,20 @@ function buildColumns({
         r.recordStatus === 'cancelled' ? (
           <span className="text-text-muted">—</span>
         ) : (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onCancel(r.id);
-            }}
-            disabled={cancellingId === r.id}
-            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
-          >
-            {cancellingId === r.id ? 'Cancelling...' : 'Cancel'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onCancel(r.id);
+              }}
+              disabled={cancellingId === r.id}
+              className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50"
+            >
+              {cancellingId === r.id ? 'Cancelling...' : 'Cancel'}
+            </button>
+            <RowActionsMenu onResend={() => onResend(r)} />
+          </div>
         ),
     },
     {
@@ -176,11 +227,13 @@ function TravelCard({
   eventId,
   onCancel,
   cancelling,
+  onResend,
 }: {
   record: TravelRecord;
   eventId: string;
   onCancel: (id: string) => void;
   cancelling: boolean;
+  onResend: (record: TravelRecord) => void;
 }) {
   const style = STATUS_STYLES[record.recordStatus] || STATUS_STYLES.draft;
   const ModeIcon = MODE_ICONS[record.travelMode] || Plane;
@@ -225,7 +278,7 @@ function TravelCard({
         </div>
       </Link>
       {!isCancelled && (
-        <div className="mt-3 flex justify-end">
+        <div className="mt-3 flex items-center justify-end gap-3">
           <button
             onClick={() => onCancel(record.id)}
             disabled={cancelling}
@@ -233,6 +286,7 @@ function TravelCard({
           >
             {cancelling ? 'Cancelling...' : 'Cancel'}
           </button>
+          <RowActionsMenu onResend={() => onResend(record)} />
         </div>
       )}
     </div>
@@ -245,10 +299,11 @@ export function TravelListClient({
 }: {
   eventId: string;
   records: TravelRecord[];
-  }) {
+}) {
   const router = useRouter();
   const [cancelling, setCancelling] = useState<string | null>(null);
-  const columns = buildColumns({ onCancel: handleCancel, cancellingId: cancelling });
+  const [resendRecord, setResendRecord] = useState<TravelRecord | null>(null);
+  const columns = buildColumns({ onCancel: handleCancel, cancellingId: cancelling, onResend: setResendRecord });
 
   const active = records.filter((r) => r.recordStatus !== 'cancelled');
   const cancelled = records.filter((r) => r.recordStatus === 'cancelled');
@@ -301,6 +356,7 @@ export function TravelListClient({
                 eventId={eventId}
                 onCancel={handleCancel}
                 cancelling={cancelling === record.id}
+                onResend={setResendRecord}
               />
             )}
             onRowClick={(record) => router.push(`/events/${eventId}/travel/${record.id}`)}
@@ -324,10 +380,25 @@ export function TravelListClient({
                 eventId={eventId}
                 onCancel={handleCancel}
                 cancelling={false}
+                onResend={setResendRecord}
               />
             )}
           />
         </section>
+      )}
+
+      {/* Resend notification dialog */}
+      {resendRecord && (
+        <ResendNotificationDialog
+          open={true}
+          onClose={() => setResendRecord(null)}
+          eventId={eventId}
+          recordId={resendRecord.id}
+          personName={resendRecord.personName}
+          personEmail={resendRecord.personEmail}
+          personPhone={resendRecord.personPhone}
+          notificationType="travel"
+        />
       )}
 
       {records.length === 0 && (

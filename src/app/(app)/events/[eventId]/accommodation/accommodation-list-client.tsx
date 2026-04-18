@@ -1,14 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Hotel, AlertTriangle, CheckCircle, Eye } from 'lucide-react';
+import { ArrowLeft, Plus, Hotel, AlertTriangle, CheckCircle, Eye, MoreVertical, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, formatDistanceToNow } from 'date-fns';
 import { cancelAccommodationRecord } from '@/lib/actions/accommodation';
 import { reviewFlag, resolveFlag } from '@/lib/actions/red-flag-actions';
 import { useRole } from '@/hooks/use-role';
+import { ResendNotificationDialog } from './resend-notification-dialog';
 
 type AccommodationRecord = {
   id: string;
@@ -51,6 +52,51 @@ const FLAG_STATUS_STYLES: Record<string, { color: string; bgColor: string }> = {
   reviewed: { color: 'text-amber-700', bgColor: 'bg-amber-100 border-amber-300' },
 };
 
+function RowActionsMenu({ onResend }: { onResend: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative" data-testid="row-actions-menu">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="rounded p-1.5 hover:bg-border/50"
+        aria-label="More actions"
+        data-testid="row-actions-trigger"
+      >
+        <MoreVertical className="h-4 w-4 text-text-muted" />
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 top-8 z-10 w-52 rounded-lg border border-border bg-white py-1 shadow-lg"
+          data-testid="row-actions-dropdown"
+        >
+          <button
+            type="button"
+            onClick={() => { setOpen(false); onResend(); }}
+            className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-text-primary hover:bg-border/30"
+            data-testid="resend-menu-item"
+          >
+            <Send className="h-4 w-4 text-text-muted" />
+            Resend Notification
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AccommodationListClient({
   eventId,
   records,
@@ -67,6 +113,7 @@ export function AccommodationListClient({
   const [showFlaggedOnly, setShowFlaggedOnly] = useState(false);
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [reviewingFlag, setReviewingFlag] = useState<string | null>(null);
+  const [resendRecord, setResendRecord] = useState<AccommodationRecord | null>(null);
 
   // Build a lookup: recordId -> flags for that record
   const flagsByRecord = new Map<string, RedFlag[]>();
@@ -186,6 +233,7 @@ export function AccommodationListClient({
                 onCancel={handleCancel}
                 onReviewFlag={handleReviewFlag}
                 onResolveFlag={handleResolveFlag}
+                onResend={setResendRecord}
                 cancelling={cancelling === record.id}
                 reviewingFlag={reviewingFlag}
                 canWrite={canWrite}
@@ -202,6 +250,7 @@ export function AccommodationListClient({
               onCancel={handleCancel}
               onReviewFlag={handleReviewFlag}
               onResolveFlag={handleResolveFlag}
+              onResend={setResendRecord}
               cancelling={cancelling}
               reviewingFlag={reviewingFlag}
               canWrite={canWrite}
@@ -228,6 +277,7 @@ export function AccommodationListClient({
                 onCancel={handleCancel}
                 onReviewFlag={handleReviewFlag}
                 onResolveFlag={handleResolveFlag}
+                onResend={setResendRecord}
                 cancelling={false}
                 reviewingFlag={null}
                 canWrite={canWrite}
@@ -244,6 +294,7 @@ export function AccommodationListClient({
               onCancel={handleCancel}
               onReviewFlag={handleReviewFlag}
               onResolveFlag={handleResolveFlag}
+              onResend={setResendRecord}
               cancelling={null}
               reviewingFlag={null}
               canWrite={canWrite}
@@ -279,6 +330,20 @@ export function AccommodationListClient({
           )}
         </div>
       )}
+
+      {/* Resend notification dialog */}
+      {resendRecord && (
+        <ResendNotificationDialog
+          open={true}
+          onClose={() => setResendRecord(null)}
+          eventId={eventId}
+          recordId={resendRecord.id}
+          personName={resendRecord.personName}
+          personEmail={resendRecord.personEmail}
+          personPhone={resendRecord.personPhone}
+          notificationType="accommodation"
+        />
+      )}
     </div>
   );
 }
@@ -290,6 +355,7 @@ function AccommodationTable({
   onCancel,
   onReviewFlag,
   onResolveFlag,
+  onResend,
   cancelling,
   reviewingFlag,
   canWrite,
@@ -300,6 +366,7 @@ function AccommodationTable({
   onCancel: (id: string) => void;
   onReviewFlag: (id: string) => void;
   onResolveFlag: (id: string) => void;
+  onResend: (record: AccommodationRecord) => void;
   cancelling: string | null;
   reviewingFlag: string | null;
   canWrite: boolean;
@@ -412,14 +479,17 @@ function AccommodationTable({
                 </td>
                 <td className="px-4 py-3 text-right">
                   {!isCancelled && (
-                    <button
-                      onClick={() => onCancel(record.id)}
-                      disabled={!canWrite || cancelling === record.id}
-                      aria-disabled={!canWrite || cancelling === record.id}
-                      className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {cancelling === record.id ? 'Cancelling...' : 'Cancel'}
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => onCancel(record.id)}
+                        disabled={!canWrite || cancelling === record.id}
+                        aria-disabled={!canWrite || cancelling === record.id}
+                        className="text-xs text-red-500 hover:text-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {cancelling === record.id ? 'Cancelling...' : 'Cancel'}
+                      </button>
+                      <RowActionsMenu onResend={() => onResend(record)} />
+                    </div>
                   )}
                 </td>
               </tr>
@@ -438,6 +508,7 @@ function AccommodationCard({
   onCancel,
   onReviewFlag,
   onResolveFlag,
+  onResend,
   cancelling,
   reviewingFlag,
   canWrite,
@@ -448,6 +519,7 @@ function AccommodationCard({
   onCancel: (id: string) => void;
   onReviewFlag: (id: string) => void;
   onResolveFlag: (id: string) => void;
+  onResend: (record: AccommodationRecord) => void;
   cancelling: boolean;
   reviewingFlag: string | null;
   canWrite: boolean;
@@ -530,7 +602,7 @@ function AccommodationCard({
       )}
 
       {!isCancelled && (
-        <div className="mt-3 flex justify-end">
+        <div className="mt-3 flex items-center justify-end gap-3">
           <button
             onClick={() => onCancel(record.id)}
             disabled={!canWrite || cancelling}
@@ -539,6 +611,7 @@ function AccommodationCard({
           >
             {cancelling ? 'Cancelling...' : 'Cancel'}
           </button>
+          <RowActionsMenu onResend={() => onResend(record)} />
         </div>
       )}
     </div>
