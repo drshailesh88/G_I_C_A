@@ -54,7 +54,7 @@ Evaluate ex
 - QA status: fail
 - checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; typecheck fail due unrelated baseline failures; manual acceptance fail against packet oracle
 - bug count: 2
-- fix commit(s): none
+- fix commit(s): `a3563ae`
 - notes: The implementation provides an editor under `/events/[eventId]/templates/[templateId]/edit` and packet-targeted editor tests pass, but the packet still fails its frozen oracle because opening the editor does not load or create an event-scoped draft for the template key. `getTemplateEditorEntry()` falls back to the global template and only creates an event override later inside `saveTemplate()`. The route contract also differs from the packet's communications-template editor path. Repo-wide failures remain unrelated noise outside PKT-A-008 scope.
 
 ## 2026-04-19T02:43:45Z — PKT-A-007 — Communications hub page
