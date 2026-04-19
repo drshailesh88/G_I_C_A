@@ -4,7 +4,12 @@ import { assertEventAccess } from '@/lib/auth/event-access';
 import { ROLES } from '@/lib/auth/roles';
 import { listFailedLogs, getLogById } from '@/lib/notifications/log-queries';
 import { retryFailedNotification, resendNotification } from '@/lib/notifications/send';
-import { getTemplateById, listTemplatesForEvent } from '@/lib/notifications/template-queries';
+import {
+  getTemplateById,
+  listTemplatesForEvent,
+  updateTemplate,
+  createEventOverride,
+} from '@/lib/notifications/template-queries';
 import { db } from '@/lib/db';
 import { notificationLog } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
@@ -176,6 +181,82 @@ export async function getNotificationLog(input: unknown) {
     .orderBy(desc(notificationLog.createdAt))
     .limit(limit)
     .offset(offset);
+}
+
+// ── Save (create-or-update) a template for an event ──────────
+
+const saveTemplateSchema = z.object({
+  eventId: z.string().uuid(),
+  templateId: z.string().uuid(),
+  templateName: z.string().trim().min(1).max(200).optional(),
+  subjectLine: z.string().max(500).nullable().optional(),
+  bodyContent: z.string().min(1).max(50000).optional(),
+  previewText: z.string().max(200).nullable().optional(),
+  status: z.enum(['draft', 'active', 'archived']).optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+
+export async function saveTemplate(input: unknown) {
+  const validated = saveTemplateSchema.parse(input);
+  const { userId, role } = await assertEventAccess(validated.eventId, { requireWrite: true });
+  assertNotificationsRole(role, { requireWrite: true });
+
+  let targetId = validated.templateId;
+
+  const eventScoped = await getTemplateById(validated.templateId, validated.eventId);
+  if (!eventScoped) {
+    const global = await getTemplateById(validated.templateId, null);
+    if (!global) throw new Error('Template not found');
+
+    // Reuse existing event override if one already exists for this key+channel
+    const channel = global.channel as 'email' | 'whatsapp';
+    const { eventTemplates } = await listTemplatesForEvent(validated.eventId, { channel });
+    const existingOverride = eventTemplates.find((t) => t.templateKey === global.templateKey);
+
+    const override = existingOverride ?? await createEventOverride(validated.templateId, validated.eventId, userId);
+    targetId = override.id;
+  }
+
+  const updated = await updateTemplate(targetId, {
+    eventId: validated.eventId,
+    templateName: validated.templateName,
+    subjectLine: validated.subjectLine,
+    bodyContent: validated.bodyContent,
+    previewText: validated.previewText,
+    status: validated.status,
+    notes: validated.notes,
+    updatedBy: userId,
+  });
+
+  if (!updated) throw new Error('Failed to save template');
+
+  revalidatePath(`/events/${validated.eventId}/templates`);
+
+  return { ok: true as const, template: updated, templateId: targetId };
+}
+
+// ── Get sibling template (other-channel variant of same key) ──
+
+const getSiblingTemplateSchema = z.object({
+  eventId: z.string().uuid(),
+  templateKey: z.string().trim().min(1).max(100),
+  channel: z.enum(['email', 'whatsapp']),
+});
+
+export async function getSiblingTemplate(input: unknown) {
+  const validated = getSiblingTemplateSchema.parse(input);
+  const { role } = await assertEventAccess(validated.eventId);
+  assertNotificationsRole(role);
+
+  const siblingChannel = validated.channel === 'email' ? 'whatsapp' : 'email';
+  const { eventTemplates, globalTemplates } = await listTemplatesForEvent(validated.eventId, {
+    channel: siblingChannel,
+  });
+
+  const eventSibling = eventTemplates.find((t) => t.templateKey === validated.templateKey);
+  if (eventSibling) return eventSibling;
+
+  return globalTemplates.find((t) => t.templateKey === validated.templateKey) ?? null;
 }
 
 // ── Get single notification log detail ───────────────────────
