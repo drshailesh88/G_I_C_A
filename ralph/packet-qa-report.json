@@ -460,5 +460,21 @@
       "The implemented editor route is `/events/[eventId]/templates/[templateId]/edit`, while the packet's frozen communications editor contract expects the M39 flow under the communications template path."
     ],
     "notes": "Packet-targeted `src/app/(app)/events/[eventId]/templates/template-editor.test.ts` and `src/app/(app)/events/[eventId]/templates/[templateId]/edit/page.test.tsx` pass, but manual verification against the packet file still fails. Repo-wide `npm run test:run` and `npx tsc --noEmit` also fail due unrelated baseline issues outside PKT-A-008 scope, including certificate, program, and general type errors."
+  },
+  {
+    "packet_id": "PKT-A-009",
+    "story_id": "p4-m53-automation-triggers",
+    "qa_timestamp": "2026-04-19T10:47:31Z",
+    "qa_model": "codex",
+    "status": "fail",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "fail"
+    },
+    "bugs": [
+      "The automation-trigger UI is implemented under `/events/[eventId]/templates/triggers`, but the packet oracle and event workspace navigation require it to stay in the event communications area at `/events/[eventId]/triggers`, so the shipped route placement does not satisfy the frozen contract."
+    ],
+    "notes": "Packet-targeted trigger management, validation, query-hardening, and automation-dispatch Vitest suites all pass, confirming the event-scoped CRUD behavior and active-trigger dispatch logic. Repo-wide `npm run test:run` and `npx tsc --noEmit` still fail due unrelated baseline issues outside PKT-A-009 scope, but manual packet acceptance still fails because the page lives under templates instead of the required communications-area route."
   }
 ]
