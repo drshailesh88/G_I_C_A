@@ -40,15 +40,17 @@ vi.mock('@/hooks/use-responsive-nav', () => ({
 }));
 
 // Mock useRole
+let mockRoleState = {
+  isLoaded: true,
+  isSuperAdmin: true,
+  isCoordinator: false,
+  isOps: false,
+  isReadOnly: false,
+  canWrite: true,
+};
+
 vi.mock('@/hooks/use-role', () => ({
-  useRole: () => ({
-    isLoaded: true,
-    isSuperAdmin: true,
-    isCoordinator: false,
-    isOps: false,
-    isReadOnly: false,
-    canWrite: true,
-  }),
+  useRole: () => mockRoleState,
 }));
 
 import { usePathname } from 'next/navigation';
@@ -63,6 +65,14 @@ function render(props?: Record<string, unknown>) {
 describe('AppSidebar', () => {
   beforeEach(() => {
     vi.mocked(usePathname).mockReturnValue('/dashboard');
+    mockRoleState = {
+      isLoaded: true,
+      isSuperAdmin: true,
+      isCoordinator: false,
+      isOps: false,
+      isReadOnly: false,
+      canWrite: true,
+    };
     mockUseResponsiveNav.mockReturnValue({
       navMode: 'desktop',
       isSidebarOpen: true,
@@ -88,6 +98,23 @@ describe('AppSidebar', () => {
     expect(html).toContain('/people');
     expect(html).toContain('Program');
     expect(html).toContain('/program');
+  });
+
+  it('filters coordinator-restricted main tabs for Ops users', () => {
+    mockRoleState = {
+      isLoaded: true,
+      isSuperAdmin: false,
+      isCoordinator: false,
+      isOps: true,
+      isReadOnly: false,
+      canWrite: true,
+    };
+
+    const html = render();
+    expect(html).toContain('Dashboard');
+    expect(html).not.toContain('People');
+    expect(html).not.toContain('Program');
+    expect(html).not.toContain('/events');
   });
 
   it('renders Settings section with Team link', () => {
@@ -172,6 +199,28 @@ describe('AppSidebar', () => {
     expect(html).toContain('Reports');
     expect(html).toContain('Branding');
     expect(html).toContain('Flags');
+  });
+
+  it('hides privileged event tools from Ops users', () => {
+    vi.mocked(usePathname).mockReturnValue('/events/evt_123/travel');
+    mockRoleState = {
+      isLoaded: true,
+      isSuperAdmin: false,
+      isCoordinator: false,
+      isOps: true,
+      isReadOnly: false,
+      canWrite: true,
+    };
+
+    const html = render();
+    expect(html).toContain('Travel');
+    expect(html).toContain('Accommodation');
+    expect(html).toContain('Transport');
+    expect(html).not.toContain('Registrations');
+    expect(html).not.toContain('Communications');
+    expect(html).not.toContain('Certificates');
+    expect(html).not.toContain('Flags');
+    expect(html).not.toContain('/settings/team');
   });
 
   it('builds Event Tools hrefs with the current eventId', () => {

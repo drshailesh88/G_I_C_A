@@ -28,16 +28,14 @@ async function assertSuperAdmin(): Promise<string> {
 // ── Get all flags for admin UI ──────────────────────────────
 
 export async function getGlobalFlags() {
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
+  await assertSuperAdmin();
 
   const svc = createFlagService();
   return svc.getAllGlobalFlags();
 }
 
 export async function getEventFlags(eventId: string) {
-  const { userId } = await auth();
-  if (!userId) throw new Error('Unauthorized');
+  await assertSuperAdmin();
 
   const svc = createFlagService();
   return svc.getAllEventFlags(eventId);
