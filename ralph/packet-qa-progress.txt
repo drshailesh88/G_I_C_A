@@ -346,3 +346,12 @@ Read @ralph/qa-packets-pass1-prompt.md @CLAUDE.md @ralph/packets/index.json @ral
 
 ITERATION: 1 of 999
 CURRENT_PAC
+
+## 2026-04-19T18:01:12Z — Wave QA hardening pass (independent Codex audit)
+
+- QA status: fixed
+- checks run: packet-oracle code inspection + packet-focused vitest matrix (16 files / 268 tests passed)
+- packets audited: PKT-A-006, PKT-A-007, PKT-A-008, PKT-A-009, PKT-A-011, PKT-A-012, PKT-A-014, PKT-A-015, PKT-B-002, PKT-B-005
+- bug count: 1
+- fix commit(s): `d050042` (PKT-A-012)
+- notes: Found one contract mismatch in PKT-A-012: aggregated bundle idempotency key omitted `eventId` despite frozen packet requirement. Added a failing assertion first, fixed key construction to include event scope, reran packet-focused cascade tests, and reran full claimed-wave packet test matrix to confirm no regressions.
