@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/db', () => ({ db: { select: vi.fn() } }));
 vi.mock('@/lib/db/schema', () => ({
+  eventPeople: {
+    eventId: 'event_people.event_id',
+    personId: 'event_people.person_id',
+  },
   people: {
     id: 'people.id',
     email: 'people.email',
@@ -61,6 +65,9 @@ function chainSelect(rows: unknown[]) {
   };
   mockDb.select.mockReturnValueOnce({
     from: vi.fn().mockReturnValue({
+      innerJoin: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue(whereReturn),
+      }),
       where: vi.fn().mockReturnValue(whereReturn),
     }),
   });
@@ -300,6 +307,26 @@ describe('sendFacultyResponsibilityBundles', () => {
     chainSelect([{ name: 'Conf' }]);
 
     await sendFacultyResponsibilityBundles({ eventId: EVENT_ID, versionId: VERSION_ID });
+    expect(vi.mocked(sendNotification)).not.toHaveBeenCalled();
+  });
+
+  it('skips affected person ids that are not linked through event_people', async () => {
+    const snapshot = {
+      sessions: [{ id: 's1', title: 'Plenary', hallId: null, startAtUtc: '2026-12-15T03:30:00Z', endAtUtc: '2026-12-15T05:00:00Z' }],
+      assignments: [{ personId: PERSON_A, sessionId: 's1', role: 'speaker' }],
+      halls: [],
+    };
+
+    chainSelect([{ snapshotJson: snapshot, affectedPersonIdsJson: [PERSON_A] }]);
+    chainSelect([]);
+    chainSelect([{ name: 'Conf' }]);
+
+    await sendFacultyResponsibilityBundles({
+      eventId: EVENT_ID,
+      versionId: VERSION_ID,
+      options: { channels: ['email'] },
+    });
+
     expect(vi.mocked(sendNotification)).not.toHaveBeenCalled();
   });
 });

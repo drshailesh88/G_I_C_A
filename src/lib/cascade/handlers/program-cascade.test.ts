@@ -6,6 +6,10 @@ vi.mock('@/lib/inngest/client', () => ({
 
 vi.mock('@/lib/db', () => ({ db: { select: vi.fn() } }));
 vi.mock('@/lib/db/schema', () => ({
+  eventPeople: {
+    eventId: 'event_people.event_id',
+    personId: 'event_people.person_id',
+  },
   people: {
     id: 'people.id',
     email: 'people.email',
@@ -74,6 +78,9 @@ function chainSelect(rows: unknown[]) {
   };
   mockDb.select.mockReturnValueOnce({
     from: vi.fn().mockReturnValue({
+      innerJoin: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue(whereReturn),
+      }),
       where: vi.fn().mockReturnValue(whereReturn),
     }),
   });
@@ -318,6 +325,24 @@ describe('handleProgramVersionPublished — multiple faculty', () => {
     expect(vi.mocked(sendNotification)).toHaveBeenCalledOnce();
     const call = vi.mocked(sendNotification).mock.calls[0][0];
     expect(call.personId).toBe(PERSON_A);
+  });
+});
+
+describe('handleProgramVersionPublished — event isolation', () => {
+  it('skips affected person ids that are not linked through event_people', async () => {
+    chainSelect([makeSnapshot([{ personId: PERSON_A, sessionId: SESSION_2 }])]);
+    chainSelect([makeSnapshot([])]);
+    chainSelect([]);
+    chainSelect(eventRow());
+
+    await emitCascadeEvent(
+      CASCADE_EVENTS.PROGRAM_VERSION_PUBLISHED,
+      EVENT_ID,
+      { type: 'user', id: 'admin-1' },
+      basePayload,
+    );
+
+    expect(vi.mocked(sendNotification)).not.toHaveBeenCalled();
   });
 });
 

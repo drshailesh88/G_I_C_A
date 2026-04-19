@@ -1,6 +1,6 @@
 import { db } from '@/lib/db';
-import { events, people, programVersions } from '@/lib/db/schema';
-import { eq, inArray } from 'drizzle-orm';
+import { eventPeople, events, people, programVersions } from '@/lib/db/schema';
+import { and, eq, inArray } from 'drizzle-orm';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { onCascadeEvent } from '../emit';
 import { CASCADE_EVENTS } from '../events';
@@ -210,7 +210,11 @@ export async function handleProgramVersionPublished(params: {
       salutation: people.salutation,
     })
     .from(people)
-    .where(inArray(people.id, data.affectedPersonIds));
+    .innerJoin(eventPeople, eq(eventPeople.personId, people.id))
+    .where(and(
+      eq(eventPeople.eventId, eventId),
+      inArray(people.id, data.affectedPersonIds),
+    ));
 
   const [eventRow] = await db
     .select({ name: events.name })
