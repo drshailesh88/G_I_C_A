@@ -275,6 +275,8 @@ describe('CP-06: Person dedup reuses existing person', () => {
 
 // ── CP-07: getRegistrationPublic returns non-sensitive fields ─
 describe('CP-07: getRegistrationPublic returns correct fields', () => {
+  const EVENT_ID = '660e8400-e29b-41d4-a716-446655440000';
+
   it('returns id, registrationNumber, status, qrCodeToken, category', async () => {
     const reg = {
       id: '550e8400-e29b-41d4-a716-446655440000',
@@ -290,19 +292,33 @@ describe('CP-07: getRegistrationPublic returns correct fields', () => {
     chain.limit = vi.fn().mockResolvedValue([reg]);
     mockDb.select.mockReturnValue(chain);
 
-    const result = await getRegistrationPublic('550e8400-e29b-41d4-a716-446655440000');
+    const result = await getRegistrationPublic(EVENT_ID, '550e8400-e29b-41d4-a716-446655440000');
 
     expect(result).toEqual(reg);
     expect(Object.keys(result)).toEqual(
       expect.arrayContaining(['id', 'registrationNumber', 'status', 'qrCodeToken', 'category']),
     );
   });
+
+  it('throws when the registration belongs to a different event', async () => {
+    const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+    chain.from = vi.fn().mockReturnValue(chain);
+    chain.where = vi.fn().mockImplementation(() => Object.assign(Promise.resolve([]), chain));
+    chain.limit = vi.fn().mockResolvedValue([]);
+    mockDb.select.mockReturnValue(chain);
+
+    await expect(
+      getRegistrationPublic(EVENT_ID, '550e8400-e29b-41d4-a716-446655440000'),
+    ).rejects.toThrow('Registration not found');
+  });
 });
 
 // ── CP-08: getRegistrationPublic rejects invalid UUID ───────
 describe('CP-08: getRegistrationPublic rejects invalid UUID', () => {
   it('throws for non-UUID string', async () => {
-    await expect(getRegistrationPublic('not-a-uuid')).rejects.toThrow();
+    await expect(
+      getRegistrationPublic('660e8400-e29b-41d4-a716-446655440000', 'not-a-uuid'),
+    ).rejects.toThrow();
   });
 });
 
@@ -316,7 +332,10 @@ describe('CP-09: getRegistrationPublic throws when not found', () => {
     mockDb.select.mockReturnValue(chain);
 
     await expect(
-      getRegistrationPublic('550e8400-e29b-41d4-a716-446655440000'),
+      getRegistrationPublic(
+        '660e8400-e29b-41d4-a716-446655440000',
+        '550e8400-e29b-41d4-a716-446655440000',
+      ),
     ).rejects.toThrow('Registration not found');
   });
 });

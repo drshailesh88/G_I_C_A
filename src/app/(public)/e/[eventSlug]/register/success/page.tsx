@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { getEventBySlug } from '@/lib/actions/event';
 import { getRegistrationPublic } from '@/lib/actions/registration';
 import { RegistrationSuccessClient } from './registration-success-client';
 
@@ -17,16 +18,23 @@ export default async function RegistrationSuccessPage({
 
   if (!sp.id) notFound();
 
+  let event;
+  try {
+    event = await getEventBySlug(eventSlug);
+  } catch {
+    notFound();
+  }
+
   let registration;
   try {
-    registration = await getRegistrationPublic(sp.id);
+    registration = await getRegistrationPublic(event.id, sp.id);
   } catch {
     notFound();
   }
 
   return (
     <RegistrationSuccessClient
-      eventSlug={eventSlug}
+      eventSlug={event.slug}
       registrationNumber={registration.registrationNumber}
       status={registration.status}
       showQr={registration.status === 'confirmed'}

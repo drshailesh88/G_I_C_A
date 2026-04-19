@@ -15,6 +15,7 @@ import {
   type RegistrationStatus,
 } from '@/lib/validations/registration';
 import { normalizePhone } from '@/lib/validations/person';
+import { eventIdSchema } from '@/lib/validations/event';
 import { findDuplicatePerson } from './person';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
@@ -387,7 +388,8 @@ export async function getEventRegistrations(eventId: string) {
 
 // ── Public: get registration by ID (for success page) ─────────
 // Only returns non-sensitive fields. No auth required (public flow).
-export async function getRegistrationPublic(registrationId: string) {
+export async function getRegistrationPublic(eventId: string, registrationId: string) {
+  eventIdSchema.parse(eventId);
   registrationIdSchema.parse(registrationId);
 
   const [reg] = await db
@@ -399,7 +401,13 @@ export async function getRegistrationPublic(registrationId: string) {
       category: eventRegistrations.category,
     })
     .from(eventRegistrations)
-    .where(eq(eventRegistrations.id, registrationId))
+    .where(
+      withEventScope(
+        eventRegistrations.eventId,
+        eventId,
+        eq(eventRegistrations.id, registrationId),
+      ),
+    )
     .limit(1);
 
   if (!reg) throw new Error('Registration not found');
