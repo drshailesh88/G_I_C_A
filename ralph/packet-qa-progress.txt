@@ -323,3 +323,26 @@ Evaluate ex
 - bug count: 0
 - fix commit(s): pending QA metadata commit
 - notes: Supersedes the stale earlier fail entry. The current implementation now eagerly creates or reuses the event-scoped override on open in `getTemplateEditorEntry()`, renders sibling email and WhatsApp variants side-by-side when present, exposes schema-backed variable chips, and saves through the notifications action/template-query abstraction so future sends resolve the updated event-scoped template while in-flight sends keep their frozen snapshots.
+
+## 2026-04-19T17:05:47.922595Z — PKT-A-009 — Automation triggers management page
+- Status: pass (mini evaluator only)
+- Model: default
+- Bugs: 0
+- Fix commits: none
+- Notes: 2026-04-19T16:47:04.708286Z ERROR codex_core::codex: failed to load skill /Users/shaileshsingh/dev/build_playbook/portable-skills/anneal/SKILL.md: missing YAML frontmatter delimited by ---
+OpenAI Codex v0.121.0 (research preview)
+--------
+workdir: /Users/shaileshsingh/G_I_C_A
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: none
+reasoning summaries: none
+session id: 019da6a3-7a06-79a2-a6c1-1ee6cd230023
+--------
+user
+Read @ralph/qa-packets-pass1-prompt.md @CLAUDE.md @ralph/packets/index.json @ralph/baseline-noise.json
+
+ITERATION: 1 of 999
+CURRENT_PAC
