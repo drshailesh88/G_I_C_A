@@ -1,7 +1,7 @@
 {
   "version": 1,
   "pipeline": "ralph-packets",
-  "updated_at": "2026-04-19T07:50:00.635803Z",
+  "updated_at": "2026-04-19T19:39:30Z",
   "current_packet_id": "PKT-A-009",
   "packets": [
     {
@@ -137,7 +137,7 @@
       "bucket": "A",
       "module": "communications",
       "priority": 22,
-      "status": "BLOCKED",
+      "status": "READY",
       "packet_file": "ralph/packets/PKT-A-008-p4-m39-template-editor.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
@@ -156,14 +156,14 @@
       "bucket": "A",
       "module": "communications",
       "priority": 23,
-      "status": "BLOCKED",
+      "status": "READY",
       "packet_file": "ralph/packets/PKT-A-009-p4-m53-automation-triggers.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "19ba1a3",
       "qa_commit": null,
-      "last_status_at": "2026-04-19T10:47:31Z",
+      "last_status_at": "2026-04-19T19:39:30Z",
       "depends_on": [
         "PKT-A-007"
       ]

@@ -148,7 +148,7 @@ export function TemplatesHubClient({
 
       {/* Triggers shortcut */}
       <Link
-        href={`/events/${eventId}/templates/triggers`}
+        href={`/events/${eventId}/triggers`}
         className="mt-3 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100"
         data-testid="triggers-link"
       >

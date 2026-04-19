@@ -123,7 +123,7 @@ vi.mock('next/cache', () => ({ revalidatePath: mockRevalidatePath }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
-  usePathname: () => `/events/00000000-0000-0000-0000-000000000001/templates/triggers`,
+  usePathname: () => `/events/00000000-0000-0000-0000-000000000001/triggers`,
 }));
 
 // ── Import under test (after all mocks) ──────────────────────

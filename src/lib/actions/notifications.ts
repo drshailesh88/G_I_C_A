@@ -333,7 +333,7 @@ export async function createAutomationTrigger(input: unknown) {
     createdBy: userId,
   });
 
-  revalidatePath(`/events/${validated.eventId}/templates/triggers`);
+  revalidatePath(`/events/${validated.eventId}/triggers`);
   return { ok: true as const, trigger };
 }
 
@@ -360,7 +360,7 @@ export async function updateAutomationTrigger(input: unknown) {
 
   if (!updated) return { ok: false as const, error: 'Trigger not found' };
 
-  revalidatePath(`/events/${eventId}/templates/triggers`);
+  revalidatePath(`/events/${eventId}/triggers`);
   return { ok: true as const, trigger: updated };
 }
 
@@ -378,6 +378,6 @@ export async function deleteAutomationTrigger(input: unknown) {
 
   if (!deleted) return { ok: false as const, error: 'Trigger not found' };
 
-  revalidatePath(`/events/${validated.eventId}/templates/triggers`);
+  revalidatePath(`/events/${validated.eventId}/triggers`);
   return { ok: true as const, trigger: deleted };
 }
