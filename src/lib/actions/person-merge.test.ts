@@ -87,6 +87,13 @@ function mockSelectChain(rows: unknown[]) {
   };
 }
 
+function mockWhereChain(rows: unknown[]) {
+  return {
+    from: vi.fn().mockReturnThis(),
+    where: vi.fn().mockResolvedValue(rows),
+  };
+}
+
 // Build a tx mock for the transaction callback
 // Select call order inside the merge transaction:
 //   1. eventPeople (keeper events)
@@ -124,8 +131,30 @@ function setupPeopleSelects(keeper: unknown, loser: unknown) {
     .mockReturnValueOnce(mockSelectChain(loser ? [loser] : []));
 }
 
+function setupCoordinatorMergeScope(
+  assignedEventIds: string[] = [],
+  linkedEventIds: string[] = [],
+) {
+  mockDb.select.mockReturnValueOnce(
+    mockWhereChain(assignedEventIds.map((eventId) => ({ eventId }))),
+  );
+
+  const linkedRows = linkedEventIds.map((eventId) => ({ eventId }));
+  mockDb.select
+    .mockReturnValueOnce(mockWhereChain(linkedRows))
+    .mockReturnValueOnce(mockWhereChain([]))
+    .mockReturnValueOnce(mockWhereChain([]))
+    .mockReturnValueOnce(mockWhereChain([]))
+    .mockReturnValueOnce(mockWhereChain([]))
+    .mockReturnValueOnce(mockWhereChain([]))
+    .mockReturnValueOnce(mockWhereChain([]))
+    .mockReturnValueOnce(mockWhereChain([]))
+    .mockReturnValueOnce(mockWhereChain([]));
+}
+
 function setupHappyPath() {
   setupPeopleSelects(KEEPER_PERSON, LOSER_PERSON);
+  setupCoordinatorMergeScope();
   const tx = makeMergeTx([[], [], [], [], []]);
   mockDb.transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(tx));
   mockWriteAudit.mockResolvedValue(undefined);
@@ -160,9 +189,24 @@ describe('RBAC', () => {
 
   it('allows super admins to merge', async () => {
     authAsSuperAdmin();
-    setupHappyPath();
+    setupPeopleSelects(KEEPER_PERSON, LOSER_PERSON);
+    const tx = makeMergeTx([[], [], [], [], []]);
+    mockDb.transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(tx));
+    mockWriteAudit.mockResolvedValue(undefined);
     const result = await mergePeople({ keepId: KEEP_ID, dropId: DROP_ID });
     expect(result).toMatchObject({ ok: true, survivorId: KEEP_ID });
+  });
+
+  it('blocks event coordinators from merging people linked to unassigned events', async () => {
+    authAsCoordinator('user_coord');
+    setupPeopleSelects(KEEPER_PERSON, LOSER_PERSON);
+    setupCoordinatorMergeScope(
+      ['11111111-1111-1111-1111-111111111111'],
+      ['22222222-2222-2222-2222-222222222222'],
+    );
+
+    await expect(mergePeople({ keepId: KEEP_ID, dropId: DROP_ID })).rejects.toThrow('Forbidden');
+    expect(mockDb.transaction).not.toHaveBeenCalled();
   });
 });
 
@@ -292,6 +336,7 @@ describe('Transaction integrity', () => {
   it('deletes conflicting event_people rows before re-pointing', async () => {
     authAsCoordinator();
     setupPeopleSelects(KEEPER_PERSON, LOSER_PERSON);
+    setupCoordinatorMergeScope();
     const EVENT_ID = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
     // Keeper already has event_people for EVENT_ID → conflict
     const tx = makeMergeTx([[{ eventId: EVENT_ID }], [], [], [], []]);
@@ -307,6 +352,7 @@ describe('Transaction integrity', () => {
   it('deletes conflicting event_registrations rows before re-pointing', async () => {
     authAsCoordinator();
     setupPeopleSelects(KEEPER_PERSON, LOSER_PERSON);
+    setupCoordinatorMergeScope();
     const EVENT_ID = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
     // No event_people conflict, but event_registration conflict
     const tx = makeMergeTx([[], [{ eventId: EVENT_ID }], [], [], []]);
@@ -374,6 +420,7 @@ describe('Transaction integrity', () => {
   it('drops loser attendance rows when the survivor already has a conflicting check-in', async () => {
     authAsCoordinator();
     setupPeopleSelects(KEEPER_PERSON, LOSER_PERSON);
+    setupCoordinatorMergeScope();
     const EVENT_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
     const SESSION_ID = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
     const tx = makeMergeTx([
@@ -393,6 +440,7 @@ describe('Transaction integrity', () => {
   it('marks loser issued_certificates as superseded when survivor has the same cert type', async () => {
     authAsCoordinator();
     setupPeopleSelects(KEEPER_PERSON, LOSER_PERSON);
+    setupCoordinatorMergeScope();
     const EVENT_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
     const tx = makeMergeTx([
       [], [], [], [],

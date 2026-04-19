@@ -1,0 +1,44 @@
+# Ralph Manual Audit Progress
+
+## Audit Patterns
+
+<!-- Reusable risks, attack ideas, and verification patterns go here. -->
+- Desktop/tablet navigation must enforce the same RBAC as mobile menus and server entrypoints; when a page is super-admin-only, hide its nav link and lock the backing server actions, not just the client UI.
+- For cascade handlers that accept person IDs from snapshots or payloads, add a defense-in-depth join through `event_people` before notifying; do not trust version metadata or payload person arrays as sufficient event isolation.
+- Public success or confirmation routes must resolve the event context from the URL and scope any opaque ID lookup with that event; never trust a bare `registrationId` or similar UUID to imply the correct event.
+- Global people mutations that repoint event-owned rows must derive the touched `eventId`s from every dependent table and reject non-super-admin writes outside the caller's active assignment set.
+
+## Iteration log
+
+<!-- Dated entries per completed audit slice. -->
+## 2026-04-19T18:27:04Z — AUD-001 — Notifications and cascade flows
+- Status: audited
+- Findings: 1
+- Fixes: 1 (`c85d2e4`)
+- Tests: `npx vitest run src/lib/cascade/handlers/program-cascade.test.ts` passed (16 tests); `npx vitest run src/lib/cascade/handlers/program-bundle-cascade.test.ts` passed (12 tests)
+- Residual risks: automation trigger recipient resolution still trusts upstream payload person context; no provider/browser verification in this slice
+- Next slice: AUD-002
+
+## 2026-04-19T18:39:57Z — AUD-002 — RBAC and navigation entrypoints
+- Status: audited
+- Findings: 1
+- Fixes: 1 (`7939f65`)
+- Tests: `npx vitest run src/components/sidebar.test.tsx` passed (15 tests); `npx vitest run src/app/(app)/events/[eventId]/flags/page.test.tsx` passed (3 tests); `npx vitest run src/lib/actions/flags.test.ts` passed (3 tests)
+- Residual risks: mobile More menu still maintains a separate role map; dashboard quick-action/page redirect coverage was not exhausted in this slice
+- Next slice: AUD-003
+
+## 2026-04-19T18:59:44Z — AUD-003 — Event isolation and cross-event leakage
+- Status: audited
+- Findings: 1
+- Fixes: 1 (`f4bed9f`)
+- Tests: `npx vitest run src/lib/actions/__tests__/registration-harden/registration-flow-gaps.test.ts` passed (10 tests)
+- Residual risks: other public success/confirmation surfaces that accept opaque IDs or tokens were not exhaustively re-audited in this slice; same-event UUID possession still reveals that event's own registration success metadata
+- Next slice: AUD-004
+
+## 2026-04-19T19:19:49Z — AUD-004 — People merge and change history
+- Status: audited
+- Findings: 1
+- Fixes: 1 (commit pending)
+- Tests: `npx vitest run src/lib/actions/person-merge.test.ts` passed (27 tests); `npx vitest run src/lib/actions/person-history.test.ts` passed (18 tests); `npx vitest run 'src/app/(app)/people/merge/merge-client.test.tsx'` passed (4 tests)
+- Residual risks: this slice did not re-audit every other people mutation for per-event write scoping; global unlinked people rows remain mergeable by coordinators unless product policy says otherwise
+- Next slice: AUD-005

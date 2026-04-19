@@ -81,6 +81,58 @@ async function assertPeopleModuleAccess(options?: { requireWrite?: boolean }) {
   return session;
 }
 
+async function getActiveAssignmentEventIds(userId: string): Promise<string[]> {
+  const rows = await db
+    .select({ eventId: eventUserAssignments.eventId })
+    .from(eventUserAssignments)
+    .where(and(
+      eq(eventUserAssignments.authUserId, userId),
+      eq(eventUserAssignments.isActive, true),
+    ));
+
+  return rows.map((row) => row.eventId);
+}
+
+async function getPeopleLinkedEventIds(personIds: string[]): Promise<string[]> {
+  if (personIds.length === 0) {
+    return [];
+  }
+
+  const [
+    eventPeopleRows,
+    registrationRows,
+    assignmentRows,
+    inviteRows,
+    travelRows,
+    accommodationRows,
+    transportRows,
+    attendanceRows,
+    certificateRows,
+  ] = await Promise.all([
+    db.select({ eventId: eventPeople.eventId }).from(eventPeople).where(inArray(eventPeople.personId, personIds)),
+    db.select({ eventId: eventRegistrations.eventId }).from(eventRegistrations).where(inArray(eventRegistrations.personId, personIds)),
+    db.select({ eventId: sessionAssignments.eventId }).from(sessionAssignments).where(inArray(sessionAssignments.personId, personIds)),
+    db.select({ eventId: facultyInvites.eventId }).from(facultyInvites).where(inArray(facultyInvites.personId, personIds)),
+    db.select({ eventId: travelRecords.eventId }).from(travelRecords).where(inArray(travelRecords.personId, personIds)),
+    db.select({ eventId: accommodationRecords.eventId }).from(accommodationRecords).where(inArray(accommodationRecords.personId, personIds)),
+    db.select({ eventId: transportPassengerAssignments.eventId }).from(transportPassengerAssignments).where(inArray(transportPassengerAssignments.personId, personIds)),
+    db.select({ eventId: attendanceRecords.eventId }).from(attendanceRecords).where(inArray(attendanceRecords.personId, personIds)),
+    db.select({ eventId: issuedCertificates.eventId }).from(issuedCertificates).where(inArray(issuedCertificates.personId, personIds)),
+  ]);
+
+  return Array.from(new Set([
+    ...eventPeopleRows,
+    ...registrationRows,
+    ...assignmentRows,
+    ...inviteRows,
+    ...travelRows,
+    ...accommodationRows,
+    ...transportRows,
+    ...attendanceRows,
+    ...certificateRows,
+  ].map((row) => row.eventId)));
+}
+
 function assertPeopleEventRole(
   role: string | null,
   options?: { requireWrite?: boolean },
@@ -624,7 +676,8 @@ function pickTextField(
 }
 
 export async function mergePeople(input: unknown): Promise<MergePeopleResult> {
-  const { userId } = await assertPeopleModuleAccess({ requireWrite: true });
+  const session = await assertPeopleModuleAccess({ requireWrite: true });
+  const { userId } = session;
   if (!userId) throw new Error('Unauthorized');
 
   const validated = mergePeopleSchema.parse(input);
@@ -644,6 +697,21 @@ export async function mergePeople(input: unknown): Promise<MergePeopleResult> {
 
   const keeper = keeperRows[0];
   const loser = loserRows[0];
+
+  const isSuperAdmin =
+    typeof session.has === 'function' && session.has({ role: ROLES.SUPER_ADMIN });
+  if (!isSuperAdmin) {
+    const [assignedEventIds, linkedEventIds] = await Promise.all([
+      getActiveAssignmentEventIds(userId),
+      getPeopleLinkedEventIds([keepId, dropId]),
+    ]);
+    const allowedEventIds = new Set(assignedEventIds);
+    const unauthorizedEventIds = linkedEventIds.filter((eventId) => !allowedEventIds.has(eventId));
+
+    if (unauthorizedEventIds.length > 0) {
+      throw new Error('Forbidden');
+    }
+  }
 
   const mergedFields = {
     fullName: pickTextField(fc.fullName, keeper.fullName, loser.fullName) ?? keeper.fullName,

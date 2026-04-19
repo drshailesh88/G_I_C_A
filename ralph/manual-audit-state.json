@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "pipeline": "ralph-manual-audit",
+  "updated_at": "2026-04-19T19:19:49Z",
+  "current_slice_id": "AUD-004",
+  "slices": [
+    {
+      "slice_id": "AUD-001",
+      "title": "Notifications and cascade flows",
+      "priority": 1,
+      "status": "AUDITED",
+      "depends_on": [],
+      "scope": [
+        "src/lib/notifications/**",
+        "src/lib/cascade/**",
+        "src/app/(app)/events/[eventId]/templates/**",
+        "src/app/(app)/events/[eventId]/triggers/**"
+      ],
+      "notes": "Audited notifications/cascade surfaces. Fixed program diff + bundle cascades to join through event_people before notifying affectedPersonIds; added regression coverage; commit c85d2e4."
+    },
+    {
+      "slice_id": "AUD-002",
+      "title": "RBAC and navigation entrypoints",
+      "priority": 2,
+      "status": "AUDITED",
+      "depends_on": [],
+      "scope": [
+        "src/app/(app)/**",
+        "src/lib/auth/**",
+        "src/components/shared/**"
+      ],
+      "notes": "Audited RBAC/navigation entrypoints. Locked feature-flags reads/page to Super Admin and filtered desktop/tablet sidebar items by role so Ops no longer see privileged admin routes; added regression coverage; commit 7939f65."
+    },
+    {
+      "slice_id": "AUD-003",
+      "title": "Event isolation and cross-event leakage",
+      "priority": 3,
+      "status": "AUDITED",
+      "depends_on": [],
+      "scope": [
+        "src/lib/actions/**",
+        "src/lib/db/**",
+        "src/app/(app)/events/**",
+        "src/app/api/**"
+      ],
+      "notes": "Audited event-isolation surfaces. Fixed the public registration success flow so it resolves the event from the route slug and scopes registration lookup by eventId + registrationId, preventing cross-event confirmation/QR leakage; added regression coverage; commit f4bed9f."
+    },
+    {
+      "slice_id": "AUD-004",
+      "title": "People merge and change history",
+      "priority": 4,
+      "status": "AUDITED",
+      "depends_on": [],
+      "scope": [
+        "src/app/(app)/people/**",
+        "src/lib/actions/person*.ts"
+      ],
+      "notes": "Audited people merge/history. Fixed mergePeople so Event Coordinators cannot merge people whose linked records touch unassigned events; added regression coverage for the unauthorized cross-event merge path and revalidated people merge/history suites; commit pending."
+    },
+    {
+      "slice_id": "AUD-005",
+      "title": "Public program visibility and published snapshots",
+      "priority": 5,
+      "status": "PENDING",
+      "depends_on": [],
+      "scope": [
+        "src/app/(public)/**",
+        "src/app/**/program/**",
+        "src/lib/actions/program*.ts"
+      ],
+      "notes": null
+    },
+    {
+      "slice_id": "AUD-006",
+      "title": "Reports and export correctness",
+      "priority": 6,
+      "status": "PENDING",
+      "depends_on": [],
+      "scope": [
+        "src/app/(app)/reports/**",
+        "src/lib/actions/reports*.ts",
+        "src/app/(app)/dashboard/**",
+        "src/app/(app)/more/**"
+      ],
+      "notes": null
+    },
+    {
+      "slice_id": "AUD-007",
+      "title": "Travel accommodation transport flags and audit logs",
+      "priority": 7,
+      "status": "PENDING",
+      "depends_on": [],
+      "scope": [
+        "src/app/(app)/travel/**",
+        "src/app/(app)/accommodation/**",
+        "src/app/(app)/transport/**",
+        "src/lib/actions/travel*.ts",
+        "src/lib/actions/accommodation*.ts",
+        "src/lib/actions/transport*.ts",
+        "src/lib/cascade/handlers/**"
+      ],
+      "notes": null
+    }
+  ]
+}

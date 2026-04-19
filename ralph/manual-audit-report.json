@@ -1,0 +1,112 @@
+[
+  {
+    "slice_id": "AUD-001",
+    "audited_at": "2026-04-19T18:27:04Z",
+    "audited_by": "codex",
+    "status": "audited",
+    "findings": [
+      {
+        "severity": "high",
+        "summary": "Program publish cascades trusted affectedPersonIds without verifying event_people membership, so stale or poisoned version snapshots could notify people outside the active event.",
+        "files": [
+          "src/lib/cascade/handlers/program-cascade.ts:202",
+          "src/lib/cascade/handlers/program-bundle-cascade.ts:188"
+        ],
+        "evidence": "Added focused regression tests proving both handlers skip affected person ids when the people query returns no event_people-linked rows; targeted vitest suites passed after the join-through-event_people fix.",
+        "fix_commit": "c85d2e4"
+      }
+    ],
+    "tests_run": [
+      "npx vitest run src/lib/cascade/handlers/program-cascade.test.ts -> pass (16 tests)",
+      "npx vitest run src/lib/cascade/handlers/program-bundle-cascade.test.ts -> pass (12 tests)"
+    ],
+    "residual_risks": [
+      "Automation trigger dispatch still resolves recipients from payload-derived personId and depends on upstream emitters to keep recipient context event-safe.",
+      "This audit slice did not run provider-integration or browser checks; it focused on notification/cascade contract and event isolation."
+    ],
+    "next_slice": "AUD-002"
+  },
+  {
+    "slice_id": "AUD-002",
+    "audited_at": "2026-04-19T18:39:57Z",
+    "audited_by": "codex",
+    "status": "audited",
+    "findings": [
+      {
+        "severity": "high",
+        "summary": "Desktop/tablet navigation exposed the feature-flags admin surface and other privileged entrypoints without role filtering, and the flags page/server actions allowed any authenticated user to read flag state.",
+        "files": [
+          "src/components/sidebar.tsx:47",
+          "src/app/(app)/events/[eventId]/flags/page.tsx:1",
+          "src/lib/actions/flags.ts:30"
+        ],
+        "evidence": "Added regression tests proving Ops users no longer see privileged sidebar links and non-super-admin requests are redirected/rejected from the flags page and flag-read server actions; targeted vitest suites passed after the guard/filter fix.",
+        "fix_commit": "7939f65"
+      }
+    ],
+    "tests_run": [
+      "npx vitest run src/components/sidebar.test.tsx -> pass (15 tests)",
+      "npx vitest run src/app/(app)/events/[eventId]/flags/page.test.tsx -> pass (3 tests)",
+      "npx vitest run src/lib/actions/flags.test.ts -> pass (3 tests)"
+    ],
+    "residual_risks": [
+      "Mobile More menu still uses a separate role map, so sidebar and mobile navigation can drift again unless both surfaces share one navigation policy.",
+      "AUD-002 did not finish a full route-by-route audit of dashboard quick actions and every page-level redirect; it closed the confirmed feature-flags/admin-entrypoint leak."
+    ],
+    "next_slice": "AUD-003"
+  },
+  {
+    "slice_id": "AUD-003",
+    "audited_at": "2026-04-19T18:59:44Z",
+    "audited_by": "codex",
+    "status": "audited",
+    "findings": [
+      {
+        "severity": "high",
+        "summary": "The public registration success page trusted a bare registrationId and rendered it under any event slug, so a copied or guessed registration UUID from Event B could be displayed on Event A's public route.",
+        "files": [
+          "src/app/(public)/e/[eventSlug]/register/success/page.tsx:1",
+          "src/lib/actions/registration.ts:388"
+        ],
+        "evidence": "Changed the success page to resolve the route event slug first and changed getRegistrationPublic() to query by both eventId and registrationId; added a regression test that proves mismatched-event lookups return 'Registration not found'; focused vitest suite passed.",
+        "fix_commit": "f4bed9f"
+      }
+    ],
+    "tests_run": [
+      "npx vitest run src/lib/actions/__tests__/registration-harden/registration-flow-gaps.test.ts -> pass (10 tests)"
+    ],
+    "residual_risks": [
+      "This slice did not exhaustively audit every public route that accepts opaque IDs or tokens, especially success/confirmation pages outside the registration flow.",
+      "The public success page still reveals event-scoped registration metadata to anyone holding the correct registration UUID for that same event; this audit only closed the cross-event mismatch leak."
+    ],
+    "next_slice": "AUD-004"
+  },
+  {
+    "slice_id": "AUD-004",
+    "audited_at": "2026-04-19T19:19:49Z",
+    "audited_by": "codex",
+    "status": "audited",
+    "findings": [
+      {
+        "severity": "high",
+        "summary": "mergePeople() trusted people-module role checks alone, so an Event Coordinator could merge two people records and repoint registrations, assignments, travel, accommodation, transport, attendance, and certificates for events they were not assigned to.",
+        "files": [
+          "src/lib/actions/person.ts:679",
+          "src/lib/actions/person-merge.test.ts:192"
+        ],
+        "evidence": "Added a focused regression test that models a coordinator assigned to one event while the target people are linked to another; the action now rejects with Forbidden before opening the transaction, and targeted merge/history vitest suites pass.",
+        "fix_commit": null
+      }
+    ],
+    "tests_run": [
+      "npx vitest run src/lib/actions/person-merge.test.ts -> pass (27 tests)",
+      "npx vitest run src/lib/actions/person-history.test.ts -> pass (18 tests)",
+      "npx vitest run 'src/app/(app)/people/merge/merge-client.test.tsx' -> pass (4 tests)"
+    ],
+    "residual_risks": [
+      "AUD-004 did not re-audit every other people mutation for per-event write scoping; this fix only closes the confirmed merge path that repointed event-owned records.",
+      "Global people rows with no linked event records remain mergeable by coordinators, which may or may not match the intended ownership model for the shared people directory."
+    ],
+    "next_slice": "AUD-005"
+  }
+]
