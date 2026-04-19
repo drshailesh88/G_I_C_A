@@ -241,3 +241,28 @@ Evaluate ex
 - bug count: 0
 - fix commit(s): none
 - notes: Supersedes the earlier blocked classification. The packet-local oracle is satisfied for travel CSV import, and the remaining repo-wide `npm run test:run` / `npx tsc --noEmit` failures are unrelated baseline noise outside PKT-B-006 scope, so this packet is recorded as VERIFIED and the queue may continue to the next ready packet.
+
+## 2026-04-19T01:25:18.339863Z — PKT-B-007 — Accommodation CSV import
+- Status: pass (mini evaluator only)
+- Model: default
+- Bugs: 0
+- Fix commits: none
+- Notes: 2026-04-19T01:23:00.814117Z ERROR codex_core::codex: failed to load skill /Users/shaileshsingh/dev/build_playbook/portable-skills/anneal/SKILL.md: missing YAML frontmatter delimited by ---
+OpenAI Codex v0.121.0 (research preview)
+--------
+workdir: /Users/shaileshsingh/G_I_C_A
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: none
+reasoning summaries: none
+session id: 019da355-7d2d-7640-86dc-2dcec2c6c20b
+--------
+user
+Read @ralph/qa-packets-pass1-prompt.md @CLAUDE.md @ralph/packets/index.json
+
+ITERATION: 1 of 999
+CURRENT_PACKET: PKT-B-007
+
+Evaluate ex

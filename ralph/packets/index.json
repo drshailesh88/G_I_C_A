@@ -385,14 +385,14 @@
       "bucket": "B",
       "module": "accommodation",
       "priority": 107,
-      "status": "NEEDS_REVIEW",
+      "status": "VERIFIED",
       "packet_file": "ralph/packets/PKT-B-007-p3-accommodation-csv-import.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "8e33546902aec8a68a6b3f33f54d53dbfa7c5be6",
       "qa_commit": null,
-      "last_status_at": "2026-04-19T07:00:00Z",
+      "last_status_at": "2026-04-19T01:25:18.518443Z",
       "depends_on": []
     },
     {
