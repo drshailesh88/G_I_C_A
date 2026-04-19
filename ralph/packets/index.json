@@ -137,14 +137,14 @@
       "bucket": "A",
       "module": "communications",
       "priority": 22,
-      "status": "NEEDS_REVIEW",
+      "status": "BLOCKED",
       "packet_file": "ralph/packets/PKT-A-008-p4-m39-template-editor.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "41c7cb8",
       "qa_commit": null,
-      "last_status_at": "2026-04-19T13:40:00.000000Z",
+      "last_status_at": "2026-04-19T08:25:32Z",
       "depends_on": [
         "PKT-A-007"
       ]
