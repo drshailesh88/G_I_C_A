@@ -14,6 +14,18 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-19T14:23:55Z — PKT-A-008 — Communications template editor (QA fix pass)
+
+- Story ID: p4-m39-template-editor
+- Implemented: Fixed two QA-blocking bugs from the first build. Bug #1: `getTemplateEditorEntry` was lazy — it returned the global template as-is and deferred event override creation to `saveTemplate`. Fixed by adding eager-fork logic: for write-role users (SUPER_ADMIN/EVENT_COORDINATOR), `getTemplateEditorEntry` now calls `listTemplatesForEvent` to check for an existing event override for the same `templateKey+channel`; if none exists, calls `createEventOverride` immediately so the editor always opens an event-scoped draft. For READ_ONLY users the global template is returned unchanged (read-only view). Bug #2: When the eager fork returns a template whose `id` differs from the `templateId` in the URL (because the hub linked to a global template's ID), the server page now calls `redirect(/events/{eventId}/templates/{override.id}/edit)` so the canonical URL always reflects the event-scoped template ID. This ensures subsequent hub navigations and page refreshes resolve directly to the event-scoped template without triggering another fork.
+- Files changed:
+  - src/lib/actions/notifications.ts (getTemplateEditorEntry: destructure userId, eager fork for write-role users via listTemplatesForEvent + createEventOverride)
+  - src/app/(app)/events/[eventId]/templates/[templateId]/edit/page.tsx (URL normalization redirect when template.id !== templateId)
+  - src/app/(app)/events/[eventId]/templates/template-editor.test.ts (added 8 getTemplateEditorEntry tests: existing event-scoped path, not-found, create override for write-role, reuse existing override, read-only no-fork)
+  - src/app/(app)/events/[eventId]/templates/[templateId]/edit/page.test.tsx (added URL normalization redirect test)
+- Tests run: `npm run test:run` — 107 tests in 4 template-related test files all pass; 8 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, full-journey, mutation-kill-2, notifications.adversarial, notifications.mutation-kill, travel-cascade).
+- Risks/follow-ups: The eager fork creates an event override with status='draft' and templateName='<global name> (Event Override)'. Coordinators may want to rename this on first open. The redirect adds one extra round-trip for the very first time a user navigates from the hub to a template that has no event override yet (hub links to global ID → server creates override → redirects to override ID). Subsequent navigations go directly to the override ID without redirect.
+
 ## 2026-04-19T14:10:00Z — PKT-A-009 — Automation triggers management page
 
 - Story ID: p4-m53-automation-triggers
