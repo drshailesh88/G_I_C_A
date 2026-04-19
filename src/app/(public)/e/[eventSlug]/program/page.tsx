@@ -26,6 +26,10 @@ export default async function PublicProgramPage({
     throw err;
   }
 
+  if (event.status !== 'published') {
+    notFound();
+  }
+
   const programData = await getPublicProgramData(event.id);
 
   if (!programData.hasPublishedVersion) {
