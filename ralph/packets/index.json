@@ -249,14 +249,14 @@
       "bucket": "A",
       "module": "people",
       "priority": 28,
-      "status": "BLOCKED",
+      "status": "VERIFIED",
       "packet_file": "ralph/packets/PKT-A-014-p2-people-merge-duplicates-ui.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "0563cf9",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T15:57:31Z",
+      "last_status_at": "2026-04-19T23:05:00Z",
       "depends_on": []
     },
     {

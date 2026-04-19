@@ -12,6 +12,8 @@ import {
   travelRecords,
   accommodationRecords,
   transportPassengerAssignments,
+  attendanceRecords,
+  issuedCertificates,
   auditLog,
 } from '@/lib/db/schema';
 import { eq, or, and, ilike, desc, sql, isNull, inArray } from 'drizzle-orm';
@@ -682,6 +684,43 @@ export async function mergePeople(input: unknown): Promise<MergePeopleResult> {
       ));
     }
     await tx.update(sessionAssignments).set({ personId: keepId }).where(eq(sessionAssignments.personId, dropId));
+
+    // Re-point attendance_records (partial unique index on (event_id, person_id, COALESCE(session_id, ...)))
+    // Drop loser rows that would collide with an existing keeper check-in for the same event+session.
+    const keeperAttendanceRows = await tx
+      .select({ eventId: attendanceRecords.eventId, sessionId: attendanceRecords.sessionId })
+      .from(attendanceRecords)
+      .where(eq(attendanceRecords.personId, keepId));
+    for (const row of keeperAttendanceRows) {
+      const sessionEq = row.sessionId === null
+        ? isNull(attendanceRecords.sessionId)
+        : eq(attendanceRecords.sessionId, row.sessionId);
+      await tx.delete(attendanceRecords).where(and(
+        eq(attendanceRecords.personId, dropId),
+        eq(attendanceRecords.eventId, row.eventId),
+        sessionEq,
+      ));
+    }
+    await tx.update(attendanceRecords).set({ personId: keepId, updatedAt: now }).where(eq(attendanceRecords.personId, dropId));
+
+    // Re-point issued_certificates (partial unique index on (event_id, person_id, certificate_type) WHERE status='issued')
+    // Mark loser's "issued" rows as superseded for the same (event, type) instead of duplicating.
+    const keeperCertRows = await tx
+      .select({ eventId: issuedCertificates.eventId, certificateType: issuedCertificates.certificateType })
+      .from(issuedCertificates)
+      .where(and(eq(issuedCertificates.personId, keepId), eq(issuedCertificates.status, 'issued')));
+    for (const row of keeperCertRows) {
+      await tx
+        .update(issuedCertificates)
+        .set({ status: 'superseded', updatedAt: now })
+        .where(and(
+          eq(issuedCertificates.personId, dropId),
+          eq(issuedCertificates.eventId, row.eventId),
+          eq(issuedCertificates.certificateType, row.certificateType),
+          eq(issuedCertificates.status, 'issued'),
+        ));
+    }
+    await tx.update(issuedCertificates).set({ personId: keepId, updatedAt: now }).where(eq(issuedCertificates.personId, dropId));
 
     // Re-point faculty_invites, travel, accommodation, transport (no conflicting unique constraints)
     await tx.update(facultyInvites).set({ personId: keepId }).where(eq(facultyInvites.personId, dropId));

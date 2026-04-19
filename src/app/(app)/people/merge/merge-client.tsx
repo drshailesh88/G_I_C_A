@@ -150,15 +150,35 @@ function ComparisonState({ personA, personB }: { personA: Person; personB: Perso
   const [result, setResult] = useState<MergePeopleResult | null>(null);
   const [submitError, setSubmitError] = useState('');
 
-  function getChoice(field: string): FieldChoice {
-    return choices[field] ?? 'left';
+  function getChoice(field: string): FieldChoice | undefined {
+    return choices[field];
   }
 
   function setChoice(field: string, choice: FieldChoice) {
     setChoices((prev) => ({ ...prev, [field]: choice }));
   }
 
+  // Conflicts that require explicit resolution before merge can proceed.
+  // A field is a conflict only when both records have a non-empty value AND those
+  // values differ. Identical values or one-sided values can be auto-resolved.
+  const conflictedFields = MERGE_FIELDS.filter(({ key }) => {
+    const a = personA[key];
+    const b = personB[key];
+    const aHas = a != null && String(a).trim() !== '';
+    const bHas = b != null && String(b).trim() !== '';
+    return aHas && bHas && String(a) !== String(b);
+  });
+
+  const unresolvedConflicts = conflictedFields.filter(f => choices[f.key] === undefined);
+  const canMerge = unresolvedConflicts.length === 0;
+
   function handleMerge() {
+    if (!canMerge) {
+      setSubmitError(
+        `Resolve ${unresolvedConflicts.length} conflicting field${unresolvedConflicts.length === 1 ? '' : 's'} before merging.`,
+      );
+      return;
+    }
     startTransition(async () => {
       setSubmitError('');
       try {
@@ -228,10 +248,26 @@ function ComparisonState({ personA, personB }: { personA: Person; personB: Perso
               const leftVal = personA[key] as string | null;
               const rightVal = personB[key] as string | null;
               const choice = getChoice(key);
+              const isConflict = conflictedFields.some(f => f.key === key);
+              const needsResolution = isConflict && choice === undefined;
 
               return (
-                <tr key={key} className="border-b border-border last:border-0 hover:bg-background/50">
-                  <td className="px-4 py-3 font-medium text-text-secondary whitespace-nowrap">{label}</td>
+                <tr
+                  key={key}
+                  data-testid={`merge-row-${key}`}
+                  data-conflict={isConflict ? 'true' : 'false'}
+                  className={`border-b border-border last:border-0 hover:bg-background/50 ${
+                    needsResolution ? 'bg-destructive/5' : ''
+                  }`}
+                >
+                  <td className="px-4 py-3 font-medium text-text-secondary whitespace-nowrap">
+                    {label}
+                    {needsResolution && (
+                      <span className="ml-2 rounded bg-destructive/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-destructive">
+                        Resolve
+                      </span>
+                    )}
+                  </td>
                   <td className={`px-4 py-3 ${choice === 'left' ? 'font-medium text-text-primary' : 'text-text-muted'}`}>
                     {leftVal ?? <span className="italic text-text-muted">—</span>}
                   </td>
@@ -240,6 +276,9 @@ function ComparisonState({ personA, personB }: { personA: Person; personB: Perso
                       {(['left', 'right', ...(supportsBoth ? ['both'] : [])] as FieldChoice[]).map((opt) => (
                         <button
                           key={opt}
+                          type="button"
+                          aria-pressed={choice === opt}
+                          data-testid={`merge-choice-${key}-${opt}`}
                           onClick={() => setChoice(key, opt)}
                           className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
                             choice === opt
@@ -289,15 +328,28 @@ function ComparisonState({ personA, personB }: { personA: Person; personB: Perso
             Cancel
           </Link>
           <button
+            type="button"
+            data-testid="merge-confirm"
             onClick={handleMerge}
-            disabled={isPending}
-            className="flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-white hover:bg-destructive/90 disabled:opacity-50"
+            disabled={isPending || !canMerge}
+            title={
+              !canMerge
+                ? `Resolve ${unresolvedConflicts.length} conflicting field${unresolvedConflicts.length === 1 ? '' : 's'} before merging`
+                : 'Confirm merge'
+            }
+            className="flex items-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-white hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ArrowLeftRight className="h-4 w-4" />
             {isPending ? 'Merging…' : 'Confirm Merge'}
           </button>
         </div>
       </div>
+
+      {!canMerge && (
+        <p className="mt-3 text-sm text-text-secondary" data-testid="merge-blocked-message">
+          {unresolvedConflicts.length} conflicting field{unresolvedConflicts.length === 1 ? '' : 's'} need an explicit choice before merging.
+        </p>
+      )}
 
       {submitError && (
         <p className="mt-3 text-sm text-destructive">{submitError}</p>

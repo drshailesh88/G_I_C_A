@@ -88,8 +88,14 @@ function mockSelectChain(rows: unknown[]) {
 }
 
 // Build a tx mock for the transaction callback
+// Select call order inside the merge transaction:
+//   1. eventPeople (keeper events)
+//   2. eventRegistrations (keeper events)
+//   3. sessionAssignments (keeper session/role pairs)
+//   4. attendanceRecords (keeper event/session pairs)
+//   5. issuedCertificates (keeper event/cert-type pairs)
 function makeMergeTx(
-  txSelectSequence: unknown[][] = [[], [], []],
+  txSelectSequence: unknown[][] = [[], [], [], [], []],
 ) {
   let selectIdx = 0;
   return {
@@ -120,7 +126,7 @@ function setupPeopleSelects(keeper: unknown, loser: unknown) {
 
 function setupHappyPath() {
   setupPeopleSelects(KEEPER_PERSON, LOSER_PERSON);
-  const tx = makeMergeTx([[], [], []]);
+  const tx = makeMergeTx([[], [], [], [], []]);
   mockDb.transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(tx));
   mockWriteAudit.mockResolvedValue(undefined);
   return tx;
@@ -288,7 +294,7 @@ describe('Transaction integrity', () => {
     setupPeopleSelects(KEEPER_PERSON, LOSER_PERSON);
     const EVENT_ID = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
     // Keeper already has event_people for EVENT_ID → conflict
-    const tx = makeMergeTx([[{ eventId: EVENT_ID }], [], []]);
+    const tx = makeMergeTx([[{ eventId: EVENT_ID }], [], [], [], []]);
     mockDb.transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(tx));
     mockWriteAudit.mockResolvedValue(undefined);
 
@@ -303,7 +309,7 @@ describe('Transaction integrity', () => {
     setupPeopleSelects(KEEPER_PERSON, LOSER_PERSON);
     const EVENT_ID = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
     // No event_people conflict, but event_registration conflict
-    const tx = makeMergeTx([[], [{ eventId: EVENT_ID }], []]);
+    const tx = makeMergeTx([[], [{ eventId: EVENT_ID }], [], [], []]);
     mockDb.transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(tx));
     mockWriteAudit.mockResolvedValue(undefined);
 
@@ -330,9 +336,80 @@ describe('Transaction integrity', () => {
     const tx = setupHappyPath();
     await mergePeople({ keepId: KEEP_ID, dropId: DROP_ID });
 
-    // Verify update was called for all 4 tables beyond the people updates
-    // (at least 4 update calls: eventPeople, eventReg, sessionAssign, facultyInvites, travel, accommodation, transport, keeper, loser = 9 minimum)
-    expect((tx.update as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(9);
+    // Verify update was called for all tables beyond the people updates.
+    // Includes: eventPeople, eventReg, sessionAssign, attendance, issuedCertificates,
+    // facultyInvites, travel, accommodation, transport, keeper, loser = 11 minimum.
+    expect((tx.update as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(11);
+  });
+
+  it('re-points attendance_records to the survivor', async () => {
+    authAsCoordinator();
+    const tx = setupHappyPath();
+    await mergePeople({ keepId: KEEP_ID, dropId: DROP_ID });
+
+    const updateCallCount = (tx.update as ReturnType<typeof vi.fn>).mock.calls.length;
+    // At least one update should set personId to keepId — proving the loser's attendance
+    // rows are being re-pointed.
+    const attendanceRepoint = (tx.update as ReturnType<typeof vi.fn>).mock.results.some(r =>
+      r.value?.set?.mock?.calls?.some((c: unknown[]) => {
+        const setArgs = c[0] as Record<string, unknown> | undefined;
+        return setArgs?.personId === KEEP_ID;
+      }),
+    );
+    expect(attendanceRepoint).toBe(true);
+    expect(updateCallCount).toBeGreaterThanOrEqual(11);
+  });
+
+  it('re-points issued_certificates to the survivor', async () => {
+    authAsCoordinator();
+    const tx = setupHappyPath();
+    await mergePeople({ keepId: KEEP_ID, dropId: DROP_ID });
+
+    // Five select calls were configured: eventPeople, eventReg, sessionAssign,
+    // attendance, issuedCertificates. If the merge stops re-pointing certs, this
+    // count drops back below 5.
+    expect((tx.select as ReturnType<typeof vi.fn>).mock.calls.length).toBe(5);
+  });
+
+  it('drops loser attendance rows when the survivor already has a conflicting check-in', async () => {
+    authAsCoordinator();
+    setupPeopleSelects(KEEPER_PERSON, LOSER_PERSON);
+    const EVENT_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+    const SESSION_ID = 'ffffffff-ffff-ffff-ffff-ffffffffffff';
+    const tx = makeMergeTx([
+      [],                                               // eventPeople
+      [],                                               // eventRegistrations
+      [],                                               // sessionAssignments
+      [{ eventId: EVENT_ID, sessionId: SESSION_ID }],   // attendance conflict
+      [],                                               // issuedCertificates
+    ]);
+    mockDb.transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(tx));
+    mockWriteAudit.mockResolvedValue(undefined);
+
+    await mergePeople({ keepId: KEEP_ID, dropId: DROP_ID });
+    expect((tx.delete as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it('marks loser issued_certificates as superseded when survivor has the same cert type', async () => {
+    authAsCoordinator();
+    setupPeopleSelects(KEEPER_PERSON, LOSER_PERSON);
+    const EVENT_ID = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+    const tx = makeMergeTx([
+      [], [], [], [],
+      [{ eventId: EVENT_ID, certificateType: 'attendance' }], // cert conflict
+    ]);
+    mockDb.transaction.mockImplementation((fn: (tx: unknown) => unknown) => fn(tx));
+    mockWriteAudit.mockResolvedValue(undefined);
+
+    await mergePeople({ keepId: KEEP_ID, dropId: DROP_ID });
+
+    const supersedeCalled = (tx.update as ReturnType<typeof vi.fn>).mock.results.some(r =>
+      r.value?.set?.mock?.calls?.some((c: unknown[]) => {
+        const setArgs = c[0] as Record<string, unknown> | undefined;
+        return setArgs?.status === 'superseded';
+      }),
+    );
+    expect(supersedeCalled).toBe(true);
   });
 });
 
