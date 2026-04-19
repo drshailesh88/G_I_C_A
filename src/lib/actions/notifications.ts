@@ -10,6 +10,18 @@ import {
   updateTemplate,
   createEventOverride,
 } from '@/lib/notifications/template-queries';
+import {
+  listTriggersForEvent,
+  createTrigger,
+  updateTrigger as updateTriggerRow,
+  deleteTrigger as deleteTriggerRow,
+} from '@/lib/notifications/trigger-queries';
+import {
+  TRIGGER_EVENT_TYPES,
+  TRIGGER_CHANNELS,
+  RECIPIENT_RESOLUTIONS,
+  IDEMPOTENCY_SCOPES,
+} from '@/lib/validations/automation-trigger';
 import { db } from '@/lib/db';
 import { notificationLog } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
@@ -273,4 +285,99 @@ export async function getNotificationDetail(input: unknown) {
   const log = await getLogById(validated.notificationLogId, validated.eventId);
   if (!log) throw new Error('Notification not found');
   return log;
+}
+
+// ── Automation Triggers ──────────────────────────────────────
+
+const listTriggersSchema = z.object({
+  eventId: z.string().uuid(),
+});
+
+export async function getTriggersForEvent(input: unknown) {
+  const validated = listTriggersSchema.parse(input);
+  const { role } = await assertEventAccess(validated.eventId);
+  assertNotificationsRole(role);
+  return listTriggersForEvent(validated.eventId);
+}
+
+const createTriggerActionSchema = z.object({
+  eventId: z.string().uuid(),
+  triggerEventType: z.enum(TRIGGER_EVENT_TYPES),
+  guardConditionJson: z.record(z.unknown()).nullable().optional(),
+  channel: z.enum(TRIGGER_CHANNELS),
+  templateId: z.string().uuid(),
+  recipientResolution: z.enum(RECIPIENT_RESOLUTIONS),
+  delaySeconds: z.number().int().min(0).max(86400).optional(),
+  idempotencyScope: z.enum(IDEMPOTENCY_SCOPES).optional(),
+  priority: z.number().int().min(0).max(100).nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
+});
+
+export async function createAutomationTrigger(input: unknown) {
+  const validated = createTriggerActionSchema.parse(input);
+  const { userId, role } = await assertEventAccess(validated.eventId, { requireWrite: true });
+  assertNotificationsRole(role, { requireWrite: true });
+
+  const trigger = await createTrigger({
+    eventId: validated.eventId,
+    triggerEventType: validated.triggerEventType,
+    guardConditionJson: validated.guardConditionJson,
+    channel: validated.channel,
+    templateId: validated.templateId,
+    recipientResolution: validated.recipientResolution,
+    delaySeconds: validated.delaySeconds,
+    idempotencyScope: validated.idempotencyScope,
+    isEnabled: true,
+    priority: validated.priority,
+    notes: validated.notes,
+    createdBy: userId,
+  });
+
+  revalidatePath(`/events/${validated.eventId}/templates/triggers`);
+  return { ok: true as const, trigger };
+}
+
+const updateTriggerActionSchema = z.object({
+  eventId: z.string().uuid(),
+  triggerId: z.string().uuid(),
+  guardConditionJson: z.record(z.unknown()).nullable().optional(),
+  templateId: z.string().uuid().optional(),
+  recipientResolution: z.enum(RECIPIENT_RESOLUTIONS).optional(),
+  delaySeconds: z.number().int().min(0).max(86400).optional(),
+  idempotencyScope: z.enum(IDEMPOTENCY_SCOPES).optional(),
+  isEnabled: z.boolean().optional(),
+  priority: z.number().int().min(0).max(100).nullable().optional(),
+  notes: z.string().max(1000).nullable().optional(),
+});
+
+export async function updateAutomationTrigger(input: unknown) {
+  const validated = updateTriggerActionSchema.parse(input);
+  const { userId, role } = await assertEventAccess(validated.eventId, { requireWrite: true });
+  assertNotificationsRole(role, { requireWrite: true });
+
+  const { triggerId, eventId, ...rest } = validated;
+  const updated = await updateTriggerRow(triggerId, { ...rest, eventId, updatedBy: userId });
+
+  if (!updated) return { ok: false as const, error: 'Trigger not found' };
+
+  revalidatePath(`/events/${eventId}/templates/triggers`);
+  return { ok: true as const, trigger: updated };
+}
+
+const deleteTriggerActionSchema = z.object({
+  eventId: z.string().uuid(),
+  triggerId: z.string().uuid(),
+});
+
+export async function deleteAutomationTrigger(input: unknown) {
+  const validated = deleteTriggerActionSchema.parse(input);
+  const { role } = await assertEventAccess(validated.eventId, { requireWrite: true });
+  assertNotificationsRole(role, { requireWrite: true });
+
+  const deleted = await deleteTriggerRow(validated.triggerId, validated.eventId);
+
+  if (!deleted) return { ok: false as const, error: 'Trigger not found' };
+
+  revalidatePath(`/events/${validated.eventId}/templates/triggers`);
+  return { ok: true as const, trigger: deleted };
 }

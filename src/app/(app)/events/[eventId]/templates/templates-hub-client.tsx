@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
-import { ArrowLeft, Mail, MessageCircle } from 'lucide-react';
+import { ArrowLeft, Mail, MessageCircle, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type NotificationTemplate = {
@@ -146,8 +146,19 @@ export function TemplatesHubClient({
         <h1 className="text-lg font-bold text-text-primary">Communications</h1>
       </div>
 
+      {/* Triggers shortcut */}
+      <Link
+        href={`/events/${eventId}/templates/triggers`}
+        className="mt-3 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-100"
+        data-testid="triggers-link"
+      >
+        <Zap className="h-4 w-4 shrink-0" />
+        Automation Triggers
+        <span className="ml-auto text-xs text-amber-600">Manage →</span>
+      </Link>
+
       {/* Tabs */}
-      <div className="mt-4 flex gap-1 rounded-xl bg-border/30 p-1">
+      <div className="mt-3 flex gap-1 rounded-xl bg-border/30 p-1">
         <button
           onClick={() => setTab('templates')}
           className={cn(
