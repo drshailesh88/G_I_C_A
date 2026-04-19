@@ -14,6 +14,18 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-19T13:09:00Z — PKT-A-007 — Communications hub page
+
+- Story ID: p4-m13-template-list-hub
+- Implemented: Implementation was already committed at e2ca38b; verified all 27 tests pass. Server page at `src/app/(app)/events/[eventId]/templates/page.tsx` — auth via `auth()`, reads searchParams for tab/channel/status/offset, fetches templates and notification log in parallel via `getTemplatesHub` and `getNotificationLog`, passes to `TemplatesHubClient`. Actions in `notifications.ts` — `getTemplatesHub` (COMMUNICATIONS_READ_ROLES gate, calls `listTemplatesForEvent`); `getNotificationLog` (same gate, queries notificationLog for ALL statuses not just failed, with optional channel/status filter, paginates at 50). Client `TemplatesHubClient` — two-tab layout (Templates | Delivery Log); Templates tab shows channel-grouped cards with status badges and Edit links; global system templates marked with "Global" badge; channel filter pills; Delivery Log tab shows all send statuses, channel + status filter pills, and Prev/Next pagination. Workspace "Templates" tile already wired to `/templates`.
+- Files changed:
+  - src/lib/actions/notifications.ts (getTemplatesHub + getNotificationLog added)
+  - src/app/(app)/events/[eventId]/templates/page.tsx (new — server page)
+  - src/app/(app)/events/[eventId]/templates/templates-hub-client.tsx (new — TemplatesHubClient)
+  - src/app/(app)/events/[eventId]/templates/templates-hub.test.ts (new — 27 tests)
+- Tests run: `npm run test:run` — 27 tests pass (5 getTemplatesHub + 8 getNotificationLog + 14 client); pre-existing failures unchanged.
+- Risks/follow-ups: Template editor route `/events/[eventId]/templates/[id]/edit` not yet built (PKT-A-008 depends on this packet). Delivery log recipients without a person join show raw email/phone only (no name resolution). IST timestamps via `toLocaleString` with `Asia/Kolkata`.
+
 ## 2026-04-19T07:00:00Z — PKT-B-007 — Accommodation CSV import
 
 - Story ID: p3-accommodation-csv-import

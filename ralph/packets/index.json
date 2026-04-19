@@ -120,14 +120,14 @@
       "bucket": "A",
       "module": "communications",
       "priority": 21,
-      "status": "READY",
+      "status": "NEEDS_REVIEW",
       "packet_file": "ralph/packets/PKT-A-007-p4-m13-template-list-hub.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "e2ca38b",
       "qa_commit": null,
-      "last_status_at": "2026-04-19T07:33:31Z",
+      "last_status_at": "2026-04-19T13:09:00Z",
       "depends_on": []
     },
     {
