@@ -2,7 +2,7 @@
   "version": 1,
   "pipeline": "ralph-packets",
   "updated_at": "2026-04-19T20:00:00Z",
-  "current_packet_id": "PKT-A-009",
+  "current_packet_id": "PKT-A-008",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -137,14 +137,14 @@
       "bucket": "A",
       "module": "communications",
       "priority": 22,
-      "status": "NEEDS_REVIEW",
+      "status": "VERIFIED",
       "packet_file": "ralph/packets/PKT-A-008-p4-m39-template-editor.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "41fd55c7ea67fa95487efdeceb86d18c378c0cf2",
       "qa_commit": null,
-      "last_status_at": "2026-04-19T14:23:55Z",
+      "last_status_at": "2026-04-19T14:33:33Z",
       "depends_on": [
         "PKT-A-007"
       ]

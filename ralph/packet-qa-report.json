@@ -476,5 +476,19 @@
       "The automation-trigger UI is implemented under `/events/[eventId]/templates/triggers`, but the packet oracle and event workspace navigation require it to stay in the event communications area at `/events/[eventId]/triggers`, so the shipped route placement does not satisfy the frozen contract."
     ],
     "notes": "Packet-targeted trigger management, validation, query-hardening, and automation-dispatch Vitest suites all pass, confirming the event-scoped CRUD behavior and active-trigger dispatch logic. Repo-wide `npm run test:run` and `npx tsc --noEmit` still fail due unrelated baseline issues outside PKT-A-009 scope, but manual packet acceptance still fails because the page lives under templates instead of the required communications-area route."
+  },
+  {
+    "packet_id": "PKT-A-008",
+    "story_id": "p4-m39-template-editor",
+    "qa_timestamp": "2026-04-19T14:33:33Z",
+    "qa_model": "codex",
+    "status": "pass",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "pass"
+    },
+    "bugs": [],
+    "notes": "Packet-targeted template-editor and notifications action Vitest suites pass. Manual verification confirms the current implementation eagerly creates or reuses the event-scoped override on open, renders email and WhatsApp variants side-by-side when both exist, shows variable chips from the template schema payload, and saves through `src/lib/actions/notifications.ts` into the notification template abstraction used by future sends. Repo-wide `npm run test:run` and `npx tsc --noEmit` still fail due unrelated baseline issues outside PKT-A-008 scope, including certificate, program, person, and general type errors."
   }
 ]

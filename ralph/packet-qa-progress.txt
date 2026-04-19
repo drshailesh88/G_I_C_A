@@ -315,3 +315,11 @@ Evaluate ex
 - bug count: 1
 - fix commit(s): none
 - notes: The trigger list, CRUD actions, event scoping, and active-trigger dispatch behavior are present and packet-targeted tests pass. PKT-A-009 remains BLOCKED because the UI ships at `/events/[eventId]/templates/triggers`, while the packet and workspace navigation require the feature to stay in the event communications area at `/events/[eventId]/triggers`.
+
+## 2026-04-19T14:33:33Z — PKT-A-008 — Communications template editor
+
+- QA status: pass
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures; repo-wide typecheck fail due unrelated baseline failures; manual acceptance pass against packet oracle
+- bug count: 0
+- fix commit(s): pending QA metadata commit
+- notes: Supersedes the stale earlier fail entry. The current implementation now eagerly creates or reuses the event-scoped override on open in `getTemplateEditorEntry()`, renders sibling email and WhatsApp variants side-by-side when present, exposes schema-backed variable chips, and saves through the notifications action/template-query abstraction so future sends resolve the updated event-scoped template while in-flight sends keep their frozen snapshots.
