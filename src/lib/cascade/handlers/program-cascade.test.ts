@@ -6,12 +6,18 @@ vi.mock('@/lib/inngest/client', () => ({
 
 vi.mock('@/lib/db', () => ({ db: { select: vi.fn() } }));
 vi.mock('@/lib/db/schema', () => ({
-  people: { id: 'people.id', email: 'people.email', fullName: 'people.full_name' },
+  people: {
+    id: 'people.id',
+    email: 'people.email',
+    fullName: 'people.full_name',
+    salutation: 'people.salutation',
+  },
   programVersions: {
     id: 'pv.id',
     eventId: 'pv.event_id',
     snapshotJson: 'pv.snapshot_json',
   },
+  events: { id: 'events.id', name: 'events.name' },
 }));
 vi.mock('drizzle-orm', () => ({
   eq: vi.fn((...args: unknown[]) => ({ op: 'eq', args })),
@@ -73,8 +79,29 @@ function chainSelect(rows: unknown[]) {
   });
 }
 
-function makeSnapshot(assignments: Array<{ personId: string; sessionId: string }>) {
-  return { snapshotJson: { assignments } };
+type SnapshotInput = {
+  sessions?: Array<{
+    id: string;
+    title?: string;
+    hallId?: string | null;
+    startAtUtc?: string | null;
+    endAtUtc?: string | null;
+  }>;
+  assignments?: Array<{ personId: string; sessionId: string; role?: string }>;
+  halls?: Array<{ id: string; name: string }>;
+};
+
+function makeSnapshot(
+  assignmentsOrSnapshot: Array<{ personId: string; sessionId: string }> | SnapshotInput,
+) {
+  if (Array.isArray(assignmentsOrSnapshot)) {
+    return { snapshotJson: { assignments: assignmentsOrSnapshot } };
+  }
+  return { snapshotJson: assignmentsOrSnapshot };
+}
+
+function eventRow(name = 'Test Conference') {
+  return [{ name }];
 }
 
 const basePayload = {
@@ -148,6 +175,7 @@ describe('handleProgramVersionPublished — zero net changes', () => {
     chainSelect([makeSnapshot(assignments)]);  // current
     chainSelect([makeSnapshot(assignments)]);  // prev (identical)
     chainSelect([{ id: PERSON_A, email: 'a@test.com', fullName: 'A' }]);  // people
+    chainSelect(eventRow());                                                // event name
 
     await emitCascadeEvent(
       CASCADE_EVENTS.PROGRAM_VERSION_PUBLISHED,
@@ -181,6 +209,7 @@ describe('handleProgramVersionPublished — added sessions', () => {
     chainSelect([makeSnapshot([{ personId: PERSON_A, sessionId: SESSION_2 }])]);  // current
     chainSelect([makeSnapshot([])]);                                               // prev (no sessions)
     chainSelect([{ id: PERSON_A, email: 'a@test.com', fullName: 'A' }]);
+    chainSelect(eventRow());
 
     await emitCascadeEvent(
       CASCADE_EVENTS.PROGRAM_VERSION_PUBLISHED,
@@ -201,6 +230,7 @@ describe('handleProgramVersionPublished — removed sessions', () => {
     chainSelect([makeSnapshot([])]);                                               // current (no sessions)
     chainSelect([makeSnapshot([{ personId: PERSON_A, sessionId: SESSION_1 }])]);  // prev
     chainSelect([{ id: PERSON_A, email: 'a@test.com', fullName: 'A' }]);
+    chainSelect(eventRow());
 
     await emitCascadeEvent(
       CASCADE_EVENTS.PROGRAM_VERSION_PUBLISHED,
@@ -223,6 +253,7 @@ describe('handleProgramVersionPublished — idempotency', () => {
     chainSelect([makeSnapshot([{ personId: PERSON_A, sessionId: SESSION_2 }])]);
     chainSelect([makeSnapshot([])]);
     chainSelect([{ id: PERSON_A, email: 'a@test.com', fullName: 'A' }]);
+    chainSelect(eventRow());
 
     await emitCascadeEvent(
       CASCADE_EVENTS.PROGRAM_VERSION_PUBLISHED,
@@ -239,6 +270,7 @@ describe('handleProgramVersionPublished — idempotency', () => {
     chainSelect([makeSnapshot([{ personId: PERSON_A, sessionId: SESSION_2 }])]);
     chainSelect([makeSnapshot([])]);
     chainSelect([{ id: PERSON_A, email: 'a@test.com', fullName: 'A' }]);
+    chainSelect(eventRow());
 
     await emitCascadeEvent(
       CASCADE_EVENTS.PROGRAM_VERSION_PUBLISHED,
@@ -274,6 +306,7 @@ describe('handleProgramVersionPublished — multiple faculty', () => {
       { id: PERSON_A, email: 'a@test.com', fullName: 'A' },
       { id: PERSON_B, email: 'b@test.com', fullName: 'B' },
     ]);
+    chainSelect(eventRow());
 
     await emitCascadeEvent(
       CASCADE_EVENTS.PROGRAM_VERSION_PUBLISHED,
@@ -295,6 +328,7 @@ describe('handleProgramVersionPublished — notification routing', () => {
     chainSelect([makeSnapshot([{ personId: PERSON_A, sessionId: SESSION_2 }])]);
     chainSelect([makeSnapshot([])]);
     chainSelect([{ id: PERSON_A, email: 'a@test.com', fullName: 'A' }]);
+    chainSelect(eventRow());
 
     await emitCascadeEvent(
       CASCADE_EVENTS.PROGRAM_VERSION_PUBLISHED,
@@ -311,6 +345,133 @@ describe('handleProgramVersionPublished — notification routing', () => {
     expect(call.triggerEntityType).toBe('program_version');
     expect(call.sendMode).toBe('automatic');
     expect(call.channel).toBe('email');
+  });
+});
+
+// ── Spec requirement: changed bucket detected for role/hall/time deltas ───────
+
+describe('handleProgramVersionPublished — changed bucket', () => {
+  it('notifies the faculty when role changes for the same session', async () => {
+    const session = { id: SESSION_1, title: 'Cardiology Update', hallId: null, startAtUtc: null, endAtUtc: null };
+    const current: SnapshotInput = {
+      sessions: [session],
+      assignments: [{ personId: PERSON_A, sessionId: SESSION_1, role: 'chair' }],
+      halls: [],
+    };
+    const prev: SnapshotInput = {
+      sessions: [session],
+      assignments: [{ personId: PERSON_A, sessionId: SESSION_1, role: 'speaker' }],
+      halls: [],
+    };
+    chainSelect([makeSnapshot(current)]);
+    chainSelect([makeSnapshot(prev)]);
+    chainSelect([{ id: PERSON_A, email: 'a@test.com', fullName: 'A', salutation: 'Dr.' }]);
+    chainSelect(eventRow());
+
+    await emitCascadeEvent(
+      CASCADE_EVENTS.PROGRAM_VERSION_PUBLISHED,
+      EVENT_ID,
+      { type: 'user', id: 'admin-1' },
+      basePayload,
+    );
+
+    expect(vi.mocked(sendNotification)).toHaveBeenCalledOnce();
+    const call = vi.mocked(sendNotification).mock.calls[0][0];
+    expect(call.variables.changedSessions).toContain(SESSION_1);
+    expect(String(call.variables.changesSummary)).toMatch(/Changed/i);
+    expect(String(call.variables.changesSummary)).toMatch(/role/i);
+  });
+
+  it('notifies the faculty when session time changes', async () => {
+    const sessionPrev = {
+      id: SESSION_1, title: 'Plenary', hallId: 'hall-1',
+      startAtUtc: '2026-12-15T03:30:00.000Z', endAtUtc: '2026-12-15T05:00:00.000Z',
+    };
+    const sessionCurr = {
+      ...sessionPrev,
+      startAtUtc: '2026-12-15T04:00:00.000Z', endAtUtc: '2026-12-15T05:30:00.000Z',
+    };
+    const current: SnapshotInput = {
+      sessions: [sessionCurr],
+      assignments: [{ personId: PERSON_A, sessionId: SESSION_1, role: 'speaker' }],
+      halls: [{ id: 'hall-1', name: 'Hall A' }],
+    };
+    const prev: SnapshotInput = {
+      sessions: [sessionPrev],
+      assignments: [{ personId: PERSON_A, sessionId: SESSION_1, role: 'speaker' }],
+      halls: [{ id: 'hall-1', name: 'Hall A' }],
+    };
+    chainSelect([makeSnapshot(current)]);
+    chainSelect([makeSnapshot(prev)]);
+    chainSelect([{ id: PERSON_A, email: 'a@test.com', fullName: 'A', salutation: 'Dr.' }]);
+    chainSelect(eventRow());
+
+    await emitCascadeEvent(
+      CASCADE_EVENTS.PROGRAM_VERSION_PUBLISHED,
+      EVENT_ID,
+      { type: 'user', id: 'admin-1' },
+      basePayload,
+    );
+
+    const call = vi.mocked(sendNotification).mock.calls[0][0];
+    expect(call.variables.changedSessions).toContain(SESSION_1);
+    expect(String(call.variables.changesSummary)).toMatch(/time/i);
+  });
+
+  it('notifies the faculty when session hall changes', async () => {
+    const sessionPrev = { id: SESSION_1, title: 'Workshop', hallId: 'hall-1' };
+    const sessionCurr = { id: SESSION_1, title: 'Workshop', hallId: 'hall-2' };
+    const current: SnapshotInput = {
+      sessions: [sessionCurr],
+      assignments: [{ personId: PERSON_A, sessionId: SESSION_1, role: 'speaker' }],
+      halls: [{ id: 'hall-1', name: 'Hall A' }, { id: 'hall-2', name: 'Hall B' }],
+    };
+    const prev: SnapshotInput = {
+      sessions: [sessionPrev],
+      assignments: [{ personId: PERSON_A, sessionId: SESSION_1, role: 'speaker' }],
+      halls: [{ id: 'hall-1', name: 'Hall A' }, { id: 'hall-2', name: 'Hall B' }],
+    };
+    chainSelect([makeSnapshot(current)]);
+    chainSelect([makeSnapshot(prev)]);
+    chainSelect([{ id: PERSON_A, email: 'a@test.com', fullName: 'A', salutation: null }]);
+    chainSelect(eventRow());
+
+    await emitCascadeEvent(
+      CASCADE_EVENTS.PROGRAM_VERSION_PUBLISHED,
+      EVENT_ID,
+      { type: 'user', id: 'admin-1' },
+      basePayload,
+    );
+
+    const call = vi.mocked(sendNotification).mock.calls[0][0];
+    expect(call.variables.changedSessions).toContain(SESSION_1);
+    expect(String(call.variables.changesSummary)).toMatch(/hall/i);
+  });
+});
+
+// ── Spec requirement: notification carries the template-required variables ────
+
+describe('handleProgramVersionPublished — template variables', () => {
+  it('passes fullName, eventName, and changesSummary required by program_update', async () => {
+    chainSelect([makeSnapshot([{ personId: PERSON_A, sessionId: SESSION_2 }])]);
+    chainSelect([makeSnapshot([])]);
+    chainSelect([{ id: PERSON_A, email: 'a@test.com', fullName: 'Dr. Priya', salutation: 'Dr.' }]);
+    chainSelect(eventRow('Cardio Conf 2026'));
+
+    await emitCascadeEvent(
+      CASCADE_EVENTS.PROGRAM_VERSION_PUBLISHED,
+      EVENT_ID,
+      { type: 'user', id: 'admin-1' },
+      basePayload,
+    );
+
+    const call = vi.mocked(sendNotification).mock.calls[0][0];
+    expect(call.variables.fullName).toBe('Dr. Priya');
+    expect(call.variables.eventName).toBe('Cardio Conf 2026');
+    expect(call.variables.salutation).toBe('Dr.');
+    expect(call.variables.versionNo).toBe('2');
+    expect(typeof call.variables.changesSummary).toBe('string');
+    expect(String(call.variables.changesSummary).length).toBeGreaterThan(0);
   });
 });
 

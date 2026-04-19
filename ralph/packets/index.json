@@ -192,14 +192,14 @@
       "bucket": "A",
       "module": "program",
       "priority": 25,
-      "status": "BLOCKED",
+      "status": "VERIFIED",
       "packet_file": "ralph/packets/PKT-A-011-p2-program-revised-responsibility-notifications.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "dd9637d",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T14:52:26Z",
+      "last_status_at": "2026-04-19T22:56:00Z",
       "depends_on": [
         "PKT-A-010"
       ]
