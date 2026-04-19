@@ -28,6 +28,10 @@ export default async function PublicProgramPage({
 
   const programData = await getPublicProgramData(event.id);
 
+  if (!programData.hasPublishedVersion) {
+    notFound();
+  }
+
   return (
     <PublicProgramClient
       event={event}

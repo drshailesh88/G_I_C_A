@@ -1649,92 +1649,153 @@ export async function getPublicScheduleData(eventId: string) {
   return { sessions: parentSessions, halls: allHalls };
 }
 
+type ProgramSnapshotSession = {
+  id: string;
+  eventId?: string;
+  parentSessionId?: string | null;
+  title: string;
+  description?: string | null;
+  sessionDate?: string | Date | null;
+  startAtUtc?: string | Date | null;
+  endAtUtc?: string | Date | null;
+  hallId?: string | null;
+  sessionType?: string;
+  track?: string | null;
+  isPublic?: boolean;
+  cmeCredits?: number | null;
+  sortOrder?: number | null;
+  status?: string;
+};
+
+type ProgramSnapshotAssignment = {
+  sessionId: string;
+  personId: string;
+  role: string;
+  presentationTitle?: string | null;
+  sortOrder?: number | null;
+};
+
+type ProgramSnapshotHall = {
+  id: string;
+  name: string;
+  sortOrder?: number | null;
+};
+
+function toDateOrNull(value: string | Date | null | undefined): Date | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export async function getPublicProgramData(eventId: string) {
   const scopedEventId = validateEventId(eventId);
 
-  // Only show program if at least one version has been published
+  // Only show program if at least one version has been published.
+  // Read from the latest published snapshot so live admin edits do not leak.
   const [latestVersion] = await db
-    .select({ id: programVersions.id })
+    .select({ id: programVersions.id, snapshotJson: programVersions.snapshotJson })
     .from(programVersions)
     .where(eq(programVersions.eventId, scopedEventId))
     .orderBy(desc(programVersions.versionNo))
     .limit(1);
 
   if (!latestVersion) {
-    return { sessions: [] as PublicProgramSession[], halls: [] as { id: string; name: string; sortOrder: number | null }[], hasPublishedVersion: false };
+    return {
+      sessions: [] as PublicProgramSession[],
+      halls: [] as { id: string; name: string; sortOrder: number | null }[],
+      hasPublishedVersion: false,
+    };
   }
 
-  const allSessions = await db
-    .select()
-    .from(sessions)
-    .where(
-      withEventScope(
-        sessions.eventId,
-        scopedEventId,
-        eq(sessions.isPublic, true),
-        ne(sessions.status, 'cancelled'),
-      ),
-    )
-    .orderBy(asc(sessions.sessionDate), asc(sessions.startAtUtc), asc(sessions.sortOrder));
+  const snapshot = (latestVersion.snapshotJson ?? {}) as {
+    sessions?: ProgramSnapshotSession[];
+    assignments?: ProgramSnapshotAssignment[];
+    halls?: ProgramSnapshotHall[];
+  };
 
-  const allHalls = await db
-    .select({ id: halls.id, name: halls.name, sortOrder: halls.sortOrder })
-    .from(halls)
-    .where(eq(halls.eventId, scopedEventId))
-    .orderBy(asc(halls.sortOrder));
+  const snapshotSessionsRaw = Array.isArray(snapshot.sessions) ? snapshot.sessions : [];
+  const snapshotAssignments = Array.isArray(snapshot.assignments) ? snapshot.assignments : [];
+  const snapshotHalls = Array.isArray(snapshot.halls) ? snapshot.halls : [];
 
-  const sessionIds = allSessions.map(s => s.id);
+  // Filter to public sessions, exclude cancelled. Sort same as live query.
+  const publicSnapshotSessions = snapshotSessionsRaw
+    .filter(s => s.isPublic === true && s.status !== 'cancelled')
+    .map(s => ({
+      ...s,
+      sessionDate: toDateOrNull(s.sessionDate ?? null),
+      startAtUtc: toDateOrNull(s.startAtUtc ?? null),
+      endAtUtc: toDateOrNull(s.endAtUtc ?? null),
+    }))
+    .sort((a, b) => {
+      const ad = a.sessionDate?.getTime() ?? 0;
+      const bd = b.sessionDate?.getTime() ?? 0;
+      if (ad !== bd) return ad - bd;
+      const as = a.startAtUtc?.getTime() ?? 0;
+      const bs = b.startAtUtc?.getTime() ?? 0;
+      if (as !== bs) return as - bs;
+      return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+    });
 
-  const rawAssignments = sessionIds.length > 0
+  const publicSessionIds = new Set(publicSnapshotSessions.map(s => s.id));
+
+  const allHalls = snapshotHalls
+    .map(h => ({ id: h.id, name: h.name, sortOrder: h.sortOrder ?? null }))
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+
+  // Resolve speaker display names from live people table (snapshot only stores ids).
+  const personIds = [...new Set(
+    snapshotAssignments
+      .filter(a => publicSessionIds.has(a.sessionId))
+      .map(a => a.personId),
+  )];
+
+  const personRows = personIds.length > 0
     ? await db
-        .select({
-          sessionId: sessionAssignments.sessionId,
-          personId: sessionAssignments.personId,
-          role: sessionAssignments.role,
-          presentationTitle: sessionAssignments.presentationTitle,
-          fullName: people.fullName,
-          designation: people.designation,
-          sortOrder: sessionAssignments.sortOrder,
-        })
-        .from(sessionAssignments)
-        .innerJoin(people, eq(sessionAssignments.personId, people.id))
-        .where(eq(sessionAssignments.eventId, scopedEventId))
-        .orderBy(asc(sessionAssignments.sortOrder))
+        .select({ id: people.id, fullName: people.fullName, designation: people.designation })
+        .from(people)
+        .where(inArray(people.id, personIds))
     : [];
 
+  const personMap = new Map(personRows.map(p => [p.id, p]));
   const hallMap = new Map(allHalls.map(h => [h.id, h.name]));
-  const sessionIdSet = new Set(sessionIds);
-  const publicAssignments = rawAssignments.filter(a => sessionIdSet.has(a.sessionId));
 
-  const assignmentsBySession = new Map<string, typeof publicAssignments>();
-  for (const a of publicAssignments) {
+  const assignmentsBySession = new Map<string, ProgramSnapshotAssignment[]>();
+  for (const a of snapshotAssignments) {
+    if (!publicSessionIds.has(a.sessionId)) continue;
     const list = assignmentsBySession.get(a.sessionId) ?? [];
     list.push(a);
     assignmentsBySession.set(a.sessionId, list);
+  }
+  for (const list of assignmentsBySession.values()) {
+    list.sort((x, y) => (x.sortOrder ?? 0) - (y.sortOrder ?? 0));
   }
 
   const parentSessions: PublicProgramSession[] = [];
   const childMap = new Map<string, PublicProgramSession[]>();
 
-  for (const s of allSessions) {
+  for (const s of publicSnapshotSessions) {
     const built: PublicProgramSession = {
       id: s.id,
       title: s.title,
-      description: s.description,
+      description: s.description ?? null,
       sessionDate: s.sessionDate,
       startAtUtc: s.startAtUtc,
       endAtUtc: s.endAtUtc,
       hallName: s.hallId ? hallMap.get(s.hallId) ?? null : null,
-      sessionType: s.sessionType,
-      track: s.track,
-      cmeCredits: s.cmeCredits,
-      speakers: (assignmentsBySession.get(s.id) ?? []).map(a => ({
-        personId: a.personId,
-        fullName: a.fullName,
-        designation: a.designation ?? null,
-        role: a.role,
-        presentationTitle: a.presentationTitle,
-      })),
+      sessionType: s.sessionType ?? 'other',
+      track: s.track ?? null,
+      cmeCredits: s.cmeCredits ?? null,
+      speakers: (assignmentsBySession.get(s.id) ?? []).map(a => {
+        const person = personMap.get(a.personId);
+        return {
+          personId: a.personId,
+          fullName: person?.fullName ?? '',
+          designation: person?.designation ?? null,
+          role: a.role,
+          presentationTitle: a.presentationTitle ?? null,
+        };
+      }).filter(sp => sp.fullName !== ''),
       childSessions: [],
     };
 

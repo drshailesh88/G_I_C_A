@@ -103,14 +103,14 @@
       "bucket": "A",
       "module": "program",
       "priority": 20,
-      "status": "BLOCKED",
+      "status": "VERIFIED",
       "packet_file": "ralph/packets/PKT-A-006-p2-m04-public-attendee-program.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "b483422",
-      "qa_commit": "d57ba17",
-      "last_status_at": "2026-04-18T13:36:16Z",
+      "qa_commit": null,
+      "last_status_at": "2026-04-19T22:51:00Z",
       "depends_on": []
     },
     {
