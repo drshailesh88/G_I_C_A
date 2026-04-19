@@ -49,6 +49,14 @@ CURRENT_PACKET: PKT-A-004
 
 Evaluate ex
 
+## 2026-04-19T02:43:45Z — PKT-A-007 — Communications hub page
+
+- QA status: fail
+- checks run: repo-wide vitest fail; packet-targeted templates hub vitest pass; typecheck fail; manual acceptance fail against packet oracle
+- bug count: 2
+- fix commit(s): none
+- notes: The communications hub route, data load, grouped template cards, and event-scoped delivery log are present, and `src/app/(app)/events/[eventId]/templates/templates-hub.test.ts` passes. The packet still fails its own oracle because the template-card links target `/events/[eventId]/templates/[templateId]/edit` without any matching route under `src/app/(app)/events/[eventId]/templates/**`, so the required editor-flow handoff is broken. `npx tsc --noEmit` also reports a direct packet-scope error at `src/lib/actions/notifications.ts(34,34)` from the role-set `.has(role)` call. Repo-wide vitest additionally fails in unrelated suites and environment-sensitive notifications tests, but those are not the basis for this packet BLOCKED verdict.
+
 ## 2026-04-18T02:13:43Z — PKT-A-005 — Registration cancellation cascade creates linked red flags
 
 - QA status: fixed
@@ -264,5 +272,30 @@ Read @ralph/qa-packets-pass1-prompt.md @CLAUDE.md @ralph/packets/index.json
 
 ITERATION: 1 of 999
 CURRENT_PACKET: PKT-B-007
+
+Evaluate ex
+
+## 2026-04-19T07:43:18.015846Z — PKT-A-007 — Communications hub page
+- Status: pass (mini evaluator only)
+- Model: default
+- Bugs: 0
+- Fix commits: none
+- Notes: 2026-04-19T07:40:03.019825Z ERROR codex_core::codex: failed to load skill /Users/shaileshsingh/dev/build_playbook/portable-skills/anneal/SKILL.md: missing YAML frontmatter delimited by ---
+OpenAI Codex v0.121.0 (research preview)
+--------
+workdir: /Users/shaileshsingh/G_I_C_A
+model: gpt-5.4
+provider: openai
+approval: never
+sandbox: danger-full-access
+reasoning effort: none
+reasoning summaries: none
+session id: 019da4ae-ac5e-79e0-bf52-4db42af8ea9d
+--------
+user
+Read @ralph/qa-packets-pass1-prompt.md @CLAUDE.md @ralph/packets/index.json
+
+ITERATION: 1 of 999
+CURRENT_PACKET: PKT-A-007
 
 Evaluate ex
