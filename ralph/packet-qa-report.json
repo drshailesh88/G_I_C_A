@@ -369,5 +369,33 @@
       "The Super Admin dashboard quick actions still route to `/events/[eventId]/reports`, so the intended global cross-event hub is not actually reachable from the packet's required dashboard entry points."
     ],
     "notes": "Packet-targeted `src/lib/actions/reports.test.ts` passes, and the implementation does provide single-event and all-events export modes plus a Super Admin guard inside the server actions. Verification still fails against the packet oracle because lower roles are offered `/reports` navigation and the dashboard entry points continue to send Super Admins to the per-event reports page. Repo-wide `npm run test:run` and `npx tsc --noEmit` also fail due unrelated baseline issues outside PKT-B-005 scope."
+  },
+  {
+    "packet_id": "PKT-B-006",
+    "story_id": "p3-travel-csv-import",
+    "qa_timestamp": "2026-04-18T20:35:59Z",
+    "qa_model": "codex",
+    "status": "fail",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "pass"
+    },
+    "bugs": [],
+    "notes": "The packet implementation exists and packet-targeted `src/lib/actions/travel-import.test.ts` passes, with the route, column mapping, email-or-E.164 person lookup, duplicate same-PNR guard, audit writes, cascade emission, and event scoping all present. This packet remains BLOCKED because the required repo-wide gates are currently red outside PKT-B-006 scope: `npx tsc --noEmit` fails across unrelated files and `npm run test:run` fails in unrelated suites and environment setup, so the packet cannot be cleanly VERIFIED."
+  },
+  {
+    "packet_id": "PKT-B-006",
+    "story_id": "p3-travel-csv-import",
+    "qa_timestamp": "2026-04-19T01:12:07Z",
+    "qa_model": "codex",
+    "status": "pass",
+    "checks_run": {
+      "vitest": "fail",
+      "typecheck": "fail",
+      "manual_acceptance": "pass"
+    },
+    "bugs": [],
+    "notes": "Supersedes the earlier blocked/global-noise classification. Packet-targeted `src/lib/actions/travel-import.test.ts` passes, the packet-local oracle is satisfied for route behavior, mapping, person lookup, duplicate same-PNR skip warnings, audit writes, cascade emission, and event scoping, and the remaining repo-wide `npm run test:run` / `npx tsc --noEmit` failures are unrelated baseline noise outside PKT-B-006 scope. This packet is therefore treated as VERIFIED so the queue can continue."
   }
 ]

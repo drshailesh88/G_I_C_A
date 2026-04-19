@@ -358,10 +358,16 @@ Output <promise>ABORT</promise> if blocked."
       echo "Packet QA agent signaled QA_COMPLETE."
       break
     elif echo "$result_tail" | grep -q '<promise>ABORT</promise>' && [ "$quota_tail" -eq 0 ]; then
-      echo ""
-      echo "Packet QA pass2 signaled ABORT. Resetting $CURRENT_PACKET to NEEDS_REVIEW." >&2
-      set_packet_status "$CURRENT_PACKET" "NEEDS_REVIEW"
-      exit 2
+      PACKET_STATUS=$(get_packet_status "$CURRENT_PACKET")
+      if [ "$PACKET_STATUS" = "QA_RUNNING" ]; then
+        echo ""
+        echo "Packet QA pass2 signaled ABORT before updating packet state. Resetting $CURRENT_PACKET to NEEDS_REVIEW." >&2
+        set_packet_status "$CURRENT_PACKET" "NEEDS_REVIEW"
+        exit 2
+      else
+        echo ""
+        echo "Packet QA pass2 emitted ABORT after setting $CURRENT_PACKET to $PACKET_STATUS. Treating packet as handled and continuing."
+      fi
     elif echo "$result_tail" | grep -q '<promise>NEXT</promise>' && [ "$quota_tail" -eq 0 ]; then
       PACKET_STATUS=$(get_packet_status "$CURRENT_PACKET")
       if [ "$PACKET_STATUS" = "QA_RUNNING" ]; then
@@ -370,9 +376,15 @@ Output <promise>ABORT</promise> if blocked."
         exit 2
       fi
     else
-      echo ""
-      echo "No promise tag found from pass2 (exit=$RC). Resetting $CURRENT_PACKET to NEEDS_REVIEW."
-      set_packet_status "$CURRENT_PACKET" "NEEDS_REVIEW"
+      PACKET_STATUS=$(get_packet_status "$CURRENT_PACKET")
+      if [ "$PACKET_STATUS" = "QA_RUNNING" ]; then
+        echo ""
+        echo "No promise tag found from pass2 (exit=$RC). Resetting $CURRENT_PACKET to NEEDS_REVIEW."
+        set_packet_status "$CURRENT_PACKET" "NEEDS_REVIEW"
+      else
+        echo ""
+        echo "No promise tag found from pass2 (exit=$RC), but $CURRENT_PACKET is now $PACKET_STATUS. Treating packet as handled and continuing."
+      fi
     fi
   elif echo "$pass1_tail" | grep -q '<promise>BLOCKED</promise>' && [ "$quota_tail" -eq 0 ]; then
     echo "[grader] pass1 verdict BLOCKED — escalating to $QA_PASS2_MODEL"
@@ -402,10 +414,16 @@ Output <promise>ABORT</promise> if blocked."
       echo "Packet QA agent signaled QA_COMPLETE."
       break
     elif echo "$result_tail" | grep -q '<promise>ABORT</promise>' && [ "$quota_tail" -eq 0 ]; then
-      echo ""
-      echo "Packet QA pass2 signaled ABORT. Resetting $CURRENT_PACKET to NEEDS_REVIEW." >&2
-      set_packet_status "$CURRENT_PACKET" "NEEDS_REVIEW"
-      exit 2
+      PACKET_STATUS=$(get_packet_status "$CURRENT_PACKET")
+      if [ "$PACKET_STATUS" = "QA_RUNNING" ]; then
+        echo ""
+        echo "Packet QA pass2 signaled ABORT before updating packet state. Resetting $CURRENT_PACKET to NEEDS_REVIEW." >&2
+        set_packet_status "$CURRENT_PACKET" "NEEDS_REVIEW"
+        exit 2
+      else
+        echo ""
+        echo "Packet QA pass2 emitted ABORT after setting $CURRENT_PACKET to $PACKET_STATUS. Treating packet as handled and continuing."
+      fi
     elif echo "$result_tail" | grep -q '<promise>NEXT</promise>' && [ "$quota_tail" -eq 0 ]; then
       PACKET_STATUS=$(get_packet_status "$CURRENT_PACKET")
       if [ "$PACKET_STATUS" = "QA_RUNNING" ]; then
@@ -414,9 +432,15 @@ Output <promise>ABORT</promise> if blocked."
         exit 2
       fi
     else
-      echo ""
-      echo "No promise tag found from pass2 (exit=$RC). Resetting $CURRENT_PACKET to NEEDS_REVIEW."
-      set_packet_status "$CURRENT_PACKET" "NEEDS_REVIEW"
+      PACKET_STATUS=$(get_packet_status "$CURRENT_PACKET")
+      if [ "$PACKET_STATUS" = "QA_RUNNING" ]; then
+        echo ""
+        echo "No promise tag found from pass2 (exit=$RC). Resetting $CURRENT_PACKET to NEEDS_REVIEW."
+        set_packet_status "$CURRENT_PACKET" "NEEDS_REVIEW"
+      else
+        echo ""
+        echo "No promise tag found from pass2 (exit=$RC), but $CURRENT_PACKET is now $PACKET_STATUS. Treating packet as handled and continuing."
+      fi
     fi
   else
     echo ""

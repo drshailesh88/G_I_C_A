@@ -225,3 +225,19 @@ Evaluate ex
 - bug count: 2
 - fix commit(s): none
 - notes: The implementation includes a Super Admin-only `/reports` page and server-side cross-event export guard, but the More menu still exposes `/reports` to Event Coordinator and Read-only users, and the Super Admin dashboard quick actions still point to `/events/[eventId]/reports` instead of the new global hub. That leaves the packet failing on both required access control/navigation acceptance checks.
+
+## 2026-04-18T20:35:59Z — PKT-B-006 — Travel CSV import
+
+- QA status: blocked
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures and environment setup issues; typecheck fail due unrelated baseline failures; manual acceptance pass against packet oracle
+- bug count: 0
+- fix commit(s): none
+- notes: The travel CSV import route and action satisfy the packet-local oracle, including column mapping, email-or-E.164 person lookup, duplicate same-PNR skip warnings, event-scoped inserts, audit writes, and travel cascade emission. This packet is recorded as BLOCKED because the required repo-wide `npm run test:run` and `npx tsc --noEmit` checks are failing outside PKT-B-006 scope, so the packet cannot be cleanly verified even though the packet-targeted checks are green.
+
+## 2026-04-19T01:12:07Z — PKT-B-006 — Travel CSV import
+
+- QA status: pass
+- checks run: packet-targeted vitest pass; repo-wide vitest fail due unrelated baseline failures and environment setup issues; typecheck fail due unrelated baseline failures; manual acceptance pass against packet oracle
+- bug count: 0
+- fix commit(s): none
+- notes: Supersedes the earlier blocked classification. The packet-local oracle is satisfied for travel CSV import, and the remaining repo-wide `npm run test:run` / `npx tsc --noEmit` failures are unrelated baseline noise outside PKT-B-006 scope, so this packet is recorded as VERIFIED and the queue may continue to the next ready packet.

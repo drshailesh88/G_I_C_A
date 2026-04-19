@@ -29,6 +29,13 @@ Attached in-context:
 - Do not use `ralph/prd.json` as the verification oracle.
 - Never modify `ralph/packets/*.md`.
 - Keep fixes inside the packet's allowed scope unless the packet clearly requires more.
+- Repo-wide `npm run test:run` / `npx tsc --noEmit` failures are evidence, not an
+  automatic packet failure. If the packet-local oracle, targeted checks, and
+  manual acceptance pass, you may still verify the packet and record the global
+  noise in the notes.
+- Only treat repo-wide failures as packet blockers when you can point to a
+  concrete failure that is caused by this packet or directly prevents packet
+  verification.
 - Run:
   - `npm run test:run`
   - `npx tsc --noEmit`
@@ -69,7 +76,9 @@ Append one entry to `ralph/packet-qa-report.json`:
 
 Update only that packet entry in `ralph/packets/index.json`:
 
-- `status` -> `VERIFIED` on success, `BLOCKED` on failure
+- `status` -> `VERIFIED` on success, including cases where packet-local checks
+  pass but unrelated repo-wide failures remain
+- `status` -> `BLOCKED` only when the packet itself still fails its own oracle
 - `qa_commit` -> commit SHA or `null`
 - `last_status_at` -> ISO timestamp
 
@@ -89,4 +98,8 @@ Append to `ralph/packet-qa-progress.txt`:
 
 - `<promise>NEXT</promise>` when this packet is QA'd and more NEEDS_REVIEW packets remain
 - `<promise>QA_COMPLETE</promise>` when no NEEDS_REVIEW packets remain
-- `<promise>ABORT</promise>` if blocked
+- `<promise>ABORT</promise>` only for true runner/infrastructure failure:
+  malformed queue state, inability to update required QA files, broken auth, or
+  other conditions that prevent safe packet state transition. Do not use ABORT
+  for ordinary packet-specific failures; mark those packets `BLOCKED` and emit
+  `NEXT` or `QA_COMPLETE` instead.
