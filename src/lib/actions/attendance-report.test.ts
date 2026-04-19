@@ -209,6 +209,18 @@ describe('getAttendanceReportData', () => {
     expect(data.bySession[0].percentage).toBe(100);
   });
 
+  it('event-scopes the joined session metadata so foreign session ids cannot leak into by-session rows', async () => {
+    defaultSequence();
+
+    await getAttendanceReportData(EVENT_ID);
+
+    expect(mockWithEventScope).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'event_id' }),
+      EVENT_ID,
+      expect.anything(),
+    );
+  });
+
   it('returns 0 percentages in byDay and bySession when totalCheckedIn is 0', async () => {
     setSelectSequence([
       [{ count: 5 }],

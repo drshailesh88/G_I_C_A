@@ -306,7 +306,14 @@ export async function getAttendanceReportData(
         count: count(),
       })
       .from(attendanceRecords)
-      .innerJoin(sessions, eq(attendanceRecords.sessionId, sessions.id))
+      .innerJoin(
+        sessions,
+        withEventScope(
+          sessions.eventId,
+          scopedEventId,
+          eq(attendanceRecords.sessionId, sessions.id),
+        ),
+      )
       .where(
         withEventScope(
           attendanceRecords.eventId,
