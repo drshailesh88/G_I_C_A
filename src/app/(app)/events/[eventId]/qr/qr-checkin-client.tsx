@@ -191,21 +191,42 @@ export function QrCheckInClient({
           <div className="min-w-0 xl:w-56">
             <h2 className="mb-3 text-sm font-semibold text-gray-700">Statistics</h2>
             <ResponsiveMetricGrid minCardWidth={120} gap="0.5rem">
-              <StatCard
-                label="Total"
-                value={totalRegistrations}
-                color="blue"
-              />
-              <StatCard
-                label="Checked In"
-                value={initialStats.totalCheckedIn}
-                color="green"
-              />
-              <StatCard
-                label="Remaining"
-                value={remaining < 0 ? 0 : remaining}
-                color="amber"
-              />
+              <Link
+                href={`/events/${eventId}/qr/report?focus=overall`}
+                aria-label="Open attendance report — Total registrations"
+                data-testid="stat-card-total"
+                className="block rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-blue-300 hover:opacity-90"
+              >
+                <StatCard
+                  label="Total"
+                  value={totalRegistrations}
+                  color="blue"
+                />
+              </Link>
+              <Link
+                href={`/events/${eventId}/qr/report?focus=by-day`}
+                aria-label="Open attendance report — Checked in"
+                data-testid="stat-card-checked-in"
+                className="block rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-green-300 hover:opacity-90"
+              >
+                <StatCard
+                  label="Checked In"
+                  value={initialStats.totalCheckedIn}
+                  color="green"
+                />
+              </Link>
+              <Link
+                href={`/events/${eventId}/qr/report?focus=by-session`}
+                aria-label="Open attendance report — Remaining"
+                data-testid="stat-card-remaining"
+                className="block rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-amber-300 hover:opacity-90"
+              >
+                <StatCard
+                  label="Remaining"
+                  value={remaining < 0 ? 0 : remaining}
+                  color="amber"
+                />
+              </Link>
             </ResponsiveMetricGrid>
 
             {/* Method breakdown */}

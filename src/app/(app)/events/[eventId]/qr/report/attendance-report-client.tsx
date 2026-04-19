@@ -12,14 +12,20 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'by-session', label: 'By Session' },
 ];
 
+function isTab(value: string | undefined): value is Tab {
+  return value === 'overall' || value === 'by-day' || value === 'by-session';
+}
+
 export function AttendanceReportClient({
   eventId,
   data,
+  initialTab,
 }: {
   eventId: string;
   data: AttendanceReportData;
+  initialTab?: string;
 }) {
-  const [activeTab, setActiveTab] = useState<Tab>('overall');
+  const [activeTab, setActiveTab] = useState<Tab>(isTab(initialTab) ? initialTab : 'overall');
   const [downloading, setDownloading] = useState(false);
 
   async function handleExport() {

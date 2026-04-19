@@ -342,6 +342,40 @@ export async function getAttendanceReportData(
         return aStart - bStart;
       });
 
+    // Compute event-level check-ins so the by-session view reconciles to the
+    // overall total. Without this, sum(bySession.count) excludes event-level
+    // (sessionId IS NULL) attendance rows and cannot match overall.totalCheckedIn.
+    const sessionLevelTotal = sortedSessions.reduce((sum, r) => sum + r.count, 0);
+    const eventLevelCount = Math.max(totalCheckedIn - sessionLevelTotal, 0);
+
+    const bySession: AttendanceReportSession[] = sortedSessions.map((r) => ({
+      sessionId: r.sessionId as string,
+      title: r.title,
+      sessionDate: r.sessionDate ? r.sessionDate.toISOString() : null,
+      startAtUtc: r.startAtUtc,
+      endAtUtc: r.endAtUtc,
+      count: r.count,
+      percentage:
+        totalCheckedIn > 0
+          ? Math.round((r.count / totalCheckedIn) * 100)
+          : 0,
+    }));
+
+    if (eventLevelCount > 0) {
+      bySession.push({
+        sessionId: '__event_level__',
+        title: 'Event check-in (no session)',
+        sessionDate: null,
+        startAtUtc: null,
+        endAtUtc: null,
+        count: eventLevelCount,
+        percentage:
+          totalCheckedIn > 0
+            ? Math.round((eventLevelCount / totalCheckedIn) * 100)
+            : 0,
+      });
+    }
+
     return {
       overall: {
         totalRegistrations,
@@ -360,18 +394,7 @@ export async function getAttendanceReportData(
             ? Math.round((r.count / totalCheckedIn) * 100)
             : 0,
       })),
-      bySession: sortedSessions.map((r) => ({
-        sessionId: r.sessionId as string,
-        title: r.title,
-        sessionDate: r.sessionDate ? r.sessionDate.toISOString() : null,
-        startAtUtc: r.startAtUtc,
-        endAtUtc: r.endAtUtc,
-        count: r.count,
-        percentage:
-          totalCheckedIn > 0
-            ? Math.round((r.count / totalCheckedIn) * 100)
-            : 0,
-      })),
+      bySession,
     };
   }, { isolationLevel: 'repeatable read' });
 }

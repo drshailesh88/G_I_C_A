@@ -190,4 +190,15 @@ describe('QrCheckInClient', () => {
   it('imports ResponsiveMetricGrid from the responsive components', () => {
     expect(componentSource).toContain("from '@/components/responsive/responsive-metric-grid'");
   });
+
+  // ── PKT-B-002 acceptance: stat cards drill into the report ─────────
+  it('wraps each attendance stat card in a link to the attendance report', () => {
+    const html = render({ totalRegistrations: 100, initialStats: sampleStats });
+    expect(html).toContain('data-testid="stat-card-total"');
+    expect(html).toContain('data-testid="stat-card-checked-in"');
+    expect(html).toContain('data-testid="stat-card-remaining"');
+    expect(html).toMatch(/href="\/events\/[^"]+\/qr\/report\?focus=overall"/);
+    expect(html).toMatch(/href="\/events\/[^"]+\/qr\/report\?focus=by-day"/);
+    expect(html).toMatch(/href="\/events\/[^"]+\/qr\/report\?focus=by-session"/);
+  });
 });

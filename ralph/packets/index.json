@@ -300,14 +300,14 @@
       "bucket": "B",
       "module": "qr",
       "priority": 102,
-      "status": "BLOCKED",
+      "status": "VERIFIED",
       "packet_file": "ralph/packets/PKT-B-002-p5-m58-attendance-report-page.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "2aa8f1f3043698b6519c46d768cbfd11e14d523f",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T17:52:46Z",
+      "last_status_at": "2026-04-19T23:13:00Z",
       "depends_on": []
     },
     {

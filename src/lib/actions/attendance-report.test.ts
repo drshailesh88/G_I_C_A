@@ -229,4 +229,53 @@ describe('getAttendanceReportData', () => {
     expect(data.byDay[0].percentage).toBe(0);
     expect(data.bySession[0].percentage).toBe(0);
   });
+
+  // ── PKT-B-002 acceptance: session totals reconcile with overall ────
+  it('appends an event-level pseudo-session when overall exceeds the sum of session-level rows', async () => {
+    // overall = 10 check-ins. Session-level (sessionId NOT NULL) = 6.
+    // The remaining 4 are event-level check-ins; without a synthetic row
+    // bySession would total 6 and never reconcile with overall.totalCheckedIn = 10.
+    setSelectSequence([
+      [{ count: 10 }],   // confirmed registrations
+      [{ count: 10 }],   // total attendance (event-level + session-level)
+      [],                // by method
+      [],                // by category
+      [],                // by day
+      [{
+        sessionId: SESSION_ID,
+        title: 'Keynote',
+        sessionDate: SESSION_DATE,
+        startAtUtc: START_AT,
+        endAtUtc: END_AT,
+        count: 6,
+      }],
+    ]);
+    const data = await getAttendanceReportData(EVENT_ID);
+
+    // Two rows: the real session row + an event-level reconciliation row.
+    expect(data.bySession).toHaveLength(2);
+    expect(data.bySession.find(r => r.sessionId === '__event_level__')?.count).toBe(4);
+    expect(data.bySession.reduce((s, r) => s + r.count, 0)).toBe(data.overall.totalCheckedIn);
+  });
+
+  it('does not append an event-level row when there are no event-level check-ins', async () => {
+    setSelectSequence([
+      [{ count: 10 }],
+      [{ count: 6 }], // overall == session-level total
+      [],
+      [],
+      [],
+      [{
+        sessionId: SESSION_ID,
+        title: 'Keynote',
+        sessionDate: SESSION_DATE,
+        startAtUtc: START_AT,
+        endAtUtc: END_AT,
+        count: 6,
+      }],
+    ]);
+    const data = await getAttendanceReportData(EVENT_ID);
+    expect(data.bySession).toHaveLength(1);
+    expect(data.bySession[0].sessionId).toBe(SESSION_ID);
+  });
 });
