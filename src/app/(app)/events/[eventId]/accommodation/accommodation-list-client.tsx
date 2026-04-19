@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Plus, Hotel, AlertTriangle, CheckCircle, Eye, MoreVertical, Send } from 'lucide-react';
+import { ArrowLeft, Plus, Hotel, AlertTriangle, CheckCircle, Eye, MoreVertical, Send, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, formatDistanceToNow } from 'date-fns';
 import { cancelAccommodationRecord } from '@/lib/actions/accommodation';
@@ -196,24 +196,35 @@ export function AccommodationListClient({
           </Link>
           <h1 className="text-xl font-bold text-text-primary">Accommodation</h1>
         </div>
-        {canWrite ? (
-          <Link
-            href={`/events/${eventId}/accommodation/new`}
-            className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-light"
-          >
-            <Plus className="h-4 w-4" />
-            Add
-          </Link>
-        ) : (
-          <button
-            disabled
-            aria-disabled="true"
-            className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white opacity-50 cursor-not-allowed"
-          >
-            <Plus className="h-4 w-4" />
-            Add
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canWrite && (
+            <Link
+              href={`/events/${eventId}/accommodation/import`}
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium text-text-secondary hover:bg-background"
+            >
+              <Upload className="h-4 w-4" />
+              Import CSV
+            </Link>
+          )}
+          {canWrite ? (
+            <Link
+              href={`/events/${eventId}/accommodation/new`}
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-light"
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </Link>
+          ) : (
+            <button
+              disabled
+              aria-disabled="true"
+              className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white opacity-50 cursor-not-allowed"
+            >
+              <Plus className="h-4 w-4" />
+              Add
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Flagged Only Toggle */}

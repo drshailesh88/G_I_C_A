@@ -9,18 +9,21 @@ import {
   eventRegistrations,
 } from '@/lib/db/schema';
 import { eq, and, desc, ne } from 'drizzle-orm';
+import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
 import { writeAudit } from '@/lib/audit/write';
 import { emitCascadeEvent } from '@/lib/cascade/emit';
 import { CASCADE_EVENTS } from '@/lib/cascade/events';
+import { normalizePhone } from '@/lib/validations/person';
 import {
   createAccommodationRecordSchema,
   updateAccommodationRecordSchema,
   cancelAccommodationRecordSchema,
   accommodationRecordIdSchema,
   ACCOMMODATION_RECORD_TRANSITIONS,
+  ROOM_TYPES,
   type AccommodationRecordStatus,
   buildAccommodationChangeSummary,
   hasAccomCascadeTriggerChanges,
@@ -430,4 +433,231 @@ export async function getSharedRoomGroupMembers(eventId: string, sharedRoomGroup
     );
 
   return rows;
+}
+
+// ── CSV batch import ──────────────────────────────────────────
+
+export interface AccommodationImportRow {
+  rowNumber: number;
+  personEmail?: string;
+  personPhone?: string;
+  hotelName: string;
+  checkInDate: string;
+  checkOutDate: string;
+  hotelAddress?: string;
+  hotelCity?: string;
+  roomType?: string;
+  roomNumber?: string;
+  sharedRoomGroup?: string;
+  bookingReference?: string;
+  specialRequests?: string;
+  notes?: string;
+}
+
+export type AccommodationImportRowResult =
+  | { rowNumber: number; status: 'imported'; recordId: string }
+  | { rowNumber: number; status: 'skipped'; reason: string }
+  | { rowNumber: number; status: 'error'; error: string };
+
+const ACCOM_IMPORT_MAX_ROWS = 500;
+
+const eventIdSchema = z.string().uuid('Invalid event ID');
+
+export async function importAccommodationBatch(
+  eventId: string,
+  rows: AccommodationImportRow[],
+): Promise<{ results: AccommodationImportRowResult[]; imported: number; skipped: number; errors: number }> {
+  const scopedEventId = eventIdSchema.parse(eventId);
+  const { userId } = await assertEventAccess(scopedEventId, { requireWrite: true });
+
+  if (rows.length > ACCOM_IMPORT_MAX_ROWS) {
+    throw new Error(`Import batch exceeds ${ACCOM_IMPORT_MAX_ROWS} rows`);
+  }
+
+  const results: AccommodationImportRowResult[] = [];
+  let imported = 0;
+  let skipped = 0;
+  let errors = 0;
+
+  for (const row of rows) {
+    try {
+      // Validate room type enum if provided
+      if (row.roomType) {
+        const roomTypeResult = z.enum(ROOM_TYPES).safeParse(row.roomType);
+        if (!roomTypeResult.success) {
+          results.push({ rowNumber: row.rowNumber, status: 'error', error: `Invalid room type: ${row.roomType}` });
+          errors++;
+          continue;
+        }
+      }
+
+      // Validate dates
+      const checkIn = new Date(row.checkInDate);
+      const checkOut = new Date(row.checkOutDate);
+
+      if (!row.checkInDate || isNaN(checkIn.getTime())) {
+        results.push({ rowNumber: row.rowNumber, status: 'error', error: 'Invalid or missing check-in date' });
+        errors++;
+        continue;
+      }
+      if (!row.checkOutDate || isNaN(checkOut.getTime())) {
+        results.push({ rowNumber: row.rowNumber, status: 'error', error: 'Invalid or missing check-out date' });
+        errors++;
+        continue;
+      }
+      if (checkOut <= checkIn) {
+        results.push({ rowNumber: row.rowNumber, status: 'error', error: 'Check-out must be after check-in' });
+        errors++;
+        continue;
+      }
+
+      // Person lookup: email first, phone as fallback
+      let personId: string | null = null;
+
+      if (row.personEmail) {
+        const [found] = await db
+          .select({ id: people.id })
+          .from(people)
+          .where(eq(people.email, row.personEmail.toLowerCase().trim()))
+          .limit(1);
+        if (found) personId = found.id;
+      }
+
+      if (!personId && row.personPhone) {
+        let phoneE164: string;
+        try {
+          phoneE164 = normalizePhone(row.personPhone);
+        } catch {
+          results.push({ rowNumber: row.rowNumber, status: 'skipped', reason: `Invalid phone number: ${row.personPhone}` });
+          skipped++;
+          continue;
+        }
+        const [found] = await db
+          .select({ id: people.id })
+          .from(people)
+          .where(eq(people.phoneE164, phoneE164))
+          .limit(1);
+        if (found) personId = found.id;
+      }
+
+      if (!personId) {
+        results.push({ rowNumber: row.rowNumber, status: 'skipped', reason: 'Person not found by email or phone' });
+        skipped++;
+        continue;
+      }
+
+      // Travel-first rule: person must have an active travel record for this event
+      const [activeTravelRecord] = await db
+        .select({ id: travelRecords.id })
+        .from(travelRecords)
+        .where(
+          withEventScope(
+            travelRecords.eventId,
+            scopedEventId,
+            eq(travelRecords.personId, personId),
+            ne(travelRecords.recordStatus, 'cancelled'),
+          ),
+        )
+        .limit(1);
+
+      if (!activeTravelRecord) {
+        results.push({ rowNumber: row.rowNumber, status: 'skipped', reason: 'Person has no active travel record for this event' });
+        skipped++;
+        continue;
+      }
+
+      // Duplicate check: same booking reference + same person + same event
+      const bookingRef = row.bookingReference?.trim();
+      if (bookingRef) {
+        const [dup] = await db
+          .select({ id: accommodationRecords.id })
+          .from(accommodationRecords)
+          .where(
+            withEventScope(
+              accommodationRecords.eventId,
+              scopedEventId,
+              eq(accommodationRecords.personId, personId),
+              eq(accommodationRecords.bookingReference, bookingRef),
+            ),
+          )
+          .limit(1);
+
+        if (dup) {
+          results.push({ rowNumber: row.rowNumber, status: 'skipped', reason: `Duplicate booking reference ${bookingRef} for this person in this event` });
+          skipped++;
+          continue;
+        }
+      }
+
+      const [record] = await db
+        .insert(accommodationRecords)
+        .values({
+          eventId: scopedEventId,
+          personId,
+          hotelName: row.hotelName.trim(),
+          hotelAddress: row.hotelAddress?.trim() || null,
+          hotelCity: row.hotelCity?.trim() || null,
+          roomType: (row.roomType as (typeof ROOM_TYPES)[number]) || null,
+          roomNumber: row.roomNumber?.trim() || null,
+          sharedRoomGroup: row.sharedRoomGroup?.trim() || null,
+          checkInDate: checkIn,
+          checkOutDate: checkOut,
+          bookingReference: bookingRef || null,
+          specialRequests: row.specialRequests?.trim() || null,
+          notes: row.notes?.trim() || null,
+          recordStatus: 'draft',
+          createdBy: userId,
+          updatedBy: userId,
+        })
+        .returning();
+
+      // Auto-upsert event_people junction
+      await db
+        .insert(eventPeople)
+        .values({ eventId: scopedEventId, personId, source: 'accommodation' })
+        .onConflictDoNothing({ target: [eventPeople.eventId, eventPeople.personId] });
+
+      await writeAudit({
+        actorUserId: userId,
+        eventId: scopedEventId,
+        action: 'create',
+        resource: 'accommodation',
+        resourceId: record.id,
+        meta: {
+          personId,
+          hotelName: record.hotelName,
+          recordStatus: record.recordStatus,
+          importedVia: 'csv',
+        },
+      });
+
+      await emitCascadeEvent(
+        CASCADE_EVENTS.ACCOMMODATION_CREATED,
+        scopedEventId,
+        { type: 'user', id: userId },
+        {
+          accommodationRecordId: record.id,
+          personId: record.personId,
+          registrationId: null,
+          hotelName: record.hotelName,
+          checkInDate: checkIn.toISOString(),
+          checkOutDate: checkOut.toISOString(),
+          googleMapsUrl: null,
+        },
+      );
+
+      results.push({ rowNumber: row.rowNumber, status: 'imported', recordId: record.id });
+      imported++;
+    } catch (err) {
+      results.push({
+        rowNumber: row.rowNumber,
+        status: 'error',
+        error: err instanceof Error ? err.message : 'Unknown error',
+      });
+      errors++;
+    }
+  }
+
+  revalidatePath(`/events/${scopedEventId}/accommodation`);
+  return { results, imported, skipped, errors };
 }
