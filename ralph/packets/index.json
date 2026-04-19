@@ -211,14 +211,14 @@
       "bucket": "A",
       "module": "program",
       "priority": 26,
-      "status": "BACKLOG",
+      "status": "VERIFIED",
       "packet_file": "ralph/packets/PKT-A-012-p2-program-aggregated-faculty-email.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": null,
       "qa_commit": null,
-      "last_status_at": null,
+      "last_status_at": "2026-04-19T23:00:00Z",
       "depends_on": [
         "PKT-A-011"
       ]
