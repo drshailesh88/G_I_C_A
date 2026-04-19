@@ -109,4 +109,16 @@ describe('TemplateEditEntryPage', () => {
     ).rejects.toThrow(`redirect:/events/${EVENT_ID}/templates`);
     expect(mockRedirect).toHaveBeenCalledWith(`/events/${EVENT_ID}/templates`);
   });
+
+  it('redirects to the event override URL when the returned template has a different ID (URL normalization)', async () => {
+    const OVERRIDE_ID = '550e8400-e29b-41d4-a716-446655440099';
+    mockGetTemplateEditorEntry.mockResolvedValue({ ...baseTemplate, id: OVERRIDE_ID, eventId: EVENT_ID });
+
+    await expect(
+      TemplateEditEntryPage({
+        params: Promise.resolve({ eventId: EVENT_ID, templateId: TEMPLATE_ID }),
+      }),
+    ).rejects.toThrow(`redirect:/events/${EVENT_ID}/templates/${OVERRIDE_ID}/edit`);
+    expect(mockRedirect).toHaveBeenCalledWith(`/events/${EVENT_ID}/templates/${OVERRIDE_ID}/edit`);
+  });
 });

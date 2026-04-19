@@ -33,6 +33,13 @@ export default async function TemplateEditPage({
     redirect(`/events/${eventId}/templates`);
   }
 
+  // URL normalization: when getTemplateEditorEntry creates/reuses an event override whose ID
+  // differs from the requested templateId (e.g. the hub linked to a global template ID),
+  // redirect to the canonical event-scoped URL so subsequent navigations resolve directly.
+  if (template.id !== templateId) {
+    redirect(`/events/${eventId}/templates/${template.id}/edit`);
+  }
+
   const sibling = await getSiblingTemplate({
     eventId,
     templateKey: template.templateKey,

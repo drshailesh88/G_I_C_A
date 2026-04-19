@@ -127,7 +127,7 @@ vi.mock('drizzle-orm', () => ({
 
 // ── Import under test (after all mocks) ──────────────────────
 
-import { saveTemplate, getSiblingTemplate } from '@/lib/actions/notifications';
+import { getTemplateEditorEntry, saveTemplate, getSiblingTemplate } from '@/lib/actions/notifications';
 import { TemplateEditorClient } from './[templateId]/edit/template-editor-client';
 
 // ── Constants + fixtures ─────────────────────────────────────
@@ -186,6 +186,63 @@ beforeEach(() => {
   mockListTemplatesForEvent.mockResolvedValue({ eventTemplates: [], globalTemplates: [] });
   mockUpdateTemplate.mockResolvedValue({ id: TEMPLATE_ID, versionNo: 2 });
   mockCreateEventOverride.mockResolvedValue({ id: 'override-new-id' });
+});
+
+// ── getTemplateEditorEntry ────────────────────────────────────
+
+describe('getTemplateEditorEntry — returns existing event-scoped template', () => {
+  it('returns event-scoped template when one exists for the given ID', async () => {
+    mockGetTemplateById.mockResolvedValueOnce(eventScopedTemplate);
+    const result = await getTemplateEditorEntry({ eventId: EVENT_ID, templateId: TEMPLATE_ID });
+    expect(result).toEqual(eventScopedTemplate);
+    expect(mockCreateEventOverride).not.toHaveBeenCalled();
+  });
+});
+
+describe('getTemplateEditorEntry — throws when template not found', () => {
+  it('throws Notification template not found when neither event nor global template exists', async () => {
+    mockGetTemplateById.mockResolvedValue(null);
+    await expect(
+      getTemplateEditorEntry({ eventId: EVENT_ID, templateId: GLOBAL_TEMPLATE_ID }),
+    ).rejects.toThrow('Notification template not found');
+  });
+});
+
+describe('getTemplateEditorEntry — eager fork for write-role users (Requirement 1)', () => {
+  beforeEach(() => {
+    // event-scoped not found, global found
+    mockGetTemplateById
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(globalTemplate);
+  });
+
+  it('creates an event override for a write-role user when none exists', async () => {
+    mockListTemplatesForEvent.mockResolvedValueOnce({ eventTemplates: [], globalTemplates: [] });
+    mockCreateEventOverride.mockResolvedValueOnce({ id: 'new-override-id', templateKey: 'registration_confirmation' });
+    const result = await getTemplateEditorEntry({ eventId: EVENT_ID, templateId: GLOBAL_TEMPLATE_ID });
+    expect(mockCreateEventOverride).toHaveBeenCalledWith(GLOBAL_TEMPLATE_ID, EVENT_ID, 'user-clerk-xyz');
+    expect(result).toEqual(expect.objectContaining({ id: 'new-override-id' }));
+  });
+
+  it('reuses existing event override instead of creating a new one', async () => {
+    const existingOverride = { id: 'existing-override', templateKey: 'registration_confirmation', channel: 'email' };
+    mockListTemplatesForEvent.mockResolvedValueOnce({ eventTemplates: [existingOverride], globalTemplates: [] });
+    const result = await getTemplateEditorEntry({ eventId: EVENT_ID, templateId: GLOBAL_TEMPLATE_ID });
+    expect(mockCreateEventOverride).not.toHaveBeenCalled();
+    expect(result).toEqual(existingOverride);
+  });
+});
+
+describe('getTemplateEditorEntry — read-only users see global template without fork', () => {
+  it('returns global template for READ_ONLY role without creating an override', async () => {
+    mockAssertEventAccess.mockResolvedValueOnce({ userId: 'ro-user', role: 'org:read_only' });
+    mockGetTemplateById
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(globalTemplate);
+    const result = await getTemplateEditorEntry({ eventId: EVENT_ID, templateId: GLOBAL_TEMPLATE_ID });
+    expect(mockCreateEventOverride).not.toHaveBeenCalled();
+    expect(result).toEqual(globalTemplate);
+  });
 });
 
 // ── saveTemplate: RBAC ───────────────────────────────────────

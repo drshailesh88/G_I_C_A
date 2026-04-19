@@ -143,13 +143,10 @@ const templateEditorSchema = z.object({
 
 export async function getTemplateEditorEntry(input: unknown) {
   const validated = templateEditorSchema.parse(input);
-  const { role } = await assertEventAccess(validated.eventId);
+  const { userId, role } = await assertEventAccess(validated.eventId);
   assertNotificationsRole(role);
 
-  const eventScopedTemplate = await getTemplateById(
-    validated.templateId,
-    validated.eventId,
-  );
+  const eventScopedTemplate = await getTemplateById(validated.templateId, validated.eventId);
   if (eventScopedTemplate) {
     return eventScopedTemplate;
   }
@@ -157,6 +154,15 @@ export async function getTemplateEditorEntry(input: unknown) {
   const globalTemplate = await getTemplateById(validated.templateId, null);
   if (!globalTemplate) {
     throw new Error('Notification template not found');
+  }
+
+  // Requirement 1: editor loads or creates the event-scoped draft for the system key on open.
+  // Write-role users get an event override created immediately; read-only users view the global.
+  if (role !== null && COMMUNICATIONS_WRITE_ROLES.has(role)) {
+    const channel = globalTemplate.channel as 'email' | 'whatsapp';
+    const { eventTemplates } = await listTemplatesForEvent(validated.eventId, { channel });
+    const existingOverride = eventTemplates.find((t) => t.templateKey === globalTemplate.templateKey);
+    return existingOverride ?? await createEventOverride(validated.templateId, validated.eventId, userId);
   }
 
   return globalTemplate;
