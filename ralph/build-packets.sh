@@ -30,6 +30,39 @@ count_ready() {
   python3 -c "import json; d=json.load(open('$PACKETS_INDEX')); print(sum(1 for x in d['packets'] if x.get('status') == 'READY'))"
 }
 
+promote_unblocked_backlog() {
+  python3 - <<PY
+import json
+from datetime import datetime, timezone
+
+path = "$PACKETS_INDEX"
+with open(path) as f:
+    data = json.load(f)
+
+packets = data["packets"]
+status_by_id = {packet["packet_id"]: packet.get("status") for packet in packets}
+promoted = []
+now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+for packet in packets:
+    if packet.get("status") != "BACKLOG":
+        continue
+    deps = packet.get("depends_on") or []
+    if deps and not all(status_by_id.get(dep) in {"VERIFIED", "DONE"} for dep in deps):
+        continue
+    packet["status"] = "READY"
+    packet["last_status_at"] = now
+    promoted.append(packet["packet_id"])
+
+if promoted:
+    data["updated_at"] = now
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\\n")
+    print("\\n".join(promoted))
+PY
+}
+
 count_buildable() {
   python3 -c "import json; d=json.load(open('$PACKETS_INDEX')); print(sum(1 for x in d['packets'] if x.get('packet_file')))"
 }
@@ -98,6 +131,13 @@ echo "  model:      $BUILD_MODEL (effort=$BUILD_EFFORT)"
 echo "───────────────────────────────────────────────────────────────"
 
 for i in $(seq 1 "$MAX_ITER"); do
+  PROMOTED=$(promote_unblocked_backlog)
+  if [ -n "$PROMOTED" ]; then
+    echo "Auto-promoted from BACKLOG to READY:"
+    printf '%s\n' "$PROMOTED"
+    echo ""
+  fi
+
   READY=$(count_ready)
   BUILT=$(count_built)
   echo ""
