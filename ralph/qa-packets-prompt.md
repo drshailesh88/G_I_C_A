@@ -11,17 +11,20 @@ Attached in-context:
 - `ralph/packets/index.json`
 - `ralph/packet-qa-report.json`
 - `ralph/packet-qa-progress.txt`
+- `ralph/baseline-noise.json`
 
 ## Workflow
 
 1. Read `CLAUDE.md`.
 2. Read `ralph/packet-qa-progress.txt`.
 3. Read `ralph/packets/index.json`.
-4. Find the first packet where `status == "NEEDS_REVIEW"` ordered by `priority`.
-5. Read that packet's `packet_file`. The packet file is the oracle.
-6. Verify the implementation against that packet.
-7. If bugs are found, fix production code only. Never weaken tests or edit the packet spec.
-8. This pass only runs after a cheaper pass has already judged the packet `FAIL` or `BLOCKED`.
+4. Read `ralph/baseline-noise.json` so you know the currently accepted unrelated
+   repo-wide failures.
+5. Find the first packet where `status == "NEEDS_REVIEW"` ordered by `priority`.
+6. Read that packet's `packet_file`. The packet file is the oracle.
+7. Verify the implementation against that packet.
+8. If bugs are found, fix production code only. Never weaken tests or edit the packet spec.
+9. This pass only runs after a cheaper pass has already judged the packet `FAIL` or `BLOCKED`.
 
 ## Rules
 
@@ -29,17 +32,18 @@ Attached in-context:
 - Do not use `ralph/prd.json` as the verification oracle.
 - Never modify `ralph/packets/*.md`.
 - Keep fixes inside the packet's allowed scope unless the packet clearly requires more.
-- Repo-wide `npm run test:run` / `npx tsc --noEmit` failures are evidence, not an
-  automatic packet failure. If the packet-local oracle, targeted checks, and
-  manual acceptance pass, you may still verify the packet and record the global
-  noise in the notes.
+- Repo-wide failures belong to the wave gate, not the normal per-packet QA
+  path. Use packet-focused tests and packet-focused code inspection first.
+- If you optionally inspect repo-wide `npm run test:run` / `npx tsc --noEmit`,
+  treat those failures as background evidence, not automatic packet failure.
 - Only treat repo-wide failures as packet blockers when you can point to a
   concrete failure that is caused by this packet or directly prevents packet
   verification.
 - Run:
-  - `npm run test:run`
-  - `npx tsc --noEmit`
   - relevant targeted checks for the packet
+  - packet-local code inspection against the packet oracle
+  - repo-wide checks only if this packet touched shared infrastructure or you
+    need them to confirm a packet-specific regression
 
 ## Commit
 

@@ -8,6 +8,7 @@ unchanged. The packet pipeline uses sibling scripts:
 - `ralph/build-packets.sh`
 - `ralph/qa-packets.sh`
 - `ralph/run-packets.sh`
+- `ralph/wave-gate.sh`
 - `ralph/watch-packets.sh`
 
 ## Source Of Truth
@@ -54,6 +55,11 @@ Every packet entry tracks:
   - `ralph/packet-progress.txt`
   - `ralph/packet-qa-progress.txt`
   - `ralph/packet-qa-report.json`
+  - `ralph/baseline-noise.json`
+
+`wave-gate.sh` is the slower repo-wide boundary check. Packet iterations stay
+focused on packet truth; the wave gate refreshes the known unrelated baseline
+noise once per wave.
 
 ## Linear / Watching
 

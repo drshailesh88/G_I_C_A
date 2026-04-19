@@ -11,6 +11,7 @@ PACKETS_INDEX="ralph/packets/index.json"
 BUILD_SKIP="${BUILD_SKIP:-0}"
 QA_SKIP="${QA_SKIP:-0}"
 MASTER_MAX="${RALPH_PACKET_MASTER_MAX:-999}"
+WAVE_GATE_ON_COMPLETE="${RALPH_WAVE_GATE_ON_COMPLETE:-0}"
 
 if [ ! -f "$PACKETS_INDEX" ]; then
   echo "ERROR: $PACKETS_INDEX not found." >&2
@@ -157,4 +158,12 @@ for CODE in "$BUILD_EXIT" "$QA_EXIT"; do
     exit "$CODE"
   fi
 done
+
+if [ "$WAVE_GATE_ON_COMPLETE" = "1" ]; then
+  echo ""
+  echo ">>> Wave gate: running repo-wide checks once at run boundary"
+  echo ""
+  ./ralph/wave-gate.sh
+fi
+
 exit 0

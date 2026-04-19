@@ -8,10 +8,11 @@ MAX_ITER="${1:-999}"
 PACKETS_INDEX="ralph/packets/index.json"
 QA_REPORT="ralph/packet-qa-report.json"
 QA_PROGRESS="ralph/packet-qa-progress.txt"
+BASELINE_NOISE="ralph/baseline-noise.json"
 ITER_TIMEOUT=1800
 SLEEP_BETWEEN=3
-QA_PASS1_MODEL="${RALPH_PACKET_QA_PASS1_MODEL:-default}"
-QA_PASS2_MODEL="${RALPH_PACKET_QA_PASS2_MODEL:-default}"
+QA_PASS1_MODEL="${RALPH_PACKET_QA_PASS1_MODEL:-gpt-5.3-codex-spark}"
+QA_PASS2_MODEL="${RALPH_PACKET_QA_PASS2_MODEL:-gpt-5.1-codex-max}"
 
 CODEX_ACC1="${CODEX_ACC1:-$HOME/.codex-acc1}"
 CODEX_ACC2="${CODEX_ACC2:-$HOME/.codex-acc2}"
@@ -22,6 +23,11 @@ BOTH_EXHAUSTED_SLEEP=300
 
 if [ ! -f "$PACKETS_INDEX" ]; then
   echo "ERROR: $PACKETS_INDEX not found." >&2
+  exit 1
+fi
+
+if [ ! -f "$BASELINE_NOISE" ]; then
+  echo "ERROR: $BASELINE_NOISE not found." >&2
   exit 1
 fi
 
@@ -144,8 +150,8 @@ data.append({
     "qa_model": "$QA_PASS1_MODEL",
     "status": "pass",
     "checks_run": {
-        "vitest": "pass",
-        "typecheck": "pass",
+        "vitest": "skip",
+        "typecheck": "skip",
         "manual_acceptance": "pass"
     },
     "bugs": [],
@@ -177,6 +183,11 @@ with open(path, "a") as f:
     f.write("- Fix commits: none\\n")
     f.write(f"- Notes: {notes[:600] if notes else 'pass1 evaluator approved packet'}\\n")
 PY
+}
+
+extract_classification() {
+  local text="$1"
+  printf '%s\n' "$text" | grep -o '<classification>[^<]*</classification>' | tail -1 | sed 's#<classification>##; s#</classification>##'
 }
 
 try_codex() {
@@ -291,7 +302,7 @@ for i in $(seq 1 "$MAX_ITER"); do
   STORY_ID=$(get_packet_field "$CURRENT_PACKET" "story_id")
   TITLE=$(get_packet_field "$CURRENT_PACKET" "title")
 
-  PASS1_PROMPT="Read @ralph/qa-packets-pass1-prompt.md @CLAUDE.md @$PACKETS_INDEX
+  PASS1_PROMPT="Read @ralph/qa-packets-pass1-prompt.md @CLAUDE.md @$PACKETS_INDEX @$BASELINE_NOISE
 
 ITERATION: $i of $MAX_ITER
 CURRENT_PACKET: $CURRENT_PACKET
@@ -312,12 +323,20 @@ Output only PASS, FAIL, or BLOCKED via promise tag."
   fi
 
   pass1_tail=$(printf '%s\n' "$pass1_result" | tail -n 40)
+  pass1_classification=$(extract_classification "$pass1_result")
   quota_tail=$(printf '%s' "$pass1_tail" | grep -ciE "$QUOTA_REGEX" || true)
   unsupported_tail=$(printf '%s' "$pass1_tail" | grep -ciE "$MODEL_UNSUPPORTED_REGEX" || true)
 
   if [ "$PASS1_RC" -eq 64 ] || [ "$unsupported_tail" -gt 0 ]; then
     echo ""
     echo "Packet QA pass1 model '$QA_PASS1_MODEL' is not supported by this Codex account. Resetting $CURRENT_PACKET to NEEDS_REVIEW and aborting QA." >&2
+    set_packet_status "$CURRENT_PACKET" "NEEDS_REVIEW"
+    exit 2
+  fi
+
+  if [ "$pass1_classification" = "RUNNER_ABORT" ]; then
+    echo ""
+    echo "Packet QA pass1 reported RUNNER_ABORT. Resetting $CURRENT_PACKET to NEEDS_REVIEW and aborting QA." >&2
     set_packet_status "$CURRENT_PACKET" "NEEDS_REVIEW"
     exit 2
   fi
@@ -332,7 +351,7 @@ Output only PASS, FAIL, or BLOCKED via promise tag."
 Packet verified by $QA_PASS1_MODEL without requiring production fixes." >/dev/null 2>&1 || true
   elif echo "$pass1_tail" | grep -q '<promise>FAIL</promise>' && [ "$quota_tail" -eq 0 ]; then
     echo "[grader] pass1 verdict FAIL — escalating to $QA_PASS2_MODEL"
-    PASS2_PROMPT="Read @ralph/qa-packets-prompt.md @CLAUDE.md @$PACKETS_INDEX @$QA_REPORT @$QA_PROGRESS
+    PASS2_PROMPT="Read @ralph/qa-packets-prompt.md @CLAUDE.md @$PACKETS_INDEX @$QA_REPORT @$QA_PROGRESS @$BASELINE_NOISE
 
 ITERATION: $i of $MAX_ITER
 CURRENT_PACKET: $CURRENT_PACKET
@@ -388,7 +407,7 @@ Output <promise>ABORT</promise> if blocked."
     fi
   elif echo "$pass1_tail" | grep -q '<promise>BLOCKED</promise>' && [ "$quota_tail" -eq 0 ]; then
     echo "[grader] pass1 verdict BLOCKED — escalating to $QA_PASS2_MODEL"
-    PASS2_PROMPT="Read @ralph/qa-packets-prompt.md @CLAUDE.md @$PACKETS_INDEX @$QA_REPORT @$QA_PROGRESS
+    PASS2_PROMPT="Read @ralph/qa-packets-prompt.md @CLAUDE.md @$PACKETS_INDEX @$QA_REPORT @$QA_PROGRESS @$BASELINE_NOISE
 
 ITERATION: $i of $MAX_ITER
 CURRENT_PACKET: $CURRENT_PACKET

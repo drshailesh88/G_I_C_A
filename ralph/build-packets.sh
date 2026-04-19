@@ -96,6 +96,24 @@ for packet in data["packets"]:
 PY
 }
 
+get_packet_field() {
+  local packet_id="$1"
+  local field="$2"
+  python3 - <<PY
+import json
+path = "$PACKETS_INDEX"
+packet_id = "$packet_id"
+field = "$field"
+with open(path) as f:
+    data = json.load(f)
+for packet in data["packets"]:
+    if packet["packet_id"] == packet_id:
+        value = packet.get(field)
+        print("" if value is None else value)
+        break
+PY
+}
+
 set_packet_status() {
   local packet_id="$1"
   local status="$2"
@@ -155,6 +173,12 @@ for i in $(seq 1 "$MAX_ITER"); do
     exit 2
   fi
 
+  BUILD_COMMIT=$(get_packet_field "$CURRENT_PACKET" "build_commit")
+  FAST_RETRY=no
+  if [ -n "$BUILD_COMMIT" ] && [ "$BUILD_COMMIT" != "null" ]; then
+    FAST_RETRY=yes
+  fi
+
   set_packet_status "$CURRENT_PACKET" "BUILDING"
 
   set +e
@@ -163,6 +187,7 @@ for i in $(seq 1 "$MAX_ITER"); do
 
 ITERATION: $i of $MAX_ITER
 CURRENT_PACKET: $CURRENT_PACKET
+FAST_RETRY: $FAST_RETRY
 
 Build exactly ONE READY packet, update the packet index and progress log, commit, then stop.
 Output <promise>NEXT</promise> when done.

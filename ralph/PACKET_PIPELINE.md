@@ -13,6 +13,7 @@ It exists because:
 - `./ralph/build-packets.sh`
 - `./ralph/qa-packets.sh`
 - `./ralph/run-packets.sh`
+- `./ralph/wave-gate.sh`
 - `./ralph/watch-packets.sh`
 
 ## What Stays Untouched
@@ -31,6 +32,7 @@ The old and new pipelines can coexist.
 - Build progress: `ralph/packet-progress.txt`
 - QA progress: `ralph/packet-qa-progress.txt`
 - QA report: `ralph/packet-qa-report.json`
+- Known repo-wide baseline noise: `ralph/baseline-noise.json`
 - Linear issue map: `ralph/.linear-packet-issues.txt`
 
 ## Suggested Usage
@@ -45,6 +47,12 @@ Run packet build + QA in another:
 
 ```bash
 ./ralph/run-packets.sh
+```
+
+Run repo-wide wave checks separately at a wave boundary:
+
+```bash
+./ralph/wave-gate.sh
 ```
 
 ## Codex Account Aliases
@@ -80,25 +88,31 @@ Unless overridden by environment variables:
 
 - build: `claude-sonnet-4-6`
 - build effort: `high`
-- QA pass 1: `default` (Codex account default model)
-- QA pass 2: `default` (Codex account default model)
+- QA pass 1: `gpt-5.3-codex-spark`
+- QA pass 2: `gpt-5.1-codex-max`
 
 Supported overrides:
 
 ```bash
 RALPH_PACKET_BUILD_MODEL=claude-sonnet-4-6
 RALPH_PACKET_BUILD_EFFORT=high
-RALPH_PACKET_QA_PASS1_MODEL=default
-RALPH_PACKET_QA_PASS2_MODEL=default
+RALPH_PACKET_QA_PASS1_MODEL=gpt-5.3-codex-spark
+RALPH_PACKET_QA_PASS2_MODEL=gpt-5.1-codex-max
+RALPH_WAVE_GATE_ON_COMPLETE=0
 ```
 
-If your Codex login is a ChatGPT-backed account, leaving QA on `default` is the
-safest option because explicit `-m` model IDs may be rejected even when Codex
-itself is usable on that account.
+If your Codex login cannot access these explicit models, override the QA model
+environment variables. The packet scripts will abort cleanly on unsupported
+model errors rather than silently drifting.
 
-If you are logged into Codex with a ChatGPT account rather than an API-key
-organization, prefer `gpt-5.1-codex` unless you have explicitly verified that a
-newer model is available on that account.
+## Packet Vs Wave Checks
+
+The packet pipeline is intentionally layered:
+
+- packet iterations run targeted packet-focused checks
+- `wave-gate.sh` runs slower repo-wide `npm run test:run` and `npx tsc --noEmit`
+- `baseline-noise.json` captures the latest known unrelated global failures so
+  packet QA does not keep rediscovering the same baseline noise
 
 Or run phases individually:
 

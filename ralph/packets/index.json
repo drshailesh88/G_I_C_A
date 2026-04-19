@@ -1,8 +1,8 @@
 {
   "version": 1,
   "pipeline": "ralph-packets",
-  "updated_at": "2026-04-19T20:00:00Z",
-  "current_packet_id": "PKT-A-008",
+  "updated_at": "2026-04-19T16:11:17.361104Z",
+  "current_packet_id": "PKT-A-009",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -163,7 +163,7 @@
       "linear_issue_id": null,
       "build_commit": "c901ec9399351766311c29aff80e80d16b921b30",
       "qa_commit": null,
-      "last_status_at": "2026-04-19T20:00:00Z",
+      "last_status_at": "2026-04-19T16:11:17.361104Z",
       "depends_on": [
         "PKT-A-007"
       ]

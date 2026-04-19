@@ -23,6 +23,7 @@ Attached in-context:
 7. Build exactly `CURRENT_PACKET`. Do not build a different packet even if
    other packets are still `READY`. Do not build adjacent features. Respect
    `Allowed Write Scope`, `Forbidden Write Scope`, and `Non-Goals`.
+8. Read `FAST_RETRY` from the iteration context.
 
 ## Rules
 
@@ -33,9 +34,15 @@ Attached in-context:
 - If you need to touch files outside allowed scope, ABORT.
 - Tests first where practical; never delete or weaken tests.
 - Run:
-  - `npm run test:run`
-  - `npx tsc --noEmit`
-  - `npm run lint --if-present`
+  - packet-focused tests for the feature you changed
+  - packet-focused typecheck or build sanity only if relevant
+  - optional lint on touched files or targeted module only
+  - do not run full repo `npm run test:run` / full repo `npx tsc --noEmit`
+    during ordinary packet build iterations unless the packet clearly touches
+    shared infrastructure and narrower checks are insufficient
+- If `FAST_RETRY=yes`, assume this is a narrow retry on an already-built packet:
+  prefer the smallest fix that satisfies the oracle and do not re-pay broad
+  validation costs unless the packet clearly requires it.
 
 ## Commit
 
