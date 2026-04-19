@@ -146,17 +146,17 @@ describe('renderResponsibilityBundleSummary', () => {
 
 describe('buildBundleIdempotencyKey', () => {
   it('includes event-scoped version, person, and channel', () => {
-    expect(buildBundleIdempotencyKey(VERSION_ID, PERSON_A, 'email')).toBe(
-      `notify:program-bundle:${VERSION_ID}:${PERSON_A}:email`,
+    expect(buildBundleIdempotencyKey(EVENT_ID, VERSION_ID, PERSON_A, 'email')).toBe(
+      `notify:program-bundle:${EVENT_ID}:${VERSION_ID}:${PERSON_A}:email`,
     );
-    expect(buildBundleIdempotencyKey(VERSION_ID, PERSON_A, 'whatsapp')).toBe(
-      `notify:program-bundle:${VERSION_ID}:${PERSON_A}:whatsapp`,
+    expect(buildBundleIdempotencyKey(EVENT_ID, VERSION_ID, PERSON_A, 'whatsapp')).toBe(
+      `notify:program-bundle:${EVENT_ID}:${VERSION_ID}:${PERSON_A}:whatsapp`,
     );
   });
 
   it('appends a force suffix only when explicitly forced', () => {
-    const key = buildBundleIdempotencyKey(VERSION_ID, PERSON_A, 'email', { at: 12345 });
-    expect(key).toBe(`notify:program-bundle:${VERSION_ID}:${PERSON_A}:email:force:12345`);
+    const key = buildBundleIdempotencyKey(EVENT_ID, VERSION_ID, PERSON_A, 'email', { at: 12345 });
+    expect(key).toBe(`notify:program-bundle:${EVENT_ID}:${VERSION_ID}:${PERSON_A}:email:force:12345`);
   });
 });
 
@@ -190,7 +190,9 @@ describe('sendFacultyResponsibilityBundles', () => {
       expect(input.eventId).toBe(EVENT_ID);
       expect(input.personId).toBe(PERSON_A);
       expect(input.triggerEntityId).toBe(VERSION_ID);
-      expect(input.idempotencyKey).toMatch(/^notify:program-bundle:/);
+      expect(input.idempotencyKey).toBe(
+        `notify:program-bundle:${EVENT_ID}:${VERSION_ID}:${PERSON_A}:${input.channel}`,
+      );
       expect(input.variables.eventName).toBe('Cardio Conf');
       expect(input.variables.fullName).toBe('Dr. A');
       expect(typeof input.variables.responsibilitySummary).toBe('string');
@@ -268,7 +270,7 @@ describe('sendFacultyResponsibilityBundles', () => {
       options: { channels: ['email'] },
     });
     const firstKey = vi.mocked(sendNotification).mock.calls[0][0].idempotencyKey;
-    expect(firstKey).toBe(`notify:program-bundle:${VERSION_ID}:${PERSON_A}:email`);
+    expect(firstKey).toBe(`notify:program-bundle:${EVENT_ID}:${VERSION_ID}:${PERSON_A}:email`);
 
     // Run 2: force=true.
     vi.mocked(sendNotification).mockClear();
@@ -281,7 +283,9 @@ describe('sendFacultyResponsibilityBundles', () => {
       options: { channels: ['email'], force: true },
     });
     const forcedKey = vi.mocked(sendNotification).mock.calls[0][0].idempotencyKey;
-    expect(forcedKey).toMatch(/^notify:program-bundle:.+:force:\d+$/);
+    expect(forcedKey).toMatch(
+      new RegExp(`^notify:program-bundle:${EVENT_ID}:${VERSION_ID}:${PERSON_A}:email:force:\\d+$`),
+    );
     expect(forcedKey).not.toBe(firstKey);
   });
 

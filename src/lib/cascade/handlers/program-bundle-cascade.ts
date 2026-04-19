@@ -156,12 +156,13 @@ type BundleSendOptions = {
 };
 
 export function buildBundleIdempotencyKey(
+  eventId: string,
   versionId: string,
   personId: string,
   channel: BundleChannel,
   force?: { at: number },
 ): string {
-  const base = `notify:program-bundle:${versionId}:${personId}:${channel}`;
+  const base = `notify:program-bundle:${eventId}:${versionId}:${personId}:${channel}`;
   return force ? `${base}:force:${force.at}` : base;
 }
 
@@ -224,7 +225,13 @@ export async function sendFacultyResponsibilityBundles(params: {
         continue;
       }
 
-      const idempotencyKey = buildBundleIdempotencyKey(versionId, person.id, channel, forceMarker);
+      const idempotencyKey = buildBundleIdempotencyKey(
+        eventId,
+        versionId,
+        person.id,
+        channel,
+        forceMarker,
+      );
 
       try {
         const result = await sendNotification({
