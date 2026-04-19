@@ -4,20 +4,20 @@ import { assertEventAccess } from '@/lib/auth/event-access';
 import { ROLES } from '@/lib/auth/roles';
 import { listFailedLogs, getLogById } from '@/lib/notifications/log-queries';
 import { retryFailedNotification, resendNotification } from '@/lib/notifications/send';
-import { listTemplatesForEvent } from '@/lib/notifications/template-queries';
+import { getTemplateById, listTemplatesForEvent } from '@/lib/notifications/template-queries';
 import { db } from '@/lib/db';
 import { notificationLog } from '@/lib/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 
-const COMMUNICATIONS_READ_ROLES = new Set([
+const COMMUNICATIONS_READ_ROLES: ReadonlySet<string> = new Set([
   ROLES.SUPER_ADMIN,
   ROLES.EVENT_COORDINATOR,
   ROLES.READ_ONLY,
 ]);
 
-const COMMUNICATIONS_WRITE_ROLES = new Set([
+const COMMUNICATIONS_WRITE_ROLES: ReadonlySet<string> = new Set([
   ROLES.SUPER_ADMIN,
   ROLES.EVENT_COORDINATOR,
 ]);
@@ -119,6 +119,32 @@ export async function getTemplatesHub(input: unknown) {
   return listTemplatesForEvent(validated.eventId, { channel: validated.channel });
 }
 
+const templateEditorSchema = z.object({
+  eventId: z.string().uuid(),
+  templateId: z.string().uuid(),
+});
+
+export async function getTemplateEditorEntry(input: unknown) {
+  const validated = templateEditorSchema.parse(input);
+  const { role } = await assertEventAccess(validated.eventId);
+  assertNotificationsRole(role);
+
+  const eventScopedTemplate = await getTemplateById(
+    validated.templateId,
+    validated.eventId,
+  );
+  if (eventScopedTemplate) {
+    return eventScopedTemplate;
+  }
+
+  const globalTemplate = await getTemplateById(validated.templateId, null);
+  if (!globalTemplate) {
+    throw new Error('Notification template not found');
+  }
+
+  return globalTemplate;
+}
+
 // ── Notification log — all statuses (hub delivery log) ───────
 
 const listAllLogsSchema = z.object({
@@ -167,4 +193,3 @@ export async function getNotificationDetail(input: unknown) {
   if (!log) throw new Error('Notification not found');
   return log;
 }
-
