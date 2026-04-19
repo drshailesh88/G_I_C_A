@@ -1,8 +1,8 @@
 {
   "version": 1,
   "pipeline": "ralph-packets",
-  "updated_at": "2026-04-19T01:12:07Z",
-  "current_packet_id": "PKT-B-007",
+  "updated_at": "2026-04-19T02:33:59Z",
+  "current_packet_id": "PKT-A-007",
   "packets": [
     {
       "packet_id": "PKT-A-001",
@@ -120,14 +120,14 @@
       "bucket": "A",
       "module": "communications",
       "priority": 21,
-      "status": "BLOCKED",
+      "status": "NEEDS_REVIEW",
       "packet_file": "ralph/packets/PKT-A-007-p4-m13-template-list-hub.md",
       "spec_status": "frozen",
       "wireframe_status": "not_required",
       "linear_issue_id": null,
       "build_commit": "e2ca38b",
       "qa_commit": null,
-      "last_status_at": "2026-04-18T14:16:30Z",
+      "last_status_at": "2026-04-19T02:45:00.000000Z",
       "depends_on": []
     },
     {
