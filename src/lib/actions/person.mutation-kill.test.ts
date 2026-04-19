@@ -1751,6 +1751,7 @@ describe('updatePerson – field inclusion/exclusion', () => {
 
   // Verify that providing ONLY personId (no fields) results in minimal updateData
   it('minimal update has only updatedBy and updatedAt', async () => {
+    chainedSelect([{ id: VALID_UUID }]); // pre-update snapshot for diff
     const updateChain = chainedUpdate([{ id: VALID_UUID }]);
 
     await updatePerson({ personId: VALID_UUID });
@@ -1772,6 +1773,7 @@ describe('updatePerson – field inclusion/exclusion', () => {
 
   // Verify each field is conditionally included
   it('includes ONLY salutation when only salutation provided', async () => {
+    chainedSelect([{ id: VALID_UUID }]);
     const updateChain = chainedUpdate([{ id: VALID_UUID }]);
 
     await updatePerson({ personId: VALID_UUID, salutation: 'Dr' });
@@ -1783,6 +1785,7 @@ describe('updatePerson – field inclusion/exclusion', () => {
   });
 
   it('includes ONLY fullName when only fullName provided', async () => {
+    chainedSelect([{ id: VALID_UUID }]);
     const updateChain = chainedUpdate([{ id: VALID_UUID }]);
 
     await updatePerson({ personId: VALID_UUID, fullName: 'Test' });
@@ -1794,6 +1797,7 @@ describe('updatePerson – field inclusion/exclusion', () => {
   });
 
   it('includes ONLY email when only email provided', async () => {
+    chainedSelect([{ id: VALID_UUID }]);
     const updateChain = chainedUpdate([{ id: VALID_UUID }]);
 
     await updatePerson({ personId: VALID_UUID, email: 'a@b.com' });
@@ -1809,6 +1813,7 @@ describe('updatePerson – field inclusion/exclusion', () => {
     // Actually let me re-check: phone='' enters L101 block because '' !== undefined
     // Inside: phoneE164 = '' ? normalize('') : undefined -> '' is falsy -> phoneE164 = undefined
     // L113: undefined !== undefined is false -> phoneE164 NOT added to updateData
+    chainedSelect([{ id: VALID_UUID }]);
     const updateChain = chainedUpdate([{ id: VALID_UUID }]);
 
     await updatePerson({ personId: VALID_UUID, phone: '' });

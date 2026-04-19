@@ -57,6 +57,15 @@ function mockCountChain(count: number) {
   };
 }
 
+// Non-super-admin reads first lookup the caller's active event assignments
+// before querying audit_log. Super Admin skips that lookup.
+function mockAssignmentsChain(eventIds: string[]) {
+  return {
+    from: vi.fn().mockReturnThis(),
+    where: vi.fn().mockResolvedValue(eventIds.map(eventId => ({ eventId }))),
+  };
+}
+
 beforeEach(() => {
   vi.resetAllMocks();
   mockWriteAudit.mockResolvedValue(undefined);
@@ -79,6 +88,7 @@ describe('RBAC', () => {
   it('allows Event Coordinator to read history', async () => {
     authAs(ROLES.EVENT_COORDINATOR);
     mockDb.select
+      .mockReturnValueOnce(mockAssignmentsChain([]))
       .mockReturnValueOnce(mockHistoryChain([]))
       .mockReturnValueOnce(mockCountChain(0));
     const result = await getPersonHistory(PERSON_ID);
@@ -88,6 +98,7 @@ describe('RBAC', () => {
   it('allows Read-only to read history', async () => {
     authAs(ROLES.READ_ONLY);
     mockDb.select
+      .mockReturnValueOnce(mockAssignmentsChain([]))
       .mockReturnValueOnce(mockHistoryChain([]))
       .mockReturnValueOnce(mockCountChain(0));
     const result = await getPersonHistory(PERSON_ID);
@@ -182,9 +193,95 @@ describe('Meta passthrough', () => {
     authAs(ROLES.EVENT_COORDINATOR);
     const rowWithMeta = { ...AUDIT_ROW, meta: { changedFields: ['email'], action: 'restore' } };
     mockDb.select
+      .mockReturnValueOnce(mockAssignmentsChain([]))
       .mockReturnValueOnce(mockHistoryChain([rowWithMeta]))
       .mockReturnValueOnce(mockCountChain(1));
     const result = await getPersonHistory(PERSON_ID);
     expect(result.rows[0].meta).toEqual({ changedFields: ['email'], action: 'restore' });
+  });
+});
+
+// ── Per-event scoping (PKT-A-015 acceptance) ────────────────────────
+
+describe('Per-event scoping', () => {
+  it('Super Admin queries audit_log without consulting event assignments', async () => {
+    authAs(ROLES.SUPER_ADMIN);
+    mockDb.select
+      .mockReturnValueOnce(mockHistoryChain([]))
+      .mockReturnValueOnce(mockCountChain(0));
+    await getPersonHistory(PERSON_ID);
+    // Exactly two selects: history + count. The assignment lookup is skipped
+    // because Super Admin sees everything.
+    expect(mockDb.select).toHaveBeenCalledTimes(2);
+  });
+
+  it('Event Coordinator first reads their assigned events to scope the query', async () => {
+    authAs(ROLES.EVENT_COORDINATOR, 'user_coord');
+    const assignChain = mockAssignmentsChain(['event-1', 'event-2']);
+    mockDb.select
+      .mockReturnValueOnce(assignChain)
+      .mockReturnValueOnce(mockHistoryChain([]))
+      .mockReturnValueOnce(mockCountChain(0));
+    await getPersonHistory(PERSON_ID);
+    // Three selects: assignments + history + count.
+    expect(mockDb.select).toHaveBeenCalledTimes(3);
+    expect(assignChain.where).toHaveBeenCalledTimes(1);
+  });
+
+  it('Event Coordinator with no assignments still gets global rows but no per-event rows', async () => {
+    authAs(ROLES.EVENT_COORDINATOR, 'user_coord');
+    mockDb.select
+      .mockReturnValueOnce(mockAssignmentsChain([]))
+      .mockReturnValueOnce(mockHistoryChain([]))
+      .mockReturnValueOnce(mockCountChain(0));
+    const result = await getPersonHistory(PERSON_ID);
+    expect(result.rows).toEqual([]);
+  });
+});
+
+// ── PKT-A-015 row enrichment (source + before→after diff) ──────────
+
+describe('Row enrichment', () => {
+  it('exposes source field from meta when present', async () => {
+    authAs(ROLES.SUPER_ADMIN);
+    const enrichedRow = {
+      ...AUDIT_ROW,
+      meta: { source: 'self_service', changedFields: ['email'] },
+    };
+    mockDb.select
+      .mockReturnValueOnce(mockHistoryChain([enrichedRow]))
+      .mockReturnValueOnce(mockCountChain(1));
+    const result = await getPersonHistory(PERSON_ID);
+    expect(result.rows[0].source).toBe('self_service');
+  });
+
+  it('falls back to admin source when meta does not specify one', async () => {
+    authAs(ROLES.SUPER_ADMIN);
+    mockDb.select
+      .mockReturnValueOnce(mockHistoryChain([AUDIT_ROW]))
+      .mockReturnValueOnce(mockCountChain(1));
+    const result = await getPersonHistory(PERSON_ID);
+    expect(result.rows[0].source).toBe('admin');
+  });
+
+  it('exposes structured changes diff when meta carries before/after values', async () => {
+    authAs(ROLES.SUPER_ADMIN);
+    const enrichedRow = {
+      ...AUDIT_ROW,
+      action: 'update',
+      meta: {
+        source: 'admin',
+        changedFields: ['email'],
+        changes: { email: { from: 'old@x.com', to: 'new@x.com' } },
+      },
+    };
+    mockDb.select
+      .mockReturnValueOnce(mockHistoryChain([enrichedRow]))
+      .mockReturnValueOnce(mockCountChain(1));
+    const result = await getPersonHistory(PERSON_ID);
+    expect(result.rows[0].changes).toEqual({
+      email: { from: 'old@x.com', to: 'new@x.com' },
+    });
+    expect(result.rows[0].changedFields).toEqual(['email']);
   });
 });

@@ -14,6 +14,7 @@ import {
   transportPassengerAssignments,
   attendanceRecords,
   issuedCertificates,
+  eventUserAssignments,
   auditLog,
 } from '@/lib/db/schema';
 import { eq, or, and, ilike, desc, sql, isNull, inArray } from 'drizzle-orm';
@@ -212,6 +213,10 @@ export async function updatePerson(input: unknown) {
   if (fields.city !== undefined) updateData.city = fields.city || null;
   if (fields.tags !== undefined) updateData.tags = fields.tags;
 
+  // Snapshot the row before mutation so the audit record can carry a real
+  // before -> after diff for change-history rendering.
+  const [previous] = await db.select().from(people).where(eq(people.id, personId)).limit(1);
+
   const [updated] = await db
     .update(people)
     .set(updateData)
@@ -227,13 +232,31 @@ export async function updatePerson(input: unknown) {
   const changedFieldNames = Object.keys(updateData).filter(
     (k) => k !== 'updatedBy' && k !== 'updatedAt',
   );
+
+  const changes: Record<string, { from: unknown; to: unknown }> = {};
+  if (previous) {
+    for (const field of changedFieldNames) {
+      const prevVal = (previous as Record<string, unknown>)[field] ?? null;
+      const nextVal = updateData[field] ?? null;
+      const prevSerialized = JSON.stringify(prevVal);
+      const nextSerialized = JSON.stringify(nextVal);
+      if (prevSerialized !== nextSerialized) {
+        changes[field] = { from: prevVal, to: nextVal };
+      }
+    }
+  }
+
   await writeAudit({
     actorUserId: userId,
     eventId: null,
     action: 'update',
     resource: 'people',
     resourceId: personId,
-    meta: { changedFields: changedFieldNames },
+    meta: {
+      source: 'admin',
+      changedFields: changedFieldNames,
+      changes,
+    },
   });
 
   revalidatePath('/people');
@@ -766,7 +789,11 @@ export type PersonHistoryRow = {
   actorUserId: string;
   action: string;
   resource: string;
+  eventId: string | null;
+  source: string;
   timestamp: Date;
+  changedFields: string[];
+  changes: Record<string, { from: unknown; to: unknown }>;
   meta: Record<string, unknown>;
 };
 
@@ -776,6 +803,33 @@ export type PersonHistoryResult = {
   page: number;
   totalPages: number;
 };
+
+function deriveSource(meta: Record<string, unknown>, action: string): string {
+  const explicit = typeof meta.source === 'string' ? meta.source : null;
+  if (explicit) return explicit;
+  const metaAction = typeof meta.action === 'string' ? meta.action : null;
+  if (metaAction === 'merge') return 'merge';
+  if (metaAction === 'restore') return 'admin';
+  if (action === 'create') return 'admin';
+  return 'admin';
+}
+
+function deriveChanges(meta: Record<string, unknown>): Record<string, { from: unknown; to: unknown }> {
+  if (meta.changes && typeof meta.changes === 'object' && !Array.isArray(meta.changes)) {
+    return meta.changes as Record<string, { from: unknown; to: unknown }>;
+  }
+  return {};
+}
+
+function deriveChangedFields(meta: Record<string, unknown>): string[] {
+  if (Array.isArray(meta.changedFields)) {
+    return (meta.changedFields as unknown[]).filter((f): f is string => typeof f === 'string');
+  }
+  if (meta.changes && typeof meta.changes === 'object' && !Array.isArray(meta.changes)) {
+    return Object.keys(meta.changes as Record<string, unknown>);
+  }
+  return [];
+}
 
 export async function getPersonHistory(
   personId: string,
@@ -791,15 +845,30 @@ export async function getPersonHistory(
     typeof session.has === 'function' && session.has({ role: ROLES.SUPER_ADMIN });
   const offset = (page - 1) * HISTORY_PAGE_SIZE;
 
-  // Super Admin sees all history; others only see global (eventId IS NULL) rows
-  // to prevent cross-event history leakage.
-  const scopeCondition = isSuperAdmin
-    ? and(eq(auditLog.resource, 'people'), eq(auditLog.resourceId, personId))
-    : and(
-        eq(auditLog.resource, 'people'),
-        eq(auditLog.resourceId, personId),
-        isNull(auditLog.eventId),
-      );
+  // Super Admin sees all history. Other roles see global (eventId IS NULL) rows
+  // plus history for events they are actively assigned to. This prevents
+  // cross-event leakage while still surfacing real per-event activity.
+  let scopeCondition;
+  if (isSuperAdmin) {
+    scopeCondition = and(eq(auditLog.resource, 'people'), eq(auditLog.resourceId, personId));
+  } else {
+    const assignmentRows = await db
+      .select({ eventId: eventUserAssignments.eventId })
+      .from(eventUserAssignments)
+      .where(and(
+        eq(eventUserAssignments.authUserId, session.userId),
+        eq(eventUserAssignments.isActive, true),
+      ));
+    const assignedEventIds = assignmentRows.map(r => r.eventId);
+    const eventScope = assignedEventIds.length > 0
+      ? or(isNull(auditLog.eventId), inArray(auditLog.eventId, assignedEventIds))
+      : isNull(auditLog.eventId);
+    scopeCondition = and(
+      eq(auditLog.resource, 'people'),
+      eq(auditLog.resourceId, personId),
+      eventScope,
+    );
+  }
 
   const rows = await db
     .select()
@@ -817,14 +886,21 @@ export async function getPersonHistory(
   const total = Number(count);
 
   return {
-    rows: rows.map((r) => ({
-      id: r.id,
-      actorUserId: r.actorUserId,
-      action: r.action,
-      resource: r.resource,
-      timestamp: r.timestamp,
-      meta: (r.meta ?? {}) as Record<string, unknown>,
-    })),
+    rows: rows.map((r) => {
+      const meta = (r.meta ?? {}) as Record<string, unknown>;
+      return {
+        id: r.id,
+        actorUserId: r.actorUserId,
+        action: r.action,
+        resource: r.resource,
+        eventId: r.eventId,
+        source: deriveSource(meta, r.action),
+        timestamp: r.timestamp,
+        changedFields: deriveChangedFields(meta),
+        changes: deriveChanges(meta),
+        meta,
+      };
+    }),
     total,
     page,
     totalPages: Math.ceil(total / HISTORY_PAGE_SIZE),

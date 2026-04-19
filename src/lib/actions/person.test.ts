@@ -578,6 +578,7 @@ describe('person adversarial hardening', () => {
   });
 
   it('refuses to edit archived or anonymized people', async () => {
+    chainedSelect([]);
     const updateChain = chainedUpdate([]);
 
     await expect(

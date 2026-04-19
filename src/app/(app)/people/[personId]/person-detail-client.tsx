@@ -412,6 +412,17 @@ const ACTION_LABEL: Record<string, string> = {
   merge: 'Merged',
 };
 
+function formatChangeValue(value: unknown): string {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'string') return value === '' ? '—' : value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 function HistoryRow({ row }: { row: PersonHistoryRow }) {
   const ts = new Date(row.timestamp).toLocaleString('en-IN', {
     timeZone: 'Asia/Kolkata',
@@ -424,46 +435,70 @@ function HistoryRow({ row }: { row: PersonHistoryRow }) {
 
   const metaAction = typeof row.meta?.action === 'string' ? row.meta.action : null;
   const actionLabel = ACTION_LABEL[metaAction ?? row.action] ?? row.action;
-
-  const changedFields = Array.isArray(row.meta?.changedFields)
-    ? (row.meta.changedFields as string[])
-    : [];
+  const source = row.source || 'admin';
+  const diffEntries = Object.entries(row.changes ?? {});
+  const changedFields = row.changedFields ?? [];
 
   const actorShort = row.actorUserId.length > 12
     ? `${row.actorUserId.slice(0, 12)}…`
     : row.actorUserId;
 
   return (
-    <li className="py-2.5" style={{ fontSize: 'var(--font-size-sm)' }}>
+    <li className="py-2.5" style={{ fontSize: 'var(--font-size-sm)' }} data-testid="person-history-row">
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-1.5 text-text-secondary">
+        <div className="flex flex-wrap items-center gap-1.5 text-text-secondary">
           <Clock className="h-3.5 w-3.5 shrink-0 text-text-muted" />
-          <span className="font-medium text-text-primary">{actionLabel}</span>
+          <span className="font-medium text-text-primary" data-testid="history-action">{actionLabel}</span>
           <span className="text-text-muted">by</span>
           <span
             className="rounded bg-background px-1 font-mono text-text-secondary"
             style={{ fontSize: 'var(--font-size-xs)' }}
             title={row.actorUserId}
+            data-testid="history-actor"
           >
             {actorShort}
+          </span>
+          <span
+            className="rounded bg-accent/10 px-1.5 py-0.5 font-medium text-accent"
+            style={{ fontSize: 'var(--font-size-xs)' }}
+            data-testid="history-source"
+          >
+            {source}
           </span>
         </div>
         <span style={{ fontSize: 'var(--font-size-xs)' }} className="shrink-0 text-text-muted">
           {ts}
         </span>
       </div>
-      {changedFields.length > 0 && (
-        <div className="mt-1 flex flex-wrap gap-1">
-          {changedFields.map((f) => (
-            <span
-              key={f}
-              className="rounded bg-background px-1.5 py-0.5 text-text-secondary"
+      {diffEntries.length > 0 ? (
+        <div className="mt-2 space-y-1" data-testid="history-diff">
+          {diffEntries.map(([field, change]) => (
+            <div
+              key={field}
+              className="rounded bg-background px-2 py-1 text-text-secondary"
               style={{ fontSize: 'var(--font-size-xs)' }}
             >
-              {f}
-            </span>
+              <span className="font-medium text-text-primary">{field}:</span>{' '}
+              <span className="text-destructive line-through">{formatChangeValue(change.from)}</span>
+              <span className="mx-1 text-text-muted">→</span>
+              <span className="text-success">{formatChangeValue(change.to)}</span>
+            </div>
           ))}
         </div>
+      ) : (
+        changedFields.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {changedFields.map((f) => (
+              <span
+                key={f}
+                className="rounded bg-background px-1.5 py-0.5 text-text-secondary"
+                style={{ fontSize: 'var(--font-size-xs)' }}
+              >
+                {f}
+              </span>
+            ))}
+          </div>
+        )
       )}
     </li>
   );
