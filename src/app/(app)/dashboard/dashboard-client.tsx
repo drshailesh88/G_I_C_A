@@ -24,6 +24,7 @@ import {
   type NeedsAttentionItem,
 } from '@/lib/actions/dashboard';
 import { NotificationDrawer } from './notification-drawer';
+import { useRole } from '@/hooks/use-role';
 
 interface EventOption {
   id: string;
@@ -62,6 +63,7 @@ function getInitialEventId(events: EventOption[]): string | null {
 }
 
 export function DashboardClient({ events }: DashboardClientProps) {
+  const { isSuperAdmin } = useRole();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(() =>
     getInitialEventId(events),
   );
@@ -267,9 +269,10 @@ export function DashboardClient({ events }: DashboardClientProps) {
             <h2 className="mb-3 text-sm font-semibold text-text-primary">Quick Actions</h2>
             <div className="grid grid-cols-2 gap-3" data-testid="quick-actions">
               <QuickAction
-                href={`/events/${selectedEventId}/reports`}
+                href={isSuperAdmin ? `/reports?eventId=${selectedEventId}` : `/events/${selectedEventId}/reports`}
                 icon={<FileSpreadsheet className="h-5 w-5 text-accent" />}
                 label="Export Attendee List"
+                testId="quick-action-attendee-list"
               />
               <QuickAction
                 href={`/events/${selectedEventId}/certificates/generate`}
@@ -277,9 +280,10 @@ export function DashboardClient({ events }: DashboardClientProps) {
                 label="Generate Certificates"
               />
               <QuickAction
-                href={`/events/${selectedEventId}/reports`}
+                href={isSuperAdmin ? `/reports?eventId=${selectedEventId}` : `/events/${selectedEventId}/reports`}
                 icon={<Download className="h-5 w-5 text-accent" />}
                 label="Emergency Kit"
+                testId="quick-action-emergency-kit"
               />
               <QuickAction
                 href={`/events/${selectedEventId}/transport`}
@@ -350,14 +354,17 @@ function QuickAction({
   href,
   icon,
   label,
+  testId,
 }: {
   href: string;
   icon: React.ReactNode;
   label: string;
+  testId?: string;
 }) {
   return (
     <Link
       href={href}
+      data-testid={testId}
       className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface p-4 hover:border-accent"
     >
       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent-light">

@@ -8,6 +8,19 @@ vi.mock('@clerk/nextjs', () => ({
   UserButton: () => createElement('div', { 'data-testid': 'user-button' }),
 }));
 
+let mockIsSuperAdmin = false;
+
+vi.mock('@/hooks/use-role', () => ({
+  useRole: () => ({
+    isLoaded: true,
+    isSuperAdmin: mockIsSuperAdmin,
+    isCoordinator: !mockIsSuperAdmin,
+    isOps: false,
+    isReadOnly: false,
+    canWrite: true,
+  }),
+}));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
 }));
@@ -29,6 +42,7 @@ let mockAttention = [
 vi.mock('@/lib/actions/dashboard', () => ({
   getDashboardMetrics: vi.fn(() => Promise.resolve(mockMetrics)),
   getNeedsAttention: vi.fn(() => Promise.resolve(mockAttention)),
+  getNotificationUnreadCount: vi.fn(() => Promise.resolve(0)),
 }));
 
 import { DashboardClient } from './dashboard-client';
@@ -135,5 +149,30 @@ describe('7C-1: Dashboard with real metrics and quick actions', () => {
   it('renders event status in selector', () => {
     const html = render();
     expect(html).toContain('published');
+  });
+});
+
+// ── PKT-B-005 acceptance: Super Admin quick actions point to global hub ──
+// Quick Actions render after the metrics fetch completes, which only runs in
+// useEffect — not during renderToStaticMarkup. We lock the routing contract by
+// inspecting the component source instead. Two facts must both hold:
+//   1. The Super Admin branch routes to /reports?eventId=…
+//   2. The non-Super-Admin branch routes to /events/[eventId]/reports.
+
+import fsForSource from 'node:fs';
+const dashboardSource = fsForSource.readFileSync(
+  new URL('./dashboard-client.tsx', import.meta.url),
+  'utf8',
+);
+
+describe('Quick Action routing (PKT-B-005)', () => {
+  it('Super Admin branch routes attendee/emergency quick actions to the global /reports hub', () => {
+    expect(dashboardSource).toMatch(/isSuperAdmin\s*\?\s*`\/reports\?eventId=\$\{selectedEventId\}`/);
+    expect(dashboardSource).toContain('quick-action-attendee-list');
+    expect(dashboardSource).toContain('quick-action-emergency-kit');
+  });
+
+  it('Non-Super-Admin branch keeps the per-event /events/[eventId]/reports link', () => {
+    expect(dashboardSource).toMatch(/`\/events\/\$\{selectedEventId\}\/reports`/);
   });
 });

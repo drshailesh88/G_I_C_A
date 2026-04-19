@@ -21,13 +21,17 @@ vi.mock('@/hooks/use-responsive-nav', () => ({
   }),
 }));
 
+let mockRoleState = {
+  isSuperAdmin: true,
+  isCoordinator: false,
+  isOps: false,
+  isReadOnly: false,
+};
+
 vi.mock('@/hooks/use-role', () => ({
   useRole: () => ({
     isLoaded: true,
-    isSuperAdmin: true,
-    isCoordinator: false,
-    isOps: false,
-    isReadOnly: false,
+    ...mockRoleState,
   }),
 }));
 
@@ -40,6 +44,12 @@ function render() {
 describe('MoreMenuClient responsive migration', () => {
   beforeEach(() => {
     mockNavMode = 'mobile';
+    mockRoleState = {
+      isSuperAdmin: true,
+      isCoordinator: false,
+      isOps: false,
+      isReadOnly: false,
+    };
   });
 
   it('renders menu items on mobile', () => {
@@ -59,5 +69,37 @@ describe('MoreMenuClient responsive migration', () => {
     mockNavMode = 'tablet';
     const html = render();
     expect(html).toContain('More');
+  });
+});
+
+// ── PKT-B-005 acceptance: cross-event Reports nav is super-admin only ──
+
+describe('MoreMenuClient — Reports nav RBAC (PKT-B-005)', () => {
+  beforeEach(() => {
+    mockNavMode = 'mobile';
+  });
+
+  it('shows the Reports item to Super Admin', () => {
+    mockRoleState = { isSuperAdmin: true, isCoordinator: false, isOps: false, isReadOnly: false };
+    const html = render();
+    expect(html).toMatch(/href="\/reports"/);
+  });
+
+  it('hides the Reports item from Event Coordinator', () => {
+    mockRoleState = { isSuperAdmin: false, isCoordinator: true, isOps: false, isReadOnly: false };
+    const html = render();
+    expect(html).not.toMatch(/href="\/reports"/);
+  });
+
+  it('hides the Reports item from Read-only', () => {
+    mockRoleState = { isSuperAdmin: false, isCoordinator: false, isOps: false, isReadOnly: true };
+    const html = render();
+    expect(html).not.toMatch(/href="\/reports"/);
+  });
+
+  it('hides the Reports item from Ops', () => {
+    mockRoleState = { isSuperAdmin: false, isCoordinator: false, isOps: true, isReadOnly: false };
+    const html = render();
+    expect(html).not.toMatch(/href="\/reports"/);
   });
 });

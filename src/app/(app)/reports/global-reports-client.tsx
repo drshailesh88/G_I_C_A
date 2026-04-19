@@ -10,6 +10,7 @@ import {
 
 interface Props {
   events: EventSummary[];
+  initialEventId?: string;
 }
 
 const EXPORT_TYPES_ORDERED: GlobalExportType[] = [
@@ -37,8 +38,13 @@ function downloadBase64(base64: string, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-export function GlobalReportsClient({ events }: Props) {
-  const [selectedEventId, setSelectedEventId] = useState<string>('all');
+export function GlobalReportsClient({ events, initialEventId }: Props) {
+  const isValidInitial =
+    initialEventId === 'all' ||
+    (initialEventId !== undefined && events.some((e) => e.id === initialEventId));
+  const [selectedEventId, setSelectedEventId] = useState<string>(
+    isValidInitial ? initialEventId! : 'all',
+  );
   const [activeType, setActiveType] = useState<GlobalExportType | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();

@@ -36,7 +36,7 @@ const MENU_ITEMS: MenuItem[] = [
   { label: 'Certificates', description: 'Generate & manage certificates', href: '/events', icon: Award, section: 'CERTIFICATES & QR', roles: ['super_admin', 'coordinator'] },
   { label: 'QR Scanner', description: 'Scan & check-in attendees', href: '/scanner', icon: QrCode, section: 'CERTIFICATES & QR', roles: ['super_admin', 'coordinator'] },
   // REPORTS & SETTINGS
-  { label: 'Reports', description: 'Exports & analytics', href: '/reports', icon: FileText, section: 'REPORTS & SETTINGS', roles: ['super_admin', 'coordinator', 'read_only'] },
+  { label: 'Reports', description: 'Cross-event exports & analytics', href: '/reports', icon: FileText, section: 'REPORTS & SETTINGS', roles: ['super_admin'] },
   { label: 'Branding', description: 'Logo, colors, letterheads', href: '/events', icon: Palette, section: 'REPORTS & SETTINGS', roles: ['super_admin', 'coordinator'] },
   { label: 'Team & Roles', description: 'Manage team members', href: '/settings/team', icon: Settings, section: 'REPORTS & SETTINGS', roles: ['super_admin'] },
 ];
