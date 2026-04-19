@@ -14,6 +14,20 @@
 
 <!-- Dated entries per completed packet build. -->
 
+## 2026-04-19T20:00:00Z — PKT-A-009 — Automation triggers management page (route fix pass)
+
+- Story ID: p4-m53-automation-triggers
+- Implemented: Route correction from QA feedback. Triggers page was moved from `src/app/(app)/events/[eventId]/templates/triggers/page.tsx` to `src/app/(app)/events/[eventId]/triggers/page.tsx` — the `/templates/triggers/` path kept as a redirect to `/events/{eventId}/triggers` for backward compatibility. The `templates/triggers/page.tsx` now contains only a `redirect()` call. The main page at `triggers/page.tsx` imports `TriggersClient` from `../templates/triggers/triggers-client` — no duplication. `getTriggersForEvent` return type annotation on the server page corrected to use the unwrapped array (spreading `triggers.triggers` was the prior bug — now uses the raw return from `getTriggersForEvent`). Templates hub shortcut link (Zap icon, amber) updated to point to `/events/{eventId}/triggers` instead of `/events/{eventId}/templates/triggers`. `triggers.test.ts` mock for `getTriggersForEvent` updated to match corrected call signature.
+- Files changed:
+  - src/app/(app)/events/[eventId]/templates/triggers/page.tsx (replaced with redirect to /events/${eventId}/triggers)
+  - src/app/(app)/events/[eventId]/triggers/page.tsx (new — canonical server page with assertEventAccess + parallel fetch + TriggersClient render)
+  - src/app/(app)/events/[eventId]/triggers/page.test.tsx (new — redirect + render tests)
+  - src/app/(app)/events/[eventId]/templates/templates-hub-client.tsx (updated Zap link target)
+  - src/lib/actions/notifications.ts (minor return type annotation fix for getTriggersForEvent)
+  - src/app/(app)/events/[eventId]/templates/triggers/triggers.test.ts (mock call signature fix)
+- Tests run: `npm run test:run` — 8 pre-existing failing files unchanged (certificate-issuance, circuit-breaker, archive-bypass, full-journey, mutation-kill-2, notifications.adversarial, notifications.mutation-kill, travel-cascade); no new failures.
+- Risks/follow-ups: The triggers route is now at `/events/{eventId}/triggers` (outside the templates subtree). The workspace "Templates" tile does not include a "Triggers" link — coordinators reach triggers via the Automation Triggers shortcut on the templates hub, or by navigating directly to `/events/{eventId}/triggers`. The redirect at `templates/triggers/page.tsx` keeps any bookmarked URLs working.
+
 ## 2026-04-19T14:23:55Z — PKT-A-008 — Communications template editor (QA fix pass)
 
 - Story ID: p4-m39-template-editor
