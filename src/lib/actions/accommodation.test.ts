@@ -123,6 +123,12 @@ beforeEach(() => {
 // CREATE
 // ══════════════════════════════════════════════════════════════
 describe('createAccommodationRecord', () => {
+  it('forbids event coordinators from creating accommodation records', async () => {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:event_coordinator' });
+
+    await expect(createAccommodationRecord(EVENT_ID, validCreateInput)).rejects.toThrow('Forbidden');
+  });
+
   it('creates a record for a valid person', async () => {
     chainedSelect([{ id: PERSON_ID }]);
     chainedInsert([{ id: RECORD_ID, ...validCreateInput, eventId: EVENT_ID }]);
@@ -378,6 +384,12 @@ describe('cancelAccommodationRecord', () => {
 // LIST / GET
 // ══════════════════════════════════════════════════════════════
 describe('getEventAccommodationRecords', () => {
+  it('forbids event coordinators from reading accommodation records', async () => {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:event_coordinator' });
+
+    await expect(getEventAccommodationRecords(EVENT_ID)).rejects.toThrow('Forbidden');
+  });
+
   it('returns records with person details', async () => {
     const rows = [{ id: RECORD_ID, personName: 'Dr. Sharma', hotelName: 'Hotel Leela' }];
     chainedSelect(rows);

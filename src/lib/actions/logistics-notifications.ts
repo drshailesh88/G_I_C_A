@@ -11,13 +11,11 @@ import { eq, and, desc } from 'drizzle-orm';
 
 const LOGISTICS_WRITE_ROLES: Set<string> = new Set([
   ROLES.SUPER_ADMIN,
-  ROLES.EVENT_COORDINATOR,
   ROLES.OPS,
 ]);
 
 const LOGISTICS_READ_ROLES: Set<string> = new Set([
   ROLES.SUPER_ADMIN,
-  ROLES.EVENT_COORDINATOR,
   ROLES.OPS,
   ROLES.READ_ONLY,
 ]);

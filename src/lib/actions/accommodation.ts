@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { ROLES } from '@/lib/auth/roles';
 import { writeAudit } from '@/lib/audit/write';
 import { emitCascadeEvent } from '@/lib/cascade/emit';
 import { CASCADE_EVENTS } from '@/lib/cascade/events';
@@ -28,6 +29,47 @@ import {
   buildAccommodationChangeSummary,
   hasAccomCascadeTriggerChanges,
 } from '@/lib/validations/accommodation';
+
+const ACCOMMODATION_READ_ROLES = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.OPS,
+  ROLES.READ_ONLY,
+]);
+
+const ACCOMMODATION_WRITE_ROLES = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.OPS,
+]);
+
+function assertAccommodationRole(
+  role: string | null | undefined,
+  options?: { requireWrite?: boolean },
+) {
+  if (!role) {
+    return;
+  }
+
+  const allowedRoles = options?.requireWrite
+    ? ACCOMMODATION_WRITE_ROLES
+    : ACCOMMODATION_READ_ROLES;
+
+  if (!allowedRoles.has(role)) {
+    throw new Error('Forbidden');
+  }
+}
+
+async function assertAccommodationEventAccess(
+  eventId: string,
+  options?: { requireWrite?: boolean },
+) {
+  const access = options
+    ? await assertEventAccess(eventId, options)
+    : await assertEventAccess(eventId);
+
+  assertAccommodationRole(access.role, options);
+
+  return access;
+}
 
 async function assertRegistrationBelongsToEventPerson(
   eventId: string,
@@ -77,7 +119,7 @@ async function assertPersonHasActiveTravelRecord(eventId: string, personId: stri
 
 // ── Create accommodation record ───────────────────────────────
 export async function createAccommodationRecord(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId } = await assertAccommodationEventAccess(eventId, { requireWrite: true });
   const validated = createAccommodationRecordSchema.parse(input);
 
   // Verify person exists
@@ -162,7 +204,7 @@ export async function createAccommodationRecord(eventId: string, input: unknown)
 
 // ── Update accommodation record ───────────────────────────────
 export async function updateAccommodationRecord(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId } = await assertAccommodationEventAccess(eventId, { requireWrite: true });
   const validated = updateAccommodationRecordSchema.parse(input);
   const { accommodationRecordId, ...fields } = validated;
 
@@ -258,7 +300,7 @@ export async function updateAccommodationRecord(eventId: string, input: unknown)
 
 // ── Cancel accommodation record (soft cancel) ─────────────────
 export async function cancelAccommodationRecord(eventId: string, input: unknown) {
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId } = await assertAccommodationEventAccess(eventId, { requireWrite: true });
   const validated = cancelAccommodationRecordSchema.parse(input);
 
   const [existing] = await db
@@ -336,7 +378,7 @@ export async function cancelAccommodationRecord(eventId: string, input: unknown)
 
 // ── List accommodation records for an event ───────────────────
 export async function getEventAccommodationRecords(eventId: string) {
-  await assertEventAccess(eventId);
+  await assertAccommodationEventAccess(eventId);
 
   const rows = await db
     .select({
@@ -367,7 +409,7 @@ export async function getEventAccommodationRecords(eventId: string) {
 
 // ── Get single accommodation record ───────────────────────────
 export async function getAccommodationRecord(eventId: string, accommodationRecordId: string) {
-  await assertEventAccess(eventId);
+  await assertAccommodationEventAccess(eventId);
   accommodationRecordIdSchema.parse(accommodationRecordId);
 
   const [record] = await db
@@ -382,7 +424,7 @@ export async function getAccommodationRecord(eventId: string, accommodationRecor
 
 // ── Get people with travel records (for accommodation form picker) ─
 export async function getPeopleWithTravelRecords(eventId: string) {
-  await assertEventAccess(eventId);
+  await assertAccommodationEventAccess(eventId);
 
   // Get distinct person IDs that have non-cancelled travel records for this event
   const rows = await db
@@ -408,7 +450,7 @@ export async function getPeopleWithTravelRecords(eventId: string) {
 
 // ── Get shared room group members ─────────────────────────────
 export async function getSharedRoomGroupMembers(eventId: string, sharedRoomGroup: string) {
-  await assertEventAccess(eventId);
+  await assertAccommodationEventAccess(eventId);
 
   if (!sharedRoomGroup) return [];
 
@@ -468,7 +510,7 @@ export async function importAccommodationBatch(
   rows: AccommodationImportRow[],
 ): Promise<{ results: AccommodationImportRowResult[]; imported: number; skipped: number; errors: number }> {
   const scopedEventId = eventIdSchema.parse(eventId);
-  const { userId } = await assertEventAccess(scopedEventId, { requireWrite: true });
+  const { userId } = await assertAccommodationEventAccess(scopedEventId, { requireWrite: true });
 
   if (rows.length > ACCOM_IMPORT_MAX_ROWS) {
     throw new Error(`Import batch exceeds ${ACCOM_IMPORT_MAX_ROWS} rows`);

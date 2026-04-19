@@ -12,6 +12,7 @@ import { eq, and, desc, ne, inArray } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { ROLES } from '@/lib/auth/roles';
 import { writeAudit } from '@/lib/audit/write';
 import { ZodError, type ZodType, z } from 'zod';
 import {
@@ -34,6 +35,17 @@ import {
 
 const eventIdSchema = z.string().uuid('Invalid event ID');
 
+const TRANSPORT_READ_ROLES = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.OPS,
+  ROLES.READ_ONLY,
+]);
+
+const TRANSPORT_WRITE_ROLES = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.OPS,
+]);
+
 type CreateBatchInput = z.infer<typeof createBatchSchema>;
 type UpdateBatchInput = z.infer<typeof updateBatchSchema>;
 type CreateVehicleInput = z.infer<typeof createVehicleSchema>;
@@ -51,6 +63,20 @@ function parseTransportInput<T>(schema: ZodType<T>, input: unknown): T {
   }
 }
 
+function assertTransportRole(
+  role: string | null | undefined,
+  options?: { requireWrite?: boolean },
+) {
+  if (!role) {
+    return;
+  }
+
+  const allowedRoles = options?.requireWrite ? TRANSPORT_WRITE_ROLES : TRANSPORT_READ_ROLES;
+  if (!allowedRoles.has(role)) {
+    throw new Error('Forbidden');
+  }
+}
+
 async function assertTransportEventAccess(
   eventId: string,
   options?: { requireWrite?: boolean },
@@ -59,6 +85,8 @@ async function assertTransportEventAccess(
   const access = options
     ? await assertEventAccess(scopedEventId, options)
     : await assertEventAccess(scopedEventId);
+
+  assertTransportRole(access.role, options);
 
   return { ...access, eventId: scopedEventId };
 }

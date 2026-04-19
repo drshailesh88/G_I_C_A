@@ -82,6 +82,20 @@ beforeEach(() => {
 // BATCHES
 // ══════════════════════════════════════════════════════════════
 describe('createTransportBatch', () => {
+  it('forbids event coordinators from creating transport batches', async () => {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:event_coordinator' });
+
+    await expect(createTransportBatch(EVENT_ID, {
+      movementType: 'arrival',
+      serviceDate: '2026-05-01T00:00:00Z',
+      timeWindowStart: '2026-05-01T08:00:00Z',
+      timeWindowEnd: '2026-05-01T10:00:00Z',
+      sourceCity: 'Mumbai',
+      pickupHub: 'BOM T2',
+      dropHub: 'Hotel Leela',
+    })).rejects.toThrow('Forbidden');
+  });
+
   it('creates a batch', async () => {
     chainedInsert([{ id: BATCH_ID, batchStatus: 'planned' }]);
     const result = await createTransportBatch(EVENT_ID, {
@@ -746,6 +760,12 @@ describe('Read actions — auth', () => {
 // ANNEAL GAP: Spec-01-CP-15 — getEventTransportBatches filters by eventId
 // ══════════════════════════════════════════════════════════════
 describe('getEventTransportBatches — event filtering', () => {
+  it('forbids event coordinators from reading transport batches', async () => {
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user_123', role: 'org:event_coordinator' });
+
+    await expect(getEventTransportBatches(EVENT_ID)).rejects.toThrow('Forbidden');
+  });
+
   it('returns only batches for the given eventId', async () => {
     const batches = [
       { id: BATCH_ID, eventId: EVENT_ID, batchStatus: 'planned' },
