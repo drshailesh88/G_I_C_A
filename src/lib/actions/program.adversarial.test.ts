@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { mockDb } = vi.hoisted(() => ({
+const { mockDb, mockAssertEventAccess } = vi.hoisted(() => ({
   mockDb: {
     select: vi.fn(),
     insert: vi.fn(),
     update: vi.fn(),
   },
+  mockAssertEventAccess: vi.fn(),
 }));
 
 vi.mock('@/lib/db', () => ({
@@ -21,7 +22,7 @@ vi.mock('@/lib/db/with-event-scope', () => ({
 }));
 
 vi.mock('@/lib/auth/event-access', () => ({
-  assertEventAccess: vi.fn(),
+  assertEventAccess: mockAssertEventAccess,
 }));
 
 vi.mock('@/lib/validations/registration', async (importOriginal) => {
@@ -32,7 +33,7 @@ vi.mock('@/lib/validations/registration', async (importOriginal) => {
   };
 });
 
-import { getPublicProgramData, updateFacultyInviteStatus } from './program';
+import { getProgramVersions, getPublicProgramData, updateFacultyInviteStatus } from './program';
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440099';
 const INVITE_ID = '550e8400-e29b-41d4-a716-446655440000';
@@ -100,6 +101,7 @@ function setupInsertOnce() {
 describe('updateFacultyInviteStatus adversarial coverage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:event_coordinator' });
   });
 
   it('should confirm an existing cancelled registration when the invite is accepted', async () => {
@@ -131,6 +133,7 @@ describe('updateFacultyInviteStatus adversarial coverage', () => {
 describe('getPublicProgramData adversarial coverage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:event_coordinator' });
   });
 
   it('should ignore newer draft snapshots and keep serving the latest published version', async () => {
@@ -196,5 +199,25 @@ describe('getPublicProgramData adversarial coverage', () => {
     const result = await getPublicProgramData(EVENT_ID);
 
     expect(result.sessions.map((session) => session.id)).toEqual(['published-session']);
+  });
+});
+
+describe('getProgramVersions adversarial coverage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:event_coordinator' });
+  });
+
+  it('should exclude draft versions from the history list', async () => {
+    setupSelectSequence([
+      { id: 'v3-draft', versionNo: 3, status: 'draft' },
+      { id: 'v2-published', versionNo: 2, status: 'published' },
+      { id: 'v1-published', versionNo: 1, status: 'published' },
+    ]);
+
+    // BUG: the history query is event-scoped, but it does not filter to published versions only.
+    const result = await getProgramVersions(EVENT_ID);
+
+    expect(result.map((version) => version.id)).toEqual(['v2-published', 'v1-published']);
   });
 });
