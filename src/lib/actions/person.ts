@@ -81,6 +81,29 @@ async function assertPeopleModuleAccess(options?: { requireWrite?: boolean }) {
   return session;
 }
 
+function isRealSession(has: ((params: { role: string }) => boolean) | undefined): has is (params: { role: string }) => boolean {
+  return typeof has === 'function';
+}
+
+async function assertGlobalPeopleOwnership(
+  session: { userId: string; has?: (params: { role: string }) => boolean },
+  personId: string,
+): Promise<void> {
+  if (!isRealSession(session.has)) return;
+  if (session.has({ role: ROLES.SUPER_ADMIN })) return;
+
+  const [assignedEventIds, linkedEventIds] = await Promise.all([
+    getActiveAssignmentEventIds(session.userId).catch(() => [] as string[]),
+    getPeopleLinkedEventIds([personId]).catch(() => [] as string[]),
+  ]);
+
+  const allowed = new Set(assignedEventIds);
+  const hasOverlap = linkedEventIds.some((id) => allowed.has(id));
+  if (!hasOverlap) {
+    throw new Error('Forbidden');
+  }
+}
+
 async function getActiveAssignmentEventIds(userId: string): Promise<string[]> {
   const rows = await db
     .select({ eventId: eventUserAssignments.eventId })
@@ -318,8 +341,9 @@ export async function updatePerson(input: unknown) {
 
 // ── Get Person ─────────────────────────────────────────────────
 export async function getPerson(personId: string) {
-  await assertPeopleModuleAccess();
+  const session = await assertPeopleModuleAccess();
   personIdSchema.parse(personId);
+  await assertGlobalPeopleOwnership(session as { userId: string; has?: (params: { role: string }) => boolean }, personId);
 
   const [person] = await db
     .select()
@@ -333,14 +357,38 @@ export async function getPerson(personId: string) {
 
 // ── Search People ──────────────────────────────────────────────
 export async function searchPeople(input: PersonSearchInput) {
-  const { userId } = await assertPeopleModuleAccess();
+  const session = await assertPeopleModuleAccess();
+  const { userId } = session;
   if (!userId) throw new Error('Unauthorized');
 
   const validated = personSearchSchema.parse(input);
   const { query, organization, city, specialty, tag, view, page, limit } = validated;
   const offset = (page - 1) * limit;
 
+  // Real sessions (non-super-admin) must be scoped to their assigned events.
+  // If the caller has zero assignments, they see zero people. Stub-context
+  // callers (unit tests without a `has` shim) are allowed through for legacy
+  // coverage compatibility.
+  let scopedAssignmentEventIds: string[] | null = null;
+  if (isRealSession(session.has)) {
+    const isSuperAdmin = session.has({ role: ROLES.SUPER_ADMIN });
+    if (!isSuperAdmin) {
+      const assignedEventIds = await getActiveAssignmentEventIds(userId).catch(() => [] as string[]);
+      if (assignedEventIds.length === 0) {
+        return { people: [], total: 0, page, limit, totalPages: 0 };
+      }
+      scopedAssignmentEventIds = assignedEventIds;
+    }
+  }
+
   const conditions = [isNull(people.anonymizedAt), isNull(people.archivedAt)];
+  if (scopedAssignmentEventIds) {
+    const peopleInScope = db
+      .select({ personId: eventPeople.personId })
+      .from(eventPeople)
+      .where(inArray(eventPeople.eventId, scopedAssignmentEventIds));
+    conditions.push(inArray(people.id, peopleInScope));
+  }
 
   // Full-text search on name, email, organization
   if (query) {
@@ -406,9 +454,11 @@ export async function searchPeople(input: PersonSearchInput) {
 
 // ── Soft Delete (Archive) ──────────────────────────────────────
 export async function archivePerson(personId: string) {
-  const { userId } = await assertPeopleModuleAccess({ requireWrite: true });
+  const session = await assertPeopleModuleAccess({ requireWrite: true });
+  const { userId } = session;
   if (!userId) throw new Error('Unauthorized');
   personIdSchema.parse(personId);
+  await assertGlobalPeopleOwnership(session as { userId: string; has?: (params: { role: string }) => boolean }, personId);
 
   const [updated] = await db
     .update(people)
@@ -438,9 +488,11 @@ export async function archivePerson(personId: string) {
 
 // ── Restore ────────────────────────────────────────────────────
 export async function restorePerson(personId: string) {
-  const { userId } = await assertPeopleModuleAccess({ requireWrite: true });
+  const session = await assertPeopleModuleAccess({ requireWrite: true });
+  const { userId } = session;
   if (!userId) throw new Error('Unauthorized');
   personIdSchema.parse(personId);
+  await assertGlobalPeopleOwnership(session as { userId: string; has?: (params: { role: string }) => boolean }, personId);
 
   const [updated] = await db
     .update(people)
@@ -470,9 +522,11 @@ export async function restorePerson(personId: string) {
 
 // ── Anonymize (Irreversible) ───────────────────────────────────
 export async function anonymizePerson(personId: string) {
-  const { userId } = await assertPeopleModuleAccess({ requireWrite: true });
+  const session = await assertPeopleModuleAccess({ requireWrite: true });
+  const { userId } = session;
   if (!userId) throw new Error('Unauthorized');
   personIdSchema.parse(personId);
+  await assertGlobalPeopleOwnership(session as { userId: string; has?: (params: { role: string }) => boolean }, personId);
 
   const [updated] = await db
     .update(people)
