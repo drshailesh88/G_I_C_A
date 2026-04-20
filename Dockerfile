@@ -15,7 +15,20 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+# NEXT_PUBLIC_* values are inlined into the client bundle at build time, so
+# production deployments MUST override this ARG via `--build-arg` with the
+# real Clerk publishable key for the target environment. The default is a
+# shape-valid placeholder that only exists so the build doesn't fail on
+# static pages that render the Clerk provider.
+ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
+ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+
 ENV NEXT_TELEMETRY_DISABLED=1
+# Placeholder so module-load-time initializers (neon(), Clerk server) don't
+# throw during `next build` page-data collection. Real values injected at
+# runtime via the container's env.
+ENV DATABASE_URL="postgresql://build:build@localhost:5432/build"
+ENV CLERK_SECRET_KEY="sk_test_build_placeholder_not_used_at_runtime"
 RUN npm run build
 
 # --- runner stage: minimal image with only what's needed at runtime ---
@@ -30,7 +43,6 @@ ENV HOSTNAME=0.0.0.0
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs
 
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
