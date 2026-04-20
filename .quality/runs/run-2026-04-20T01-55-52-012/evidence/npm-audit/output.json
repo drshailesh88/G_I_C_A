@@ -1,0 +1,318 @@
+{
+  "auditReportVersion": 2,
+  "vulnerabilities": {
+    "@clerk/nextjs": {
+      "name": "@clerk/nextjs",
+      "severity": "critical",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1116728,
+          "name": "@clerk/nextjs",
+          "dependency": "@clerk/nextjs",
+          "title": "Official Clerk JavaScript SDKs: Middleware-based route protection bypass",
+          "url": "https://github.com/advisories/GHSA-vqx2-fgx2-5wq9",
+          "severity": "critical",
+          "cwe": [
+            "CWE-436",
+            "CWE-863"
+          ],
+          "cvss": {
+            "score": 9.1,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N"
+          },
+          "range": ">=6.0.0-snapshot.vb87a27f <6.39.2"
+        }
+      ],
+      "effects": [],
+      "range": "6.0.0-snapshot.vb87a27f - 6.39.1",
+      "nodes": [
+        "node_modules/@clerk/nextjs"
+      ],
+      "fixAvailable": true
+    },
+    "@clerk/shared": {
+      "name": "@clerk/shared",
+      "severity": "critical",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1116722,
+          "name": "@clerk/shared",
+          "dependency": "@clerk/shared",
+          "title": "Official Clerk JavaScript SDKs: Middleware-based route protection bypass",
+          "url": "https://github.com/advisories/GHSA-vqx2-fgx2-5wq9",
+          "severity": "critical",
+          "cwe": [
+            "CWE-436",
+            "CWE-863"
+          ],
+          "cvss": {
+            "score": 9.1,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N"
+          },
+          "range": ">=4.0.0 <4.8.1"
+        },
+        {
+          "source": 1116723,
+          "name": "@clerk/shared",
+          "dependency": "@clerk/shared",
+          "title": "Official Clerk JavaScript SDKs: Middleware-based route protection bypass",
+          "url": "https://github.com/advisories/GHSA-vqx2-fgx2-5wq9",
+          "severity": "critical",
+          "cwe": [
+            "CWE-436",
+            "CWE-863"
+          ],
+          "cvss": {
+            "score": 9.1,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:N"
+          },
+          "range": ">=3.0.0-canary.v20250225091530 <3.47.4"
+        }
+      ],
+      "effects": [],
+      "range": ">=4.0.0 <4.8.1 || >=3.0.0-canary.v20250225091530 <3.47.4",
+      "nodes": [
+        "node_modules/@clerk/backend/node_modules/@clerk/shared",
+        "node_modules/@clerk/shared",
+        "node_modules/@clerk/testing/node_modules/@clerk/shared"
+      ],
+      "fixAvailable": true
+    },
+    "@esbuild-kit/core-utils": {
+      "name": "@esbuild-kit/core-utils",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "esbuild"
+      ],
+      "effects": [
+        "@esbuild-kit/esm-loader"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@esbuild-kit/core-utils"
+      ],
+      "fixAvailable": {
+        "name": "drizzle-kit",
+        "version": "0.31.10",
+        "isSemVerMajor": true
+      }
+    },
+    "@esbuild-kit/esm-loader": {
+      "name": "@esbuild-kit/esm-loader",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        "@esbuild-kit/core-utils"
+      ],
+      "effects": [
+        "drizzle-kit"
+      ],
+      "range": "*",
+      "nodes": [
+        "node_modules/@esbuild-kit/esm-loader"
+      ],
+      "fixAvailable": {
+        "name": "drizzle-kit",
+        "version": "0.31.10",
+        "isSemVerMajor": true
+      }
+    },
+    "dompurify": {
+      "name": "dompurify",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1116663,
+          "name": "dompurify",
+          "dependency": "dompurify",
+          "title": "DOMPurify's ADD_TAGS function form bypasses FORBID_TAGS due to short-circuit evaluation",
+          "url": "https://github.com/advisories/GHSA-39q2-94rc-95cp",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-783"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<=3.3.3"
+        }
+      ],
+      "effects": [],
+      "range": "<=3.3.3",
+      "nodes": [
+        "node_modules/dompurify"
+      ],
+      "fixAvailable": true
+    },
+    "drizzle-kit": {
+      "name": "drizzle-kit",
+      "severity": "moderate",
+      "isDirect": true,
+      "via": [
+        "@esbuild-kit/esm-loader",
+        "esbuild"
+      ],
+      "effects": [],
+      "range": "0.9.1 - 0.9.54 || 0.12.9 - 1.0.0-beta.1-fd8bfcc",
+      "nodes": [
+        "node_modules/drizzle-kit"
+      ],
+      "fixAvailable": {
+        "name": "drizzle-kit",
+        "version": "0.31.10",
+        "isSemVerMajor": true
+      }
+    },
+    "drizzle-orm": {
+      "name": "drizzle-orm",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1116251,
+          "name": "drizzle-orm",
+          "dependency": "drizzle-orm",
+          "title": "Drizzle ORM has SQL injection via improperly escaped SQL identifiers",
+          "url": "https://github.com/advisories/GHSA-gpj5-g38j-94v9",
+          "severity": "high",
+          "cwe": [
+            "CWE-89"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N"
+          },
+          "range": "<0.45.2"
+        }
+      ],
+      "effects": [],
+      "range": "<0.45.2",
+      "nodes": [
+        "node_modules/drizzle-orm"
+      ],
+      "fixAvailable": {
+        "name": "drizzle-orm",
+        "version": "0.45.2",
+        "isSemVerMajor": true
+      }
+    },
+    "esbuild": {
+      "name": "esbuild",
+      "severity": "moderate",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1102341,
+          "name": "esbuild",
+          "dependency": "esbuild",
+          "title": "esbuild enables any website to send any requests to the development server and read the response",
+          "url": "https://github.com/advisories/GHSA-67mh-4wv8-2f99",
+          "severity": "moderate",
+          "cwe": [
+            "CWE-346"
+          ],
+          "cvss": {
+            "score": 5.3,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:R/S:U/C:H/I:N/A:N"
+          },
+          "range": "<=0.24.2"
+        }
+      ],
+      "effects": [
+        "@esbuild-kit/core-utils",
+        "drizzle-kit"
+      ],
+      "range": "<=0.24.2",
+      "nodes": [
+        "node_modules/@esbuild-kit/core-utils/node_modules/esbuild",
+        "node_modules/esbuild"
+      ],
+      "fixAvailable": {
+        "name": "drizzle-kit",
+        "version": "0.31.10",
+        "isSemVerMajor": true
+      }
+    },
+    "next": {
+      "name": "next",
+      "severity": "high",
+      "isDirect": true,
+      "via": [
+        {
+          "source": 1116375,
+          "name": "next",
+          "dependency": "next",
+          "title": "Next.js has a Denial of Service with Server Components",
+          "url": "https://github.com/advisories/GHSA-q4gf-8mx6-v5v3",
+          "severity": "high",
+          "cwe": [
+            "CWE-770"
+          ],
+          "cvss": {
+            "score": 7.5,
+            "vectorString": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H"
+          },
+          "range": ">=16.0.0-beta.0 <16.2.3"
+        }
+      ],
+      "effects": [],
+      "range": "16.0.0-beta.0 - 16.2.2",
+      "nodes": [
+        "node_modules/next"
+      ],
+      "fixAvailable": true
+    },
+    "protobufjs": {
+      "name": "protobufjs",
+      "severity": "critical",
+      "isDirect": false,
+      "via": [
+        {
+          "source": 1116832,
+          "name": "protobufjs",
+          "dependency": "protobufjs",
+          "title": "Arbitrary code execution in protobufjs",
+          "url": "https://github.com/advisories/GHSA-xq3m-2v4x-88gg",
+          "severity": "critical",
+          "cwe": [
+            "CWE-94"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": "<7.5.5"
+        }
+      ],
+      "effects": [],
+      "range": "<7.5.5",
+      "nodes": [
+        "node_modules/protobufjs"
+      ],
+      "fixAvailable": true
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 5,
+      "high": 2,
+      "critical": 3,
+      "total": 10
+    },
+    "dependencies": {
+      "prod": 928,
+      "dev": 314,
+      "optional": 179,
+      "peer": 93,
+      "peerOptional": 0,
+      "total": 1418
+    }
+  }
+}

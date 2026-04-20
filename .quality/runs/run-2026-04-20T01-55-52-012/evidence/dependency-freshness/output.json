@@ -1,0 +1,219 @@
+{
+  "@aws-sdk/client-s3": {
+    "current": "3.1027.0",
+    "wanted": "3.1032.0",
+    "latest": "3.1032.0",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/@aws-sdk/client-s3"
+  },
+  "@aws-sdk/lib-storage": {
+    "current": "3.1027.0",
+    "wanted": "3.1032.0",
+    "latest": "3.1032.0",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/@aws-sdk/lib-storage"
+  },
+  "@aws-sdk/s3-request-presigner": {
+    "current": "3.1026.0",
+    "wanted": "3.1032.0",
+    "latest": "3.1032.0",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/@aws-sdk/s3-request-presigner"
+  },
+  "@axe-core/playwright": {
+    "current": "4.11.1",
+    "wanted": "4.11.2",
+    "latest": "4.11.2",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/@axe-core/playwright"
+  },
+  "@clerk/backend": {
+    "current": "3.2.9",
+    "wanted": "3.2.13",
+    "latest": "3.2.13",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/@clerk/backend"
+  },
+  "@clerk/nextjs": {
+    "current": "6.39.1",
+    "wanted": "6.39.2",
+    "latest": "7.2.3",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/@clerk/nextjs"
+  },
+  "@clerk/testing": {
+    "current": "2.0.13",
+    "wanted": "2.0.17",
+    "latest": "2.0.17",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/@clerk/testing"
+  },
+  "@hookform/resolvers": {
+    "current": "3.10.0",
+    "wanted": "3.10.0",
+    "latest": "5.2.2",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/@hookform/resolvers"
+  },
+  "@neondatabase/serverless": {
+    "current": "0.10.4",
+    "wanted": "0.10.4",
+    "latest": "1.1.0",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/@neondatabase/serverless"
+  },
+  "@sentry/nextjs": {
+    "current": "10.47.0",
+    "wanted": "10.49.0",
+    "latest": "10.49.0",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/@sentry/nextjs"
+  },
+  "@stryker-mutator/core": {
+    "current": "9.6.0",
+    "wanted": "9.6.1",
+    "latest": "9.6.1",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/@stryker-mutator/core"
+  },
+  "@stryker-mutator/vitest-runner": {
+    "current": "9.6.0",
+    "wanted": "9.6.1",
+    "latest": "9.6.1",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/@stryker-mutator/vitest-runner"
+  },
+  "@types/node": {
+    "current": "22.19.17",
+    "wanted": "22.19.17",
+    "latest": "25.6.0",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/@types/node"
+  },
+  "@vitejs/plugin-react": {
+    "current": "4.7.0",
+    "wanted": "4.7.0",
+    "latest": "6.0.1",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/@vitejs/plugin-react"
+  },
+  "date-fns": {
+    "current": "3.6.0",
+    "wanted": "3.6.0",
+    "latest": "4.1.0",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/date-fns"
+  },
+  "dotenv": {
+    "current": "17.4.1",
+    "wanted": "17.4.2",
+    "latest": "17.4.2",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/dotenv"
+  },
+  "drizzle-kit": {
+    "current": "0.30.6",
+    "wanted": "0.30.6",
+    "latest": "0.31.10",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/drizzle-kit"
+  },
+  "drizzle-orm": {
+    "current": "0.36.4",
+    "wanted": "0.36.4",
+    "latest": "0.45.2",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/drizzle-orm"
+  },
+  "fast-check": {
+    "current": "4.6.0",
+    "wanted": "4.7.0",
+    "latest": "4.7.0",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/fast-check"
+  },
+  "inngest": {
+    "current": "4.2.0",
+    "wanted": "4.2.4",
+    "latest": "4.2.4",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/inngest"
+  },
+  "lucide-react": {
+    "current": "0.460.0",
+    "wanted": "0.460.0",
+    "latest": "1.8.0",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/lucide-react"
+  },
+  "msw": {
+    "current": "2.13.3",
+    "wanted": "2.13.4",
+    "latest": "2.13.4",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/msw"
+  },
+  "next": {
+    "current": "16.2.2",
+    "wanted": "16.2.4",
+    "latest": "16.2.4",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/next"
+  },
+  "postcss": {
+    "current": "8.5.8",
+    "wanted": "8.5.10",
+    "latest": "8.5.10",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/postcss"
+  },
+  "react": {
+    "current": "19.2.4",
+    "wanted": "19.2.5",
+    "latest": "19.2.5",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/react"
+  },
+  "react-dom": {
+    "current": "19.2.4",
+    "wanted": "19.2.5",
+    "latest": "19.2.5",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/react-dom"
+  },
+  "resend": {
+    "current": "6.10.0",
+    "wanted": "6.12.0",
+    "latest": "6.12.0",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/resend"
+  },
+  "tailwind-merge": {
+    "current": "2.6.1",
+    "wanted": "2.6.1",
+    "latest": "3.5.0",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/tailwind-merge"
+  },
+  "typescript": {
+    "current": "5.9.3",
+    "wanted": "5.9.3",
+    "latest": "6.0.3",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/typescript"
+  },
+  "vitest": {
+    "current": "3.2.4",
+    "wanted": "3.2.4",
+    "latest": "4.1.4",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/vitest"
+  },
+  "zod": {
+    "current": "3.25.76",
+    "wanted": "3.25.76",
+    "latest": "4.3.6",
+    "dependent": "G_I_C_A",
+    "location": "/Users/shaileshsingh/G_I_C_A/node_modules/zod"
+  }
+}

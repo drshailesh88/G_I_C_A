@@ -1,0 +1,82 @@
+{
+  "buildDir": ".next/static",
+  "fileCount": 24,
+  "totalBytes": 862174,
+  "totalMaxBytes": null,
+  "exceededTotal": false,
+  "filesOverLimit": [],
+  "largestFiles": [
+    {
+      "path": "chunks/0.~2ky53fo~10.js",
+      "sizeBytes": 226355,
+      "matchedPattern": null,
+      "limit": null,
+      "overLimit": false
+    },
+    {
+      "path": "chunks/03~yq9q893hmn.js",
+      "sizeBytes": 112594,
+      "matchedPattern": null,
+      "limit": null,
+      "overLimit": false
+    },
+    {
+      "path": "chunks/0gn7_19di0n8z.js",
+      "sizeBytes": 108985,
+      "matchedPattern": null,
+      "limit": null,
+      "overLimit": false
+    },
+    {
+      "path": "chunks/0q52jnf44t-yh.js",
+      "sizeBytes": 61397,
+      "matchedPattern": null,
+      "limit": null,
+      "overLimit": false
+    },
+    {
+      "path": "chunks/0qh8gav_b.309.js",
+      "sizeBytes": 55339,
+      "matchedPattern": null,
+      "limit": null,
+      "overLimit": false
+    },
+    {
+      "path": "chunks/0d3shmwh5_nmn.js",
+      "sizeBytes": 54646,
+      "matchedPattern": null,
+      "limit": null,
+      "overLimit": false
+    },
+    {
+      "path": "chunks/0ir3wqnw53~gg.js",
+      "sizeBytes": 46665,
+      "matchedPattern": null,
+      "limit": null,
+      "overLimit": false
+    },
+    {
+      "path": "chunks/0pqt~8bl3ukh4.js",
+      "sizeBytes": 44414,
+      "matchedPattern": null,
+      "limit": null,
+      "overLimit": false
+    },
+    {
+      "path": "chunks/0ec0h7_olo6p6.js",
+      "sizeBytes": 31396,
+      "matchedPattern": null,
+      "limit": null,
+      "overLimit": false
+    },
+    {
+      "path": "chunks/10qd__0r7a~.l.js",
+      "sizeBytes": 27778,
+      "matchedPattern": null,
+      "limit": null,
+      "overLimit": false
+    }
+  ],
+  "thresholds": {},
+  "defaultMaxBytes": null
+}

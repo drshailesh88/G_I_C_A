@@ -1,0 +1,22 @@
+{
+  "exitCode": 1,
+  "timedOut": false,
+  "durationMs": 6245,
+  "overallScore": 100,
+  "totalMutants": 19,
+  "perFileSummary": [
+    {
+      "filePath": "src/lib/exports/types.ts",
+      "score": 100,
+      "killed": 19,
+      "survived": 0,
+      "tier": "business_60"
+    }
+  ],
+  "mutationJsonPath": "/Users/shaileshsingh/G_I_C_A/reports/mutation/mutation.json",
+  "command": [
+    "npx",
+    "stryker",
+    "run"
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "migrationsDir": "drizzle",
+  "filesScanned": 9,
+  "findingsCount": 4,
+  "findings": [
+    {
+      "file": "drizzle/migrations/0002_fix_attendance_null_uniqueness.sql",
+      "line": 6,
+      "pattern": "DROP_INDEX",
+      "statement": "DROP INDEX IF EXISTS \"uq_attendance_check\";"
+    },
+    {
+      "file": "drizzle/migrations/0007_expand_red_flags_for_system_dispatch.sql",
+      "line": 2,
+      "pattern": "DROP_CONSTRAINT",
+      "statement": "ALTER TABLE red_flags DROP CONSTRAINT IF EXISTS red_flags_flag_type_check;"
+    },
+    {
+      "file": "drizzle/migrations/0007_expand_red_flags_for_system_dispatch.sql",
+      "line": 15,
+      "pattern": "DROP_CONSTRAINT",
+      "statement": "ALTER TABLE red_flags DROP CONSTRAINT IF EXISTS red_flags_target_entity_type_check;"
+    },
+    {
+      "file": "drizzle/migrations/0007_expand_red_flags_for_system_dispatch.sql",
+      "line": 25,
+      "pattern": "DROP_CONSTRAINT",
+      "statement": "ALTER TABLE red_flags DROP CONSTRAINT IF EXISTS red_flags_source_entity_type_check;"
+    }
+  ],
+  "patternsApplied": [
+    "DROP_TABLE",
+    "DROP_COLUMN",
+    "DROP_INDEX",
+    "DROP_CONSTRAINT",
+    "DROP_SCHEMA",
+    "DROP_VIEW",
+    "DROP_DATABASE",
+    "DELETE_FROM",
+    "TRUNCATE",
+    "ALTER_COLUMN_TYPE",
+    "RENAME_TABLE",
+    "RENAME_COLUMN"
+  ]
+}

@@ -1,0 +1,35 @@
+[33m07:26:00 (69400) WARN ProjectReader[39m Glob pattern "!src/**/*.anneal.test.ts" did not exclude any files.
+[33m07:26:00 (69400) WARN ProjectReader[39m Glob pattern "!src/**/*.census.test.ts" did not exclude any files.
+[33m07:26:00 (69400) WARN ProjectReader[39m Glob pattern "!src/**/*.spec.ts" did not exclude any files.
+[32m07:26:00 (69400) INFO ProjectReader[39m Found 141 of 1465 file(s) to be mutated.
+[32m07:26:01 (69400) INFO Instrumenter[39m Instrumented 141 source file(s) with 18708 mutant(s)
+[32m07:26:01 (69400) INFO ConcurrencyTokenProvider[39m Creating 11 test runner process(es).
+[32m07:26:02 (69400) INFO BroadcastReporter[39m Detected that current console does not support the "progress" reporter, downgrading to "progress-append-only" reporter
+[32m07:26:02 (69400) INFO DryRunExecutor[39m Starting initial test run (vitest test runner with "perTest" coverage analysis). This may take a while.
+[91m07:26:05 (69400) ERROR DryRunExecutor[39m One or more tests failed in the initial test run:
+	issueCertificate — insert shape assertions inserts with correct person/template/event fields (L105 ObjectLiteral)
+		[
+  {
+    "code": "custom",
+    "message": "eligibilityBasisId is required unless eligibilityBasisType is manual",
+    "path": [
+      "eligibilityBasisId"
+    ]
+  }
+]
+[91m07:26:05 (69400) ERROR Stryker[39m There were failed tests in the initial test run.
+---STDERR---
+file:///Users/shaileshsingh/G_I_C_A/node_modules/@stryker-mutator/core/dist/src/process/3-dry-run-executor.js:65
+                    throw new ConfigError('There were failed tests in the initial test run.');
+                          ^
+
+ConfigError: There were failed tests in the initial test run.
+    at DryRunExecutor.validateResultCompleted (file:///Users/shaileshsingh/G_I_C_A/node_modules/@stryker-mutator/core/dist/src/process/3-dry-run-executor.js:65:27)
+    at DryRunExecutor.executeDryRun (file:///Users/shaileshsingh/G_I_C_A/node_modules/@stryker-mutator/core/dist/src/process/3-dry-run-executor.js:100:14)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async WorkItem.execute (file:///Users/shaileshsingh/G_I_C_A/node_modules/@stryker-mutator/core/dist/src/concurrent/pool.js:32:28)
+    at async file:///Users/shaileshsingh/G_I_C_A/node_modules/@stryker-mutator/core/dist/src/concurrent/pool.js:69:13 {
+  innerError: undefined
+}
+
+Node.js v22.21.1

@@ -1,0 +1,9 @@
+# Preflight run-2026-04-20T01-55-52-012
+started: 2026-04-20T01:55:52.075Z
+
+lock: none
+working_tree_clean: true
+abandoned_runs: runs dir absent (ok)
+stryker_cache: not present
+state_readable: true
+ended: 2026-04-20T01:55:52.113Z

@@ -1,0 +1,66 @@
+
+
+◇ injected env (38) from .env.test.local // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env (3) from .env.local // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env (0) from .env.test.local // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env (0) from .env.local // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env (0) from .env.test.local // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env (0) from .env.local // tip: ◈ encrypted .env [www.dotenvx.com]
+◇ injected env (0) from .env.test.local // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env (0) from .env.local // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+◇ injected env (0) from .env.test.local // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+◇ injected env (0) from .env.local // tip: ⌘ enable debugging { debug: true }
+◇ injected env (0) from .env.test.local // tip: ◈ encrypted .env [www.dotenvx.com]
+◇ injected env (0) from .env.local // tip: ⌘ override existing { override: true }
+◇ injected env (0) from .env.test.local // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+◇ injected env (0) from .env.local // tip: ⌁ auth for agents [www.vestauth.com]
+◇ injected env (0) from .env.test.local // tip: ⌘ override existing { override: true }
+◇ injected env (0) from .env.local // tip: ⌘ override existing { override: true }
+◇ injected env (0) from .env.test.local // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+◇ injected env (0) from .env.local // tip: ⌘ suppress logs { quiet: true }
+
+Running 310 tests using 6 workers
+
+[1A[2K◇ injected env (0) from .env.test.local // tip: ◈ encrypted .env [www.dotenvx.com]
+
+[1A[2K◇ injected env (0) from .env.local // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+
+[1A[2K[1/310] [setup] › e2e/auth/global-setup.ts:15:6 › global setup
+[1A[2K[setup] › e2e/auth/global-setup.ts:15:6 › global setup
+[dotenv@17.2.2] injecting env (0) from .env.local,.env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+
+[1A[2K[2/310] [setup] › e2e/auth/global-setup.ts:19:6 › authenticate and save state
+
+
+
+
+[1A[2K  1) [setup] › e2e/auth/global-setup.ts:19:6 › authenticate and save state ─────────────────────────
+
+    Error: page.goto: net::ERR_TOO_MANY_REDIRECTS at http://localhost:4000/events
+    Call log:
+    [2m  - navigating to "http://localhost:4000/events", waiting until "domcontentloaded"[22m
+
+
+      55 |   // The dashboard currently triggers unsupported transaction code paths in the
+      56 |   // neon-http driver and is not needed to persist an authenticated session.
+    > 57 |   await page.goto('/events', { waitUntil: 'domcontentloaded' });
+         |              ^
+      58 |   await page.waitForURL('**/events**', { timeout: 15000 });
+      59 |
+      60 |   // Save authenticated session for reuse in all tests
+        at /Users/shaileshsingh/G_I_C_A/e2e/auth/global-setup.ts:57:14
+
+    Error Context: test-results/global-setup.ts-authenticate-and-save-state-setup/error-context.md
+
+
+[1A[2K  1 failed
+    [setup] › e2e/auth/global-setup.ts:19:6 › authenticate and save state ──────────────────────────
+  308 did not run
+  1 passed (23.7s)
+---STDERR---
+[1A[2K[2m[WebServer] [22m[@sentry/nextjs] ACTION REQUIRED: To instrument navigations, the Sentry SDK requires you to export an `onRouterTransitionStart` hook from your `instrumentation-client.(js|ts)` file. You can do so by adding `export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;` to the file.
+[1A[2K[2m[WebServer] [22m[33m[1m⚠[22m[39m The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+[1A[2K[2m[WebServer] [22m[36m[browser][39m [33mClerk: Clerk has been loaded with development keys. Development instances have strict usage limits and should not be used when deploying your application to production. Learn more: https://clerk.com/docs/deployments/overview[39m [2m(https://apparent-glider-6.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js:19:7048)[22m
+[1A[2K[2m[WebServer] [22m[36m[browser][39m [33mClerk: The prop "afterSignInUrl" is deprecated and should be replaced with the new "fallbackRedirectUrl" or "forceRedirectUrl" props instead. Learn more: https://clerk.com/docs/guides/custom-redirects#redirect-url-props[39m [2m(https://apparent-glider-6.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js:19:7048)[22m
+[1A[2K[2m[WebServer] [22m[36m[browser][39m [33mClerk: The "signInFallbackRedirectUrl" prop ("http://localhost:4000/dashboard") has priority over the legacy "afterSignInUrl" (or "redirectUrl") ("http://localhost:4000/dashboard"), which will be completely ignored in this case. "afterSignInUrl" (or "redirectUrl" prop) should be replaced with the new "fallbackRedirectUrl" or "forceRedirectUrl" props instead. Learn more: https://clerk.com/docs/guides/custom-redirects#redirect-url-props[39m [2m(https://apparent-glider-6.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js:19:7048)[22m
+[1A[2K[2m[WebServer] [22m[36m[browser][39m [33mClerk: Session has pending tasks but no handling is configured. To handle pending tasks, provide either "taskUrls" for navigation to custom URLs or "navigate" for programmatic navigation. Without these options, users may get stuck on incomplete flows.[39m [2m(https://apparent-glider-6.clerk.accounts.dev/npm/@clerk/clerk-js@5/dist/clerk.browser.js:19:7048)[22m
