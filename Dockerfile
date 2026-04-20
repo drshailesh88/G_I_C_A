@@ -16,12 +16,16 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # NEXT_PUBLIC_* values are inlined into the client bundle at build time, so
-# production deployments MUST override this ARG via `--build-arg` with the
-# real Clerk publishable key for the target environment. The default is a
+# production deployments MUST override these ARGs via `--build-arg` with the
+# real values for the target environment. The publishable-key default is a
 # shape-valid placeholder that only exists so the build doesn't fail on
 # static pages that render the Clerk provider.
 ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_ZXhhbXBsZS5jbGVyay5hY2NvdW50cy5kZXYk
+ARG NEXT_PUBLIC_CLERK_SIGN_IN_URL=/login
+ARG NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/
 ENV NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+ENV NEXT_PUBLIC_CLERK_SIGN_IN_URL=${NEXT_PUBLIC_CLERK_SIGN_IN_URL}
+ENV NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=${NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL}
 
 ENV NEXT_TELEMETRY_DISABLED=1
 # Placeholder so module-load-time initializers (neon(), Clerk server) don't
