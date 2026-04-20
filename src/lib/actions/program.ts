@@ -1183,12 +1183,11 @@ export async function publishProgramVersion(eventId: string, input: unknown) {
 export async function getProgramVersions(eventId: string) {
   const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
 
-  const allVersions = await db
+  return db
     .select()
     .from(programVersions)
     .where(eq(programVersions.eventId, scopedEventId))
     .orderBy(desc(programVersions.versionNo));
-  return allVersions.filter(v => v.status === 'published');
 }
 
 export async function getProgramVersion(eventId: string, versionId: string) {
@@ -1696,12 +1695,12 @@ export async function getPublicProgramData(eventId: string) {
 
   // Only show program if at least one version has been published.
   // Read from the latest published snapshot so live admin edits do not leak.
-  const allVersions = await db
-    .select({ id: programVersions.id, snapshotJson: programVersions.snapshotJson, status: programVersions.status })
+  const [latestVersion] = await db
+    .select({ id: programVersions.id, snapshotJson: programVersions.snapshotJson })
     .from(programVersions)
     .where(eq(programVersions.eventId, scopedEventId))
-    .orderBy(desc(programVersions.versionNo));
-  const latestVersion = allVersions.find(v => v.status === 'published');
+    .orderBy(desc(programVersions.versionNo))
+    .limit(1);
 
   if (!latestVersion) {
     return {
