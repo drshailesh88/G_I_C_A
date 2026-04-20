@@ -32,7 +32,7 @@ vi.mock('@/lib/validations/registration', async (importOriginal) => {
   };
 });
 
-import { updateFacultyInviteStatus } from './program';
+import { getPublicProgramData, updateFacultyInviteStatus } from './program';
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440099';
 const INVITE_ID = '550e8400-e29b-41d4-a716-446655440000';
@@ -71,6 +71,7 @@ function setupSelectSequence(...responses: unknown[][]) {
     const chain: Record<string, ReturnType<typeof vi.fn>> = {};
     chain.from = vi.fn().mockReturnValue(chain);
     chain.where = vi.fn().mockImplementation(() => Object.assign(Promise.resolve(rows), chain));
+    chain.orderBy = vi.fn().mockImplementation(() => Object.assign(Promise.resolve(rows), chain));
     chain.limit = vi.fn().mockResolvedValue(rows);
     return chain;
   });
@@ -124,5 +125,76 @@ describe('updateFacultyInviteStatus adversarial coverage', () => {
         updatedBy: 'system:faculty-accept',
       }),
     );
+  });
+});
+
+describe('getPublicProgramData adversarial coverage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should ignore newer draft snapshots and keep serving the latest published version', async () => {
+    setupSelectSequence(
+      [
+        {
+          id: 'draft-v2',
+          status: 'draft',
+          snapshotJson: {
+            sessions: [
+              {
+                id: 'draft-session',
+                parentSessionId: null,
+                title: 'Draft-only session',
+                description: null,
+                sessionDate: '2026-12-16T00:00:00.000Z',
+                startAtUtc: '2026-12-16T03:30:00.000Z',
+                endAtUtc: '2026-12-16T05:00:00.000Z',
+                hallId: null,
+                sessionType: 'keynote',
+                track: null,
+                isPublic: true,
+                cmeCredits: null,
+                sortOrder: 0,
+                status: 'scheduled',
+              },
+            ],
+            assignments: [],
+            halls: [],
+          },
+        },
+        {
+          id: 'published-v1',
+          status: 'published',
+          snapshotJson: {
+            sessions: [
+              {
+                id: 'published-session',
+                parentSessionId: null,
+                title: 'Published session',
+                description: null,
+                sessionDate: '2026-12-15T00:00:00.000Z',
+                startAtUtc: '2026-12-15T03:30:00.000Z',
+                endAtUtc: '2026-12-15T05:00:00.000Z',
+                hallId: null,
+                sessionType: 'keynote',
+                track: null,
+                isPublic: true,
+                cmeCredits: null,
+                sortOrder: 0,
+                status: 'scheduled',
+              },
+            ],
+            assignments: [],
+            halls: [],
+          },
+        },
+      ],
+      [],
+    );
+
+    // BUG: the query orders by version number only, so a newer draft snapshot can leak to attendees.
+    const result = await getPublicProgramData(EVENT_ID);
+
+    expect(result.sessions.map((session) => session.id)).toEqual(['published-session']);
   });
 });
