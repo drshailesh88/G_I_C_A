@@ -1294,8 +1294,8 @@ describe('getProgramVersions', () => {
 
   it('returns versions ordered by versionNo desc', async () => {
     const versions = [
-      { id: 'v2', versionNo: 2 },
-      { id: 'v1', versionNo: 1 },
+      { id: 'v2', versionNo: 2, status: 'published' },
+      { id: 'v1', versionNo: 1, status: 'published' },
     ];
     const chain = {
       from: vi.fn().mockReturnThis(),

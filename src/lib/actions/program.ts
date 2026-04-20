@@ -1008,7 +1008,7 @@ export async function updateFacultyInviteStatus(eventId: string, input: unknown)
           updatedBy: 'system:faculty-accept',
         })
         .returning();
-    } else if (existingReg.status === 'pending') {
+    } else if (existingReg.status === 'pending' || existingReg.status === 'cancelled') {
       await db
         .update(eventRegistrations)
         .set({
@@ -1183,11 +1183,12 @@ export async function publishProgramVersion(eventId: string, input: unknown) {
 export async function getProgramVersions(eventId: string) {
   const { eventId: scopedEventId } = await assertProgramEventAccess(eventId);
 
-  return db
+  const allVersions = await db
     .select()
     .from(programVersions)
     .where(eq(programVersions.eventId, scopedEventId))
     .orderBy(desc(programVersions.versionNo));
+  return allVersions.filter(v => v.status === 'published');
 }
 
 export async function getProgramVersion(eventId: string, versionId: string) {
@@ -1300,6 +1301,8 @@ export async function getVersionEmailParts(eventId: string, versionId: string, p
   ]);
 
   if (!version) throw new Error('Program version not found');
+  const affectedIds = Array.isArray(version.affectedPersonIdsJson) ? version.affectedPersonIdsJson as string[] : [];
+  if (!affectedIds.includes(personId)) throw new Error('Person is not affected by this version');
   if (!person) throw new Error('Person not found');
 
   const vars = {
@@ -1693,12 +1696,12 @@ export async function getPublicProgramData(eventId: string) {
 
   // Only show program if at least one version has been published.
   // Read from the latest published snapshot so live admin edits do not leak.
-  const [latestVersion] = await db
-    .select({ id: programVersions.id, snapshotJson: programVersions.snapshotJson })
+  const allVersions = await db
+    .select({ id: programVersions.id, snapshotJson: programVersions.snapshotJson, status: programVersions.status })
     .from(programVersions)
     .where(eq(programVersions.eventId, scopedEventId))
-    .orderBy(desc(programVersions.versionNo))
-    .limit(1);
+    .orderBy(desc(programVersions.versionNo));
+  const latestVersion = allVersions.find(v => v.status === 'published');
 
   if (!latestVersion) {
     return {

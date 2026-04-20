@@ -72,7 +72,7 @@ function makeHall(id = 'h1', name = 'Auditorium') {
 }
 
 function versionRow(snapshot: Record<string, unknown>) {
-  return [{ id: 'v1', snapshotJson: snapshot }];
+  return [{ id: 'v1', status: 'published', snapshotJson: snapshot }];
 }
 
 describe('getPublicProgramData', () => {

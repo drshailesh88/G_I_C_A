@@ -322,7 +322,7 @@ describe('getVersionEmailParts', () => {
     makeSequentialSelectMock([[VERSION], [EVENT], []]);
 
     await expect(
-      getVersionEmailParts(EVENT_UUID, VERSION_UUID, MISSING_UUID),
+      getVersionEmailParts(EVENT_UUID, VERSION_UUID, PERSON_UUID_A),
     ).rejects.toThrow('Person not found');
   });
 
