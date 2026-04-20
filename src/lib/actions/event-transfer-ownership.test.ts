@@ -67,6 +67,7 @@ function mockInsertChain() {
 
 function setupSelectSequence(rowsList: unknown[][]) {
   mockDb.select
+    .mockReturnValueOnce(mockSelectChain([{ id: EVENT_ID }])) // event existence check
     .mockReturnValueOnce(mockSelectChain(rowsList[0] ?? []))
     .mockReturnValueOnce(mockSelectChain(rowsList[1] ?? []));
 }

@@ -363,6 +363,16 @@ export async function transferEventOwnership(
   const normalizedNewOwnerUserId = newOwnerUserId.trim();
   const updatedAt = new Date();
 
+  const [eventRow] = await db
+    .select({ id: events.id })
+    .from(events)
+    .where(eq(events.id, parsedEventId.data))
+    .limit(1);
+
+  if (!eventRow) {
+    return { ok: false, error: 'Event not found' };
+  }
+
   const [currentOwner] = await db
     .select({
       id: eventUserAssignments.id,
