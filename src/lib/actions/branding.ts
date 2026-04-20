@@ -5,7 +5,19 @@ import { events } from '@/lib/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { ROLES } from '@/lib/auth/roles';
 import { eventIdSchema } from '@/lib/validations/event';
+
+const EVENT_MANAGEMENT_WRITE_ROLES: ReadonlySet<string> = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+]);
+
+function assertBrandingWriteRole(role: string | null | undefined) {
+  if (!role || !EVENT_MANAGEMENT_WRITE_ROLES.has(role)) {
+    throw new Error('Forbidden');
+  }
+}
 import {
   updateBrandingSchema,
   eventBrandingSchema,
@@ -169,7 +181,8 @@ export async function updateEventBranding(
   input: unknown,
 ): Promise<{ success: true; branding: EventBranding }> {
   eventIdSchema.parse(eventId);
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  assertBrandingWriteRole(role);
   const validated = updateBrandingSchema.parse(input);
   assertScopedBrandingStorageKey(eventId, 'logo', validated.logoStorageKey);
   assertScopedBrandingStorageKey(eventId, 'header', validated.headerImageStorageKey);
@@ -233,7 +246,8 @@ export async function uploadBrandingImage(
 ): Promise<{ storageKey: string; signedUrl: string }> {
   eventIdSchema.parse(eventId);
   const parsedImageType = parseBrandingImageType(imageType);
-  await assertEventAccess(eventId, { requireWrite: true });
+  const { role } = await assertEventAccess(eventId, { requireWrite: true });
+  assertBrandingWriteRole(role);
 
   const file = formData.get('file') as File | null;
   if (!file) throw new Error('No file provided');
@@ -291,7 +305,8 @@ export async function deleteBrandingImage(
 ): Promise<{ success: true }> {
   eventIdSchema.parse(eventId);
   const parsedImageType = parseBrandingImageType(imageType);
-  await assertEventAccess(eventId, { requireWrite: true });
+  const { role } = await assertEventAccess(eventId, { requireWrite: true });
+  assertBrandingWriteRole(role);
 
   const branding = await getEventBranding(eventId);
   const fieldKey = storageFieldForImageType(parsedImageType);
