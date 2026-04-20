@@ -25,6 +25,14 @@ vi.mock('@/lib/auth/event-access', () => ({
   assertEventAccess: mockAssertEventAccess,
 }));
 
+vi.mock('@/lib/notifications/template-renderer', () => ({
+  renderTemplate: vi.fn().mockResolvedValue({
+    subject: 'Program Update — GEM India 2026',
+    body: 'Before __PROGRAM_UPDATE_PREVIEW_SPLIT__ After',
+    variables: {},
+  }),
+}));
+
 vi.mock('@/lib/validations/registration', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/validations/registration')>();
   return {
@@ -33,7 +41,12 @@ vi.mock('@/lib/validations/registration', async (importOriginal) => {
   };
 });
 
-import { getProgramVersions, getPublicProgramData, updateFacultyInviteStatus } from './program';
+import {
+  getProgramVersions,
+  getPublicProgramData,
+  getVersionEmailParts,
+  updateFacultyInviteStatus,
+} from './program';
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440099';
 const INVITE_ID = '550e8400-e29b-41d4-a716-446655440000';
@@ -219,5 +232,32 @@ describe('getProgramVersions adversarial coverage', () => {
     const result = await getProgramVersions(EVENT_ID);
 
     expect(result.map((version) => version.id)).toEqual(['v2-published', 'v1-published']);
+  });
+});
+
+describe('getVersionEmailParts adversarial coverage', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:event_coordinator' });
+  });
+
+  it('should reject previews for people who are not affected by the selected version', async () => {
+    setupSelectSequence(
+      [
+        {
+          id: 'version-1',
+          versionNo: 3,
+          affectedPersonIdsJson: ['affected-person'],
+          changesSummaryJson: {},
+        },
+      ],
+      [{ name: 'GEM India 2026' }],
+      [{ fullName: 'Unrelated Person', salutation: 'Dr', email: 'other@example.com' }],
+    );
+
+    // BUG: the preview action trusts any personId and does not enforce membership in affectedPersonIdsJson.
+    await expect(
+      getVersionEmailParts(EVENT_ID, 'version-1', 'unrelated-person'),
+    ).rejects.toThrow(/not affected/i);
   });
 });
