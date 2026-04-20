@@ -4,7 +4,7 @@ import { eventIdSchema } from './event';
 export const ASSIGNMENT_TYPES = ['owner', 'collaborator'] as const;
 export type AssignmentType = (typeof ASSIGNMENT_TYPES)[number];
 
-const authUserIdSchema = z.string().min(1, 'User ID is required');
+const authUserIdSchema = z.string().trim().min(1, 'User ID is required');
 
 export const createEventAssignmentSchema = z.object({
   eventId: eventIdSchema,
