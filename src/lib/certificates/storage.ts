@@ -98,6 +98,28 @@ export function buildCertificateStorageKey(
 }
 
 /**
+ * Build the S3 client config so the same code works on Cloudflare R2 and real AWS S3.
+ * - If R2_ENDPOINT is set: target R2 (endpoint override, region 'auto').
+ * - Otherwise: target real AWS S3 (no endpoint override, region from AWS_REGION).
+ */
+function buildS3ClientConfig() {
+  const endpoint = process.env.R2_ENDPOINT;
+  const credentials = {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+  };
+
+  if (endpoint) {
+    return { region: 'auto', endpoint, credentials };
+  }
+
+  return {
+    region: process.env.AWS_REGION || 'ap-south-1',
+    credentials,
+  };
+}
+
+/**
  * Build the R2 storage provider using environment variables.
  * In tests, swap with a stub implementation.
  */
@@ -110,14 +132,7 @@ export function createR2Provider(): StorageProvider {
         const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
         const crypto = await import('crypto');
 
-        const client = new S3Client({
-          region: 'auto',
-          endpoint: process.env.R2_ENDPOINT!,
-          credentials: {
-            accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-            secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-          },
-        });
+        const client = new S3Client(buildS3ClientConfig());
 
         const checksum = crypto.createHash('sha256').update(data).digest('hex');
 
@@ -147,14 +162,7 @@ export function createR2Provider(): StorageProvider {
         const { Upload } = await import('@aws-sdk/lib-storage');
         const cryptoModule = await import('crypto');
 
-        const client = new S3Client({
-          region: 'auto',
-          endpoint: process.env.R2_ENDPOINT!,
-          credentials: {
-            accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-            secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-          },
-        });
+        const client = new S3Client(buildS3ClientConfig());
 
         // Tee the stream: compute hash while uploading via multipart
         const { PassThrough } = await import('stream');
@@ -201,14 +209,7 @@ export function createR2Provider(): StorageProvider {
         const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
         const { getSignedUrl: s3GetSignedUrl } = await import('@aws-sdk/s3-request-presigner');
 
-        const client = new S3Client({
-          region: 'auto',
-          endpoint: process.env.R2_ENDPOINT!,
-          credentials: {
-            accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-            secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-          },
-        });
+        const client = new S3Client(buildS3ClientConfig());
 
         return s3GetSignedUrl(client, new GetObjectCommand({
           Bucket: process.env.R2_BUCKET_NAME!,
@@ -225,14 +226,7 @@ export function createR2Provider(): StorageProvider {
         assertValidStorageKey(key);
         const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
 
-        const client = new S3Client({
-          region: 'auto',
-          endpoint: process.env.R2_ENDPOINT!,
-          credentials: {
-            accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-            secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-          },
-        });
+        const client = new S3Client(buildS3ClientConfig());
 
         await client.send(new DeleteObjectCommand({
           Bucket: process.env.R2_BUCKET_NAME!,

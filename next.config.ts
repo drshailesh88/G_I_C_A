@@ -4,6 +4,8 @@ import { withSentryConfig } from '@sentry/nextjs';
 const nextConfig: NextConfig = {
   // Strict mode for catching bugs early
   reactStrictMode: true,
+  // Standalone output for Docker / AWS deployment
+  output: 'standalone',
 };
 
 export default withSentryConfig(nextConfig, {
