@@ -148,6 +148,25 @@ describe('importTravelBatch — validation', () => {
     expect(result.results[0].status).toBe('error');
     expect((result.results[0] as { error: string }).error).toMatch(/travel mode/i);
   });
+
+  it('rejects spreadsheet formulas in imported text fields', async () => {
+    selectOnce([{ id: PERSON_ID }]);
+    insertOnce([mockRecord]);
+    insertOnce([]);
+
+    const result = await importTravelBatch(EVENT_ID, [
+      {
+        ...validRow,
+        fromCity: '=HYPERLINK("https://attacker.invalid","Mumbai")',
+      },
+    ]);
+
+    expect(result.imported).toBe(0);
+    expect(result.errors).toBe(1);
+    expect(result.results[0].status).toBe('error');
+    expect((result.results[0] as { error: string }).error).toMatch(/unsafe spreadsheet formula/i);
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
 });
 
 describe('importTravelBatch — person lookup', () => {

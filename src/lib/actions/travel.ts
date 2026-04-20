@@ -25,6 +25,7 @@ import {
   type TravelRecordStatus,
 } from '@/lib/validations/travel';
 import { normalizePhone } from '@/lib/validations/person';
+import { checkCsvFormulaFields } from '@/lib/validations/csv-sanitizer';
 
 const eventIdSchema = z.string().uuid('Invalid event ID');
 const travelStatusSchema = z.enum(TRAVEL_RECORD_STATUSES);
@@ -594,6 +595,22 @@ export async function importTravelBatch(
       const modeResult = z.enum(TRAVEL_MODES).safeParse(row.travelMode);
       if (!modeResult.success) {
         results.push({ rowNumber: row.rowNumber, status: 'error', error: `Invalid travel mode: ${row.travelMode}` });
+        errors++;
+        continue;
+      }
+
+      const formulaError = checkCsvFormulaFields([
+        ['fromCity', row.fromCity],
+        ['toCity', row.toCity],
+        ['fromLocation', row.fromLocation],
+        ['toLocation', row.toLocation],
+        ['carrierName', row.carrierName],
+        ['serviceNumber', row.serviceNumber],
+        ['pnrOrBookingRef', row.pnrOrBookingRef],
+        ['terminalOrGate', row.terminalOrGate],
+      ]);
+      if (formulaError) {
+        results.push({ rowNumber: row.rowNumber, status: 'error', error: formulaError });
         errors++;
         continue;
       }

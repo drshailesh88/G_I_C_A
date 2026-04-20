@@ -155,6 +155,26 @@ describe('importAccommodationBatch — validation', () => {
     expect(result.errors).toBe(1);
     expect((result.results[0] as { error: string }).error).toMatch(/check-out must be after/i);
   });
+
+  it('rejects spreadsheet formulas in imported text fields', async () => {
+    selectOnce([{ id: PERSON_ID }]);
+    selectOnce([{ id: TRAVEL_RECORD_ID }]);
+    insertOnce([mockRecord]);
+    insertOnce([]);
+
+    const result = await importAccommodationBatch(EVENT_ID, [
+      {
+        ...validRow,
+        hotelName: '=CMD|" /C calc"!A0',
+      },
+    ]);
+
+    expect(result.imported).toBe(0);
+    expect(result.errors).toBe(1);
+    expect(result.results[0].status).toBe('error');
+    expect((result.results[0] as { error: string }).error).toMatch(/unsafe spreadsheet formula/i);
+    expect(mockDb.insert).not.toHaveBeenCalled();
+  });
 });
 
 describe('importAccommodationBatch — person lookup', () => {

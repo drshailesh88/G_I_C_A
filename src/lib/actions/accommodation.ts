@@ -18,6 +18,7 @@ import { writeAudit } from '@/lib/audit/write';
 import { emitCascadeEvent } from '@/lib/cascade/emit';
 import { CASCADE_EVENTS } from '@/lib/cascade/events';
 import { normalizePhone } from '@/lib/validations/person';
+import { checkCsvFormulaFields } from '@/lib/validations/csv-sanitizer';
 import {
   createAccommodationRecordSchema,
   updateAccommodationRecordSchema,
@@ -549,6 +550,22 @@ export async function importAccommodationBatch(
       }
       if (checkOut <= checkIn) {
         results.push({ rowNumber: row.rowNumber, status: 'error', error: 'Check-out must be after check-in' });
+        errors++;
+        continue;
+      }
+
+      const formulaError = checkCsvFormulaFields([
+        ['hotelName', row.hotelName],
+        ['hotelAddress', row.hotelAddress],
+        ['hotelCity', row.hotelCity],
+        ['roomNumber', row.roomNumber],
+        ['sharedRoomGroup', row.sharedRoomGroup],
+        ['bookingReference', row.bookingReference],
+        ['specialRequests', row.specialRequests],
+        ['notes', row.notes],
+      ]);
+      if (formulaError) {
+        results.push({ rowNumber: row.rowNumber, status: 'error', error: formulaError });
         errors++;
         continue;
       }
