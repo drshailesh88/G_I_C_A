@@ -11,7 +11,17 @@ import {
   assertEventAccess,
   EventNotFoundError,
 } from '@/lib/auth/event-access';
+import { ROLES } from '@/lib/auth/roles';
 import { crossEvent404Response } from '@/lib/auth/sanitize-cross-event-404';
+
+// People detail returns PII (name, email, phone, registration/travel/session
+// data). Ops is limited to logistics surfaces so cannot read this, even with
+// event-level access.
+const PEOPLE_READ_ROLES: ReadonlySet<string> = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+  ROLES.READ_ONLY,
+]);
 
 type Params = Promise<{ eventId: string; personId: string }>;
 
@@ -33,7 +43,10 @@ export async function GET(
   const { eventId, personId } = parsed.data;
 
   try {
-    await assertEventAccess(eventId);
+    const { role } = await assertEventAccess(eventId);
+    if (!role || !PEOPLE_READ_ROLES.has(role)) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
   } catch (err) {
     if (err instanceof EventNotFoundError) {
       return crossEvent404Response();
