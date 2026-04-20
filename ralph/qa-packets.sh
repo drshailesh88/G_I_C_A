@@ -187,7 +187,7 @@ PY
 
 extract_classification() {
   local text="$1"
-  printf '%s\n' "$text" | grep -o '<classification>[^<]*</classification>' | tail -1 | sed 's#<classification>##; s#</classification>##'
+  printf '%s\n' "$text" | tail -n 80 | grep -o '<classification>[^<]*</classification>' | tail -1 | sed 's#<classification>##; s#</classification>##' || true
 }
 
 try_codex() {

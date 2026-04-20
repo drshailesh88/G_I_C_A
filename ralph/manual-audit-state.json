@@ -1,8 +1,8 @@
 {
   "version": 1,
   "pipeline": "ralph-manual-audit",
-  "updated_at": "2026-04-19T19:19:49Z",
-  "current_slice_id": "AUD-004",
+  "updated_at": "2026-04-19T20:15:22Z",
+  "current_slice_id": "AUD-007",
   "slices": [
     {
       "slice_id": "AUD-001",
@@ -55,26 +55,26 @@
         "src/app/(app)/people/**",
         "src/lib/actions/person*.ts"
       ],
-      "notes": "Audited people merge/history. Fixed mergePeople so Event Coordinators cannot merge people whose linked records touch unassigned events; added regression coverage for the unauthorized cross-event merge path and revalidated people merge/history suites; commit pending."
+      "notes": "Audited people merge/history. Fixed mergePeople so Event Coordinators cannot merge people whose linked records touch unassigned events; added regression coverage for the unauthorized cross-event merge path and revalidated people merge/history suites; commit ad3f720."
     },
     {
       "slice_id": "AUD-005",
       "title": "Public program visibility and published snapshots",
       "priority": 5,
-      "status": "PENDING",
+      "status": "AUDITED",
       "depends_on": [],
       "scope": [
         "src/app/(public)/**",
         "src/app/**/program/**",
         "src/lib/actions/program*.ts"
       ],
-      "notes": null
+      "notes": "Audited public program visibility against PKT-A-006. Fixed the public /e/[eventSlug]/program route so completed/cancelled/archived events with historical program snapshots now return notFound instead of rendering stale public schedules; added route-level regression coverage; commit 708b341."
     },
     {
       "slice_id": "AUD-006",
       "title": "Reports and export correctness",
       "priority": 6,
-      "status": "PENDING",
+      "status": "AUDITED",
       "depends_on": [],
       "scope": [
         "src/app/(app)/reports/**",
@@ -82,13 +82,13 @@
         "src/app/(app)/dashboard/**",
         "src/app/(app)/more/**"
       ],
-      "notes": null
+      "notes": "Audited reports/export correctness. Fixed getAttendanceReportData so by-session attendance joins scope sessions by eventId before reading session metadata, preventing foreign event session titles/times from leaking into an event report; added regression coverage; commit 6f5d90c."
     },
     {
       "slice_id": "AUD-007",
       "title": "Travel accommodation transport flags and audit logs",
       "priority": 7,
-      "status": "PENDING",
+      "status": "AUDITED",
       "depends_on": [],
       "scope": [
         "src/app/(app)/travel/**",
@@ -99,7 +99,7 @@
         "src/lib/actions/transport*.ts",
         "src/lib/cascade/handlers/**"
       ],
-      "notes": null
+      "notes": "Audited logistics server actions. Fixed accommodation, transport, resend-notification, and red-flag mutation actions so Event Coordinators can no longer read or mutate Ops-only logistics surfaces; added regression coverage; commit 2b5fe6e."
     }
   ]
 }

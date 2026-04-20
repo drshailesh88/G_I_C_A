@@ -7,6 +7,9 @@
 - For cascade handlers that accept person IDs from snapshots or payloads, add a defense-in-depth join through `event_people` before notifying; do not trust version metadata or payload person arrays as sufficient event isolation.
 - Public success or confirmation routes must resolve the event context from the URL and scope any opaque ID lookup with that event; never trust a bare `registrationId` or similar UUID to imply the correct event.
 - Global people mutations that repoint event-owned rows must derive the touched `eventId`s from every dependent table and reject non-super-admin writes outside the caller's active assignment set.
+- Public slug routes that render attendee-facing data must enforce the route's required event status explicitly; a stored published snapshot alone is not enough to keep `/e/[slug]/...` visible after an event becomes completed, cancelled, or archived.
+- Attendance report drill-down queries must event-scope joined `sessions` metadata as well as the base `attendance_records`; filtering only the attendance rows is not enough if a foreign `sessionId` is present.
+- Ops-only logistics modules need their own server-side role gates; `assertEventAccess(..., { requireWrite: true })` still permits Event Coordinators, so accommodation/transport reads, resend actions, and red-flag mutations must reject coordinator roles explicitly.
 
 ## Iteration log
 
@@ -38,7 +41,31 @@
 ## 2026-04-19T19:19:49Z — AUD-004 — People merge and change history
 - Status: audited
 - Findings: 1
-- Fixes: 1 (commit pending)
+- Fixes: 1 (`ad3f720`)
 - Tests: `npx vitest run src/lib/actions/person-merge.test.ts` passed (27 tests); `npx vitest run src/lib/actions/person-history.test.ts` passed (18 tests); `npx vitest run 'src/app/(app)/people/merge/merge-client.test.tsx'` passed (4 tests)
 - Residual risks: this slice did not re-audit every other people mutation for per-event write scoping; global unlinked people rows remain mergeable by coordinators unless product policy says otherwise
 - Next slice: AUD-005
+
+## 2026-04-19T19:33:22Z — AUD-005 — Public program visibility and published snapshots
+- Status: audited
+- Findings: 1
+- Fixes: 1 (`708b341`)
+- Tests: `npx vitest run 'src/app/(public)/e/[eventSlug]/program/page.test.tsx'` passed (3 tests); `npx vitest run 'src/app/(public)/e/[eventSlug]/program/program.test.ts'` passed (13 tests)
+- Residual risks: other public event-slug routes may still need explicit status guards; this slice closed the confirmed stale public-program visibility leak only
+- Next slice: AUD-006
+
+## 2026-04-19T19:43:34Z — AUD-006 — Reports and export correctness
+- Status: audited
+- Findings: 1
+- Fixes: 1 (`6f5d90c`)
+- Tests: `npx vitest run src/lib/actions/attendance-report.test.ts` passed (15 tests); `npx vitest run src/lib/actions/reports.test.ts` passed (13 tests)
+- Residual risks: browser-level export/archive flows were not rerun in this slice; per-event reports auth redirects still deserve a separate route-behavior audit if that becomes a contract requirement
+- Next slice: AUD-007
+
+## 2026-04-19T20:15:22Z — AUD-007 — Travel accommodation transport flags and audit logs
+- Status: audited
+- Findings: 1
+- Fixes: 1 (`2b5fe6e`)
+- Tests: `npx vitest run src/lib/actions/accommodation.test.ts` passed (26 tests); `npx vitest run src/lib/actions/transport.test.ts` passed (69 tests); `npx vitest run src/lib/actions/logistics-notifications.test.ts` passed (3 tests); `npx vitest run src/lib/actions/red-flag-actions.test.ts` passed (2 tests)
+- Residual risks: page-level route guards and client hooks were not exhaustively re-audited; this slice closed the confirmed server-action coordinator bypass across logistics reads/writes, resend actions, and red-flag mutations
+- Next slice: none

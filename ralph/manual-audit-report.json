@@ -95,7 +95,7 @@
           "src/lib/actions/person-merge.test.ts:192"
         ],
         "evidence": "Added a focused regression test that models a coordinator assigned to one event while the target people are linked to another; the action now rejects with Forbidden before opening the transaction, and targeted merge/history vitest suites pass.",
-        "fix_commit": null
+        "fix_commit": "ad3f720"
       }
     ],
     "tests_run": [
@@ -108,5 +108,90 @@
       "Global people rows with no linked event records remain mergeable by coordinators, which may or may not match the intended ownership model for the shared people directory."
     ],
     "next_slice": "AUD-005"
+  },
+  {
+    "slice_id": "AUD-005",
+    "audited_at": "2026-04-19T19:33:22Z",
+    "audited_by": "codex",
+    "status": "audited",
+    "findings": [
+      {
+        "severity": "high",
+        "summary": "The public /e/[eventSlug]/program route only required a historical published snapshot, so completed, cancelled, or archived events could keep exposing stale attendee schedules after the event was no longer publicly published.",
+        "files": [
+          "src/app/(public)/e/[eventSlug]/program/page.tsx:29",
+          "src/app/(public)/e/[eventSlug]/program/page.test.tsx:1"
+        ],
+        "evidence": "Added a route-level regression test proving a completed event with an existing snapshot previously rendered instead of 404ing; the page now rejects non-published event statuses before loading public program data, and the targeted public-program vitest suites pass.",
+        "fix_commit": "708b341"
+      }
+    ],
+    "tests_run": [
+      "npx vitest run 'src/app/(public)/e/[eventSlug]/program/page.test.tsx' -> pass (3 tests)",
+      "npx vitest run 'src/app/(public)/e/[eventSlug]/program/program.test.ts' -> pass (13 tests)"
+    ],
+    "residual_risks": [
+      "AUD-005 did not re-audit every other public event-slug route for completed/cancelled/archived visibility drift; this slice closed the confirmed public-program leak.",
+      "getEventBySlug() still intentionally exposes non-draft events to other public surfaces, so each public route must continue enforcing its own status policy."
+    ],
+    "next_slice": "AUD-006"
+  },
+  {
+    "slice_id": "AUD-006",
+    "audited_at": "2026-04-19T19:43:34Z",
+    "audited_by": "codex",
+    "status": "audited",
+    "findings": [
+      {
+        "severity": "high",
+        "summary": "The attendance drill-down report joined session metadata by raw sessionId only, so a stale or poisoned attendance row could import another event's session title/date/time into this event's by-session report.",
+        "files": [
+          "src/lib/actions/attendance.ts:300",
+          "src/lib/actions/attendance-report.test.ts:212"
+        ],
+        "evidence": "Added a focused regression test proving the by-session attendance query now event-scopes the sessions join via withEventScope(eventId, ...); targeted vitest suites for attendance-report and global reports passed after the fix.",
+        "fix_commit": "6f5d90c"
+      }
+    ],
+    "tests_run": [
+      "npx vitest run src/lib/actions/attendance-report.test.ts -> pass (15 tests)",
+      "npx vitest run src/lib/actions/reports.test.ts -> pass (13 tests)"
+    ],
+    "residual_risks": [
+      "This slice did not rerun browser-level export downloads or archive/emergency-kit generation; it focused on report/query correctness and event isolation.",
+      "Per-event reports page auth failures still redirect broadly rather than distinguishing not-found from forbidden, but that was not the confirmed data-correctness defect in this slice."
+    ],
+    "next_slice": "AUD-007"
+  },
+  {
+    "slice_id": "AUD-007",
+    "audited_at": "2026-04-19T20:15:22Z",
+    "audited_by": "codex",
+    "status": "audited",
+    "findings": [
+      {
+        "severity": "high",
+        "summary": "Accommodation, transport, logistics resend, and red-flag server actions trusted generic event access, so Event Coordinators could read and mutate Ops-only logistics data despite the role policy limiting travel/accommodation/transport to Ops.",
+        "files": [
+          "src/lib/actions/accommodation.ts:33",
+          "src/lib/actions/transport.ts:38",
+          "src/lib/actions/logistics-notifications.ts:12",
+          "src/lib/actions/red-flag-actions.ts:7"
+        ],
+        "evidence": "Added focused regression tests proving event coordinators are now rejected from accommodation/transport reads and writes, logistics resend actions, and red-flag review/resolve mutations; all targeted vitest suites passed after the role-gate fix.",
+        "fix_commit": "2b5fe6e"
+      }
+    ],
+    "tests_run": [
+      "npx vitest run src/lib/actions/accommodation.test.ts -> pass (26 tests)",
+      "npx vitest run src/lib/actions/transport.test.ts -> pass (69 tests)",
+      "npx vitest run src/lib/actions/logistics-notifications.test.ts -> pass (3 tests)",
+      "npx vitest run src/lib/actions/red-flag-actions.test.ts -> pass (2 tests)"
+    ],
+    "residual_risks": [
+      "This slice did not re-audit every page-level transport/accommodation route guard or client hook; it closed the confirmed server-action RBAC bypass on logistics operations.",
+      "Travel list reads and writes already had module-level role checks, but any future shared logistics helper that falls back to assertEventAccess() alone could reintroduce the same coordinator bypass."
+    ],
+    "next_slice": null
   }
 ]
