@@ -193,9 +193,8 @@ describe('Full Journey Integration Test (Req 9A-1)', () => {
   });
 
   it('Step 2: publishes the event (draft → published)', async () => {
-    chainSelect([{ id: EVENT_ID, status: 'draft' }]);
-    chainUpdate([]);
-    chainSelect([{ id: EVENT_ID, status: 'published' }]);
+    chainSelect([{ id: EVENT_ID, status: 'draft', updatedAt: new Date() }]);
+    chainUpdate([{ id: EVENT_ID }]);
 
     const result = await updateEventStatus(EVENT_ID, 'published' as never);
     expect(result.success).toBe(true);
@@ -234,6 +233,7 @@ describe('Full Journey Integration Test (Req 9A-1)', () => {
     ];
     for (let i = 0; i < 2; i++) {
       chainSelect([{ id: assignments[i].sessionId }]);
+      chainSelect([{ id: assignments[i].personId }]);
       chainSelect([]);
       chainInsert([{ id: ASSIGNMENT_IDS[i], eventId: EVENT_ID, ...assignments[i] }]);
       chainInsert([]);
@@ -289,6 +289,7 @@ describe('Full Journey Integration Test (Req 9A-1)', () => {
   it('Step 8: creates accommodation for 5 delegates', async () => {
     for (let i = 0; i < 5; i++) {
       chainSelect([{ id: PERSON_IDS[i] }]);
+      chainSelect([{ id: TRAVEL_IDS[i] }]);
       chainInsert([{
         id: ACCOM_IDS[i], eventId: EVENT_ID, personId: PERSON_IDS[i],
         hotelName: 'The Taj Mahal Palace', roomType: 'suite',
@@ -322,12 +323,14 @@ describe('Full Journey Integration Test (Req 9A-1)', () => {
 
     for (let i = 0; i < 5; i++) {
       chainSelect([{ id: BATCH_ID }]);
-      chainInsert([{ id: `passenger-${i}`, batchId: BATCH_ID, personId: PERSON_IDS[i], passengerStatus: 'assigned' }]);
+      chainSelect([{ id: TRAVEL_IDS[i] }]);
+      chainSelect([{ id: VEHICLE_ID, batchId: BATCH_ID, capacity: 40 }]);
+      chainInsert([{ id: `passenger-${i}`, batchId: BATCH_ID, personId: PERSON_IDS[i], assignmentStatus: 'assigned' }]);
       const p = await assignPassenger(EVENT_ID, {
         batchId: BATCH_ID, vehicleAssignmentId: VEHICLE_ID,
         personId: PERSON_IDS[i], travelRecordId: TRAVEL_IDS[i],
       });
-      expect(p.passengerStatus).toBe('assigned');
+      expect(p.assignmentStatus).toBe('assigned');
     }
   });
 
@@ -349,12 +352,13 @@ describe('Full Journey Integration Test (Req 9A-1)', () => {
     const act = await activateCertificateTemplate(EVENT_ID, { templateId: TEMPLATE_ID });
     expect(act.status).toBe('active');
 
-    // issueCertificate: event status → person exists → event_people → template active → transaction(existing certs + numbers + insert)
+    // issueCertificate: event status → person exists → event_people → template active → basis check → transaction(existing certs + numbers + insert)
     for (let i = 0; i < 5; i++) {
       chainSelect([{ status: 'published' }]); // event not archived
       chainSelect([{ id: PERSON_IDS[i] }]); // person exists
       chainSelect([{ id: `ep-${i}` }]); // event_people row exists
       chainSelect([{ id: TEMPLATE_ID, eventId: EVENT_ID, status: 'active', certificateType: 'delegate_attendance' }]);
+      chainSelect([{ id: REGISTRATION_IDS[i] }]); // eligibility basis
       // Inside transaction:
       chainSelect([]); // existing certs (FOR UPDATE) → none
       chainSelect([]); // existing cert numbers
@@ -365,6 +369,7 @@ describe('Full Journey Integration Test (Req 9A-1)', () => {
       const c = await issueCertificate(EVENT_ID, {
         personId: PERSON_IDS[i], templateId: TEMPLATE_ID,
         certificateType: 'delegate_attendance', eligibilityBasisType: 'registration',
+        eligibilityBasisId: REGISTRATION_IDS[i],
         renderedVariablesJson: { recipient_name: `Delegate ${i + 1}` },
       });
       expect(c.id).toBe(CERT_IDS[i]);
@@ -493,6 +498,7 @@ describe('Full Journey — Cross-Module Flow (Req 9A-1)', () => {
 
     // Accommodation
     chainSelect([{ id: pid }]);
+    chainSelect([{ id: TRAVEL_IDS[0] }]);
     chainInsert([{ id: ACCOM_IDS[0], eventId: EVENT_ID, personId: pid, hotelName: 'Hotel Imperial' }]);
     chainInsert([]);
     const accom = await createAccommodationRecord(EVENT_ID, {
@@ -503,7 +509,8 @@ describe('Full Journey — Cross-Module Flow (Req 9A-1)', () => {
 
     // Transport
     chainSelect([{ id: BATCH_ID }]);
-    chainInsert([{ id: 'pass-chain', batchId: BATCH_ID, personId: pid, passengerStatus: 'assigned' }]);
+    chainSelect([{ id: TRAVEL_IDS[0] }]);
+    chainInsert([{ id: 'pass-chain', batchId: BATCH_ID, personId: pid, assignmentStatus: 'pending' }]);
     const pass = await assignPassenger(EVENT_ID, { batchId: BATCH_ID, personId: pid, travelRecordId: TRAVEL_IDS[0] });
     expect(pass.personId).toBe(pid);
   });
@@ -525,18 +532,21 @@ describe('Full Journey — Cross-Module Flow (Req 9A-1)', () => {
   });
 
   it('faculty invite creates record', async () => {
+    // assertActivePerson
+    chainSelect([{ id: PERSON_IDS[10] }]);
     // Existing active invite check → none found
     chainSelect([]);
     // Insert invite
-    chainInsert([{ id: INVITE_ID, eventId: EVENT_ID, personId: PERSON_IDS[10], inviteStatus: 'sent', token: 'tok-1' }]);
+    chainInsert([{ id: INVITE_ID, eventId: EVENT_ID, personId: PERSON_IDS[10], status: 'sent', token: 'tok-1' }]);
     // event_people
     chainInsert([]);
     const inv = await createFacultyInvite(EVENT_ID, { personId: PERSON_IDS[10] });
-    expect(inv.inviteStatus).toBe('sent');
+    expect(inv.status).toBe('sent');
   });
 
   it('session assignment links faculty to session', async () => {
     chainSelect([{ id: SESSION_IDS[0] }]);
+    chainSelect([{ id: PERSON_IDS[10] }]); // assertActivePerson
     chainSelect([]);
     chainInsert([{ id: ASSIGNMENT_IDS[0], sessionId: SESSION_IDS[0], personId: PERSON_IDS[10], role: 'speaker' }]);
     chainInsert([]);

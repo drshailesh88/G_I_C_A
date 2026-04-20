@@ -327,13 +327,14 @@ describe('updateSession — date conversion specifics', () => {
     mockAssertEventAccess.mockResolvedValue({ userId: 'user-1' });
   });
 
-  it('sessionDate set when sessionDate+startTime provided', async () => {
+  it('sessionDate set when sessionDate+startTime+endTime provided', async () => {
     multiSelect([{ id: UUID, parentSessionId: null }]);
     const updateChain = chainedUpdate([{ id: UUID }]);
     await updateSession(EVENT_ID, {
       sessionId: UUID,
       sessionDate: '2026-06-01',
       startTime: '14:00',
+      endTime: '15:00',
     });
     const setArg = updateChain.set.mock.calls[0][0];
     expect(setArg.sessionDate).toBeInstanceOf(Date);

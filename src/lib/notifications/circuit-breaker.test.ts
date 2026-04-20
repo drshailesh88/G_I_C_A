@@ -323,6 +323,8 @@ vi.mock('./log-queries', () => ({
   getLogById: vi.fn(),
   listFailedLogs: vi.fn(),
   markAsRetrying: vi.fn(),
+  upsertLogEntry: vi.fn(),
+  beginLogAttempt: vi.fn(),
 }));
 vi.mock('./email', () => ({
   resendEmailProvider: { send: vi.fn() },
