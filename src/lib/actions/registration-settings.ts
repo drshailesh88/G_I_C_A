@@ -6,6 +6,12 @@ import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { eventIdSchema, registrationSettingsSchema } from '@/lib/validations/event';
 import { assertEventAccess } from '@/lib/auth/event-access';
+import { ROLES } from '@/lib/auth/roles';
+
+const EVENT_MANAGEMENT_WRITE_ROLES: ReadonlySet<string> = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+]);
 
 export type UpdateRegistrationSettingsResult =
   | { ok: true }
@@ -17,7 +23,10 @@ export async function updateRegistrationSettings(
 ): Promise<UpdateRegistrationSettingsResult> {
   eventIdSchema.parse(eventId);
 
-  const { userId } = await assertEventAccess(eventId, { requireWrite: true });
+  const { userId, role } = await assertEventAccess(eventId, { requireWrite: true });
+  if (!role || !EVENT_MANAGEMENT_WRITE_ROLES.has(role)) {
+    throw new Error('Forbidden');
+  }
 
   if (input === null || typeof input !== 'object' || Array.isArray(input) || Object.keys(input as object).length === 0) {
     return { ok: false, status: 400, fieldErrors: {}, formErrors: ['At least one setting field is required'] };

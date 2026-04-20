@@ -145,21 +145,55 @@ export async function checkEventAccess(eventId: string): Promise<EventAccessResu
 /** Roles that can perform write operations */
 const WRITE_ROLES: ReadonlySet<string> = new Set([ROLES.SUPER_ADMIN, ROLES.EVENT_COORDINATOR, ROLES.OPS]);
 
+/** Roles allowed to read event-management surfaces (people, registration, branding, exports) — excludes Ops. */
+const EVENT_MANAGEMENT_READ_ROLES: ReadonlySet<string> = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+  ROLES.READ_ONLY,
+]);
+
+/** Roles allowed to mutate event-management surfaces — excludes Ops and Read-only. */
+const EVENT_MANAGEMENT_WRITE_ROLES: ReadonlySet<string> = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+]);
+
+/**
+ * Post-assertion guard for event-management surfaces (registration, branding,
+ * exports, people-detail) where Ops must be blocked even though Ops has
+ * generic event write access. Call this immediately after assertEventAccess.
+ */
+export function assertEventManagementRole(
+  role: string | null | undefined,
+  options?: { requireWrite?: boolean },
+): void {
+  const roleSet = options?.requireWrite ? EVENT_MANAGEMENT_WRITE_ROLES : EVENT_MANAGEMENT_READ_ROLES;
+  if (!role || !roleSet.has(role)) {
+    throw new Error('Forbidden');
+  }
+}
+
 /**
  * Assert event access — throws if unauthorized.
  * Use in server actions and API routes before any data access.
  * Pass requireWrite: true for mutations to block read-only users.
+ * Pass surface: 'event_management' for non-logistics surfaces to block Ops.
  */
 export async function assertEventAccess(
   eventId: string,
-  options?: { requireWrite?: boolean },
+  options?: { requireWrite?: boolean; surface?: 'event_management' },
 ): Promise<{ userId: string; role: string | null }> {
   const result = await checkEventAccess(eventId);
   if (!result.authorized) {
     throw new EventNotFoundError();
   }
 
-  if (options?.requireWrite && (!result.role || !WRITE_ROLES.has(result.role as string))) {
+  if (options?.surface === 'event_management') {
+    const roleSet = options.requireWrite ? EVENT_MANAGEMENT_WRITE_ROLES : EVENT_MANAGEMENT_READ_ROLES;
+    if (!result.role || !roleSet.has(result.role as string)) {
+      throw new ForbiddenError();
+    }
+  } else if (options?.requireWrite && (!result.role || !WRITE_ROLES.has(result.role as string))) {
     throw new ForbiddenError();
   }
 
