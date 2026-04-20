@@ -656,6 +656,24 @@ export async function importTravelBatch(
         }
       }
 
+      if (row.departureAtUtc) {
+        const d = new Date(row.departureAtUtc);
+        if (isNaN(d.getTime())) {
+          results.push({ rowNumber: row.rowNumber, status: 'error', error: 'Departure time must be a valid UTC timestamp' });
+          errors++;
+          continue;
+        }
+      }
+
+      if (row.arrivalAtUtc) {
+        const d = new Date(row.arrivalAtUtc);
+        if (isNaN(d.getTime())) {
+          results.push({ rowNumber: row.rowNumber, status: 'error', error: 'Arrival time must be a valid UTC timestamp' });
+          errors++;
+          continue;
+        }
+      }
+
       const [record] = await db
         .insert(travelRecords)
         .values({
