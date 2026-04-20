@@ -83,6 +83,7 @@ const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 const PERSON_ID = '550e8400-e29b-41d4-a716-446655440001';
 const TEMPLATE_ID = '550e8400-e29b-41d4-a716-446655440002';
 const CERT_ID = '550e8400-e29b-41d4-a716-446655440003';
+const BASIS_ID = '550e8400-e29b-41d4-a716-446655440004';
 
 const mockTemplate = {
   id: TEMPLATE_ID,
@@ -115,6 +116,7 @@ const validIssueInput = {
   templateId: TEMPLATE_ID,
   certificateType: 'delegate_attendance' as const,
   eligibilityBasisType: 'registration' as const,
+  eligibilityBasisId: BASIS_ID,
   renderedVariablesJson: { full_name: 'Dr. Smith' },
 };
 
@@ -134,6 +136,7 @@ describe('issueCertificate — insert shape assertions', () => {
       [{ id: PERSON_ID }],
       [{ id: 'ep-1' }],
       [mockTemplate],
+      [{ id: BASIS_ID }],
       [],
       [],
     ]);
@@ -164,7 +167,13 @@ describe('issueCertificate — insert shape assertions', () => {
     ]);
     const insertChain = chainedInsert([mockIssuedCert]);
 
-    await issueCertificate(EVENT_ID, validIssueInput);
+    await issueCertificate(EVENT_ID, {
+      personId: PERSON_ID,
+      templateId: TEMPLATE_ID,
+      certificateType: 'delegate_attendance' as const,
+      eligibilityBasisType: 'manual' as const,
+      renderedVariablesJson: { full_name: 'Dr. Smith' },
+    });
     const insertCall = insertChain.values.mock.calls[0][0];
     expect(insertCall.eligibilityBasisId).toBeNull();
   });
@@ -196,6 +205,7 @@ describe('issueCertificate — insert shape assertions', () => {
       [{ id: PERSON_ID }],
       [{ id: 'ep-1' }],
       [mockTemplate],
+      [{ id: BASIS_ID }],
       [],
       [],
     ]);
@@ -212,6 +222,7 @@ describe('issueCertificate — insert shape assertions', () => {
       [{ id: PERSON_ID }],
       [{ id: 'ep-1' }],
       [mockTemplate],
+      [{ id: BASIS_ID }],
       [],
       [],
     ]);
@@ -229,6 +240,7 @@ describe('issueCertificate — insert shape assertions', () => {
       [{ id: PERSON_ID }],
       [{ id: 'ep-1' }],
       [mockTemplate],
+      [{ id: BASIS_ID }],
       [],
       [],
     ]);
@@ -247,6 +259,7 @@ describe('issueCertificate — insert shape assertions', () => {
       [{ id: PERSON_ID }],
       [{ id: 'ep-1' }],
       [mockTemplate],
+      [{ id: BASIS_ID }],
       [],
       [],
     ]);
@@ -266,6 +279,7 @@ describe('issueCertificate — supersession behavior', () => {
       [{ id: PERSON_ID }],
       [{ id: 'ep-1' }],
       [mockTemplate],
+      [{ id: BASIS_ID }],
       [existingCert],
       [{ certificateNumber: 'GEM2026-ATT-00001' }],
     ]);
@@ -289,6 +303,7 @@ describe('issueCertificate — supersession behavior', () => {
       [{ id: PERSON_ID }],
       [{ id: 'ep-1' }],
       [mockTemplate],
+      [{ id: BASIS_ID }],
       [],
       [],
     ]);
@@ -311,6 +326,7 @@ describe('issueCertificate — retry loop boundary (L58,151,152)', () => {
     const selectResponses = [
       [{ status: 'published' }],
       [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate],
+      [{ id: BASIS_ID }],
       [], [], [], [], [], [],
     ];
     mockDb.select.mockImplementation(() => {
@@ -344,7 +360,7 @@ describe('issueCertificate — retry loop boundary (L58,151,152)', () => {
     const genericError = new Error('some other DB error');
 
     chainedSelectSequence([
-      [{ status: 'published' }], [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate], [], [],
+      [{ status: 'published' }], [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate], [{ id: BASIS_ID }], [], [],
     ]);
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
@@ -816,6 +832,7 @@ describe('issueCertificate — assertEventAccess + select shapes', () => {
       [{ id: PERSON_ID }],
       [{ id: 'ep-1' }],
       [mockTemplate],
+      [{ id: BASIS_ID }],
       [],
       [],
     ]);
@@ -830,6 +847,7 @@ describe('issueCertificate — assertEventAccess + select shapes', () => {
       [{ id: PERSON_ID }],
       [{ id: 'ep-1' }],
       [mockTemplate],
+      [{ id: BASIS_ID }],
       [],
       [],
     ]);
@@ -867,6 +885,7 @@ describe('issueCertificate — assertEventAccess + select shapes', () => {
       [{ id: PERSON_ID }],
       [{ id: 'ep-1' }],
       [mockTemplate],
+      [{ id: BASIS_ID }],
       [],
       [{ certificateNumber: 'GEM2026-ATT-00001' }],
     ]);
@@ -890,6 +909,7 @@ describe('issueCertificate — assertEventAccess + select shapes', () => {
     const selectResponses = [
       [{ status: 'published' }],
       [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate],
+      [{ id: BASIS_ID }],
       [], [], [], [], [], [], [], [],
     ];
     mockDb.select.mockImplementation(() => {
@@ -928,7 +948,7 @@ describe('issueCertificate — collision detection', () => {
     const nonErrorThrow = 'string error';
 
     chainedSelectSequence([
-      [{ status: 'published' }], [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate], [], [],
+      [{ status: 'published' }], [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate], [{ id: BASIS_ID }], [], [],
     ]);
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
@@ -949,7 +969,7 @@ describe('issueCertificate — collision detection', () => {
     const noCodeError = new Error('some db error without code');
 
     chainedSelectSequence([
-      [{ status: 'published' }], [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate], [], [],
+      [{ status: 'published' }], [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate], [{ id: BASIS_ID }], [], [],
     ]);
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
@@ -973,7 +993,7 @@ describe('issueCertificate — collision detection', () => {
     );
 
     chainedSelectSequence([
-      [{ status: 'published' }], [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate], [], [],
+      [{ status: 'published' }], [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate], [{ id: BASIS_ID }], [], [],
     ]);
 
     mockDb.transaction.mockImplementation(async (callback: (tx: typeof mockDb) => unknown) => {
@@ -1000,6 +1020,7 @@ describe('issueCertificate — currentCert AND chain.oldCertUpdate check (L126)'
       [{ id: PERSON_ID }],
       [{ id: 'ep-1' }],
       [mockTemplate],
+      [{ id: BASIS_ID }],
       [revokedCert], // existing cert is revoked
       [],
     ]);
@@ -1164,6 +1185,7 @@ describe('issueCertificate — select argument verification', () => {
       [{ id: PERSON_ID }],
       [{ id: 'ep-1' }],
       [mockTemplate],
+      [{ id: BASIS_ID }],
       [],
       [],
     ]);
@@ -1184,13 +1206,14 @@ describe('issueCertificate — select argument verification', () => {
       [{ id: PERSON_ID }],
       [{ id: 'ep-1' }],
       [mockTemplate],
+      [{ id: BASIS_ID }],
       [],
       [{ certificateNumber: 'GEM2026-ATT-00001' }],
     ]);
     chainedInsert([mockIssuedCert]);
     await issueCertificate(EVENT_ID, validIssueInput);
-    // 6th select call is for cert numbers (1=event status, 2=person, 3=event_people, 4=template, 5=existing certs, 6=cert numbers)
-    const selectArg = mockDb.select.mock.calls[5]?.[0];
+    // 7th select call is for cert numbers (1=event status, 2=person, 3=event_people, 4=template, 5=basis, 6=existing certs, 7=cert numbers)
+    const selectArg = mockDb.select.mock.calls[6]?.[0];
     expect(selectArg).toBeDefined();
     if (selectArg) {
       expect(typeof selectArg).toBe('object');
@@ -1443,6 +1466,7 @@ describe('issueCertificate — collision detection: code property handling (L152
     const selectResponses = [
       [{ status: 'published' }],
       [{ id: PERSON_ID }], [{ id: 'ep-1' }], [mockTemplate],
+      [{ id: BASIS_ID }],
       [], [],
       [], [],
     ];
@@ -1493,6 +1517,7 @@ describe('issueCertificate — L126 both conditions required', () => {
       [{ id: PERSON_ID }],
       [{ id: 'ep-1' }],
       [mockTemplate],
+      [{ id: BASIS_ID }],
       [], // no existing certs
       [],
     ]);
