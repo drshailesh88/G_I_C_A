@@ -21,6 +21,7 @@ tiers:
     - src/middleware.ts
     # Added 2026-04-14 — server actions, validations, cascade, inngest, API routes
     - src/lib/actions/**
+    - src/lib/audit/**
     - src/lib/validations/**
     - src/lib/cascade/**
     - src/lib/inngest/**
@@ -45,6 +46,7 @@ tiers:
     - src/lib/attendance/**
     - src/lib/import/**
     - src/lib/flags.ts
+    - src/lib/sentry/**
     - src/lib/sentry.ts
     - src/instrumentation.ts
     - src/instrumentation-client.ts
