@@ -4,8 +4,18 @@ import { withSentryConfig } from '@sentry/nextjs';
 const securityHeaders = [
   {
     key: 'Content-Security-Policy',
-    value:
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://*.ingest.sentry.io; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+    value: [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https://img.clerk.com",
+      "font-src 'self' https://fonts.gstatic.com",
+      "connect-src 'self' https://*.clerk.accounts.dev https://*.clerk.com https://*.ingest.sentry.io",
+      "frame-src 'self' https://*.clerk.accounts.dev",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join('; '),
   },
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'DENY' },
