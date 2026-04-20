@@ -1,0 +1,64 @@
+{
+  "run_date": "2026-04-20",
+  "model": "codex",
+  "packets_reviewed": 28,
+  "bugs_found": 7,
+  "bug_list": [
+    {
+      "packet": "PKT-A-001",
+      "file": "src/lib/validations/event-assignments.ts",
+      "line": 7,
+      "description": "Whitespace-only Clerk user IDs pass assignment validation and can create unusable event assignments.",
+      "test_file": "src/lib/actions/event-assignments.adversarial.test.ts",
+      "severity": "MEDIUM"
+    },
+    {
+      "packet": "PKT-A-002",
+      "file": "src/lib/actions/event.ts",
+      "line": 720,
+      "description": "When moduleToggles is omitted, updateEvent silently parses '{}' and re-enables every module instead of rejecting the malformed payload.",
+      "test_file": "src/lib/actions/event.adversarial.test.ts",
+      "severity": "HIGH"
+    },
+    {
+      "packet": "PKT-A-003",
+      "file": "src/lib/actions/registration-settings.ts",
+      "line": 22,
+      "description": "An empty registration settings payload is accepted and written back as fully defaulted settings, wiping existing event-specific configuration.",
+      "test_file": "src/lib/actions/registration-settings.adversarial.test.ts",
+      "severity": "HIGH"
+    },
+    {
+      "packet": "PKT-A-004",
+      "file": "src/lib/actions/program.ts",
+      "line": 1011,
+      "description": "Faculty invite acceptance only confirms pending registrations; existing cancelled registrations stay terminal instead of being restored to confirmed.",
+      "test_file": "src/lib/actions/program.adversarial.test.ts",
+      "severity": "HIGH"
+    },
+    {
+      "packet": "PKT-A-006",
+      "file": "src/lib/actions/program.ts",
+      "line": 1696,
+      "description": "Public attendee program data reads the highest version number regardless of publish status, so a newer draft snapshot can leak to attendees.",
+      "test_file": "src/lib/actions/program.adversarial.test.ts",
+      "severity": "HIGH"
+    },
+    {
+      "packet": "PKT-A-010",
+      "file": "src/lib/actions/program.ts",
+      "line": 1186,
+      "description": "Program version history returns all versions for the event, including drafts, instead of published versions only.",
+      "test_file": "src/lib/actions/program.adversarial.test.ts",
+      "severity": "MEDIUM"
+    },
+    {
+      "packet": "PKT-C-003",
+      "file": "src/lib/actions/program.ts",
+      "line": 1295,
+      "description": "Version email preview accepts any personId and does not enforce that the selected person is in affectedPersonIdsJson for the version.",
+      "test_file": "src/lib/actions/program.adversarial.test.ts",
+      "severity": "HIGH"
+    }
+  ]
+}
