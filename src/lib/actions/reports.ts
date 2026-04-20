@@ -22,10 +22,11 @@ import { eq, ne, desc } from 'drizzle-orm';
 import { ROLES } from '@/lib/auth/roles';
 import { eventIdSchema } from '@/lib/validations/event';
 import { generateExport, type ExportType } from '@/lib/exports/excel';
-import type {
-  GlobalExportType,
-  GetEventsResult,
-  GenerateGlobalExportResult,
+import {
+  GLOBAL_EXPORT_TYPES,
+  type GlobalExportType,
+  type GetEventsResult,
+  type GenerateGlobalExportResult,
 } from '@/lib/actions/reports-types';
 export type {
   GlobalExportType,
@@ -608,6 +609,9 @@ export async function generateGlobalExport(
       const parsed = eventIdSchema.safeParse(eventId);
       if (!parsed.success) {
         return { ok: false, error: 'Invalid event ID' };
+      }
+      if (!(type in GLOBAL_EXPORT_TYPES)) {
+        return { ok: false, error: `Unknown export type: ${String(type)}` };
       }
       filename = `${type}-${parsed.data}.xlsx`;
       if (type === 'notification-log') {
