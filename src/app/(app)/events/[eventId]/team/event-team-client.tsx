@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react';
 import { ArrowLeft, UserMinus, UserPlus, CheckCircle, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { type EventAssignment, createEventAssignment, deactivateEventAssignment } from '@/lib/actions/event-assignments';
-import { type TeamMember } from '@/lib/actions/team';
+import { type TeamMember } from '@/lib/actions/team-utils';
 import { ASSIGNMENT_TYPES, type AssignmentType } from '@/lib/validations/event-assignments';
 
 const ASSIGNMENT_TYPE_LABELS: Record<AssignmentType, string> = {

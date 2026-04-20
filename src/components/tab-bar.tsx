@@ -51,6 +51,7 @@ export function TabBar() {
   }
 
   function isVisible(tabKey: string) {
+    if (!userRole) return false;
     const allowedRoles = TAB_ACCESS[tabKey];
     return allowedRoles?.includes(userRole) ?? false;
   }

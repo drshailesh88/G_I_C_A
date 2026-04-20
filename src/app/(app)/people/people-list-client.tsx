@@ -193,7 +193,7 @@ export function PeopleListClient({
       });
 
       if (result.duplicate) {
-        setAddError(result.message);
+        setAddError(result.message ?? 'Duplicate person');
         return;
       }
 

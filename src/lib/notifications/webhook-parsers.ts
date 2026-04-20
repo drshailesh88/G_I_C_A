@@ -152,7 +152,7 @@ export function parseEvolutionWebhook(payload: unknown): ParsedWebhookEvent | nu
   const statusCode = getOwnNumber(update, 'status');
   if (statusCode === undefined) return null;
 
-  const eventType = EVOLUTION_STATUS_MAP[statusCode];
+  const eventType = EVOLUTION_STATUS_MAP[statusCode as keyof typeof EVOLUTION_STATUS_MAP];
   if (!eventType) return null;
 
   // Evolution API doesn't always include a timestamp; use now as fallback

@@ -27,7 +27,7 @@ function createFlagLookup<const T extends readonly string[]>(
   const lookup = Object.create(null) as Record<T[number], true>;
 
   for (const value of values) {
-    lookup[value] = true;
+    lookup[value as T[number]] = true;
   }
 
   return Object.freeze(lookup);

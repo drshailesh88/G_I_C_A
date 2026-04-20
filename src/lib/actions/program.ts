@@ -72,7 +72,7 @@ function assertProgramRole(
   }
 
   const allowedRoles = options?.requireWrite ? PROGRAM_WRITE_ROLES : PROGRAM_READ_ROLES;
-  if (!allowedRoles.has(role)) {
+  if (!(allowedRoles as ReadonlySet<string>).has(role)) {
     throw new Error('Forbidden');
   }
 }

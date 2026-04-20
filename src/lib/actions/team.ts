@@ -9,16 +9,8 @@ import {
   changeMemberRoleSchema,
   removeMemberSchema,
 } from '@/lib/validations/team';
-
-export type TeamMember = {
-  userId: string;
-  email: string;
-  firstName: string | null;
-  lastName: string | null;
-  imageUrl: string;
-  role: string;
-  createdAt: number;
-};
+import type { TeamMember } from '@/lib/actions/team-utils';
+export type { TeamMember } from '@/lib/actions/team-utils';
 
 type OrganizationMembershipRecord = {
   publicUserData?: {
@@ -42,21 +34,10 @@ type TeamMutationLock = {
   release(handle: TeamMutationLockHandle): Promise<void>;
 };
 
-const ROLE_LABELS: Record<string, string> = {
-  [ROLES.SUPER_ADMIN]: 'Super Admin',
-  [ROLES.EVENT_COORDINATOR]: 'Event Coordinator',
-  [ROLES.OPS]: 'Ops',
-  [ROLES.READ_ONLY]: 'Read-only',
-};
-
 const MEMBERSHIP_PAGE_SIZE = 100;
 const TEAM_MUTATION_LOCK_PREFIX = 'team:membership-lock:';
 const TEAM_MUTATION_LOCK_TTL_SECONDS = 15;
 const RELEASE_LOCK_LUA = `if redis.call("get",KEYS[1]) == ARGV[1] then return redis.call("del",KEYS[1]) else return 0 end`;
-
-export function getRoleLabel(role: string): string {
-  return ROLE_LABELS[role] ?? role;
-}
 
 async function assertSuperAdmin(): Promise<string> {
   const session = await auth();

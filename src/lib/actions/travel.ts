@@ -51,7 +51,7 @@ function assertTravelRole(
 
   const allowedRoles = options?.requireWrite ? TRAVEL_WRITE_ROLES : TRAVEL_READ_ROLES;
 
-  if (!allowedRoles.has(role)) {
+  if (!(allowedRoles as ReadonlySet<string>).has(role)) {
     throw new Error('Forbidden');
   }
 }

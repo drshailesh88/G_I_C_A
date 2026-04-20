@@ -84,7 +84,7 @@ function assertRegistrationRole(
     ? REGISTRATION_WRITE_ROLES
     : REGISTRATION_READ_ROLES;
 
-  if (!allowedRoles.has(role)) {
+  if (!(allowedRoles as ReadonlySet<string>).has(role)) {
     throw new Error('Forbidden');
   }
 }

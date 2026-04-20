@@ -48,7 +48,7 @@ function assertNotificationsRole(
     ? COMMUNICATIONS_WRITE_ROLES
     : COMMUNICATIONS_READ_ROLES;
 
-  if (!role || !allowedRoles.has(role)) {
+  if (!role || !(allowedRoles as ReadonlySet<string>).has(role)) {
     throw new Error('forbidden');
   }
 }

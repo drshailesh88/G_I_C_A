@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { ArrowLeft, ArrowRightLeft, User } from 'lucide-react';
 import Link from 'next/link';
-import { type TeamMember } from '@/lib/actions/team';
+import { type TeamMember } from '@/lib/actions/team-utils';
 import { transferEventOwnership } from '@/lib/actions/event';
 
 interface TransferOwnershipClientProps {

@@ -4,7 +4,7 @@ import { assertEventAccess } from '@/lib/auth/event-access';
 import { reviewRedFlag, resolveRedFlag } from '@/lib/cascade/red-flags';
 import { ROLES } from '@/lib/auth/roles';
 
-const RED_FLAG_WRITE_ROLES = new Set([
+const RED_FLAG_WRITE_ROLES: ReadonlySet<string> = new Set([
   ROLES.SUPER_ADMIN,
   ROLES.OPS,
 ]);

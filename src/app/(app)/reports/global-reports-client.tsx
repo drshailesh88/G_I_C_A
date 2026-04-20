@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { generateGlobalExport } from '@/lib/actions/reports';
 import {
   GLOBAL_EXPORT_TYPES,
-  generateGlobalExport,
   type GlobalExportType,
   type EventSummary,
-} from '@/lib/actions/reports';
+} from '@/lib/actions/reports-types';
 
 interface Props {
   events: EventSummary[];

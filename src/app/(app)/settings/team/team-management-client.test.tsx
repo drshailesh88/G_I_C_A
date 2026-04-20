@@ -8,11 +8,14 @@ vi.mock('next/link', () => ({
 }));
 
 vi.mock('@/lib/actions/team', () => ({
-  getRoleLabel: (role: string) => role,
   inviteTeamMember: vi.fn(),
   changeMemberRole: vi.fn(),
   removeTeamMember: vi.fn(),
   getTeamMembers: vi.fn(() => Promise.resolve([])),
+}));
+
+vi.mock('@/lib/actions/team-utils', () => ({
+  getRoleLabel: (role: string) => role,
 }));
 
 vi.mock('@/lib/auth/roles', () => ({

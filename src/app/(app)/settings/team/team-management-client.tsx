@@ -4,13 +4,12 @@ import { useState, useTransition } from 'react';
 import { ArrowLeft, UserPlus, Trash2, Shield } from 'lucide-react';
 import Link from 'next/link';
 import {
-  type TeamMember,
-  getRoleLabel,
   inviteTeamMember,
   changeMemberRole,
   removeTeamMember,
   getTeamMembers,
 } from '@/lib/actions/team';
+import { type TeamMember, getRoleLabel } from '@/lib/actions/team-utils';
 import { ROLES } from '@/lib/auth/roles';
 import { FormGrid } from '@/components/responsive/form-grid';
 

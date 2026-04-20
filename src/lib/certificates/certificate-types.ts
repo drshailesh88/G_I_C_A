@@ -35,7 +35,7 @@ function freezeCertificateConfig(config: CertificateTypeConfig): CertificateType
     ...config,
     defaultVariables: Object.freeze([...config.defaultVariables]),
     requiredVariables: Object.freeze([...config.requiredVariables]),
-  });
+  }) as unknown as CertificateTypeConfig;
 }
 
 const RAW_CERTIFICATE_TYPE_CONFIGS: Record<CertificateType, CertificateTypeConfig> = {

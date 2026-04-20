@@ -138,7 +138,7 @@ function assertPeopleEventRole(
   options?: { requireWrite?: boolean },
 ) {
   const allowedRoles = options?.requireWrite ? PEOPLE_WRITE_ROLES : PEOPLE_READ_ROLES;
-  if (!role || !allowedRoles.has(role)) {
+  if (!role || !(allowedRoles as ReadonlySet<string>).has(role)) {
     throw new Error('Forbidden');
   }
 }

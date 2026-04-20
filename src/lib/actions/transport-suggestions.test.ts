@@ -21,14 +21,13 @@ vi.mock('@/lib/audit/write', () => ({ writeAudit: mockWriteAudit }));
 
 import {
   acceptSuggestion,
-  buildClusters,
   discardSuggestion,
-  floorToThreeHourWindowUtc,
   generateTransportSuggestions,
   getSuggestedBatches,
   mergeSuggestions,
   splitSuggestion,
 } from './transport';
+import { buildClusters, floorToThreeHourWindowUtc } from './transport-utils';
 
 const EVENT_ID = '550e8400-e29b-41d4-a716-446655440000';
 const BATCH_ID = '550e8400-e29b-41d4-a716-446655440001';
