@@ -714,12 +714,13 @@ export async function updateEvent(eventId: string, formData: FormData): Promise<
 
   const { userId } = await assertEventAccess(eventId, { requireWrite: true });
 
+  const moduleTogglesStr = formData.get('moduleToggles') as string | null;
+  if (!moduleTogglesStr) {
+    return { ok: false, status: 400, fieldErrors: {}, formErrors: ['moduleToggles is required'] };
+  }
   let moduleTogglesRaw: unknown;
   try {
-    moduleTogglesRaw = safeJsonParse(
-      (formData.get('moduleToggles') as string) || '{}',
-      'moduleToggles',
-    );
+    moduleTogglesRaw = safeJsonParse(moduleTogglesStr, 'moduleToggles');
   } catch (err) {
     if (err instanceof ZodError) {
       const flat = err.flatten();
