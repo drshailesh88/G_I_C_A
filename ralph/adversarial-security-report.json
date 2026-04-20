@@ -1,0 +1,178 @@
+{
+  "generated_at": "2026-04-20",
+  "auditor": "codex",
+  "mode": "red-team adversarial",
+  "scope": [
+    "MULTI-TENANT EVENT ISOLATION",
+    "ROLE ESCALATION",
+    "INPUT INJECTION",
+    "WEBHOOK FORGERY",
+    "FILE UPLOAD ABUSE"
+  ],
+  "previous_audit_slices_skipped": [
+    {
+      "slice_id": "AUD-001",
+      "reason": "Already audited and fixed the program cascade cross-event recipient leak."
+    },
+    {
+      "slice_id": "AUD-002",
+      "reason": "Already audited and fixed the feature-flags admin surface/sidebar role leak."
+    },
+    {
+      "slice_id": "AUD-003",
+      "reason": "Already audited and fixed the public registration success cross-event UUID leak."
+    },
+    {
+      "slice_id": "AUD-004",
+      "reason": "Already audited and fixed mergePeople cross-event mutation access."
+    },
+    {
+      "slice_id": "AUD-005",
+      "reason": "Already audited and fixed the stale public-program exposure on non-published events."
+    },
+    {
+      "slice_id": "AUD-006",
+      "reason": "Already audited and fixed attendance-report session join event scoping."
+    },
+    {
+      "slice_id": "AUD-007",
+      "reason": "Already audited and fixed logistics server-action RBAC bypasses."
+    }
+  ],
+  "tests_run": [
+    {
+      "command": "npx vitest run src/lib/actions/person.adversarial.test.ts src/lib/actions/registration-settings-rbac.adversarial.test.ts src/lib/actions/branding-rbac.adversarial.test.ts 'src/app/api/events/[eventId]/exports/[type]/route.adversarial.test.ts' 'src/app/api/events/[eventId]/people/[personId]/route.adversarial.test.ts'",
+      "exit_code": 1,
+      "summary": "5 adversarial test files executed; all 6 assertions failed against the current implementation, confirming the findings remain exploitable."
+    }
+  ],
+  "findings": [
+    {
+      "id": "ADV-SEC-001",
+      "severity": "critical",
+      "category": "MULTI-TENANT EVENT ISOLATION",
+      "title": "Global people actions ignore event ownership and leak or mutate cross-event PII",
+      "files": [
+        "src/lib/actions/person.ts:320",
+        "src/lib/actions/person.ts:335",
+        "src/lib/actions/person.ts:408"
+      ],
+      "exploit": "An event coordinator assigned to one event can use the global people actions to search and archive person records linked only to other events because these actions never accept an eventId and never verify linked event assignments before querying or mutating the people table.",
+      "failing_tests": [
+        "src/lib/actions/person.adversarial.test.ts"
+      ],
+      "failure_evidence": [
+        "searchPeople returned a person row from outside the caller's event scope instead of returning an empty result.",
+        "archivePerson resolved with an archived record instead of rejecting as forbidden."
+      ],
+      "status": "open"
+    },
+    {
+      "id": "ADV-SEC-002",
+      "severity": "critical",
+      "category": "ROLE ESCALATION",
+      "title": "Ops can change registration settings through generic write access",
+      "files": [
+        "src/lib/actions/registration-settings.ts:20",
+        "src/lib/auth/event-access.ts:145",
+        "src/lib/auth/roles.ts:15"
+      ],
+      "exploit": "The registration settings action relies only on assertEventAccess(requireWrite:true). Because generic write access includes org:ops, an Ops user assigned to an event can reconfigure approval, capacity, waitlist, and cutoff settings even though Ops should be limited to travel, accommodation, and transport.",
+      "failing_tests": [
+        "src/lib/actions/registration-settings-rbac.adversarial.test.ts"
+      ],
+      "failure_evidence": [
+        "updateRegistrationSettings resolved with { ok: true } for an org:ops caller instead of rejecting."
+      ],
+      "status": "open"
+    },
+    {
+      "id": "ADV-SEC-003",
+      "severity": "high",
+      "category": "ROLE ESCALATION",
+      "title": "Ops can overwrite event branding and upload branding assets",
+      "files": [
+        "src/lib/actions/branding.ts:167",
+        "src/lib/actions/branding.ts:229",
+        "src/lib/actions/branding.ts:288",
+        "src/lib/auth/event-access.ts:145",
+        "src/lib/auth/roles.ts:15"
+      ],
+      "exploit": "Branding mutations also trust generic write access, so an Ops user can change colors, sender branding, and uploaded branding assets for an event despite branding belonging to the event-management surface, not logistics.",
+      "failing_tests": [
+        "src/lib/actions/branding-rbac.adversarial.test.ts"
+      ],
+      "failure_evidence": [
+        "updateEventBranding resolved successfully for an org:ops caller instead of rejecting."
+      ],
+      "status": "open"
+    },
+    {
+      "id": "ADV-SEC-004",
+      "severity": "high",
+      "category": "ROLE ESCALATION",
+      "title": "Ops can export attendee PII through the event export API",
+      "files": [
+        "src/app/api/events/[eventId]/exports/[type]/route.ts:22",
+        "src/lib/auth/event-access.ts:153",
+        "src/lib/auth/roles.ts:15"
+      ],
+      "exploit": "The export route treats any event-readable session as export-authorized. An Ops user can therefore call the attendee export endpoint directly and download attendee names, emails, phones, and related report data outside the logistics scope.",
+      "failing_tests": [
+        "src/app/api/events/[eventId]/exports/[type]/route.adversarial.test.ts"
+      ],
+      "failure_evidence": [
+        "GET /api/events/{eventId}/exports/attendee-list returned 200 for an org:ops caller instead of 403.",
+        "generateExport executed for the Ops caller."
+      ],
+      "status": "open"
+    },
+    {
+      "id": "ADV-SEC-005",
+      "severity": "high",
+      "category": "ROLE ESCALATION",
+      "title": "Ops can read people-module PII via the event person-detail API route",
+      "files": [
+        "src/app/api/events/[eventId]/people/[personId]/route.ts:35",
+        "src/app/api/events/[eventId]/people/[personId]/route.ts:45",
+        "src/lib/auth/roles.ts:16"
+      ],
+      "exploit": "The person-detail API route checks only generic event access, then returns full name, email, phone, registration, travel, and session data. An Ops user assigned to the event can call the route directly even though the PEOPLE surface is not available to Ops.",
+      "failing_tests": [
+        "src/app/api/events/[eventId]/people/[personId]/route.adversarial.test.ts"
+      ],
+      "failure_evidence": [
+        "GET /api/events/{eventId}/people/{personId} returned 200 for an org:ops caller instead of 403.",
+        "The route proceeded into database reads for person, travel, session, and registration data."
+      ],
+      "status": "open"
+    }
+  ],
+  "no_fresh_issue_confirmed": [
+    {
+      "category": "INPUT INJECTION",
+      "status": "no fresh exploit confirmed on the reviewed entrypoints",
+      "notes": "I did not find raw SQL string interpolation, .unsafe(), or .raw() usage on the targeted actions/routes, and the reviewed API routes on this surface continue to parse request bodies/params with Zod before use."
+    },
+    {
+      "category": "WEBHOOK FORGERY",
+      "status": "no fresh exploit confirmed",
+      "files": [
+        "src/app/api/webhooks/email/route.ts",
+        "src/app/api/webhooks/whatsapp/route.ts",
+        "src/lib/notifications/webhook-auth.ts"
+      ],
+      "notes": "The email webhook verifies Svix/Resend HMAC input and the WhatsApp webhook verifies a shared secret header, both failing closed when verification data or secrets are missing."
+    },
+    {
+      "category": "FILE UPLOAD ABUSE",
+      "status": "no fresh exploit confirmed on the reviewed code path",
+      "files": [
+        "src/lib/actions/branding.ts",
+        "src/lib/validations/branding.ts",
+        "src/lib/certificates/storage.ts"
+      ],
+      "notes": "I did not find a presigned PUT upload endpoint on the reviewed surface. The branding upload path performs server-side MIME allowlisting, byte-signature checks, active-SVG rejection, and a 5MB size cap before storage."
+    }
+  ]
+}
