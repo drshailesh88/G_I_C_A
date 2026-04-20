@@ -38,7 +38,6 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
-ENV HOSTNAME=0.0.0.0
 
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs
@@ -50,4 +49,8 @@ USER nextjs
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+# Inline HOSTNAME=0.0.0.0 so it overrides whatever the container platform
+# injects (AWS App Runner, for example, sets HOSTNAME to the instance's
+# internal FQDN, which Next.js standalone would then bind to and fail
+# health checks on). `exec` replaces the shell so SIGTERM reaches node.
+CMD ["sh", "-c", "HOSTNAME=0.0.0.0 exec node server.js"]
