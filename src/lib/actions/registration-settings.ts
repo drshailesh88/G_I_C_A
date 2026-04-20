@@ -19,6 +19,10 @@ export async function updateRegistrationSettings(
 
   const { userId } = await assertEventAccess(eventId, { requireWrite: true });
 
+  if (input === null || typeof input !== 'object' || Array.isArray(input) || Object.keys(input as object).length === 0) {
+    return { ok: false, status: 400, fieldErrors: {}, formErrors: ['At least one setting field is required'] };
+  }
+
   const parsed = registrationSettingsSchema.safeParse(input);
   if (!parsed.success) {
     const flat = parsed.error.flatten();

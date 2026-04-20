@@ -82,10 +82,10 @@ describe('updateRegistrationSettings — input validation', () => {
     expect(result.ok).toBe(true);
   });
 
-  it('accepts empty input (all defaults)', async () => {
+  it('rejects empty input to prevent silent reset of existing settings', async () => {
     mockUpdateChain();
     const result = await updateRegistrationSettings(VALID_UUID, {});
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
   });
 
   it('accepts full valid input', async () => {
