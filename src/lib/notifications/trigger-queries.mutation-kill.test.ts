@@ -91,7 +91,7 @@ import {
 beforeEach(() => {
   vi.clearAllMocks();
   mockReturning.mockResolvedValue([{ id: VALID_TRIGGER_ID }]);
-  mockLimit.mockResolvedValue([{ id: VALID_TEMPLATE_ID, eventId: VALID_EVENT_ID }]);
+  mockLimit.mockResolvedValue([{ id: VALID_TEMPLATE_ID, eventId: VALID_EVENT_ID, channel: 'email' }]);
   mockWhere.mockReturnValue(dbChain);
   mockOrderBy.mockReturnValue(dbChain);
   mockFrom.mockReturnValue(dbChain);

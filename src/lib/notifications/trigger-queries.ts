@@ -28,13 +28,14 @@ function parseTemplateId(templateId: string) {
   return notificationTemplateIdSchema.parse(templateId);
 }
 
-async function assertTemplateInScope(templateId: string, eventId: string) {
+async function assertTemplateInScope(templateId: string, eventId: string, channel?: Channel) {
   const scopedTemplateId = parseTemplateId(templateId);
 
   const [template] = await db
     .select({
       id: notificationTemplates.id,
       eventId: notificationTemplates.eventId,
+      channel: notificationTemplates.channel,
     })
     .from(notificationTemplates)
     .where(eq(notificationTemplates.id, scopedTemplateId))
@@ -46,6 +47,10 @@ async function assertTemplateInScope(templateId: string, eventId: string) {
 
   if (template.eventId !== eventId && template.eventId !== null) {
     throw new Error('Notification template is outside the active event scope');
+  }
+
+  if (channel !== undefined && template.channel !== channel) {
+    throw new Error('Notification template channel does not match trigger channel');
   }
 
   return scopedTemplateId;
@@ -82,7 +87,7 @@ export type UpdateTriggerInput = {
 /** Create a new automation trigger */
 export async function createTrigger(input: CreateTriggerInput) {
   const scopedEventId = parseEventId(input.eventId);
-  const scopedTemplateId = await assertTemplateInScope(input.templateId, scopedEventId);
+  const scopedTemplateId = await assertTemplateInScope(input.templateId, scopedEventId, input.channel);
 
   const [trigger] = await db
     .insert(automationTriggers)
