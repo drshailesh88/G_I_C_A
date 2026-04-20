@@ -75,6 +75,7 @@ vi.mock('@/lib/db/schema', () => ({
   notificationTemplates: {
     id: 'id',
     eventId: 'eventId',
+    channel: 'channel',
   },
 }));
 
@@ -98,7 +99,7 @@ beforeEach(() => {
   mockValues.mockReturnValue(dbChain);
   mockSet.mockReturnValue(dbChain);
   mockReturning.mockResolvedValue([{ id: VALID_TRIGGER_ID }]);
-  mockLimit.mockResolvedValue([{ id: VALID_TEMPLATE_ID, eventId: VALID_EVENT_ID }]);
+  mockLimit.mockResolvedValue([{ id: VALID_TEMPLATE_ID, eventId: VALID_EVENT_ID, channel: 'email' }]);
   mockOrderBy.mockResolvedValue([{ id: VALID_TRIGGER_ID }]);
 });
 
@@ -144,5 +145,23 @@ describe('trigger query hardening', () => {
     ).rejects.toThrow('Notification template is outside the active event scope');
 
     expect(dbChain.update).not.toHaveBeenCalled();
+  });
+
+  it('should reject trigger creation when the template channel does not match the trigger channel', async () => {
+    mockLimit.mockResolvedValueOnce([{ id: VALID_TEMPLATE_ID, eventId: VALID_EVENT_ID, channel: 'whatsapp' }]);
+
+    // BUG: createTrigger only checks event scope and lets email triggers point at WhatsApp templates.
+    await expect(
+      createTrigger({
+        eventId: VALID_EVENT_ID,
+        triggerEventType: 'registration.created',
+        channel: 'email',
+        templateId: VALID_TEMPLATE_ID,
+        recipientResolution: 'trigger_person',
+        createdBy: 'user-1',
+      }),
+    ).rejects.toThrow('Notification template channel does not match trigger channel');
+
+    expect(dbChain.insert).not.toHaveBeenCalled();
   });
 });

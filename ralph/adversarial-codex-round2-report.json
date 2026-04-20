@@ -1,0 +1,40 @@
+{
+  "run_date": "2026-04-20",
+  "model": "codex",
+  "packets_reviewed": 16,
+  "bugs_found": 4,
+  "bug_list": [
+    {
+      "packet": "PKT-A-013",
+      "file": "src/lib/actions/event.ts",
+      "line": 345,
+      "description": "transferEventOwnership never verifies that the event exists before inserting or reactivating owner assignments, so a nonexistent event can return ok:true and create orphaned ownership rows.",
+      "test_file": "src/lib/actions/event.adversarial.test.ts",
+      "severity": "HIGH"
+    },
+    {
+      "packet": "PKT-A-009",
+      "file": "src/lib/notifications/trigger-queries.ts",
+      "line": 31,
+      "description": "Automation trigger creation only scopes the template by event and allows channel mismatches, so an email trigger can point at a WhatsApp template.",
+      "test_file": "src/lib/notifications/trigger-queries.adversarial.test.ts",
+      "severity": "MEDIUM"
+    },
+    {
+      "packet": "PKT-B-005",
+      "file": "src/lib/actions/reports.ts",
+      "line": 612,
+      "description": "generateGlobalExport rejects unknown types in all-events mode but not in single-event mode, where arbitrary runtime strings are forwarded to generateExport and returned as successful exports.",
+      "test_file": "src/lib/actions/reports.adversarial.test.ts",
+      "severity": "LOW"
+    },
+    {
+      "packet": "PKT-B-006",
+      "file": "src/lib/actions/travel.ts",
+      "line": 659,
+      "description": "importTravelBatch bypasses the travel CSV row schema and imports malformed UTC timestamps instead of returning a row-level validation error.",
+      "test_file": "src/lib/actions/travel.adversarial.test.ts",
+      "severity": "MEDIUM"
+    }
+  ]
+}

@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const { mockAuth, mockDb, mockRevalidatePath, mockAssertEventAccess } = vi.hoisted(() => ({
   mockAuth: vi.fn(),
   mockDb: {
+    select: vi.fn(),
+    insert: vi.fn(),
     update: vi.fn(),
   },
   mockRevalidatePath: vi.fn(),
@@ -30,7 +32,7 @@ vi.mock('@/lib/db/with-event-scope', () => ({
   withEventScope: vi.fn(),
 }));
 
-import { updateEvent } from './event';
+import { transferEventOwnership, updateEvent } from './event';
 
 const EVENT_ID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
@@ -66,6 +68,26 @@ function mockUpdatePath() {
   mockDb.update.mockReturnValue({ set });
 }
 
+function mockSelectChain(rows: unknown[]) {
+  return {
+    from: vi.fn().mockReturnThis(),
+    where: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockResolvedValue(rows),
+  };
+}
+
+function mockUpdateChain() {
+  const where = vi.fn().mockResolvedValue(undefined);
+  const set = vi.fn().mockReturnValue({ where });
+  return { set, where };
+}
+
+function mockInsertChain() {
+  return {
+    values: vi.fn().mockResolvedValue([]),
+  };
+}
+
 describe('updateEvent adversarial coverage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -80,5 +102,25 @@ describe('updateEvent adversarial coverage', () => {
     const result = await updateEvent(EVENT_ID, buildFormData(false));
 
     expect(result.ok).toBe(false);
+  });
+
+  it('should reject transferring ownership for an event that does not exist', async () => {
+    mockAuth.mockResolvedValue({
+      userId: 'user-sa',
+      has: ({ role }: { role: string }) => role === 'org:super_admin',
+    });
+    mockDb.select
+      .mockReturnValueOnce(mockSelectChain([]))
+      .mockReturnValueOnce(mockSelectChain([]));
+    mockDb.insert.mockReturnValueOnce(mockInsertChain());
+    mockDb.update
+      .mockReturnValueOnce(mockUpdateChain())
+      .mockReturnValueOnce(mockUpdateChain());
+
+    // BUG: transferEventOwnership never verifies that the target event exists before inserting owner assignments.
+    const result = await transferEventOwnership(EVENT_ID, 'user-new-owner');
+
+    expect(result).toEqual({ ok: false, error: 'Event not found' });
+    expect(mockDb.insert).not.toHaveBeenCalled();
   });
 });
