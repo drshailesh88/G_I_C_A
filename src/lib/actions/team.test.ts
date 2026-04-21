@@ -41,18 +41,27 @@ const USER_OPS = 'user_ops';
 
 type Membership = ReturnType<typeof makeMembership>;
 
+function sessionClaimsForRole(role: string) {
+  return {
+    org_membership: {
+      publicMetadata: { appRole: role },
+    },
+  };
+}
+
 function authAsSuperAdmin(userId = USER_SA) {
   mockAuth.mockResolvedValue({
     userId,
     orgId: ORG_ID,
-    has: ({ role }: { role: string }) => role === ROLES.SUPER_ADMIN,
+    sessionClaims: sessionClaimsForRole(ROLES.SUPER_ADMIN),
   });
 }
 
 function makeMembership(userId: string, email: string, role: string, firstName = 'Test') {
   return {
     publicUserData: { userId, identifier: email, firstName, lastName: null, imageUrl: '' },
-    role,
+    role: 'org:member',
+    publicMetadata: { appRole: role },
     createdAt: Date.now(),
   };
 }
@@ -71,17 +80,12 @@ function mockOrgClient(memberships: Membership[]) {
     getOrganizationMembershipList: vi.fn().mockImplementation((params?: {
       limit?: number;
       offset?: number;
-      role?: string[];
       userId?: string[];
     }) => {
       const limit = params?.limit ?? memberships.length;
       const offset = params?.offset ?? 0;
 
       let filtered = memberships;
-
-      if (params?.role?.length) {
-        filtered = filtered.filter((membership) => params.role!.includes(membership.role));
-      }
 
       if (params?.userId?.length) {
         filtered = filtered.filter((membership) =>
@@ -95,7 +99,7 @@ function mockOrgClient(memberships: Membership[]) {
       });
     }),
     createOrganizationInvitation: vi.fn().mockResolvedValue({}),
-    updateOrganizationMembership: vi.fn().mockResolvedValue({}),
+    updateOrganizationMembershipMetadata: vi.fn().mockResolvedValue({}),
     deleteOrganizationMembership: vi.fn().mockResolvedValue({}),
   };
   mockClerkClient.mockResolvedValue({ organizations: orgApi });
@@ -128,6 +132,7 @@ describe('Team Management (6D-1)', () => {
       expect(result[0].email).toBe('admin@gem.org');
       expect(result[0].role).toBe(ROLES.SUPER_ADMIN);
       expect(result[1].email).toBe('coord@gem.org');
+      expect(result[1].role).toBe(ROLES.EVENT_COORDINATOR);
     });
 
     it('paginates across every Clerk membership page', async () => {
@@ -147,7 +152,7 @@ describe('Team Management (6D-1)', () => {
       mockAuth.mockResolvedValue({
         userId: USER_COORD,
         orgId: ORG_ID,
-        has: ({ role }: { role: string }) => role === ROLES.EVENT_COORDINATOR,
+        sessionClaims: sessionClaimsForRole(ROLES.EVENT_COORDINATOR),
       });
 
       await expect(getTeamMembers()).rejects.toThrow('only Super Admin');
@@ -170,6 +175,7 @@ describe('Team Management (6D-1)', () => {
         emailAddress: 'new@gem.org',
         role: ROLES.READ_ONLY,
         inviterUserId: USER_SA,
+        publicMetadata: { appRole: ROLES.READ_ONLY },
       });
       expect(mockRevalidatePath).toHaveBeenCalledWith('/settings/team');
     });
@@ -189,7 +195,7 @@ describe('Team Management (6D-1)', () => {
   });
 
   describe('changeMemberRole', () => {
-    it('updates member role via Clerk API', async () => {
+    it('updates member role via Clerk metadata API', async () => {
       authAsSuperAdmin();
       const orgApi = mockOrgClient([
         makeMembership(USER_SA, 'admin@gem.org', ROLES.SUPER_ADMIN),
@@ -202,10 +208,10 @@ describe('Team Management (6D-1)', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(orgApi.updateOrganizationMembership).toHaveBeenCalledWith({
+      expect(orgApi.updateOrganizationMembershipMetadata).toHaveBeenCalledWith({
         organizationId: ORG_ID,
         userId: USER_COORD,
-        role: ROLES.OPS,
+        publicMetadata: { appRole: ROLES.OPS },
       });
     });
 
@@ -305,7 +311,7 @@ describe('Team Management (6D-1)', () => {
       ]);
       const updateDeferred = createDeferred<{}>();
 
-      orgApi.updateOrganizationMembership.mockImplementation(() => updateDeferred.promise);
+      orgApi.updateOrganizationMembershipMetadata.mockImplementation(() => updateDeferred.promise);
       mockRedisSet
         .mockResolvedValueOnce('OK')
         .mockResolvedValueOnce(null);
@@ -331,7 +337,7 @@ describe('Team Management (6D-1)', () => {
 
   describe('edge cases', () => {
     it('rejects unauthenticated users', async () => {
-      mockAuth.mockResolvedValue({ userId: null, orgId: null, has: () => false });
+      mockAuth.mockResolvedValue({ userId: null, orgId: null, sessionClaims: null });
 
       await expect(getTeamMembers()).rejects.toThrow('Not authenticated');
     });

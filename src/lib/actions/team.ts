@@ -21,6 +21,7 @@ type OrganizationMembershipRecord = {
     imageUrl?: string | null;
   } | null;
   role: string;
+  publicMetadata?: Record<string, unknown> | null;
   createdAt: number;
 };
 
@@ -39,12 +40,54 @@ const TEAM_MUTATION_LOCK_PREFIX = 'team:membership-lock:';
 const TEAM_MUTATION_LOCK_TTL_SECONDS = 15;
 const RELEASE_LOCK_LUA = `if redis.call("get",KEYS[1]) == ARGV[1] then return redis.call("del",KEYS[1]) else return 0 end`;
 
-async function assertSuperAdmin(): Promise<string> {
+const VALID_ROLE_VALUES: ReadonlySet<string> = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+  ROLES.OPS,
+  ROLES.READ_ONLY,
+]);
+
+function normalizeAppRole(raw: unknown): RoleValue | null {
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+  const prefixed = raw.startsWith('org:') ? raw : `org:${raw}`;
+  return VALID_ROLE_VALUES.has(prefixed) ? (prefixed as RoleValue) : null;
+}
+
+function readAppRoleFromMembership(record: OrganizationMembershipRecord): RoleValue | null {
+  const rawMeta = record.publicMetadata as
+    | { appRole?: unknown; public_metadata?: { appRole?: unknown } }
+    | null
+    | undefined;
+  const raw =
+    rawMeta?.appRole ?? (rawMeta as { public_metadata?: { appRole?: unknown } })?.public_metadata?.appRole;
+  return normalizeAppRole(raw);
+}
+
+async function resolveCurrentAppRole(): Promise<{ userId: string; role: RoleValue | null }> {
   const session = await auth();
   const userId = session.userId;
+  if (!userId) return { userId: '', role: null };
+
+  const claims = (session as { sessionClaims?: Record<string, unknown> }).sessionClaims;
+  const orgMembership = claims?.org_membership as
+    | { publicMetadata?: { appRole?: unknown }; public_metadata?: { appRole?: unknown } }
+    | undefined;
+  const metadata = claims?.metadata as { appRole?: unknown } | undefined;
+
+  const raw =
+    orgMembership?.publicMetadata?.appRole ??
+    orgMembership?.public_metadata?.appRole ??
+    metadata?.appRole;
+
+  return { userId, role: normalizeAppRole(raw) };
+}
+
+async function assertSuperAdmin(): Promise<string> {
+  const { userId, role } = await resolveCurrentAppRole();
   if (!userId) throw new Error('Not authenticated');
-  const isSuperAdmin = session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
-  if (!isSuperAdmin) throw new Error('Forbidden: only Super Admin can manage team');
+  if (role !== ROLES.SUPER_ADMIN) {
+    throw new Error('Forbidden: only Super Admin can manage team');
+  }
   return userId;
 }
 
@@ -119,7 +162,6 @@ async function withTeamMutationLock<T>(
 async function listOrganizationMemberships(
   orgId: string,
   filters?: {
-    role?: RoleValue[];
     userId?: string[];
   },
 ): Promise<OrganizationMembershipRecord[]> {
@@ -133,7 +175,6 @@ async function listOrganizationMemberships(
       organizationId: orgId,
       limit: MEMBERSHIP_PAGE_SIZE,
       offset,
-      ...(filters?.role ? { role: filters.role } : {}),
       ...(filters?.userId ? { userId: filters.userId } : {}),
     });
 
@@ -146,7 +187,8 @@ async function listOrganizationMemberships(
 }
 
 async function listSuperAdminMemberships(orgId: string): Promise<OrganizationMembershipRecord[]> {
-  return listOrganizationMemberships(orgId, { role: [ROLES.SUPER_ADMIN] });
+  const all = await listOrganizationMemberships(orgId);
+  return all.filter((m) => readAppRoleFromMembership(m) === ROLES.SUPER_ADMIN);
 }
 
 export async function getTeamMembers(): Promise<TeamMember[]> {
@@ -160,7 +202,7 @@ export async function getTeamMembers(): Promise<TeamMember[]> {
     firstName: m.publicUserData?.firstName ?? null,
     lastName: m.publicUserData?.lastName ?? null,
     imageUrl: m.publicUserData?.imageUrl ?? '',
-    role: m.role,
+    role: readAppRoleFromMembership(m) ?? ROLES.READ_ONLY,
     createdAt: m.createdAt,
   }));
 }
@@ -184,6 +226,7 @@ export async function inviteTeamMember(input: {
       emailAddress: parsed.data.emailAddress,
       role: parsed.data.role,
       inviterUserId: currentUserId,
+      publicMetadata: { appRole: parsed.data.role },
     });
 
     revalidatePath('/settings/team');
@@ -206,14 +249,12 @@ export async function changeMemberRole(input: {
     return { success: false, error: parsed.error.issues[0].message };
   }
 
-  // Guard: cannot change your own role
   if (parsed.data.userId === currentUserId) {
     return { success: false, error: 'Cannot change your own role' };
   }
 
   try {
     return await withTeamMutationLock(orgId, async () => {
-      // Guard: cannot downgrade the last super admin
       if (parsed.data.role !== ROLES.SUPER_ADMIN) {
         const superAdmins = await listSuperAdminMemberships(orgId);
         const targetIsSuperAdmin = superAdmins.some(
@@ -226,10 +267,10 @@ export async function changeMemberRole(input: {
       }
 
       const client = await clerkClient();
-      await client.organizations.updateOrganizationMembership({
+      await client.organizations.updateOrganizationMembershipMetadata({
         organizationId: orgId,
         userId: parsed.data.userId,
-        role: parsed.data.role as RoleValue,
+        publicMetadata: { appRole: parsed.data.role },
       });
 
       revalidatePath('/settings/team');
@@ -252,14 +293,12 @@ export async function removeTeamMember(input: {
     return { success: false, error: parsed.error.issues[0].message };
   }
 
-  // Guard: cannot remove yourself
   if (parsed.data.userId === currentUserId) {
     return { success: false, error: 'Cannot remove yourself from the team' };
   }
 
   try {
     return await withTeamMutationLock(orgId, async () => {
-      // Guard: cannot remove the last super admin
       const superAdmins = await listSuperAdminMemberships(orgId);
       const targetIsSuperAdmin = superAdmins.some(
         (membership) => membership.publicUserData?.userId === parsed.data.userId,
