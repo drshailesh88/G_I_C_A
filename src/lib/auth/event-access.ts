@@ -44,9 +44,29 @@ function mapAssignmentTypeToRole(assignmentType: string | null | undefined): str
   return null;
 }
 
+const VALID_ROLE_VALUES: ReadonlySet<string> = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+  ROLES.OPS,
+  ROLES.READ_ONLY,
+]);
+
 /**
- * Resolve the current user's Clerk org role from the auth session.
- * Returns the first matching role from the Clerk org membership.
+ * Normalize an appRole value read from org membership publicMetadata into a
+ * canonical ROLES value (e.g. "super_admin" -> "org:super_admin").
+ * Returns null when the value is missing or not a recognized role.
+ */
+function normalizeAppRole(raw: unknown): string | null {
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+  const prefixed = raw.startsWith('org:') ? raw : `org:${raw}`;
+  return VALID_ROLE_VALUES.has(prefixed) ? prefixed : null;
+}
+
+/**
+ * Resolve the current user's app role from the Clerk session.
+ * The Clerk dashboard is configured to include org_membership (with
+ * publicMetadata) in the session token; the app role is stored there under
+ * `appRole`. A fallback reads from `metadata.appRole` for alternate shapes.
  */
 async function resolveClerkRole(): Promise<{
   userId: string;
@@ -59,17 +79,19 @@ async function resolveClerkRole(): Promise<{
     return { userId: '', role: null, isSuperAdmin: false };
   }
 
-  // Check roles via has() — Clerk org role check
-  const isSuperAdmin = session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
-  const isCoordinator = session.has?.({ role: ROLES.EVENT_COORDINATOR }) ?? false;
-  const isOps = session.has?.({ role: ROLES.OPS }) ?? false;
-  const isReadOnly = session.has?.({ role: ROLES.READ_ONLY }) ?? false;
+  const claims = (session as { sessionClaims?: Record<string, unknown> }).sessionClaims;
+  const orgMembership = claims?.org_membership as
+    | { publicMetadata?: { appRole?: unknown }; public_metadata?: { appRole?: unknown } }
+    | undefined;
+  const metadata = claims?.metadata as { appRole?: unknown } | undefined;
 
-  let role: string | null = null;
-  if (isSuperAdmin) role = ROLES.SUPER_ADMIN;
-  else if (isCoordinator) role = ROLES.EVENT_COORDINATOR;
-  else if (isOps) role = ROLES.OPS;
-  else if (isReadOnly) role = ROLES.READ_ONLY;
+  const rawAppRole =
+    orgMembership?.publicMetadata?.appRole ??
+    orgMembership?.public_metadata?.appRole ??
+    metadata?.appRole;
+
+  const role = normalizeAppRole(rawAppRole);
+  const isSuperAdmin = role === ROLES.SUPER_ADMIN;
 
   return { userId, role, isSuperAdmin };
 }

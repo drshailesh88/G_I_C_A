@@ -43,7 +43,7 @@ describe('checkEventAccess — gap tests', () => {
   it('ops without assignment denied', async () => {
     mockAuth.mockResolvedValue({
       userId: 'ops-2',
-      has: ({ role }: { role: string }) => role === 'org:ops',
+      sessionClaims: { org_membership: { publicMetadata: { appRole: 'ops' } } },
     });
     mockAssignmentQuery([]);
 
@@ -54,7 +54,7 @@ describe('checkEventAccess — gap tests', () => {
   it('read-only with assignment authorized for read', async () => {
     mockAuth.mockResolvedValue({
       userId: 'readonly-1',
-      has: ({ role }: { role: string }) => role === 'org:read_only',
+      sessionClaims: { org_membership: { publicMetadata: { appRole: 'read_only' } } },
     });
     mockAssignmentQuery([{ id: 'a1', eventId: EVENT_ID_1, authUserId: 'readonly-1', isActive: true }]);
 
@@ -66,7 +66,7 @@ describe('checkEventAccess — gap tests', () => {
   it('owner assignment authorizes users even when Clerk returns no org role', async () => {
     mockAuth.mockResolvedValue({
       userId: 'owner-1',
-      has: () => false,
+      sessionClaims: {},
     });
     mockAssignmentQuery([{ assignmentType: 'owner' }]);
 
@@ -78,7 +78,7 @@ describe('checkEventAccess — gap tests', () => {
   it('super admin validates event existence without querying assignments', async () => {
     mockAuth.mockResolvedValue({
       userId: 'admin-1',
-      has: ({ role }: { role: string }) => role === 'org:super_admin',
+      sessionClaims: { org_membership: { publicMetadata: { appRole: 'super_admin' } } },
     });
 
     const eventChain = mockSelectChain([{ status: 'published' }]);
@@ -98,7 +98,7 @@ describe('assertEventAccess — gap tests', () => {
   it('ops allowed for write operations', async () => {
     mockAuth.mockResolvedValue({
       userId: 'ops-1',
-      has: ({ role }: { role: string }) => role === 'org:ops',
+      sessionClaims: { org_membership: { publicMetadata: { appRole: 'ops' } } },
     });
     const assignmentChain = mockSelectChain([{ id: 'a1', eventId: EVENT_ID_1, authUserId: 'ops-1', isActive: true }]);
     const eventChain = mockSelectChain([{ status: 'published' }]);
@@ -113,7 +113,7 @@ describe('assertEventAccess — gap tests', () => {
   it('super admin allowed for write operations', async () => {
     mockAuth.mockResolvedValue({
       userId: 'admin-1',
-      has: ({ role }: { role: string }) => role === 'org:super_admin',
+      sessionClaims: { org_membership: { publicMetadata: { appRole: 'super_admin' } } },
     });
 
     const eventChain = mockSelectChain([{ status: 'published' }]);
@@ -126,7 +126,7 @@ describe('assertEventAccess — gap tests', () => {
   it('collaborator fallback role is denied for write operations', async () => {
     mockAuth.mockResolvedValue({
       userId: 'collaborator-1',
-      has: () => false,
+      sessionClaims: {},
     });
     mockAssignmentQuery([{ assignmentType: 'collaborator' }]);
 
