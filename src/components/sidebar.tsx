@@ -24,7 +24,7 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react';
-import { UserButton } from '@clerk/nextjs';
+import { OrganizationSwitcher, UserButton } from '@clerk/nextjs';
 import { cn } from '@/lib/utils';
 import { useResponsiveNav } from '@/hooks/use-responsive-nav';
 import { useRole } from '@/hooks/use-role';
@@ -259,7 +259,13 @@ export function AppSidebar() {
         </SidebarContent>
 
         <SidebarFooter>
-          <div className={cn('flex items-center', collapsed ? 'justify-center' : 'gap-2 px-2')}>
+          <div className={cn('flex items-center', collapsed ? 'flex-col gap-2' : 'gap-2 px-2')}>
+            <OrganizationSwitcher
+              hidePersonal
+              afterCreateOrganizationUrl="/dashboard"
+              afterSelectOrganizationUrl="/dashboard"
+              appearance={{ elements: { rootBox: 'flex', organizationSwitcherTrigger: 'px-2 py-1' } }}
+            />
             <UserButton />
           </div>
         </SidebarFooter>

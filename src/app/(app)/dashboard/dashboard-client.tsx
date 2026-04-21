@@ -1,6 +1,6 @@
 'use client';
 
-import { UserButton } from '@clerk/nextjs';
+import { OrganizationSwitcher, UserButton } from '@clerk/nextjs';
 import {
   Bell,
   Users,
@@ -131,6 +131,11 @@ export function DashboardClient({ events }: DashboardClientProps) {
               </span>
             )}
           </button>
+          <OrganizationSwitcher
+            hidePersonal
+            afterCreateOrganizationUrl="/dashboard"
+            afterSelectOrganizationUrl="/dashboard"
+          />
           <UserButton afterSignOutUrl="/login" />
         </div>
       </div>
