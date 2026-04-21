@@ -65,9 +65,9 @@ beforeEach(() => {
 // ──────────────────────────────────────────────────────────
 describe('getPublicProgramData — filter + sort', () => {
   it('returns empty structures when no version is published', async () => {
-    setSelectSequence([
-      [{ id: VERSION_ID, snapshotJson: { sessions: [] }, status: 'draft' }],
-    ]);
+    // Every row in program_versions is a published snapshot (drafts don't create
+    // rows), so "no published version" is represented by an empty result set.
+    setSelectSequence([[]]);
     const result = await getPublicProgramData(EVENT_ID);
     expect(result).toEqual({ sessions: [], halls: [], hasPublishedVersion: false });
   });

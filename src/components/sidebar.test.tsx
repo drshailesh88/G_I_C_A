@@ -19,6 +19,8 @@ vi.mock('next/link', () => ({
 vi.mock('@clerk/nextjs', () => ({
   useAuth: () => ({ has: () => true, isLoaded: true }),
   UserButton: () => createElement('div', { 'data-testid': 'clerk-user-button' }, 'UserButton'),
+  OrganizationSwitcher: () =>
+    createElement('div', { 'data-testid': 'clerk-organization-switcher' }, 'OrganizationSwitcher'),
 }));
 
 // Mock useResponsiveNav

@@ -6,6 +6,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 vi.mock('@clerk/nextjs', () => ({
   UserButton: () => createElement('div', { 'data-testid': 'user-button' }),
+  OrganizationSwitcher: () =>
+    createElement('div', { 'data-testid': 'organization-switcher' }),
 }));
 
 let mockIsSuperAdmin = false;

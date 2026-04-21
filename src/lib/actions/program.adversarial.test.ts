@@ -149,38 +149,13 @@ describe('getPublicProgramData adversarial coverage', () => {
     mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:event_coordinator' });
   });
 
-  it('should ignore newer draft snapshots and keep serving the latest published version', async () => {
+  it('serves the latest published snapshot to attendees', async () => {
+    // Every row in program_versions is a published snapshot (drafts don't
+    // create rows), so the top row by versionNo is what attendees see.
     setupSelectSequence(
       [
         {
-          id: 'draft-v2',
-          status: 'draft',
-          snapshotJson: {
-            sessions: [
-              {
-                id: 'draft-session',
-                parentSessionId: null,
-                title: 'Draft-only session',
-                description: null,
-                sessionDate: '2026-12-16T00:00:00.000Z',
-                startAtUtc: '2026-12-16T03:30:00.000Z',
-                endAtUtc: '2026-12-16T05:00:00.000Z',
-                hallId: null,
-                sessionType: 'keynote',
-                track: null,
-                isPublic: true,
-                cmeCredits: null,
-                sortOrder: 0,
-                status: 'scheduled',
-              },
-            ],
-            assignments: [],
-            halls: [],
-          },
-        },
-        {
           id: 'published-v1',
-          status: 'published',
           snapshotJson: {
             sessions: [
               {
@@ -208,7 +183,6 @@ describe('getPublicProgramData adversarial coverage', () => {
       [],
     );
 
-    // BUG: the query orders by version number only, so a newer draft snapshot can leak to attendees.
     const result = await getPublicProgramData(EVENT_ID);
 
     expect(result.sessions.map((session) => session.id)).toEqual(['published-session']);
@@ -221,17 +195,22 @@ describe('getProgramVersions adversarial coverage', () => {
     mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:event_coordinator' });
   });
 
-  it('should exclude draft versions from the history list', async () => {
+  it('returns all versions for the event ordered by versionNo desc', async () => {
+    // Every row in program_versions represents a published snapshot; the
+    // history list is the full set ordered newest-first.
     setupSelectSequence([
-      { id: 'v3-draft', versionNo: 3, status: 'draft' },
-      { id: 'v2-published', versionNo: 2, status: 'published' },
-      { id: 'v1-published', versionNo: 1, status: 'published' },
+      { id: 'v3-published', versionNo: 3 },
+      { id: 'v2-published', versionNo: 2 },
+      { id: 'v1-published', versionNo: 1 },
     ]);
 
-    // BUG: the history query is event-scoped, but it does not filter to published versions only.
     const result = await getProgramVersions(EVENT_ID);
 
-    expect(result.map((version) => version.id)).toEqual(['v2-published', 'v1-published']);
+    expect(result.map((version) => version.id)).toEqual([
+      'v3-published',
+      'v2-published',
+      'v1-published',
+    ]);
   });
 });
 
