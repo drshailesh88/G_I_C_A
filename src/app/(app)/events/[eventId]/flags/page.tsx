@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { ROLES } from '@/lib/auth/roles';
+import { sessionHasRole } from '@/lib/auth/session-role';
 import { FlagsDashboard } from './flags-dashboard';
 
 export const metadata = { title: 'Feature Flags' };
@@ -17,7 +18,7 @@ export default async function FlagsPage({
     redirect('/login');
   }
 
-  if (!(session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false)) {
+  if (!sessionHasRole(session, ROLES.SUPER_ADMIN)) {
     redirect(`/events/${eventId}`);
   }
 

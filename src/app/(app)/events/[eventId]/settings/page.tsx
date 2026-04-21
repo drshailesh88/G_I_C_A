@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { notFound, redirect } from 'next/navigation';
 import { getEvent } from '@/lib/actions/event';
 import { ROLES } from '@/lib/auth/roles';
+import { sessionHasRole } from '@/lib/auth/session-role';
 import { EventSettingsClient } from './event-settings-client';
 
 export default async function EventSettingsPage({
@@ -16,7 +17,7 @@ export default async function EventSettingsPage({
   try {
     const event = await getEvent(eventId);
 
-    const isReadOnly = session.has?.({ role: ROLES.READ_ONLY }) ?? false;
+    const isReadOnly = sessionHasRole(session, ROLES.READ_ONLY);
 
     return <EventSettingsClient event={event} canWrite={!isReadOnly} />;
   } catch {

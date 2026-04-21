@@ -5,7 +5,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 // ── Mocks ──
 
 vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({ has: () => false, isLoaded: true }),
+  useUser: () => ({
+    user: { publicMetadata: { appRole: 'event_coordinator' } },
+    isLoaded: true,
+  }),
 }));
 
 vi.mock('@/hooks/use-role', () => ({

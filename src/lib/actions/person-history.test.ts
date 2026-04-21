@@ -34,9 +34,10 @@ const AUDIT_ROW = {
 };
 
 function authAs(role: string, userId = 'user1') {
+  const rawRole = role.startsWith('org:') ? role.slice(4) : role;
   mockAuth.mockResolvedValue({
     userId,
-    has: ({ role: r }: { role: string }) => r === role,
+    sessionClaims: { metadata: { appRole: rawRole } },
   });
 }
 
@@ -76,7 +77,7 @@ beforeEach(() => {
 
 describe('RBAC', () => {
   it('rejects unauthenticated requests', async () => {
-    mockAuth.mockResolvedValue({ userId: null, has: () => false });
+    mockAuth.mockResolvedValue({ userId: null, sessionClaims: null });
     await expect(getPersonHistory(PERSON_ID)).rejects.toThrow('Unauthorized');
   });
 

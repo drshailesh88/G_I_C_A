@@ -95,7 +95,7 @@ function mockCountChain(count: number) {
 function authAsSuperAdmin() {
   mockAuth.mockResolvedValue({
     userId: 'u_sa',
-    has: ({ role }: { role: string }) => role === ROLES.SUPER_ADMIN,
+    sessionClaims: { metadata: { appRole: 'super_admin' } },
   });
 }
 

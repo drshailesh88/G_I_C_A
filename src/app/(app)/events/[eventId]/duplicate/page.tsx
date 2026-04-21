@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
 import { getEvent } from '@/lib/actions/event';
+import { ROLES } from '@/lib/auth/roles';
+import { sessionHasAnyRole } from '@/lib/auth/session-role';
 import { DuplicateEventClient } from './duplicate-event-client';
 
 export default async function DuplicateEventPage({
@@ -13,10 +15,9 @@ export default async function DuplicateEventPage({
   const session = await auth();
   if (!session.userId) redirect('/sign-in');
 
-  const isAllowed =
-    session.has?.({ role: 'org:super_admin' }) ||
-    session.has?.({ role: 'org:event_coordinator' });
-  if (!isAllowed) redirect(`/events/${eventId}`);
+  if (!sessionHasAnyRole(session, [ROLES.SUPER_ADMIN, ROLES.EVENT_COORDINATOR])) {
+    redirect(`/events/${eventId}`);
+  }
 
   const event = await getEvent(eventId);
 

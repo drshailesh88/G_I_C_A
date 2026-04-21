@@ -17,10 +17,11 @@ vi.mock('next/link', () => ({
 
 // Mock Clerk
 vi.mock('@clerk/nextjs', () => ({
-  useAuth: () => ({ has: () => true, isLoaded: true }),
+  useUser: () => ({
+    user: { publicMetadata: { appRole: 'super_admin' } },
+    isLoaded: true,
+  }),
   UserButton: () => createElement('div', { 'data-testid': 'clerk-user-button' }, 'UserButton'),
-  OrganizationSwitcher: () =>
-    createElement('div', { 'data-testid': 'clerk-organization-switcher' }, 'OrganizationSwitcher'),
 }));
 
 // Mock useResponsiveNav

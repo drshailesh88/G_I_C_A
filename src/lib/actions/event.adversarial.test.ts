@@ -107,7 +107,7 @@ describe('updateEvent adversarial coverage', () => {
   it('should reject transferring ownership for an event that does not exist', async () => {
     mockAuth.mockResolvedValue({
       userId: 'user-sa',
-      has: ({ role }: { role: string }) => role === 'org:super_admin',
+      sessionClaims: { metadata: { appRole: 'super_admin' } },
     });
     mockDb.select
       .mockReturnValueOnce(mockSelectChain([]))

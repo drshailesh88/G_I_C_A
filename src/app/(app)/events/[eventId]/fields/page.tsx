@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { getEvent } from '@/lib/actions/event';
 import { ROLES } from '@/lib/auth/roles';
+import { sessionHasAnyRole } from '@/lib/auth/session-role';
 import { FieldBuilderClient } from './field-builder-client';
 
 export default async function FieldBuilderPage({
@@ -15,9 +16,7 @@ export default async function FieldBuilderPage({
   const { eventId } = await params;
   const event = await getEvent(eventId);
 
-  const isSuperAdmin = session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
-  const isCoordinator = session.has?.({ role: ROLES.EVENT_COORDINATOR }) ?? false;
-  const canWrite = isSuperAdmin || isCoordinator;
+  const canWrite = sessionHasAnyRole(session, [ROLES.SUPER_ADMIN, ROLES.EVENT_COORDINATOR]);
 
   return <FieldBuilderClient event={event} canWrite={canWrite} />;
 }

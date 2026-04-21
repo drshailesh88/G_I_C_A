@@ -39,14 +39,14 @@ const VALID_EVENT_ID = '550e8400-e29b-41d4-a716-446655440001';
 function authAsSuperAdmin() {
   mockAuth.mockResolvedValue({
     userId: 'user_sa',
-    has: ({ role }: { role: string }) => role === ROLES.SUPER_ADMIN,
+    sessionClaims: { metadata: { appRole: 'super_admin' } },
   });
 }
 
 function authAsCoordinator() {
   mockAuth.mockResolvedValue({
     userId: 'user_coord',
-    has: ({ role }: { role: string }) => role === ROLES.EVENT_COORDINATOR,
+    sessionClaims: { metadata: { appRole: 'event_coordinator' } },
   });
 }
 

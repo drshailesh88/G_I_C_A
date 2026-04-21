@@ -41,28 +41,28 @@ const VALID_FIELD_CONFIG = {
 function authAsSuperAdmin() {
   mockAuth.mockResolvedValue({
     userId: ACTOR_ID,
-    has: ({ role }: { role: string }) => role === ROLES.SUPER_ADMIN,
+    sessionClaims: { metadata: { appRole: 'super_admin' } },
   });
 }
 
 function authAsCoordinator() {
   mockAuth.mockResolvedValue({
     userId: ACTOR_ID,
-    has: ({ role }: { role: string }) => role === ROLES.EVENT_COORDINATOR,
+    sessionClaims: { metadata: { appRole: 'event_coordinator' } },
   });
 }
 
 function authAsOps() {
   mockAuth.mockResolvedValue({
     userId: ACTOR_ID,
-    has: ({ role }: { role: string }) => role === ROLES.OPS,
+    sessionClaims: { metadata: { appRole: 'ops' } },
   });
 }
 
 function authAsReadOnly() {
   mockAuth.mockResolvedValue({
     userId: ACTOR_ID,
-    has: ({ role }: { role: string }) => role === ROLES.READ_ONLY,
+    sessionClaims: { metadata: { appRole: 'read_only' } },
   });
 }
 
@@ -81,7 +81,7 @@ beforeEach(() => {
 
 describe('updateFieldConfig — RBAC', () => {
   it('rejects unauthenticated callers', async () => {
-    mockAuth.mockResolvedValue({ userId: null, has: undefined });
+    mockAuth.mockResolvedValue({ userId: null, sessionClaims: null });
     const result = await updateFieldConfig(EVENT_ID, VALID_FIELD_CONFIG);
     expect(result).toEqual({ ok: false, error: 'Not authenticated' });
   });

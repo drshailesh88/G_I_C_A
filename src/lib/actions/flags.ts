@@ -9,6 +9,7 @@ import {
   type EventFlag,
 } from '@/lib/flags';
 import { ROLES } from '@/lib/auth/roles';
+import { sessionHasRole } from '@/lib/auth/session-role';
 
 // ── Role guard — only Super Admin can toggle flags ──────────
 
@@ -17,8 +18,7 @@ async function assertSuperAdmin(): Promise<string> {
   const userId = session.userId;
   if (!userId) throw new Error('Unauthorized');
 
-  const isSuperAdmin = session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
-  if (!isSuperAdmin) {
+  if (!sessionHasRole(session, ROLES.SUPER_ADMIN)) {
     throw new Error('Forbidden: only Super Admin can manage feature flags');
   }
 

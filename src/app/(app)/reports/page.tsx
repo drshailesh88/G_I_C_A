@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
 import { ROLES } from '@/lib/auth/roles';
+import { sessionHasRole } from '@/lib/auth/session-role';
 import { getEventsForGlobalReports } from '@/lib/actions/reports';
 import { GlobalReportsClient } from './global-reports-client';
 
@@ -12,9 +13,8 @@ export default async function GlobalReportsPage({
   searchParams: SearchParams;
 }) {
   const session = await auth();
-  const isSuperAdmin = session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
 
-  if (!isSuperAdmin) {
+  if (!sessionHasRole(session, ROLES.SUPER_ADMIN)) {
     redirect('/dashboard');
   }
 

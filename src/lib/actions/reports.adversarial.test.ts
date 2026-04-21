@@ -35,7 +35,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   mockAuth.mockResolvedValue({
     userId: 'user-sa',
-    has: ({ role }: { role: string }) => role === ROLES.SUPER_ADMIN,
+    sessionClaims: { metadata: { appRole: 'super_admin' } },
   });
   mockGenerateExport.mockResolvedValue(Buffer.from('excel-data'));
 });

@@ -36,7 +36,7 @@ describe('cascade-037: new mutation on archived event blocked', () => {
   it('assertEventAccess with requireWrite throws EventArchivedError for archived event', async () => {
     mockAuth.mockResolvedValue({
       userId: 'coord-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'event_coordinator' } } },
+      sessionClaims: { metadata: { appRole: 'event_coordinator' } },
     });
 
     // First select: event_user_assignments (authorized)
@@ -56,7 +56,7 @@ describe('cascade-037: new mutation on archived event blocked', () => {
   it('assertEventAccess allows writes on active (published) event', async () => {
     mockAuth.mockResolvedValue({
       userId: 'coord-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'event_coordinator' } } },
+      sessionClaims: { metadata: { appRole: 'event_coordinator' } },
     });
 
     const assignmentChain = mockSelectChain([{ assignmentType: 'owner' }]);
@@ -73,7 +73,7 @@ describe('cascade-037: new mutation on archived event blocked', () => {
   it('assertEventAccess skips archive check for read-only access (no requireWrite)', async () => {
     mockAuth.mockResolvedValue({
       userId: 'coord-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'event_coordinator' } } },
+      sessionClaims: { metadata: { appRole: 'event_coordinator' } },
     });
 
     const assignmentChain = mockSelectChain([{ assignmentType: 'owner' }]);

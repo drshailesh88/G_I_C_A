@@ -92,7 +92,7 @@ describe('event actions — existing adversarial tests', () => {
   it('createEvent should reject ops users that bypass the UI and call the action directly', async () => {
     mockAuth.mockResolvedValue({
       userId: 'ops-1',
-      has: ({ role }: { role: string }) => role === 'org:ops',
+      sessionClaims: { metadata: { appRole: 'ops' } },
     });
 
     await expect(createEvent(buildFormData())).rejects.toThrow(/forbidden/i);

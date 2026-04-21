@@ -158,7 +158,7 @@ function setupHappyPath({
       createdBy: 'user-orig', updatedBy: 'user-orig', createdAt: new Date(), updatedAt: new Date(),
     },
   ];
-  mockAuth.mockResolvedValue({ userId: 'user-1', has: (p: { role: string }) => p.role === 'org:super_admin' });
+  mockAuth.mockResolvedValue({ userId: 'user-1', sessionClaims: { metadata: { appRole: 'super_admin' } } });
   mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:super_admin' });
 
   // Selects in order (matches execution order in duplicateEvent):
@@ -219,7 +219,7 @@ describe('duplicateEvent — RBAC', () => {
   it('returns forbidden when caller is OPS role', async () => {
     mockAuth.mockResolvedValue({
       userId: 'user-ops',
-      has: (p: { role: string }) => p.role === 'org:ops',
+      sessionClaims: { metadata: { appRole: 'ops' } },
     });
 
     const result = await duplicateEvent(SRC_EVENT_ID, { name: 'Copy', newStartDate: '2026-06-01' });
@@ -230,7 +230,7 @@ describe('duplicateEvent — RBAC', () => {
   it('returns forbidden when caller is read-only', async () => {
     mockAuth.mockResolvedValue({
       userId: 'user-ro',
-      has: (p: { role: string }) => p.role === 'org:read_only',
+      sessionClaims: { metadata: { appRole: 'read_only' } },
     });
 
     const result = await duplicateEvent(SRC_EVENT_ID, { name: 'Copy', newStartDate: '2026-06-01' });
@@ -239,7 +239,7 @@ describe('duplicateEvent — RBAC', () => {
   });
 
   it('returns not authenticated when no userId', async () => {
-    mockAuth.mockResolvedValue({ userId: null, has: vi.fn() });
+    mockAuth.mockResolvedValue({ userId: null, sessionClaims: null });
 
     const result = await duplicateEvent(SRC_EVENT_ID, { name: 'Copy', newStartDate: '2026-06-01' });
 
@@ -251,7 +251,7 @@ describe('duplicateEvent — RBAC', () => {
 describe('duplicateEvent — validation', () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mockAuth.mockResolvedValue({ userId: 'user-1', has: (p: { role: string }) => p.role === 'org:super_admin' });
+    mockAuth.mockResolvedValue({ userId: 'user-1', sessionClaims: { metadata: { appRole: 'super_admin' } } });
     mockAssertEventAccess.mockResolvedValue({ userId: 'user-1', role: 'org:super_admin' });
   });
 

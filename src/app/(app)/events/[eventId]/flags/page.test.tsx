@@ -38,7 +38,7 @@ describe('FlagsPage', () => {
     vi.clearAllMocks();
     mockAuth.mockResolvedValue({
       userId: 'super-1',
-      has: vi.fn(({ role }: { role: string }) => role === 'org:super_admin'),
+      sessionClaims: { metadata: { appRole: 'super_admin' } },
     });
   });
 
@@ -54,7 +54,7 @@ describe('FlagsPage', () => {
   });
 
   it('redirects unauthenticated users to login', async () => {
-    mockAuth.mockResolvedValue({ userId: null, has: vi.fn() });
+    mockAuth.mockResolvedValue({ userId: null, sessionClaims: null });
 
     await expect(
       FlagsPage({
@@ -68,7 +68,7 @@ describe('FlagsPage', () => {
   it('redirects non-super-admin users back to the event workspace', async () => {
     mockAuth.mockResolvedValue({
       userId: 'coord-1',
-      has: vi.fn().mockReturnValue(false),
+      sessionClaims: { metadata: { appRole: 'event_coordinator' } },
     });
 
     await expect(

@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { ROLES } from '@/lib/auth/roles';
+import { sessionHasAnyRole } from '@/lib/auth/session-role';
 import { getPerson } from '@/lib/actions/person';
 import { MergeClient } from './merge-client';
 
@@ -12,9 +13,7 @@ export default async function MergePeoplePage({
   const session = await auth();
   if (!session.userId) redirect('/sign-in');
 
-  const canWrite =
-    session.has?.({ role: ROLES.SUPER_ADMIN }) ||
-    session.has?.({ role: ROLES.EVENT_COORDINATOR });
+  const canWrite = sessionHasAnyRole(session, [ROLES.SUPER_ADMIN, ROLES.EVENT_COORDINATOR]);
 
   if (!canWrite) redirect('/people');
 

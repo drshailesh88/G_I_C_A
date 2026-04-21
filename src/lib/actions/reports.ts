@@ -20,6 +20,7 @@ import {
 } from '@/lib/db/schema';
 import { eq, ne, desc } from 'drizzle-orm';
 import { ROLES } from '@/lib/auth/roles';
+import { sessionHasRole } from '@/lib/auth/session-role';
 import { eventIdSchema } from '@/lib/validations/event';
 import { generateExport, type ExportType } from '@/lib/exports/excel';
 import {
@@ -39,8 +40,7 @@ export type {
 
 async function assertSuperAdmin(): Promise<void> {
   const session = await auth();
-  const isSuperAdmin = session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
-  if (!isSuperAdmin) {
+  if (!sessionHasRole(session, ROLES.SUPER_ADMIN)) {
     throw new Error('Forbidden: cross-event reporting requires Super Admin');
   }
 }

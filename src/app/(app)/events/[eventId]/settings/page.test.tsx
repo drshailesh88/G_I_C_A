@@ -58,7 +58,7 @@ describe('EventSettingsPage', () => {
   it('renders settings for an accessible event', async () => {
     mockAuth.mockResolvedValue({
       userId: 'user-1',
-      has: vi.fn().mockReturnValue(false),
+      sessionClaims: { metadata: { appRole: 'event_coordinator' } },
     });
     mockGetEvent.mockResolvedValue(EVENT);
 
@@ -76,7 +76,7 @@ describe('EventSettingsPage', () => {
   it('disables writes for read-only users', async () => {
     mockAuth.mockResolvedValue({
       userId: 'user-1',
-      has: vi.fn(({ role }: { role: string }) => role === 'org:read_only'),
+      sessionClaims: { metadata: { appRole: 'read_only' } },
     });
     mockGetEvent.mockResolvedValue(EVENT);
 
@@ -93,7 +93,7 @@ describe('EventSettingsPage', () => {
   it('maps inaccessible events to notFound', async () => {
     mockAuth.mockResolvedValue({
       userId: 'user-1',
-      has: vi.fn().mockReturnValue(false),
+      sessionClaims: { metadata: { appRole: 'event_coordinator' } },
     });
     mockGetEvent.mockRejectedValue(new Error('Not found'));
 

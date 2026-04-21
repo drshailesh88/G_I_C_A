@@ -32,8 +32,7 @@ const EVENT_ID = '550e8400-e29b-41d4-a716-446655440001';
 function authAsSuperAdmin() {
   mockAuth.mockResolvedValue({
     userId: 'user_superadmin',
-    orgId: 'org_test',
-    has: ({ role }: { role: string }) => role === ROLES.SUPER_ADMIN,
+    sessionClaims: { metadata: { appRole: 'super_admin' } },
   });
 }
 

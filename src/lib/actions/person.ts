@@ -22,6 +22,7 @@ import { revalidatePath } from 'next/cache';
 import { writeAudit } from '@/lib/audit/write';
 import { assertEventAccess } from '@/lib/auth/event-access';
 import { ROLES } from '@/lib/auth/roles';
+import { getAppRoleFromSession } from '@/lib/auth/session-role';
 import {
   createPersonSchema,
   updatePersonSchema,
@@ -54,18 +55,25 @@ const eventPersonSourceSchema = z.enum([
 ]);
 const MAX_IMPORT_BATCH_ROWS = 500;
 
-function hasPeopleRole(
-  has: ((params: { role: string }) => boolean) | undefined,
-  requireWrite = false,
-): boolean {
-  // Some isolated test contexts stub auth() without Clerk's has() helper.
-  // Real request sessions provide it, and when available we enforce people RBAC here.
-  if (typeof has !== 'function') {
+type SessionLike = {
+  userId?: string | null;
+  sessionClaims?: Record<string, unknown> | null;
+};
+
+function isRealSession(session: SessionLike | null | undefined): boolean {
+  return session?.sessionClaims != null;
+}
+
+function hasPeopleRole(session: SessionLike | null | undefined, requireWrite = false): boolean {
+  // Some isolated test contexts stub auth() without sessionClaims.
+  // Real request sessions carry claims; when present we enforce people RBAC here.
+  if (!isRealSession(session)) {
     return true;
   }
 
+  const role = getAppRoleFromSession(session);
   const allowedRoles = requireWrite ? PEOPLE_WRITE_ROLES : PEOPLE_READ_ROLES;
-  return [...allowedRoles].some((role) => has({ role }));
+  return role !== null && (allowedRoles as ReadonlySet<string>).has(role);
 }
 
 async function assertPeopleModuleAccess(options?: { requireWrite?: boolean }) {
@@ -74,23 +82,19 @@ async function assertPeopleModuleAccess(options?: { requireWrite?: boolean }) {
     throw new Error('Unauthorized');
   }
 
-  if (!hasPeopleRole(session.has, options?.requireWrite)) {
+  if (!hasPeopleRole(session, options?.requireWrite)) {
     throw new Error('Forbidden');
   }
 
   return session;
 }
 
-function isRealSession(has: ((params: { role: string }) => boolean) | undefined): has is (params: { role: string }) => boolean {
-  return typeof has === 'function';
-}
-
 async function assertGlobalPeopleOwnership(
-  session: { userId: string; has?: (params: { role: string }) => boolean },
+  session: SessionLike & { userId: string },
   personId: string,
 ): Promise<void> {
-  if (!isRealSession(session.has)) return;
-  if (session.has({ role: ROLES.SUPER_ADMIN })) return;
+  if (!isRealSession(session)) return;
+  if (getAppRoleFromSession(session) === ROLES.SUPER_ADMIN) return;
 
   const [assignedEventIds, linkedEventIds] = await Promise.all([
     getActiveAssignmentEventIds(session.userId).catch(() => [] as string[]),
@@ -370,8 +374,8 @@ export async function searchPeople(input: PersonSearchInput) {
   // callers (unit tests without a `has` shim) are allowed through for legacy
   // coverage compatibility.
   let scopedAssignmentEventIds: string[] | null = null;
-  if (isRealSession(session.has)) {
-    const isSuperAdmin = session.has({ role: ROLES.SUPER_ADMIN });
+  if (isRealSession(session)) {
+    const isSuperAdmin = getAppRoleFromSession(session) === ROLES.SUPER_ADMIN;
     if (!isSuperAdmin) {
       const assignedEventIds = await getActiveAssignmentEventIds(userId).catch(() => [] as string[]);
       if (assignedEventIds.length === 0) {
@@ -753,7 +757,7 @@ export async function mergePeople(input: unknown): Promise<MergePeopleResult> {
   const loser = loserRows[0];
 
   const isSuperAdmin =
-    typeof session.has === 'function' && session.has({ role: ROLES.SUPER_ADMIN });
+    isRealSession(session) && getAppRoleFromSession(session) === ROLES.SUPER_ADMIN;
   if (!isSuperAdmin) {
     const [assignedEventIds, linkedEventIds] = await Promise.all([
       getActiveAssignmentEventIds(userId),
@@ -959,12 +963,12 @@ export async function getPersonHistory(
 ): Promise<PersonHistoryResult> {
   const session = await auth();
   if (!session.userId) throw new Error('Unauthorized');
-  if (!hasPeopleRole(session.has)) throw new Error('Forbidden');
+  if (!hasPeopleRole(session)) throw new Error('Forbidden');
 
   personIdSchema.parse(personId);
 
   const isSuperAdmin =
-    typeof session.has === 'function' && session.has({ role: ROLES.SUPER_ADMIN });
+    isRealSession(session) && getAppRoleFromSession(session) === ROLES.SUPER_ADMIN;
   const offset = (page - 1) * HISTORY_PAGE_SIZE;
 
   // Super Admin sees all history. Other roles see global (eventId IS NULL) rows

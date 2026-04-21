@@ -1,6 +1,7 @@
 import { auth } from '@clerk/nextjs/server';
 import { redirect } from 'next/navigation';
 import { ROLES } from '@/lib/auth/roles';
+import { sessionHasRole } from '@/lib/auth/session-role';
 import { getEvent } from '@/lib/actions/event';
 import { getEventAssignments } from '@/lib/actions/event-assignments';
 import { getTeamMembers } from '@/lib/actions/team';
@@ -14,8 +15,7 @@ export default async function TransferOwnershipPage({
   const session = await auth();
   if (!session.userId) redirect('/login');
 
-  const isSuperAdmin = session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
-  if (!isSuperAdmin) redirect('/dashboard');
+  if (!sessionHasRole(session, ROLES.SUPER_ADMIN)) redirect('/dashboard');
 
   const { eventId } = await params;
 

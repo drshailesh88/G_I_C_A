@@ -6,6 +6,7 @@ import { eventUserAssignments } from '@/lib/db/schema';
 import { eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { ROLES } from '@/lib/auth/roles';
+import { sessionHasRole } from '@/lib/auth/session-role';
 import { eventIdSchema } from '@/lib/validations/event';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import {
@@ -19,8 +20,9 @@ async function assertSuperAdmin(): Promise<string> {
   const session = await auth();
   const userId = session.userId;
   if (!userId) throw new Error('Not authenticated');
-  const isSuperAdmin = session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
-  if (!isSuperAdmin) throw new Error('Forbidden: only Super Admin can manage event assignments');
+  if (!sessionHasRole(session, ROLES.SUPER_ADMIN)) {
+    throw new Error('Forbidden: only Super Admin can manage event assignments');
+  }
   return userId;
 }
 

@@ -34,33 +34,33 @@ vi.mock('next/cache', () => ({
 import { getTeamMembers, inviteTeamMember, changeMemberRole, removeTeamMember } from './team';
 import { ROLES } from '@/lib/auth/roles';
 
-const ORG_ID = 'org_abc123';
 const USER_SA = 'user_superadmin';
 const USER_COORD = 'user_coordinator';
 const USER_OPS = 'user_ops';
 
-type Membership = ReturnType<typeof makeMembership>;
+type UserRecord = ReturnType<typeof makeUser>;
 
 function sessionClaimsForRole(role: string) {
   return {
-    org_membership: {
-      publicMetadata: { appRole: role },
-    },
+    metadata: { appRole: role },
   };
 }
 
 function authAsSuperAdmin(userId = USER_SA) {
   mockAuth.mockResolvedValue({
     userId,
-    orgId: ORG_ID,
     sessionClaims: sessionClaimsForRole(ROLES.SUPER_ADMIN),
   });
 }
 
-function makeMembership(userId: string, email: string, role: string, firstName = 'Test') {
+function makeUser(id: string, email: string, role: string, firstName = 'Test') {
   return {
-    publicUserData: { userId, identifier: email, firstName, lastName: null, imageUrl: '' },
-    role: 'org:member',
+    id,
+    firstName,
+    lastName: null,
+    imageUrl: '',
+    primaryEmailAddressId: `email_${id}`,
+    emailAddresses: [{ id: `email_${id}`, emailAddress: email }],
     publicMetadata: { appRole: role },
     createdAt: Date.now(),
   };
@@ -75,38 +75,27 @@ function createDeferred<T>() {
   return { promise, resolve };
 }
 
-function mockOrgClient(memberships: Membership[]) {
-  const orgApi = {
-    getOrganizationMembershipList: vi.fn().mockImplementation((params?: {
-      limit?: number;
-      offset?: number;
-      userId?: string[];
-    }) => {
-      const limit = params?.limit ?? memberships.length;
+function mockUsersClient(users: UserRecord[]) {
+  const usersApi = {
+    getUserList: vi.fn().mockImplementation((params?: { limit?: number; offset?: number }) => {
+      const limit = params?.limit ?? users.length;
       const offset = params?.offset ?? 0;
-
-      let filtered = memberships;
-
-      if (params?.userId?.length) {
-        filtered = filtered.filter((membership) =>
-          params.userId!.includes(membership.publicUserData.userId),
-        );
-      }
-
       return Promise.resolve({
-        data: filtered.slice(offset, offset + limit),
-        totalCount: filtered.length,
+        data: users.slice(offset, offset + limit),
+        totalCount: users.length,
       });
     }),
-    createOrganizationInvitation: vi.fn().mockResolvedValue({}),
-    updateOrganizationMembershipMetadata: vi.fn().mockResolvedValue({}),
-    deleteOrganizationMembership: vi.fn().mockResolvedValue({}),
+    updateUser: vi.fn().mockResolvedValue({}),
+    deleteUser: vi.fn().mockResolvedValue({}),
   };
-  mockClerkClient.mockResolvedValue({ organizations: orgApi });
-  return orgApi;
+  const invitationsApi = {
+    createInvitation: vi.fn().mockResolvedValue({}),
+  };
+  mockClerkClient.mockResolvedValue({ users: usersApi, invitations: invitationsApi });
+  return { usersApi, invitationsApi };
 }
 
-describe('Team Management (6D-1)', () => {
+describe('Team Management (user publicMetadata)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.UPSTASH_REDIS_REST_URL = 'https://redis.test';
@@ -118,13 +107,13 @@ describe('Team Management (6D-1)', () => {
   });
 
   describe('getTeamMembers', () => {
-    it('returns all organization members', async () => {
+    it('returns all users', async () => {
       authAsSuperAdmin();
-      const members = [
-        makeMembership(USER_SA, 'admin@gem.org', ROLES.SUPER_ADMIN),
-        makeMembership(USER_COORD, 'coord@gem.org', ROLES.EVENT_COORDINATOR),
+      const users = [
+        makeUser(USER_SA, 'admin@gem.org', ROLES.SUPER_ADMIN),
+        makeUser(USER_COORD, 'coord@gem.org', ROLES.EVENT_COORDINATOR),
       ];
-      mockOrgClient(members);
+      mockUsersClient(users);
 
       const result = await getTeamMembers();
 
@@ -135,12 +124,12 @@ describe('Team Management (6D-1)', () => {
       expect(result[1].role).toBe(ROLES.EVENT_COORDINATOR);
     });
 
-    it('paginates across every Clerk membership page', async () => {
+    it('paginates across every Clerk user page', async () => {
       authAsSuperAdmin();
-      const members = Array.from({ length: 101 }, (_, index) =>
-        makeMembership(`user_${index + 1}`, `user${index + 1}@gem.org`, ROLES.READ_ONLY),
+      const users = Array.from({ length: 101 }, (_, index) =>
+        makeUser(`user_${index + 1}`, `user${index + 1}@gem.org`, ROLES.READ_ONLY),
       );
-      mockOrgClient(members);
+      mockUsersClient(users);
 
       const result = await getTeamMembers();
 
@@ -151,7 +140,6 @@ describe('Team Management (6D-1)', () => {
     it('rejects non-super-admin users', async () => {
       mockAuth.mockResolvedValue({
         userId: USER_COORD,
-        orgId: ORG_ID,
         sessionClaims: sessionClaimsForRole(ROLES.EVENT_COORDINATOR),
       });
 
@@ -160,9 +148,9 @@ describe('Team Management (6D-1)', () => {
   });
 
   describe('inviteTeamMember', () => {
-    it('sends invitation via Clerk API', async () => {
+    it('sends invitation via Clerk API with appRole in publicMetadata', async () => {
       authAsSuperAdmin();
-      const orgApi = mockOrgClient([]);
+      const { invitationsApi } = mockUsersClient([]);
 
       const result = await inviteTeamMember({
         emailAddress: 'new@gem.org',
@@ -170,19 +158,17 @@ describe('Team Management (6D-1)', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(orgApi.createOrganizationInvitation).toHaveBeenCalledWith({
-        organizationId: ORG_ID,
+      expect(invitationsApi.createInvitation).toHaveBeenCalledWith({
         emailAddress: 'new@gem.org',
-        role: ROLES.READ_ONLY,
-        inviterUserId: USER_SA,
         publicMetadata: { appRole: ROLES.READ_ONLY },
+        notify: true,
       });
       expect(mockRevalidatePath).toHaveBeenCalledWith('/settings/team');
     });
 
     it('rejects invalid email', async () => {
       authAsSuperAdmin();
-      mockOrgClient([]);
+      mockUsersClient([]);
 
       const result = await inviteTeamMember({
         emailAddress: 'not-an-email',
@@ -195,11 +181,11 @@ describe('Team Management (6D-1)', () => {
   });
 
   describe('changeMemberRole', () => {
-    it('updates member role via Clerk metadata API', async () => {
+    it('updates user publicMetadata via Clerk API', async () => {
       authAsSuperAdmin();
-      const orgApi = mockOrgClient([
-        makeMembership(USER_SA, 'admin@gem.org', ROLES.SUPER_ADMIN),
-        makeMembership(USER_COORD, 'coord@gem.org', ROLES.EVENT_COORDINATOR),
+      const { usersApi } = mockUsersClient([
+        makeUser(USER_SA, 'admin@gem.org', ROLES.SUPER_ADMIN),
+        makeUser(USER_COORD, 'coord@gem.org', ROLES.EVENT_COORDINATOR),
       ]);
 
       const result = await changeMemberRole({
@@ -208,16 +194,14 @@ describe('Team Management (6D-1)', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(orgApi.updateOrganizationMembershipMetadata).toHaveBeenCalledWith({
-        organizationId: ORG_ID,
-        userId: USER_COORD,
+      expect(usersApi.updateUser).toHaveBeenCalledWith(USER_COORD, {
         publicMetadata: { appRole: ROLES.OPS },
       });
     });
 
     it('blocks changing own role', async () => {
       authAsSuperAdmin();
-      mockOrgClient([]);
+      mockUsersClient([]);
 
       const result = await changeMemberRole({
         userId: USER_SA,
@@ -230,12 +214,11 @@ describe('Team Management (6D-1)', () => {
 
     it('blocks downgrading the last super admin', async () => {
       authAsSuperAdmin();
-      mockOrgClient([
-        makeMembership(USER_SA, 'admin@gem.org', ROLES.EVENT_COORDINATOR), // not SA in DB
-        makeMembership(USER_OPS, 'ops@gem.org', ROLES.SUPER_ADMIN), // only SA
+      mockUsersClient([
+        makeUser(USER_SA, 'admin@gem.org', ROLES.EVENT_COORDINATOR),
+        makeUser(USER_OPS, 'ops@gem.org', ROLES.SUPER_ADMIN),
       ]);
 
-      // The auth still says current user is SA (from session)
       const result = await changeMemberRole({
         userId: USER_OPS,
         role: ROLES.READ_ONLY,
@@ -247,26 +230,23 @@ describe('Team Management (6D-1)', () => {
   });
 
   describe('removeTeamMember', () => {
-    it('removes member via Clerk API', async () => {
+    it('deletes user via Clerk API', async () => {
       authAsSuperAdmin();
-      const orgApi = mockOrgClient([
-        makeMembership(USER_SA, 'admin@gem.org', ROLES.SUPER_ADMIN),
-        makeMembership(USER_COORD, 'coord@gem.org', ROLES.EVENT_COORDINATOR),
+      const { usersApi } = mockUsersClient([
+        makeUser(USER_SA, 'admin@gem.org', ROLES.SUPER_ADMIN),
+        makeUser(USER_COORD, 'coord@gem.org', ROLES.EVENT_COORDINATOR),
       ]);
 
       const result = await removeTeamMember({ userId: USER_COORD });
 
       expect(result.success).toBe(true);
-      expect(orgApi.deleteOrganizationMembership).toHaveBeenCalledWith({
-        organizationId: ORG_ID,
-        userId: USER_COORD,
-      });
+      expect(usersApi.deleteUser).toHaveBeenCalledWith(USER_COORD);
       expect(mockRevalidatePath).toHaveBeenCalledWith('/settings/team');
     });
 
     it('blocks removing yourself', async () => {
       authAsSuperAdmin();
-      mockOrgClient([]);
+      mockUsersClient([]);
 
       const result = await removeTeamMember({ userId: USER_SA });
 
@@ -276,9 +256,9 @@ describe('Team Management (6D-1)', () => {
 
     it('blocks removing the last super admin', async () => {
       authAsSuperAdmin();
-      mockOrgClient([
-        makeMembership(USER_SA, 'admin@gem.org', ROLES.EVENT_COORDINATOR),
-        makeMembership(USER_OPS, 'ops@gem.org', ROLES.SUPER_ADMIN),
+      mockUsersClient([
+        makeUser(USER_SA, 'admin@gem.org', ROLES.EVENT_COORDINATOR),
+        makeUser(USER_OPS, 'ops@gem.org', ROLES.SUPER_ADMIN),
       ]);
 
       const result = await removeTeamMember({ userId: USER_OPS });
@@ -287,15 +267,15 @@ describe('Team Management (6D-1)', () => {
       expect(result.error).toMatch(/last Super Admin/i);
     });
 
-    it('blocks removing the last super admin even when they appear after the first 100 members', async () => {
+    it('blocks removing the last super admin even when they appear after the first 100 users', async () => {
       authAsSuperAdmin();
-      const members = [
+      const users = [
         ...Array.from({ length: 100 }, (_, index) =>
-          makeMembership(`user_${index + 1}`, `user${index + 1}@gem.org`, ROLES.EVENT_COORDINATOR),
+          makeUser(`user_${index + 1}`, `user${index + 1}@gem.org`, ROLES.EVENT_COORDINATOR),
         ),
-        makeMembership(USER_OPS, 'ops@gem.org', ROLES.SUPER_ADMIN),
+        makeUser(USER_OPS, 'ops@gem.org', ROLES.SUPER_ADMIN),
       ];
-      mockOrgClient(members);
+      mockUsersClient(users);
 
       const result = await removeTeamMember({ userId: USER_OPS });
 
@@ -305,13 +285,13 @@ describe('Team Management (6D-1)', () => {
 
     it('fails closed when another team membership change already holds the lock', async () => {
       authAsSuperAdmin();
-      const orgApi = mockOrgClient([
-        makeMembership(USER_SA, 'admin@gem.org', ROLES.SUPER_ADMIN),
-        makeMembership(USER_COORD, 'coord@gem.org', ROLES.EVENT_COORDINATOR),
+      const { usersApi } = mockUsersClient([
+        makeUser(USER_SA, 'admin@gem.org', ROLES.SUPER_ADMIN),
+        makeUser(USER_COORD, 'coord@gem.org', ROLES.EVENT_COORDINATOR),
       ]);
       const updateDeferred = createDeferred<{}>();
 
-      orgApi.updateOrganizationMembershipMetadata.mockImplementation(() => updateDeferred.promise);
+      usersApi.updateUser.mockImplementation(() => updateDeferred.promise);
       mockRedisSet
         .mockResolvedValueOnce('OK')
         .mockResolvedValueOnce(null);
@@ -331,20 +311,20 @@ describe('Team Management (6D-1)', () => {
       expect(overlappingRemove.success).toBe(false);
       expect(overlappingRemove.error).toMatch(/already in progress/i);
       expect(firstResult.success).toBe(true);
-      expect(orgApi.deleteOrganizationMembership).not.toHaveBeenCalled();
+      expect(usersApi.deleteUser).not.toHaveBeenCalled();
     });
   });
 
   describe('edge cases', () => {
     it('rejects unauthenticated users', async () => {
-      mockAuth.mockResolvedValue({ userId: null, orgId: null, sessionClaims: null });
+      mockAuth.mockResolvedValue({ userId: null, sessionClaims: null });
 
       await expect(getTeamMembers()).rejects.toThrow('Not authenticated');
     });
 
     it('rejects invite with invalid role', async () => {
       authAsSuperAdmin();
-      mockOrgClient([]);
+      mockUsersClient([]);
 
       const result = await inviteTeamMember({
         emailAddress: 'test@gem.org',
@@ -357,7 +337,7 @@ describe('Team Management (6D-1)', () => {
 
     it('rejects remove with empty userId', async () => {
       authAsSuperAdmin();
-      mockOrgClient([]);
+      mockUsersClient([]);
 
       const result = await removeTeamMember({ userId: '' });
 

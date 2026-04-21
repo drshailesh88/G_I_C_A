@@ -64,7 +64,7 @@ describe('checkEventAccess', () => {
   it('super admin bypasses event assignment check', async () => {
     mockAuth.mockResolvedValue({
       userId: 'admin-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'super_admin' } } },
+      sessionClaims: { metadata: { appRole: 'super_admin' } },
     });
 
     const eventChain = mockSelectChain([{ status: 'published' }]);
@@ -79,7 +79,7 @@ describe('checkEventAccess', () => {
   it('super admin is denied when the event does not exist', async () => {
     mockAuth.mockResolvedValue({
       userId: 'admin-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'super_admin' } } },
+      sessionClaims: { metadata: { appRole: 'super_admin' } },
     });
 
     const eventChain = mockSelectChain([]);
@@ -97,7 +97,7 @@ describe('checkEventAccess', () => {
   it('event coordinator with assignment is authorized', async () => {
     mockAuth.mockResolvedValue({
       userId: 'coord-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'event_coordinator' } } },
+      sessionClaims: { metadata: { appRole: 'event_coordinator' } },
     });
     mockAssignmentQuery([{ id: 'a1', eventId: EVENT_ID_1, authUserId: 'coord-1', isActive: true }]);
 
@@ -109,7 +109,7 @@ describe('checkEventAccess', () => {
   it('event coordinator without assignment is denied', async () => {
     mockAuth.mockResolvedValue({
       userId: 'coord-2',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'event_coordinator' } } },
+      sessionClaims: { metadata: { appRole: 'event_coordinator' } },
     });
     mockAssignmentQuery([]);
 
@@ -120,7 +120,7 @@ describe('checkEventAccess', () => {
   it('ops role with assignment is authorized', async () => {
     mockAuth.mockResolvedValue({
       userId: 'ops-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'ops' } } },
+      sessionClaims: { metadata: { appRole: 'ops' } },
     });
     mockAssignmentQuery([{ id: 'a2', eventId: EVENT_ID_1, authUserId: 'ops-1', isActive: true }]);
 
@@ -132,7 +132,7 @@ describe('checkEventAccess', () => {
   it('read-only role without assignment is denied', async () => {
     mockAuth.mockResolvedValue({
       userId: 'readonly-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'read_only' } } },
+      sessionClaims: { metadata: { appRole: 'read_only' } },
     });
     mockAssignmentQuery([]);
 
@@ -182,7 +182,7 @@ describe('assertEventAccess', () => {
   it('throws EventNotFoundError when access is denied (no assignment)', async () => {
     mockAuth.mockResolvedValue({
       userId: 'coord-2',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'event_coordinator' } } },
+      sessionClaims: { metadata: { appRole: 'event_coordinator' } },
     });
     mockAssignmentQuery([]);
 
@@ -199,7 +199,7 @@ describe('assertEventAccess', () => {
   it('coord_A → event B returns 404 signal (NotFoundError)', async () => {
     mockAuth.mockResolvedValue({
       userId: 'coord-A',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'event_coordinator' } } },
+      sessionClaims: { metadata: { appRole: 'event_coordinator' } },
     });
     mockAssignmentQuery([]);
 
@@ -215,7 +215,7 @@ describe('assertEventAccess', () => {
   it('returns userId and role when access is granted', async () => {
     mockAuth.mockResolvedValue({
       userId: 'admin-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'super_admin' } } },
+      sessionClaims: { metadata: { appRole: 'super_admin' } },
     });
 
     const eventChain = mockSelectChain([{ status: 'published' }]);
@@ -230,7 +230,7 @@ describe('assertEventAccess', () => {
   it('throws for read-only users when requireWrite is true', async () => {
     mockAuth.mockResolvedValue({
       userId: 'readonly-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'read_only' } } },
+      sessionClaims: { metadata: { appRole: 'read_only' } },
     });
     mockAssignmentQuery([{ id: 'a4', eventId: EVENT_ID_1, authUserId: 'readonly-1', isActive: true }]);
 
@@ -240,7 +240,7 @@ describe('assertEventAccess', () => {
   it('read_only + requireWrite → ForbiddenError carrying 403', async () => {
     mockAuth.mockResolvedValue({
       userId: 'readonly-A',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'read_only' } } },
+      sessionClaims: { metadata: { appRole: 'read_only' } },
     });
     mockAssignmentQuery([{ id: 'a-ro', eventId: EVENT_ID_2, authUserId: 'readonly-A', isActive: true }]);
 
@@ -256,7 +256,7 @@ describe('assertEventAccess', () => {
   it('allows coordinator for write operations', async () => {
     mockAuth.mockResolvedValue({
       userId: 'coord-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'event_coordinator' } } },
+      sessionClaims: { metadata: { appRole: 'event_coordinator' } },
     });
     const assignmentChain = mockSelectChain([{ id: 'a5', eventId: EVENT_ID_1, authUserId: 'coord-1', isActive: true }]);
     const eventChain = mockSelectChain([{ status: 'published' }]);
@@ -271,7 +271,7 @@ describe('assertEventAccess', () => {
   it('super admin crosses events freely (no EventNotFoundError)', async () => {
     mockAuth.mockResolvedValue({
       userId: 'admin-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'super_admin' } } },
+      sessionClaims: { metadata: { appRole: 'super_admin' } },
     });
 
     const eventChain = mockSelectChain([{ status: 'published' }]);
@@ -285,7 +285,7 @@ describe('assertEventAccess', () => {
   it('super bypasses assignment check but still requires the event to exist', async () => {
     mockAuth.mockResolvedValue({
       userId: 'super-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'super_admin' } } },
+      sessionClaims: { metadata: { appRole: 'super_admin' } },
     });
 
     const eventChain = mockSelectChain([]);
@@ -331,7 +331,7 @@ describe('getEventListContext', () => {
   it('returns isSuperAdmin true for super admin', async () => {
     mockAuth.mockResolvedValue({
       userId: 'admin-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'super_admin' } } },
+      sessionClaims: { metadata: { appRole: 'super_admin' } },
     });
 
     const ctx = await getEventListContext();
@@ -342,7 +342,7 @@ describe('getEventListContext', () => {
   it('returns isSuperAdmin false for coordinator', async () => {
     mockAuth.mockResolvedValue({
       userId: 'coord-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'event_coordinator' } } },
+      sessionClaims: { metadata: { appRole: 'event_coordinator' } },
     });
 
     const ctx = await getEventListContext();

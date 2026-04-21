@@ -1,14 +1,28 @@
 'use client';
 
-import { useAuth } from '@clerk/nextjs';
-import { ROLES } from '@/lib/auth/roles';
+import { useUser } from '@clerk/nextjs';
+import { ROLES, type RoleValue } from '@/lib/auth/roles';
+
+const VALID_ROLE_VALUES: ReadonlySet<string> = new Set([
+  ROLES.SUPER_ADMIN,
+  ROLES.EVENT_COORDINATOR,
+  ROLES.OPS,
+  ROLES.READ_ONLY,
+]);
+
+function normalizeAppRole(raw: unknown): RoleValue | null {
+  if (typeof raw !== 'string' || raw.length === 0) return null;
+  const prefixed = raw.startsWith('org:') ? raw : `org:${raw}`;
+  return VALID_ROLE_VALUES.has(prefixed) ? (prefixed as RoleValue) : null;
+}
 
 export function useRole() {
-  const { has, isLoaded } = useAuth();
+  const { user, isLoaded } = useUser();
 
   if (!isLoaded) {
     return {
       isLoaded: false,
+      role: null as RoleValue | null,
       isSuperAdmin: false,
       isCoordinator: false,
       isOps: false,
@@ -17,13 +31,15 @@ export function useRole() {
     };
   }
 
-  const isSuperAdmin = has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
-  const isCoordinator = has?.({ role: ROLES.EVENT_COORDINATOR }) ?? false;
-  const isOps = has?.({ role: ROLES.OPS }) ?? false;
-  const isReadOnly = has?.({ role: ROLES.READ_ONLY }) ?? false;
+  const role = normalizeAppRole((user?.publicMetadata as { appRole?: unknown } | undefined)?.appRole);
+  const isSuperAdmin = role === ROLES.SUPER_ADMIN;
+  const isCoordinator = role === ROLES.EVENT_COORDINATOR;
+  const isOps = role === ROLES.OPS;
+  const isReadOnly = role === ROLES.READ_ONLY;
 
   return {
     isLoaded: true,
+    role,
     isSuperAdmin,
     isCoordinator,
     isOps,

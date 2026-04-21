@@ -35,7 +35,7 @@ describe('flags actions RBAC', () => {
   it('allows super admins to read global flags', async () => {
     mockAuth.mockResolvedValue({
       userId: 'super-1',
-      has: vi.fn(({ role }: { role: string }) => role === 'org:super_admin'),
+      sessionClaims: { metadata: { appRole: 'super_admin' } },
     });
 
     await expect(getGlobalFlags()).resolves.toEqual({ whatsapp_enabled: true });
@@ -45,7 +45,7 @@ describe('flags actions RBAC', () => {
   it('rejects non-super-admin reads of global flags', async () => {
     mockAuth.mockResolvedValue({
       userId: 'coord-1',
-      has: vi.fn().mockReturnValue(false),
+      sessionClaims: { metadata: { appRole: 'event_coordinator' } },
     });
 
     await expect(getGlobalFlags()).rejects.toThrow(/only Super Admin/i);
@@ -55,7 +55,7 @@ describe('flags actions RBAC', () => {
   it('rejects non-super-admin reads of event flags', async () => {
     mockAuth.mockResolvedValue({
       userId: 'coord-1',
-      has: vi.fn().mockReturnValue(false),
+      sessionClaims: { metadata: { appRole: 'event_coordinator' } },
     });
 
     await expect(getEventFlags(EVENT_ID)).rejects.toThrow(/only Super Admin/i);

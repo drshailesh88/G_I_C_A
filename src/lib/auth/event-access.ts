@@ -52,7 +52,7 @@ const VALID_ROLE_VALUES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Normalize an appRole value read from org membership publicMetadata into a
+ * Normalize an appRole value read from user publicMetadata into a
  * canonical ROLES value (e.g. "super_admin" -> "org:super_admin").
  * Returns null when the value is missing or not a recognized role.
  */
@@ -64,9 +64,9 @@ function normalizeAppRole(raw: unknown): string | null {
 
 /**
  * Resolve the current user's app role from the Clerk session.
- * The Clerk dashboard is configured to include org_membership (with
- * publicMetadata) in the session token; the app role is stored there under
- * `appRole`. A fallback reads from `metadata.appRole` for alternate shapes.
+ * The Clerk dashboard is configured to include `user.public_metadata` in the
+ * session token under the `metadata` claim; the app role is stored there
+ * under `appRole`.
  */
 async function resolveClerkRole(): Promise<{
   userId: string;
@@ -80,15 +80,8 @@ async function resolveClerkRole(): Promise<{
   }
 
   const claims = (session as { sessionClaims?: Record<string, unknown> }).sessionClaims;
-  const orgMembership = claims?.org_membership as
-    | { publicMetadata?: { appRole?: unknown }; public_metadata?: { appRole?: unknown } }
-    | undefined;
   const metadata = claims?.metadata as { appRole?: unknown } | undefined;
-
-  const rawAppRole =
-    orgMembership?.publicMetadata?.appRole ??
-    orgMembership?.public_metadata?.appRole ??
-    metadata?.appRole;
+  const rawAppRole = metadata?.appRole;
 
   const role = normalizeAppRole(rawAppRole);
   const isSuperAdmin = role === ROLES.SUPER_ADMIN;

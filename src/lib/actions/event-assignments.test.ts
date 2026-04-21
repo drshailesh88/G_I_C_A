@@ -42,16 +42,14 @@ const USER_OPS = 'user_ops';
 function authAsSuperAdmin(userId = USER_SA) {
   mockAuth.mockResolvedValue({
     userId,
-    orgId: 'org_test',
-    has: ({ role }: { role: string }) => role === ROLES.SUPER_ADMIN,
+    sessionClaims: { metadata: { appRole: 'super_admin' } },
   });
 }
 
 function authAsCoordinator() {
   mockAuth.mockResolvedValue({
     userId: USER_COORD,
-    orgId: 'org_test',
-    has: ({ role }: { role: string }) => role === ROLES.EVENT_COORDINATOR,
+    sessionClaims: { metadata: { appRole: 'event_coordinator' } },
   });
 }
 
@@ -132,7 +130,7 @@ describe('Event Assignment Actions', () => {
     });
 
     it('rejects unauthenticated user', async () => {
-      mockAuth.mockResolvedValue({ userId: null, has: () => false });
+      mockAuth.mockResolvedValue({ userId: null, sessionClaims: null });
 
       await expect(getEventAssignments(EVENT_ID)).rejects.toThrow('Not authenticated');
     });

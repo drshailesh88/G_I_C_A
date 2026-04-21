@@ -526,7 +526,7 @@ describe('person adversarial hardening', () => {
   it('blocks ops users from creating people directly', async () => {
     mockAuth.mockResolvedValue({
       userId: 'ops_user',
-      has: ({ role }: { role: string }) => role === 'org:ops',
+      sessionClaims: { metadata: { appRole: 'ops' } },
     });
 
     await expect(
@@ -538,7 +538,7 @@ describe('person adversarial hardening', () => {
   it('blocks ops users from reading the global people search', async () => {
     mockAuth.mockResolvedValue({
       userId: 'ops_user',
-      has: ({ role }: { role: string }) => role === 'org:ops',
+      sessionClaims: { metadata: { appRole: 'ops' } },
     });
 
     await expect(searchPeople({ page: 1, limit: 25 })).rejects.toThrow('Forbidden');

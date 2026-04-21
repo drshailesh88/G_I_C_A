@@ -61,21 +61,21 @@ const LOSER_PERSON = {
 function authAsCoordinator(userId = 'user_coord') {
   mockAuth.mockResolvedValue({
     userId,
-    has: ({ role }: { role: string }) => role === ROLES.EVENT_COORDINATOR,
+    sessionClaims: { metadata: { appRole: 'event_coordinator' } },
   });
 }
 
 function authAsSuperAdmin(userId = 'user_sa') {
   mockAuth.mockResolvedValue({
     userId,
-    has: ({ role }: { role: string }) => role === ROLES.SUPER_ADMIN,
+    sessionClaims: { metadata: { appRole: 'super_admin' } },
   });
 }
 
 function authAsReadOnly() {
   mockAuth.mockResolvedValue({
     userId: 'user_ro',
-    has: ({ role }: { role: string }) => role === ROLES.READ_ONLY,
+    sessionClaims: { metadata: { appRole: 'read_only' } },
   });
 }
 
@@ -171,7 +171,7 @@ beforeEach(() => {
 
 describe('RBAC', () => {
   it('rejects unauthenticated requests', async () => {
-    mockAuth.mockResolvedValue({ userId: null, has: () => false });
+    mockAuth.mockResolvedValue({ userId: null, sessionClaims: null });
     await expect(mergePeople({ keepId: KEEP_ID, dropId: DROP_ID })).rejects.toThrow('Unauthorized');
   });
 

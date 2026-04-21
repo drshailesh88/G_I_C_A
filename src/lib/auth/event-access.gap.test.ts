@@ -43,7 +43,7 @@ describe('checkEventAccess — gap tests', () => {
   it('ops without assignment denied', async () => {
     mockAuth.mockResolvedValue({
       userId: 'ops-2',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'ops' } } },
+      sessionClaims: { metadata: { appRole: 'ops' } },
     });
     mockAssignmentQuery([]);
 
@@ -54,7 +54,7 @@ describe('checkEventAccess — gap tests', () => {
   it('read-only with assignment authorized for read', async () => {
     mockAuth.mockResolvedValue({
       userId: 'readonly-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'read_only' } } },
+      sessionClaims: { metadata: { appRole: 'read_only' } },
     });
     mockAssignmentQuery([{ id: 'a1', eventId: EVENT_ID_1, authUserId: 'readonly-1', isActive: true }]);
 
@@ -78,7 +78,7 @@ describe('checkEventAccess — gap tests', () => {
   it('super admin validates event existence without querying assignments', async () => {
     mockAuth.mockResolvedValue({
       userId: 'admin-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'super_admin' } } },
+      sessionClaims: { metadata: { appRole: 'super_admin' } },
     });
 
     const eventChain = mockSelectChain([{ status: 'published' }]);
@@ -98,7 +98,7 @@ describe('assertEventAccess — gap tests', () => {
   it('ops allowed for write operations', async () => {
     mockAuth.mockResolvedValue({
       userId: 'ops-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'ops' } } },
+      sessionClaims: { metadata: { appRole: 'ops' } },
     });
     const assignmentChain = mockSelectChain([{ id: 'a1', eventId: EVENT_ID_1, authUserId: 'ops-1', isActive: true }]);
     const eventChain = mockSelectChain([{ status: 'published' }]);
@@ -113,7 +113,7 @@ describe('assertEventAccess — gap tests', () => {
   it('super admin allowed for write operations', async () => {
     mockAuth.mockResolvedValue({
       userId: 'admin-1',
-      sessionClaims: { org_membership: { publicMetadata: { appRole: 'super_admin' } } },
+      sessionClaims: { metadata: { appRole: 'super_admin' } },
     });
 
     const eventChain = mockSelectChain([{ status: 'published' }]);

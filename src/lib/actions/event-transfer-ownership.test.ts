@@ -33,16 +33,14 @@ const CURRENT_OWNER_ROW_ID = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 function authAsSuperAdmin(userId = ACTOR_ID) {
   mockAuth.mockResolvedValue({
     userId,
-    orgId: 'org_test',
-    has: ({ role }: { role: string }) => role === ROLES.SUPER_ADMIN,
+    sessionClaims: { metadata: { appRole: 'super_admin' } },
   });
 }
 
 function authAsCoordinator() {
   mockAuth.mockResolvedValue({
     userId: 'user_coord',
-    orgId: 'org_test',
-    has: ({ role }: { role: string }) => role === ROLES.EVENT_COORDINATOR,
+    sessionClaims: { metadata: { appRole: 'event_coordinator' } },
   });
 }
 
@@ -119,7 +117,7 @@ beforeEach(() => {
 
 describe('transferEventOwnership — RBAC (spec req 1)', () => {
   it('rejects unauthenticated callers', async () => {
-    mockAuth.mockResolvedValue({ userId: null, has: undefined });
+    mockAuth.mockResolvedValue({ userId: null, sessionClaims: null });
     const result = await transferEventOwnership(EVENT_ID, NEW_OWNER_ID);
     expect(result).toEqual({ ok: false, error: 'Not authenticated' });
   });

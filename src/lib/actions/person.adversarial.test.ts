@@ -83,7 +83,7 @@ describe('people adversarial coverage', () => {
     vi.clearAllMocks();
     mockAuth.mockResolvedValue({
       userId: 'coord-1',
-      has: ({ role }: { role: string }) => role === 'org:event_coordinator',
+      sessionClaims: { metadata: { appRole: 'event_coordinator' } },
     });
   });
 

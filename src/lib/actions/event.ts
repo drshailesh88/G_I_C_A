@@ -19,6 +19,7 @@ import { createEventSchema, updateEventSchema, eventIdSchema, EVENT_TRANSITIONS,
 import { assertEventAccess, getEventListContext } from '@/lib/auth/event-access';
 import { withEventScope } from '@/lib/db/with-event-scope';
 import { ROLES } from '@/lib/auth/roles';
+import { getAppRoleFromSession, sessionHasAnyRole, sessionHasRole } from '@/lib/auth/session-role';
 
 function slugify(text: string): string {
   return text
@@ -52,16 +53,15 @@ function safeJsonParse(value: string, fieldPath: string): unknown {
   }
 }
 
-const EVENT_CREATE_ROLES = ['org:super_admin', 'org:event_coordinator'] as const;
+const EVENT_CREATE_ROLES: ReadonlySet<string> = new Set(['org:super_admin', 'org:event_coordinator']);
 
-function canCreateEvents(has: ((params: { role: string }) => boolean) | undefined): boolean {
-  // Some isolated test contexts stub auth() without Clerk's has() helper.
-  // Real request sessions provide it, and when available we enforce create RBAC here.
-  if (typeof has !== 'function') {
-    return true;
-  }
-
-  return EVENT_CREATE_ROLES.some((role) => has({ role }));
+function canCreateEvents(session: Parameters<typeof getAppRoleFromSession>[0]): boolean {
+  // Some isolated test contexts stub auth() without session claims.
+  // Real request sessions provide them; when absent we fall open so tests can
+  // exercise downstream logic without threading role state everywhere.
+  if (!session?.sessionClaims) return true;
+  const role = getAppRoleFromSession(session);
+  return role !== null && EVENT_CREATE_ROLES.has(role);
 }
 
 function buildEventStateFilters(event: {
@@ -91,9 +91,9 @@ export type UpdateEventResult =
 
 export async function createEvent(formData: FormData): Promise<CreateEventResult> {
   const session = await auth();
-  const { userId, has } = session;
+  const { userId } = session;
   if (!userId) throw new Error('Unauthorized');
-  if (!canCreateEvents(has)) throw new Error('Forbidden');
+  if (!canCreateEvents(session)) throw new Error('Forbidden');
 
   // Parse JSON safely BEFORE Zod validation (Bug fix #4)
   let moduleTogglesRaw: unknown;
@@ -350,8 +350,9 @@ export async function transferEventOwnership(
   const { userId } = session;
   if (!userId) return { ok: false, error: 'Not authenticated' };
 
-  const isSuperAdmin = session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
-  if (!isSuperAdmin) return { ok: false, error: 'Forbidden: only Super Admin can transfer event ownership' };
+  if (!sessionHasRole(session, ROLES.SUPER_ADMIN)) {
+    return { ok: false, error: 'Forbidden: only Super Admin can transfer event ownership' };
+  }
 
   const parsedEventId = eventIdSchema.safeParse(eventId);
   if (!parsedEventId.success) return { ok: false, error: 'Invalid event ID' };
@@ -478,9 +479,9 @@ export async function duplicateEvent(
   if (!parsedId.success) return { ok: false, error: 'Invalid event ID' };
 
   const session = await auth();
-  const { userId, has } = session;
+  const { userId } = session;
   if (!userId) return { ok: false, error: 'Not authenticated' };
-  if (!canCreateEvents(has)) {
+  if (!canCreateEvents(session)) {
     return { ok: false, error: 'Forbidden: only Event Coordinator or Super Admin can duplicate events' };
   }
 
@@ -793,9 +794,7 @@ export async function updateFieldConfig(
   const session = await auth();
   if (!session.userId) return { ok: false, error: 'Not authenticated' };
 
-  const isSuperAdmin = session.has?.({ role: ROLES.SUPER_ADMIN }) ?? false;
-  const isCoordinator = session.has?.({ role: ROLES.EVENT_COORDINATOR }) ?? false;
-  if (!isSuperAdmin && !isCoordinator) {
+  if (!sessionHasAnyRole(session, [ROLES.SUPER_ADMIN, ROLES.EVENT_COORDINATOR])) {
     return {
       ok: false,
       error: 'Only Event Coordinators and Super Admins can configure event fields',
